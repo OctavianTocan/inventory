@@ -1,12 +1,12 @@
-// Replays a captured mymind session on localhost: the real shell and front-end modules,
-// with every API call answered from capture/ instead of mymind's servers.
-import { createHash } from 'node:crypto';
+// Serves mymind's captured front end with a local SQLite API and recording fallbacks.
 import http from 'node:http';
 import { watchFile } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { deviceVariant } from './tools/replay-store.mjs';
+import { createApi } from './lib/api.mjs';
+import { createHub } from './lib/hub.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const CAPTURE = path.join(ROOT, 'capture');
@@ -234,6 +234,10 @@ async function serveDetail(res, id) {
   });
 }
 
+let push = () => {};
+const api = await createApi({ root: ROOT, dbPath: process.env.STORE_DB, readonly: process.env.STORE_READONLY === '1',
+  msgpack, localize, send, push: (target, payload) => push(target, payload) });
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const { pathname, search } = url;
@@ -248,8 +252,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname === '/__replay/reload') {
       return send(res, 200, JSON.stringify({ responses: await reloadReplay(), offline: OFFLINE }), { 'content-type': 'application/json' });
     }
+    if (api && await api.handle(req, res, url)) return;
     const replayed = replayedFor(req, url);
-    if (replayed) return sendRange(req, res, replayed.status, await replayBody(replayed), replayed.headers);
+    if (replayed) {
+      let body = await replayBody(replayed);
+      if (api && !deviceVariant(req.headers['user-agent']) && req.headers['sec-fetch-dest'] === 'document') body = api.shell(body.toString('utf8'));
+      return sendRange(req, res, replayed.status, body, replayed.headers);
+    }
 
     if (pathname.startsWith('/_static/')) return await serveStatic(res, pathname.slice('/_static/'.length), search);
     if (pathname.startsWith('/media/')) return await serveMedia(res, path.join(CAPTURE, 'media'), pathname.slice('/media/'.length));
@@ -264,7 +273,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document') {
       const replayedShell = replayedFor(req, new URL('/everything', url));
       const body = replayedShell ? await replayBody(replayedShell) : shell;
-      return send(res, 200, body, { 'content-type': 'text/html; charset=utf-8' });
+      return send(res, 200, api && !deviceVariant(req.headers['user-agent']) ? api.shell(body.toString()) : body, { 'content-type': 'text/html; charset=utf-8' });
     }
 
     if (key === 'GET /cards') {
@@ -296,46 +305,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// Realtime hub: a SignalR JSON-protocol endpoint that completes the handshake and keeps the socket
-// alive, so the app connects exactly as it does against mymind (no pushes are ever sent).
-server.on('upgrade', (req, socket) => {
-  if (!req.url.startsWith('/hub')) return socket.destroy();
-  const accept = createHash('sha1').update(`${req.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
-  socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
-  const frame = (opcode, payload) => {
-    const head = payload.length < 126 ? Buffer.from([0x80 | opcode, payload.length]) : Buffer.from([0x80 | opcode, 126, payload.length >> 8, payload.length & 0xff]);
-    socket.write(Buffer.concat([head, payload]));
-  };
-  let buffer = Buffer.alloc(0);
-  socket.on('data', (chunk) => {
-    buffer = Buffer.concat([buffer, chunk]);
-    for (;;) {
-      if (buffer.length < 2) return;
-      let length = buffer[1] & 0x7f;
-      let offset = 2;
-      if (length === 126) {
-        if (buffer.length < 4) return;
-        length = buffer.readUInt16BE(2);
-        offset = 4;
-      }
-      const mask = buffer.subarray(offset, offset + 4);
-      offset += 4;
-      if (buffer.length < offset + length) return;
-      const payload = Buffer.from(buffer.subarray(offset, offset + length)).map((byte, i) => byte ^ mask[i % 4]);
-      const opcode = buffer[0] & 0x0f;
-      buffer = buffer.subarray(offset + length);
-      if (opcode === 0x8) return socket.end();
-      if (opcode === 0x9) frame(0xa, payload);
-      if (opcode === 0x1 && payload.toString().includes('"protocol"')) frame(0x1, Buffer.from('{}\x1e'));
-    }
-  });
-  const ping = setInterval(() => frame(0x1, Buffer.from('{"type":6}\x1e')), 15000);
-  socket.on('close', () => clearInterval(ping));
-  socket.on('error', () => clearInterval(ping));
-});
+push = createHub(server);
+server.on('close', () => api?.close());
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`mymind replica on http://localhost:${PORT}/everything`);
+  console.log(`mymind replica on http://localhost:${server.address().port}/everything`);
   console.log(`${cards.length} cards, ${Object.keys(details).length} detail views, captured ${meta.capturedAt}${OFFLINE ? ', offline' : ''}`);
   console.log(`${Object.keys(replayIndex).length} replayed responses from REA scenarios`);
 });

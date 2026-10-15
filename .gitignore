@@ -7,3 +7,6 @@ replay/
 
 # Local secrets (API keys).
 .env
+
+# Local database.
+data/

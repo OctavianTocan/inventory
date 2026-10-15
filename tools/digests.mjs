@@ -1,7 +1,7 @@
 // Content digests that tie a verification run to the exact code it verified, so REA's coverage check
 // rejects results once the replica or the normalization changes.
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,7 +13,11 @@ const digestOf = async (files) => {
 };
 
 /** @returns {Promise<string>} SHA-256 of the replica's own code (the reconstruction being verified). */
-export const replicaDigest = () => digestOf(['server.mjs', 'tools/replay-store.mjs']);
+export async function replicaDigest() {
+  const modules = (await Promise.all(['lib', 'lib/render'].map(async (dir) =>
+    (await readdir(path.join(ROOT, dir))).filter(name => name.endsWith('.mjs')).map(name => `${dir}/${name}`)))).flat().sort();
+  return digestOf(['server.mjs', 'tools/replay-store.mjs', ...modules]);
+}
 
 /** @returns {Promise<string>} SHA-256 of everything that makes both sides deterministic (the normalization). */
 export async function normalizationDigest() {

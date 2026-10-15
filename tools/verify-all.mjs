@@ -27,7 +27,7 @@ const { values: opts, positionals } = parseArgs({
 const queue = positionals.length ? MATRIX.filter(([p, s]) => positionals.includes(`${p}-${s}`)) : [...MATRIX];
 
 const up = () => fetch('http://localhost:4321/__replay/reload', { method: 'POST' }).then((r) => r.ok, () => false);
-const server = (await up()) ? null : spawn('node', ['server.mjs'], { cwd: ROOT, stdio: 'ignore' });
+const server = (await up()) ? null : spawn('node', ['server.mjs'], { cwd: ROOT, env: { ...process.env, STORE_READONLY: '1' }, stdio: 'ignore' });
 while (!(await up())) await new Promise((r) => setTimeout(r, 200));
 await mkdir(DRIVE, { recursive: true });
 
