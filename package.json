@@ -2,10 +2,18 @@
   "name": "mymind-reconstruction",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "capture": "node tools/capture.mjs",
     "mirror": "node tools/mirror-static.mjs",
-    "serve": "node server.mjs"
+    "serve": "node server.mjs",
+    "verify": "node tools/verify-all.mjs",
+    "drive": "node tools/drive.mjs",
+    "coverage": "node tools/coverage.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.58.2"
   }
 }

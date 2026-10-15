@@ -49,3 +49,39 @@ export async function connectToPage(endpoint, urlPrefix) {
 
   return { url: target.url, send, evaluate, close: () => ws.close() };
 }
+
+/**
+ * Downloads a URL through the browser's own network stack, with the page's cookies and no CORS checks.
+ * @param {{ send: (method: string, params?: object) => Promise<any> }} page Page from `connectToPage`, or a CDP session.
+ * @param {string} frameId Main frame ID of that page.
+ * @param {string} url Absolute URL to load.
+ * @returns {Promise<{ status: number, headers: Record<string, string>, body: Buffer } | null>} The response, or null if it failed.
+ */
+export async function loadResource(page, frameId, url) {
+  const { resource } = await page.send('Network.loadNetworkResource', {
+    frameId,
+    url,
+    options: { disableCache: false, includeCredentials: true },
+  });
+  if (!resource.success || !resource.stream) return null;
+  const chunks = [];
+  for (;;) {
+    const read = await page.send('IO.read', { handle: resource.stream, size: 1 << 20 });
+    chunks.push(Buffer.from(read.data, read.base64Encoded ? 'base64' : 'utf8'));
+    if (read.eof) break;
+  }
+  await page.send('IO.close', { handle: resource.stream });
+  return { status: resource.httpStatusCode, headers: resource.headers ?? {}, body: Buffer.concat(chunks) };
+}
+
+/**
+ * Downloads a URL with the attached tab's cookies, bypassing CORS (media redirects cross-origin without it).
+ * @param {{ send: (method: string, params?: object) => Promise<any> }} page Page from `connectToPage`.
+ * @param {string} frameId Main frame ID of that page.
+ * @param {string} url Absolute URL to load.
+ * @returns {Promise<Buffer | null>} The body, or null unless the final response was 200.
+ */
+export async function loadThroughDevTools(page, frameId, url) {
+  const response = await loadResource(page, frameId, url);
+  return response?.status === 200 ? response.body : null;
+}

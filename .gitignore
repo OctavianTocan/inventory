@@ -3,3 +3,7 @@ capture/
 mirror/
 evidence/
 node_modules/
+replay/
+
+# Local secrets (API keys).
+.env

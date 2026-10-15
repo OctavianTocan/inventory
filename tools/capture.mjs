@@ -3,7 +3,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { connectToPage } from './cdp.mjs';
+import { connectToPage, loadThroughDevTools } from './cdp.mjs';
 
 const { values: opts } = parseArgs({
   options: {
@@ -126,24 +126,6 @@ async function fetchInBatches(page, requests, label) {
   }
   if (requests.length) process.stdout.write('\n');
   return all;
-}
-
-// Media redirects cross-origin without CORS, so page fetch() fails; DevTools' loader carries the tab's cookies instead.
-async function loadThroughDevTools(page, frameId, url) {
-  const { resource } = await page.send('Network.loadNetworkResource', {
-    frameId,
-    url,
-    options: { disableCache: false, includeCredentials: true },
-  });
-  if (!resource.success || resource.httpStatusCode !== 200 || !resource.stream) return null;
-  const chunks = [];
-  for (;;) {
-    const read = await page.send('IO.read', { handle: resource.stream, size: 1 << 20 });
-    chunks.push(Buffer.from(read.data, read.base64Encoded ? 'base64' : 'utf8'));
-    if (read.eof) break;
-  }
-  await page.send('IO.close', { handle: resource.stream });
-  return Buffer.concat(chunks);
 }
 
 const page = await connectToPage(opts.cdp, ORIGIN);
