@@ -9,6 +9,10 @@ import { createApi } from './lib/api.mjs';
 import { createHub } from './lib/hub.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
+if (process.env.STORE_LOAD_ENV !== '0') {
+  try { process.loadEnvFile(path.join(ROOT, '.env')); }
+  catch (error) { if (error.code !== 'ENOENT') throw new Error('Could not load server environment'); }
+}
 const CAPTURE = path.join(ROOT, 'capture');
 const MIRROR = path.join(ROOT, 'mirror', 'static');
 const REPLAY = path.join(ROOT, 'replay');

@@ -34,14 +34,14 @@ export function localize(value) {
 // Run the real server request callback without sockets when the caller explicitly selects it.
 async function memoryTransport(dbPath, readonly) {
   const originalCreate = http.createServer;
-  const previous = Object.fromEntries(['PORT', 'OFFLINE', 'STORE_DB', 'STORE_READONLY'].map(key => [key, process.env[key]]));
+  const previous = Object.fromEntries(['PORT', 'OFFLINE', 'STORE_DB', 'STORE_READONLY', 'STORE_LOAD_ENV'].map(key => [key, process.env[key]]));
   let server;
   http.createServer = (...args) => {
     server = originalCreate(...args);
     server.listen = () => server;
     return server;
   };
-  Object.assign(process.env, { PORT: '0', OFFLINE: '1', STORE_DB: dbPath, STORE_READONLY: readonly ? '1' : '0' });
+  Object.assign(process.env, { PORT: '0', OFFLINE: '1', STORE_DB: dbPath, STORE_READONLY: readonly ? '1' : '0', STORE_LOAD_ENV: '0' });
   try { await import(`../server.mjs?http-check=${encodeURIComponent(dbPath)}`); }
   finally {
     http.createServer = originalCreate;
@@ -107,7 +107,7 @@ export async function testServer({ readonly = false, source = process.env.TEST_S
     if (process.argv.includes('--in-process')) memory = await memoryTransport(serverDb, readonly);
     if (!memory) {
       child = spawn(process.execPath, ['server.mjs'], { cwd: ROOT,
-        env: { ...process.env, PORT: '0', OFFLINE: '1', STORE_DB: serverDb, STORE_READONLY: readonly ? '1' : '0' },
+        env: { ...process.env, PORT: '0', OFFLINE: '1', STORE_DB: serverDb, STORE_READONLY: readonly ? '1' : '0', STORE_LOAD_ENV: '0' },
         stdio: ['ignore', 'pipe', 'pipe'] });
       child.stderr.on('data', chunk => { startupError += chunk; });
     }
@@ -129,7 +129,7 @@ export async function testServer({ readonly = false, source = process.env.TEST_S
       async request(path, { method = 'GET', body, accept = 'application/json', type = 'application/json', headers = {} } = {}) {
         const response = await (memory?.fetch ?? fetch)(base + path, { method, signal: AbortSignal.timeout(10000), headers: { accept, 'content-type': type,
           'x-authenticity-token': 'local-test-token', ...headers },
-          ...(body !== undefined ? { body: typeof body === 'string' ? body : JSON.stringify(body) } : {}) });
+          ...(body !== undefined ? { body: typeof body === 'string' || body instanceof Uint8Array ? body : JSON.stringify(body) } : {}) });
         const bytes = Buffer.from(await response.arrayBuffer());
         const contentType = response.headers.get('content-type') ?? '';
         const value = contentType.includes('msgpack') ? [...msgpack.decodeMulti(bytes, { useBigInt64: true })]

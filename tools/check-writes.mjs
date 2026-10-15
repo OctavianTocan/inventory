@@ -97,13 +97,13 @@ try {
     ok(result.html.includes('&lt;script&gt;'));
     ok(!result.html.includes('<script>'));
   });
-  await check('URL create and duplicate bump without fetching', async () => {
+  await check('URL create and duplicate bump with readable offline fallback', async () => {
     urlId = (await write('POST', '/objects', { content: 'https://example.invalid/local' }, 201)).id;
     const created = await card(urlId);
-    strictEqual(created.data.type, 'WebPage');
+    ok(['WebPage', 'Placeholder'].includes(created.data.type));
     strictEqual(created.data.source.url, 'https://example.invalid/local');
     strictEqual(created.data.domain, 'example.invalid');
-    strictEqual(created.data.flags, 1);
+    strictEqual(created.data.flags & ~1, 0);
     const since = await checkpoint();
     const result = await write('POST', '/objects', { content: 'https://example.invalid/local' });
     strictEqual(result.id, urlId);
@@ -175,10 +175,12 @@ try {
     highlightId = (await write('POST', `/objects/${noteId}/tags`, { name: 'highlight' })).id;
     let result = await card(noteId);
     ok(result.html.includes('note content highlighted'));
+    ok((await server.request(`/cards/${noteId}/detail`, { accept: 'text/html' })).value.includes('class="body inner highlighted"'), 'detail body highlighted on reopen');
     ok(!Object.hasOwn(result.data.tags.find(tag => tag.id === highlightId), 'flags'));
     await write('DELETE', `/annotations/${highlightId}`);
     result = await card(noteId);
     ok(!result.html.includes('content highlighted'));
+    ok(!(await server.request(`/cards/${noteId}/detail`, { accept: 'text/html' })).value.includes('class="body inner highlighted"'), 'detail highlight removed');
   });
   await check('annotation removal changes card and tag counts', async () => {
     const since = await checkpoint();
@@ -422,7 +424,7 @@ try {
     const invalid = await server.request('/objects', { method: 'POST', body: '{' });
     strictEqual(invalid.response.status, 400);
     const media = await server.request('/objects', { method: 'POST', body: { type: 'Media', uploadId: 'pending' } });
-    strictEqual(media.response.status, 501);
+    strictEqual(media.response.status, 404);
   });
   await check('SignalR committed events and payloads reach connected hub', async () => {
     for (let i = 0; i < 100 && !hub.messages.some(message => message.target === 'account:updated'); i++) {

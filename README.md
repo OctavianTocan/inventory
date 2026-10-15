@@ -30,24 +30,70 @@ by an older queued update in the client. Drafts stay outside the main grid until
 cards have generated editable details and pinned previews; unchanged detail/template recordings retain their
 existing replay path. Shared cards have local URLs with a 24-hour expiry and revocation.
 
-URL capture stops at storing the URL, host title and analyzing flag. `captureLink` in `lib/store-write.mjs` is the
-phase 4 enrichment entry point and currently performs no fetch. Uploads and attachments need metadata extraction
-and media renditions, so remain in phase 4. AI analysis and thumbnail generation remain in phase 5. Permanent
-delete and empty trash have no client calls in the captured client, so only trash and restore are implemented.
+URL saves return `201` immediately, then `captureLink` enriches the placeholder in the background. Capture reads
+OpenGraph, Twitter, JSON-LD and public oEmbed metadata, detects social posts, videos, repositories, apps, products,
+articles and PDFs, downloads covers and sanitizes post HTML. Web pages without a usable cover and explicitly saved
+Screenshots use a fresh headless Chromium context with the default user agent; page fetches identify themselves as
+`mymind-replica/1.0`, since some sites (Wikimedia) refuse requests without a user agent. Failed capture retains a
+readable "blocking us" card and skips AI, which would otherwise invent a summary from the bare URL. Original source
+URLs and user edits made during capture are preserved.
+Online capture permits public destinations only, including every redirect, media/oEmbed request and screenshot
+resource. Node HTTP validates DNS answers at socket lookup and limits streamed wire and decoded bodies. Screenshot
+resources share a 100 MiB wire-plus-decoded budget; native browser networking uses an unresolvable proxy with
+QUIC disabled, and WebRTC/WebTransport are removed from every frame. Pending links use minimal `processing-guts` markup and analyzing details use
+the processing TL;DR. These pending templates are inferred from the shipped CSS, not present in the recordings.
+
+Uploads use `POST /uploads/authorize`, bearer-authorized chunked `PUT /uploads/:id`, then `POST /objects` with
+`{type:"Media",uploadId}`. PNG/JPEG/WebP and other decoded raster images, videos and PDFs become local cards.
+Originals live in `data/media/<account>/<card-tail>/<blob>.<ext>`; recorded-style rendition URLs are generated on
+demand with sharp, with cached resized/cropped WebP/JPEG/PNG, PDF pages and video posters/previews. Local files
+take precedence over captured media; streaming originals and videos support byte ranges. Set `STORE_MEDIA` to
+override the media root (the default is beside `STORE_DB`). Clipboard multipart image/PDF paste and inline editor
+image attachments (raw bytes, completed upload IDs or public remote URLs) use the same local media storage.
+HEAD and byte ranges stat and stream files without loading whole originals. Video renditions and previews publish
+by atomic rename after successful processing. Temporary uploads have a shared 1 GiB byte limit, expire after
+24 hours, and are swept at writable startup and upload operations. Claiming an upload removes its temporary
+original after commit; its row retains idempotency until expiry and attachment reuse resolves permanent media.
+
+AI runs after capture, after saved notes and on `POST /cards/:id/analyze`. The server loads `.env` with
+`process.loadEnvFile` when present. Set `GEMINI_API_KEY` for hosted summaries and 768-dimension embeddings;
+`TYPESAFE_API_KEY` optionally selects final tags with Jev. Cover images are converted to PNG for analysis. The
+library's tag vocabulary is passed to `analyze`; generic labels are filtered, manual tags are preserved, AI tags
+use flag `2`, summaries appear in the detail TL;DR and embeddings persist in the SQLite `embeddings` BLOB table.
+Missing keys and API failures retain the card and clear processing state. `STORE_READONLY=1` disables all capture
+and AI work. `OFFLINE=1` allows only loopback capture fixtures and explicitly configured loopback AI stubs.
+Article reader edits schedule analysis and invalidate in-flight results based on the effective reader content.
+Summaries and tags use text for text-rich cards; images inform visual cards and items with under 200 text
+characters. Post analysis supplies headlines of at most eight words, applied only to titles the user hasn't
+edited. AI tags use normalized identity, existing vocabulary spelling, type-label filtering and a ten-tag cap.
+
+Install dependencies with `npm ci`. PDF/video previews require host `pdftoppm` (Poppler), `ffmpeg` and `ffprobe`.
+Page screenshots use `VERIFIER_CHROMIUM`, default `/usr/lib/chromium/chromium`, without touching the verifier's
+running browser. New screenshot output still needs host/browser verification before making a parity claim.
+Permanent delete and empty trash have no captured client calls, so only trash and restore are implemented.
 
 Run the local data and HTTP checks without opening a browser:
 
 ```bash
 node tools/check-reads.mjs
 node tools/check-writes.mjs
+node tools/check-capture.mjs
+node tools/check-media.mjs --in-process
 node tools/check-store.mjs
 node tools/check-render.mjs
 ```
 
 The HTTP checks back up the seeded database to temporary files, start isolated offline servers on OS-assigned
 loopback ports, and clean them up. They never use port 4321. If a sandbox prohibits socket listeners, pass
-`--in-process` to either HTTP check to exercise the real server request callbacks and hub framing in memory;
-that mode does not establish socket or browser parity.
+`--in-process` to the HTTP checks to exercise the real server request callbacks and hub framing in memory;
+that mode does not establish socket or browser parity. `check-capture` starts a temporary fixture HTTP server
+and local Gemini/TypeSafe stubs, generates synthetic PNG/MP4/PDF files and never contacts hosted services. Its
+`--in-process` mode runs those handlers in memory and injects a PNG at the screenshot seam; the real Chromium
+screenshot and native-network probe checks are explicitly skipped. The host browser probe uses local TCP/UDP
+sinks and an unguarded positive control to check preconnect/WebRTC isolation. `check-media` uses a synthetic
+database, real filesystem streams/Sharp and stubbed media executables. Tests use isolated databases/media roots
+and `STORE_LOAD_ENV=0`, so they never load
+the user's `.env`.
 
 ## Re-capture
 
@@ -142,7 +188,8 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 
 - Recorded detail views cover the first 30 cards; images cover the first 300. Unchanged uncaptured cards use placeholders.
 - Generated details and rich prose nodes have route/data coverage, but still need browser and REA parity checks.
-- Media without recordings, link enrichment, uploads, AI and full search remain later phases.
+- Uncaptured historical media retains its placeholder fallback. Full/semantic search and generated AI thumbnails
+  remain later work; embeddings from new cards are persisted for semantic search.
 
 ## Private data
 

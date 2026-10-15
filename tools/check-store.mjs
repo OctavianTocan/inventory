@@ -9,10 +9,10 @@ import { ROOT, readRecordings, recordedCardId } from './seed-db.mjs';
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const ids = (rows) => rows.map((row) => row.id);
 
-// Name the first position where two id lists differ.
 // Blank CDN signatures, which live mymind re-issues on every recording and the store cannot mint.
 const unsign = (html) => html?.replace(/Expires=\d+(&(?:amp;)?)Signature=[^&"\s]+/g, 'Expires=$1Signature=');
 
+// Name the first position where two id lists differ.
 function firstOrderDifference(actual, expected) {
   const i = Array.from({ length: Math.max(actual.length, expected.length) }, (_, n) => n).find((n) => actual[n] !== expected[n]);
   return i === undefined ? null : `position ${i}: store ${actual[i]}, recording ${expected[i]}`;
