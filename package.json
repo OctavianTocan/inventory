@@ -1,0 +1,11 @@
+{
+  "name": "mymind-reconstruction",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "capture": "node tools/capture.mjs",
+    "mirror": "node tools/mirror-static.mjs",
+    "serve": "node server.mjs"
+  }
+}

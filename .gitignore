@@ -1,0 +1,5 @@
+# Private account data and third-party code captured from the live app.
+capture/
+mirror/
+evidence/
+node_modules/
