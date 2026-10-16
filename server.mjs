@@ -1,11 +1,12 @@
 // Serves mymind's captured front end with a local SQLite API and recording fallbacks.
 import http from 'node:http';
 import { watchFile } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { deviceVariant } from './tools/replay-store.mjs';
 import { createApi } from './lib/api.mjs';
+import { createAuth } from './lib/auth.mjs';
 import { createHub } from './lib/hub.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -167,11 +168,24 @@ async function serveStatic(res, relative, search) {
   return serveFile(res, file, { localizeText: true });
 }
 
+// The largest recorded rendition of the same transformed media (e.g. the 1x of a srcset's 2x), or null.
+async function siblingRendition(file, relative) {
+  const stem = decodeURIComponent(relative).replace(/[^/;]*$/, '');
+  if (!file || !stem.includes(';')) return null;
+  const prefix = path.basename(stem.endsWith('/') ? '' : stem);
+  const area = (name) => name.match(/(\d+)x(\d+)/)?.slice(1).reduce((a, b) => a * b) ?? 0;
+  const names = (await readdir(path.dirname(file)).catch(() => [])).filter((name) => name.startsWith(prefix));
+  const best = names.sort((a, b) => area(b) - area(a))[0];
+  return best ? path.join(path.dirname(file), best) : null;
+}
+
 async function serveMedia(res, root, relative) {
   const file = fileInside(root, relative);
   try {
     if (file) return await serveFile(res, file);
   } catch {}
+  const sibling = await siblingRendition(file, relative);
+  if (sibling) return await serveFile(res, sibling);
   console.log(`[placeholder] ${root.slice(CAPTURE.length)}/${relative}`);
   if (/\.(mp4|mov|webm)$/i.test(relative)) return send(res, 404, 'video not captured');
   send(res, 200, IMAGE_PLACEHOLDER, { 'content-type': 'image/svg+xml' });
@@ -238,15 +252,20 @@ async function serveDetail(res, id) {
   });
 }
 
+const auth = createAuth({ root: ROOT, localize, port: PORT });
 let push = () => {};
 const api = await createApi({ root: ROOT, dbPath: process.env.STORE_DB, readonly: process.env.STORE_READONLY === '1',
-  msgpack, localize, send, push: (target, payload) => push(target, payload), hasReplay: (req, url) => Boolean(replayedFor(req, url)) });
+  msgpack, localize, send, push: (target, payload) => push(target, payload),
+  hasReplay: (req, url) => Boolean(replayedFor(req, url)) || Object.hasOwn(details, /^\/cards\/([^/]+)\/detail$/.exec(url.pathname)?.[1] ?? '') });
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const { pathname, search } = url;
   const key = `${req.method} ${pathname}${search}`;
   try {
+    if (auth && await auth.handle(req, res, url)) return;
+    // A request through a Cloudflare tunnel reaches a server without sign-in only by mistake; keep the library private.
+    if (!auth && req.headers['cf-connecting-ip']) return send(res, 403, 'This server has no sign-in configured.');
     // mymind redirects framed media (PDFs) to its media host, so the viewer runs in a cross-site frame. Mirror
     // that with a cross-site loopback address: frame rendering differs between same-site and cross-site frames.
     const dest = req.headers['sec-fetch-dest'];
@@ -309,8 +328,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-push = createHub(server);
-server.on('close', () => api?.close());
+push = createHub(server, auth ? (req) => auth.allows(req) : (req) => !req.headers['cf-connecting-ip']);
+server.on('close', () => { api?.close(); auth?.close(); });
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`mymind replica on http://localhost:${server.address().port}/everything`);

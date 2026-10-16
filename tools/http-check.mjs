@@ -92,9 +92,10 @@ async function memoryTransport(dbPath, readonly) {
  * @param {boolean} [options.readonly=false] Start in verification mode.
  * @param {string} [options.source] Seeded database to copy; defaults to `$TEST_SOURCE_DB`, then data/mymind.db.
  * @param {boolean} [options.noStore=false] Exercise the legacy path with a nonexistent database.
- * @returns {Promise<object>} Base URL, database path, request helpers and async cleanup.
+ * @param {Record<string,string>} [options.env={}] Extra server environment (spawned servers only).
+ * @returns {Promise<object>} Base URL, database path, temporary directory, request helpers and async cleanup.
  */
-export async function testServer({ readonly = false, source = process.env.TEST_SOURCE_DB ?? join(ROOT, 'data/mymind.db'), noStore = false } = {}) {
+export async function testServer({ readonly = false, source = process.env.TEST_SOURCE_DB ?? join(ROOT, 'data/mymind.db'), noStore = false, env = {} } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'mymind-http-'));
   const dbPath = join(dir, 'test.db');
   let child;
@@ -107,7 +108,7 @@ export async function testServer({ readonly = false, source = process.env.TEST_S
     if (process.argv.includes('--in-process')) memory = await memoryTransport(serverDb, readonly);
     if (!memory) {
       child = spawn(process.execPath, ['server.mjs'], { cwd: ROOT,
-        env: { ...process.env, PORT: '0', OFFLINE: '1', STORE_DB: serverDb, STORE_READONLY: readonly ? '1' : '0', STORE_LOAD_ENV: '0' },
+        env: { ...process.env, PORT: '0', OFFLINE: '1', STORE_DB: serverDb, STORE_READONLY: readonly ? '1' : '0', STORE_LOAD_ENV: '0', ...env },
         stdio: ['ignore', 'pipe', 'pipe'] });
       child.stderr.on('data', chunk => { startupError += chunk; });
     }
@@ -125,7 +126,7 @@ export async function testServer({ readonly = false, source = process.env.TEST_S
     const errors = [];
     child?.stderr.on('data', chunk => { if (!chunk.toString().includes('ExperimentalWarning')) errors.push(chunk.toString()); });
     return {
-      base, dbPath,
+      base, dbPath, dir,
       async request(path, { method = 'GET', body, accept = 'application/json', type = 'application/json', headers = {} } = {}) {
         const response = await (memory?.fetch ?? fetch)(base + path, { method, signal: AbortSignal.timeout(10000), headers: { accept, 'content-type': type,
           'x-authenticity-token': 'local-test-token', ...headers },

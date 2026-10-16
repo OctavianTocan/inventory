@@ -109,6 +109,7 @@ node tools/check-media.mjs --in-process
 node tools/check-store.mjs
 node tools/check-render.mjs
 node tools/check-search.mjs --in-process
+node tools/check-auth.mjs
 ```
 
 The HTTP checks back up the seeded database to temporary files, start isolated offline servers on OS-assigned
@@ -121,7 +122,30 @@ screenshot and native-network probe checks are explicitly skipped. The host brow
 sinks and an unguarded positive control to check preconnect/WebRTC isolation. `check-media` uses a synthetic
 database, real filesystem streams/Sharp and stubbed media executables. Tests use isolated databases/media roots
 and `STORE_LOAD_ENV=0`, so they never load
-the user's `.env`.
+the user's `.env`. `check-auth` runs a stand-in Google (its own keys, token endpoint and JWKS) and never contacts
+Google.
+
+## Sign-in (remote access)
+
+Sign-in is off by default: the server trusts everyone who can reach it, which is fine on localhost and is how the
+desktop app and every verification run work. With sign-in off the server refuses any request that arrives through
+a Cloudflare tunnel (`cf-connecting-ip`), so publishing it by mistake exposes nothing.
+
+To reach the library from other computers, run the server with Google sign-in and put it behind HTTPS:
+
+| Variable | Effect |
+|---|---|
+| `AUTH=google` | Turns sign-in on. Requires the three below. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | A Google OAuth "Web application" client whose redirect URI is `{PUBLIC_URL}/google/oauth2-callback`. |
+| `OWNER_EMAIL` | The only Google account let in; any other gets mymind's "could not find an account" page. |
+| `PUBLIC_URL` | The address browsers use, default `http://localhost:PORT`. An `https://` URL makes cookies `Secure`. |
+| `AUTH_DB` | Session database, default `data/auth.db`. |
+
+Signed-out visitors get mymind's own sign-in page (`capture/signin/`, recorded signed out by
+`node tools/capture-signin.mjs`). Its Google button opens the usual popup; the server runs the OAuth flow (PKCE,
+`state`, `nonce`), verifies Google's ID token and sets a 30-day HttpOnly session cookie. The Apple button does
+nothing. API requests and the `/hub` socket without a session get 401, cross-origin writes 403. `/signout` ends
+the session.
 
 ## Desktop app
 
@@ -220,8 +244,12 @@ Needs Chrome with remote debugging on port 9222 and a logged-in mymind tab open.
 ```bash
 npm run capture -- --media-cards 300 --detail-cards 30   # add --videos to include mp4s
 npm run capture -- --media-only                            # only the card media still missing (add --videos for mp4s)
+npm run capture -- --details-only                          # detail views, article readers and detail media of every card lacking them
 npm run mirror                                             # static JS/CSS/fonts for OFFLINE=1
+node tools/capture-signin.mjs                              # the signed-out sign-in page, from a cookie-less context
 ```
+
+Every pass only sends GETs. `--details-only` reads the card list from `data/mymind.db` (`--db` picks another).
 
 ## Verify against live, 1:1
 
@@ -311,7 +339,8 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 
 ## Known gaps
 
-- Recorded detail views cover the first 30 cards; images cover the first 300. Unchanged uncaptured cards use placeholders.
+- Recorded detail views cover every card that existed at the last `--details-only` pass. A card without one
+  (e.g. saved on live mymind afterwards) gets a generated detail whose body is its grid card.
 - Generated details and rich prose nodes have route/data coverage, but still need browser and REA parity checks.
 - Uncaptured historical media retains its placeholder fallback. Generated AI thumbnails remain later work.
 - Local search approximates the live ranking engine; historical cards without vectors need an explicit hosted

@@ -2,6 +2,7 @@
 // from an open Chrome tab, so server.mjs can replay it offline.
 // --gets-only records just the side endpoints missing from an existing capture and leaves everything else as is.
 // --media-only records the media of every captured card that neither capture/ nor replay/ has yet.
+// --details-only records the detail view, article reader and detail media of every stored card that has none yet.
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -18,6 +19,8 @@ const { values: opts } = parseArgs({
     videos: { type: 'boolean', default: false },
     'gets-only': { type: 'boolean', default: false },
     'media-only': { type: 'boolean', default: false },
+    'details-only': { type: 'boolean', default: false },
+    db: { type: 'string', default: 'data/mymind.db' },
   },
 });
 
@@ -125,9 +128,22 @@ function mediaUrlsIn(html, includeVideos) {
   return [...found].filter((u) => includeVideos || !/\.(mp4|mov|webm)(\?|$)/i.test(u));
 }
 
+// Media referenced by src/srcset attributes, keeping only the 1x candidate of each srcset.
+function attributeMediaUrls(html, includeVideos) {
+  const found = new Set();
+  for (const [, name, value] of html.replaceAll('&amp;', '&').matchAll(/\b(src|data-src|poster|srcset|data-srcset)="([^"]+)"/g)) {
+    const candidates = value.split(/,\s+/).map((candidate) => candidate.trim().split(/\s+/));
+    const [url] = name.endsWith('srcset') ? (candidates.find(([, d]) => d === '1x') ?? candidates[0]) : [value];
+    const local = url.replace(ORIGIN, '');
+    if (local.startsWith('/media/') || local.startsWith(MEDIA_HOST)) found.add(local);
+  }
+  return [...found].filter((u) => includeVideos || !/\.(mp4|mov|webm)(\?|$)/i.test(u));
+}
+
 // Where a media URL is stored under capture/.
+// The media host signs each URL with an expiring query; the server looks files up by path alone.
 const mediaFile = (url) => url.startsWith(MEDIA_HOST)
-  ? `mediahost/${decodeURIComponent(url.slice(MEDIA_HOST.length))}`
+  ? `mediahost/${decodeURIComponent(url.slice(MEDIA_HOST.length).split('?')[0])}`
   : `media/${decodeURIComponent(url.slice('/media/'.length))}`;
 
 // Loads media URLs through the page's DevTools session, six at a time, and stores each under capture/; returns how many were saved.
@@ -197,6 +213,53 @@ if (opts['media-only']) {
   const meta = JSON.parse(await readFile(path.join(OUT, 'meta.json'), 'utf8'));
   await writeFile(path.join(OUT, 'meta.json'), JSON.stringify({ ...meta, media: meta.media + saved }, null, 2));
   console.log(`Media saved: ${saved}/${missing.length} missing`);
+  page.close();
+  process.exit(0);
+}
+
+if (opts['details-only']) {
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(path.resolve(opts.db), { readOnly: true });
+  const rows = db.prepare("SELECT id, type FROM cards WHERE deleted_ns IS NULL AND coalesce(json_extract(extras, '$.local'), 0) = 0").all();
+  db.close();
+  const replayed = JSON.parse(await readFile(path.join(STORE, 'index.json'), 'utf8').catch(() => '{}'));
+  const details = JSON.parse(await readFile(path.join(OUT, 'details.json'), 'utf8'));
+  const responses = JSON.parse(await readFile(path.join(OUT, 'responses.json'), 'utf8'));
+  const meta = JSON.parse(await readFile(path.join(OUT, 'meta.json'), 'utf8'));
+  const missing = rows.filter(({ id }) => !details[id] && !replayed[replayKey('GET', `${ORIGIN}/cards/${id}/detail`, false)]);
+  const [screenWidth, screenHeight] = meta.viewport.screen;
+  const detailRequests = missing.map(({ id }) => ({
+    url: `/cards/${id}/detail`,
+    accept: 'text/html,image/webp',
+    headers: { 'x-viewport-width': String(screenWidth), 'x-viewport-height': String(screenHeight), 'x-partial': '1' },
+  }));
+  let html = '';
+  for (const res of await fetchInBatches(page, detailRequests, 'Card details')) {
+    if (res.error || res.status !== 200) continue;
+    const id = res.url.split('/')[2];
+    const body = Buffer.from(res.base64, 'base64');
+    html += body.toString();
+    await writeInside(OUT, `details/${toFileName(id)}.html`, body);
+    details[id] = { headers: res.headers };
+  }
+  await writeFile(path.join(OUT, 'details.json'), JSON.stringify(details, null, 2));
+  const readerRequests = missing
+    .filter(({ id, type }) => type === 'Article' && !(`GET /cards/${id}/reader` in responses) && !replayed[replayKey('GET', `${ORIGIN}/cards/${id}/reader`, false)])
+    .map(({ id }) => ({ url: `/cards/${id}/reader`, accept: 'text/html' }));
+  for (const res of await fetchInBatches(page, readerRequests, 'Readers')) {
+    if (res.error || res.status !== 200) continue;
+    const file = `responses/${toFileName(res.url)}.body`;
+    const body = Buffer.from(res.base64, 'base64');
+    html += body.toString();
+    await writeInside(OUT, file, body);
+    responses[`GET ${res.url}`] = { status: res.status, headers: res.headers, file };
+  }
+  await writeFile(path.join(OUT, 'responses.json'), JSON.stringify(responses, null, 2));
+  const media = attributeMediaUrls(html, opts.videos)
+    .filter((url) => !existsSync(path.join(OUT, mediaFile(url))) && !replayed[replayKey('GET', url.startsWith('/') ? ORIGIN + url : url, false)]);
+  const saved = await recordMedia(page, media);
+  await writeFile(path.join(OUT, 'meta.json'), JSON.stringify({ ...meta, details: Object.keys(details).length, media: meta.media + saved }, null, 2));
+  console.log(`Details: ${Object.keys(details).length} (${missing.length} were missing), readers: ${readerRequests.length}, media saved: ${saved}/${media.length}`);
   page.close();
   process.exit(0);
 }

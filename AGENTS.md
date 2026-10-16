@@ -24,6 +24,9 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
 5. **Git:** work on a branch, never force-push `main`. Commit only when the user asks.
 6. **No local models.** Never run or download models locally (no Ollama, llama.cpp, transformers.js). Every AI
    feature calls a hosted API (see External services).
+7. **Nothing public without sign-in.** A server reachable from outside the machine (tunnel, port forward) runs
+   with `AUTH=google` and `OWNER_EMAIL` (README, Sign-in). Never weaken the gate in `lib/auth.mjs` or the tunnel
+   refusal in `server.mjs`, and ask the user before publishing any hostname.
 
 ## Long-running processes
 
@@ -38,6 +41,9 @@ Verification is slow: a desktop `ui` suite takes 40–60 min, a phone `ui` suite
 4. Before starting anything over 5 minutes, say how long it will take, run it in the background and wait for the
    completion notification instead of polling. At most 3 drive runs in parallel; check `free -g` first.
 5. Delete `evidence/drive/claims/` before a fresh matrix, or every run is skipped as already claimed.
+6. Never edit replica code (`server.mjs`, `tools/replay-store.mjs`, `lib/**/*.mjs`) while drive runs are going.
+   Coverage hashes those files when it reports, so every run that finished before the edit becomes
+   `verifier-result-incompatible` and has to be re-run.
 
 Claude Code sandbox notes: `drive`/`verify` need the agent Chromium on CDP `:9222`, which the Bash sandbox cannot
 reach, and `git` cannot read `~/.gitconfig` inside it; run both unsandboxed. Never `pkill -f` a pattern that also
