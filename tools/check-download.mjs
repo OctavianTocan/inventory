@@ -1,5 +1,5 @@
-// Proves deploy/download-server.mjs serves the app only to the owner's valid Cloudflare Access token, against a
-// stand-in for Cloudflare's signing keys; it never contacts Cloudflare.
+// Proves deploy/download-server.mjs serves the app only to valid tokens of its Cloudflare Access application, against
+// a stand-in for Cloudflare's signing keys; it never contacts Cloudflare.
 import { ok, strictEqual } from 'node:assert';
 import { spawn } from 'node:child_process';
 import { generateKeyPairSync, sign } from 'node:crypto';
@@ -10,7 +10,7 @@ import { join } from 'node:path';
 
 const TEAM = 'team.cloudflareaccess.test';
 const AUD = 'test-audience';
-const OWNER = 'owner@example.com';
+const PERSON = 'person@example.com';
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const { privateKey: strangerKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 
@@ -18,7 +18,7 @@ const { privateKey: strangerKey } = generateKeyPairSync('rsa', { modulusLength: 
 function token(claims = {}, key = privateKey) {
   const now = Math.floor(Date.now() / 1000);
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
-  const body = `${encode({ alg: 'RS256', kid: 'test-key', typ: 'JWT' })}.${encode({ iss: `https://${TEAM}`, aud: [AUD], email: OWNER, iat: now, nbf: now, exp: now + 3600, type: 'app', ...claims })}`;
+  const body = `${encode({ alg: 'RS256', kid: 'test-key', typ: 'JWT' })}.${encode({ iss: `https://${TEAM}`, aud: [AUD], email: PERSON, iat: now, nbf: now, exp: now + 3600, type: 'app', ...claims })}`;
   return `${body}.${sign('RSA-SHA256', Buffer.from(body), key).toString('base64url')}`;
 }
 
@@ -40,7 +40,7 @@ await writeFile(join(dir, 'manifest.json'), JSON.stringify({ library: 'https://m
   { name: 'mymind-linux-x86_64.tar.gz', label: 'Linux (x86_64)', bytes: app.length, sha256: 'abc', built: new Date().toISOString() },
 ] }));
 const server = spawn(process.execPath, ['deploy/download-server.mjs'], {
-  env: { PATH: process.env.PATH, CF_ACCESS_TEAM_DOMAIN: TEAM, CF_ACCESS_AUD: AUD, OWNER_EMAIL: OWNER, DOWNLOAD_PORT: String(port), DOWNLOAD_DIR: dir,
+  env: { PATH: process.env.PATH, CF_ACCESS_TEAM_DOMAIN: TEAM, CF_ACCESS_AUD: AUD, DOWNLOAD_PORT: String(port), DOWNLOAD_DIR: dir,
     CF_ACCESS_CERTS_URL: `http://127.0.0.1:${certs.address().port}/cdn-cgi/access/certs` },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
@@ -61,15 +61,20 @@ try {
   await check('another application\'s token is refused', async () => strictEqual((await get('/download', token({ aud: ['other'] }))).status, 403));
   await check('another team\'s token is refused', async () => strictEqual((await get('/download', token({ iss: 'https://evil.cloudflareaccess.com' }))).status, 403));
   await check('an expired token is refused', async () => strictEqual((await get('/download', token({ exp: Math.floor(Date.now() / 1000) - 60 }))).status, 403));
-  await check('another person\'s token is refused', async () => strictEqual((await get('/download', token({ email: 'someone@example.com' }))).status, 403));
+  await check('a token naming no one is refused', async () => strictEqual((await get('/download', token({ email: undefined }))).status, 403));
   await check('a token without a signature is refused', async () => strictEqual((await get('/download', token().replace(/\.[^.]+$/, '.'))).status, 403));
-  await check('the owner gets the download page', async () => {
+  await check('a person Access let in gets the download page', async () => {
     const res = await get('/download', token());
     strictEqual(res.status, 200);
     const html = await res.text();
-    ok(html.includes('href="/download/mymind-linux-x86_64.tar.gz"') && html.includes(OWNER));
+    ok(html.includes('href="/download/mymind-linux-x86_64.tar.gz"') && html.includes(PERSON));
   });
-  await check('the owner downloads the app', async () => {
+  await check('a service token Access let in gets the download page', async () => {
+    const res = await get('/download', token({ email: undefined, common_name: 'abc.access' }));
+    strictEqual(res.status, 200);
+    ok((await res.text()).includes('abc.access'));
+  });
+  await check('a person Access let in downloads the app', async () => {
     const res = await get('/download/mymind-linux-x86_64.tar.gz', token());
     strictEqual(res.status, 200);
     ok(res.headers.get('content-disposition').includes('attachment'));

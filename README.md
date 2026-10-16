@@ -223,10 +223,12 @@ default, so an app on the host and the hosted site share one library and its liv
 #### Downloading the desktop app
 
 `https://<hostname>/download` serves the desktop app, packaged to open the hosted library. The tunnel sends
-`/download` to `deploy/download-server.mjs`, which itself refuses every request without a valid Access token for
-`OWNER_EMAIL`, so other people Access lets in can reach the site but not the downloads.
+`/download` to `deploy/download-server.mjs`, which itself checks each request's Access token (signature, team,
+audience, expiry), so everyone the Access policy lets in can download and the files stay private even if the tunnel's
+routing changes. It logs why it refused a request (`journalctl --user -u mymind-download`). There is a Linux build
+only: `deploy/package-app.sh` builds for the machine it runs on.
 
-Run `deploy/package-app.sh` again after changing `desktop/`. It builds for the machine it runs on (Linux here).
+Run `deploy/package-app.sh` again after changing `desktop/`.
 
 ## Desktop app
 

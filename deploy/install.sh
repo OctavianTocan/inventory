@@ -86,7 +86,7 @@ PartOf=mymind-replica.service
 
 [Service]
 WorkingDirectory=$root
-Environment=DOWNLOAD_PORT=4332 CF_ACCESS_TEAM_DOMAIN=$access_team CF_ACCESS_AUD=$access_aud OWNER_EMAIL=$(setting OWNER_EMAIL)
+Environment=DOWNLOAD_PORT=4332 CF_ACCESS_TEAM_DOMAIN=$access_team CF_ACCESS_AUD=$access_aud
 ExecStart=$node deploy/download-server.mjs
 Restart=always
 RestartSec=5

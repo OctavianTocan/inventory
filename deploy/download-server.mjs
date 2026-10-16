@@ -1,7 +1,8 @@
-// Serves the packaged desktop app at /download, only to requests that carry a valid Cloudflare Access token for the
-// owner, so the files stay behind Cloudflare Access even if the tunnel's routing changes.
+// Serves the packaged desktop app at /download, only to requests that carry a valid token of the hosted site's
+// Cloudflare Access application, so whoever its policy lets in can download and the files stay behind Access even if
+// the tunnel's routing changes.
 // Env: CF_ACCESS_TEAM_DOMAIN (e.g. you.cloudflareaccess.com), CF_ACCESS_AUD (the Access application's audience tag),
-// OWNER_EMAIL, DOWNLOAD_PORT (default 4332), DOWNLOAD_DIR (default downloads/), CF_ACCESS_CERTS_URL (default the team's).
+// DOWNLOAD_PORT (default 4332), DOWNLOAD_DIR (default downloads/), CF_ACCESS_CERTS_URL (default the team's).
 import { createPublicKey, verify } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
@@ -10,11 +11,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { CF_ACCESS_TEAM_DOMAIN: team, CF_ACCESS_AUD: audience, OWNER_EMAIL: owner } = process.env;
+const { CF_ACCESS_TEAM_DOMAIN: team, CF_ACCESS_AUD: audience } = process.env;
 const port = Number(process.env.DOWNLOAD_PORT ?? 4332);
 const dir = path.resolve(root, process.env.DOWNLOAD_DIR ?? 'downloads');
-if (!team || !audience || !owner) {
-  console.error('CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD and OWNER_EMAIL are required.');
+if (!team || !audience) {
+  console.error('CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD are required.');
   process.exit(1);
 }
 const issuer = `https://${team}`;
@@ -34,20 +35,26 @@ async function signingKey(kid) {
   return key;
 }
 
-// The email of the owner's verified Access token, or null for anything else.
-async function accessEmail(token) {
+// Who a verified Access token of this application names (a person's email or a service token's client ID), or why
+// the token is refused.
+async function accessIdentity(token) {
+  if (!token) return { refused: 'no Access token' };
   try {
-    const [header, payload, signature] = (token ?? '').split('.');
+    const [header, payload, signature] = token.split('.');
     const { alg, kid } = JSON.parse(Buffer.from(header, 'base64url'));
-    if (alg !== 'RS256') return null;
-    if (!verify('RSA-SHA256', Buffer.from(`${header}.${payload}`), await signingKey(kid), Buffer.from(signature, 'base64url'))) return null;
+    if (alg !== 'RS256') return { refused: `algorithm ${alg}` };
+    if (!verify('RSA-SHA256', Buffer.from(`${header}.${payload}`), await signingKey(kid), Buffer.from(signature, 'base64url'))) {
+      return { refused: 'bad signature' };
+    }
     const claims = JSON.parse(Buffer.from(payload, 'base64url'));
     const now = Date.now() / 1000;
-    const audiences = [claims.aud].flat();
-    if (claims.iss !== issuer || !audiences.includes(audience) || !(claims.exp > now) || (claims.nbf ?? 0) > now + 60) return null;
-    return String(claims.email ?? '').toLowerCase() === owner.toLowerCase() ? claims.email : null;
-  } catch {
-    return null;
+    if (claims.iss !== issuer) return { refused: `issuer ${claims.iss}` };
+    if (![claims.aud].flat().includes(audience)) return { refused: 'another application' };
+    if (!(claims.exp > now) || (claims.nbf ?? 0) > now + 60) return { refused: 'expired' };
+    const identity = claims.email || claims.common_name;
+    return identity ? { identity } : { refused: 'no email or service token' };
+  } catch (error) {
+    return { refused: error.message };
   }
 }
 
@@ -55,7 +62,7 @@ const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;',
 const size = (bytes) => `${(bytes / 1_048_576).toFixed(1)} MB`;
 
 // The download page: every packaged file with its size and checksum, and how to install it.
-async function page(email) {
+async function page(identity) {
   const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8').catch(() => '{"files":[]}'));
   const rows = manifest.files.map((file) => `<li><a href="/download/${encodeURIComponent(file.name)}">${escape(file.label)}</a>
     <span>${size(file.bytes)} · built ${escape(file.built.slice(0, 10))}</span><code>sha256 ${escape(file.sha256)}</code></li>`).join('');
@@ -74,13 +81,14 @@ pre{background:var(--card);border-radius:14px;padding:16px;overflow-x:auto;font-
 <pre>tar -xzf mymind-linux-x86_64.tar.gz
 mymind/install.sh        # ~/.local/bin/mymind and a launcher entry</pre>
 <p>Needs WebKitGTK 4.1 and GStreamer's good plugins (Arch: <code>webkit2gtk-4.1 gst-plugins-good</code>).</p>
-<p>Signed in to Cloudflare Access as ${escape(email)} · <a href="/cdn-cgi/access/logout">Sign out</a></p>
+<p>Signed in to Cloudflare Access as ${escape(identity)} · <a href="/cdn-cgi/access/logout">Sign out</a></p>
 </main></body></html>`;
 }
 
 http.createServer(async (req, res) => {
-  const email = await accessEmail(req.headers['cf-access-jwt-assertion']);
-  if (!email) {
+  const { identity, refused } = await accessIdentity(req.headers['cf-access-jwt-assertion']);
+  if (!identity) {
+    console.warn(`refused ${req.method} ${req.url}: ${refused}`);
     res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
     return res.end('Sign in through Cloudflare Access to download the app.\n');
   }
@@ -91,7 +99,7 @@ http.createServer(async (req, res) => {
   }
   if (pathname === '/download' || pathname === '/download/') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-    return res.end(await page(email));
+    return res.end(await page(identity));
   }
   const name = decodeURIComponent(pathname.slice('/download/'.length));
   const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8').catch(() => '{"files":[]}'));
@@ -109,4 +117,4 @@ http.createServer(async (req, res) => {
   });
   if (req.method === 'HEAD') return res.end();
   createReadStream(path.join(dir, file.name)).pipe(res);
-}).listen(port, '127.0.0.1', () => console.log(`downloads for ${owner} behind Cloudflare Access on http://127.0.0.1:${port}/download`));
+}).listen(port, '127.0.0.1', () => console.log(`downloads behind Cloudflare Access on http://127.0.0.1:${port}/download`));
