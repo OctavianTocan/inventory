@@ -22,5 +22,5 @@ Every table carries `user_id` from phase 1 so accounts slot in without a migrati
 
 Order after phase 8, as the user set it: phone app, then GPUI, then the browser extension. The hosted library comes
 first because the phone app needs a server it can reach. Next for phase 8 (the user, 2026-10-16): a library per
-person and the server's sign-in as the only gate, without Cloudflare Access (`docs/accounts-plan.md`), before the
-phone app or in parallel with it.
+person (`docs/accounts-plan.md`), before the phone app or in parallel with it. The server's sign-in is already the
+only gate: Cloudflare Access was removed the same day.

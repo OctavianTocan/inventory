@@ -51,8 +51,8 @@ the Kotlin models are generated or checked against it.
 
 The user's choice: a native sign-in screen with one-tap Google sign-in, and no Cloudflare Access at all (the tunnel
 stays). Option A (browser sign-in, then per-device Cloudflare tokens), C (passing the Access token through) and an
-Access exemption for an app path were rejected. Accounts, per-user libraries and removing Access are planned in
-`docs/accounts-plan.md`; the app builds on them.
+Access exemption for an app path were rejected. Access was removed on 2026-10-16; accounts and per-user libraries
+are planned in `docs/accounts-plan.md`, and the app builds on them.
 
 - **Who can sign in (the user):** "the test user, my main email, and then my domain. Anyone from those is completely
   welcome." Google for `OWNER_EMAIL` and any verified `@octaviantocan.com` address, passwords only for users made

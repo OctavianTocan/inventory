@@ -33,11 +33,11 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
    owner's Google login. Never weaken `lib/auth.mjs`, the tunnel refusal, or the session check in
    `deploy/download-server.mjs`, and ask the user before publishing any hostname.
 
-   Cloudflare (the user, 2026-10-16): drop Cloudflare Access entirely, keep the tunnel. Not done yet (plan in
-   `docs/accounts-plan.md`); until then the hostname sits behind the Access application "mymind" (owner plus
-   `@octaviantocan.com`), the tunnel and `/download` check its token (`deploy/install.sh`), and the hosted site is
-   reached with the service token in `.env` (`CF_ACCESS_CLIENT_*`, `node tools/check-hosted.mjs`). Google sign-in
-   admits only `OWNER_EMAIL` until per-user libraries exist.
+   Cloudflare (the user, 2026-10-16): no Cloudflare Access, only the tunnel; Access was removed the same day. The
+   hostname is public, so signed-out tunnel visitors get the replica's own plain sign-in page (no mymind name, logo
+   or assets, `noindex`), never mymind's recorded one; keep it that way. `node tools/check-hosted.mjs` tests the
+   hosted site as the test user. Google sign-in admits only `OWNER_EMAIL` until per-user libraries exist
+   (`docs/accounts-plan.md`).
 
 ## Long-running processes
 

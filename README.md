@@ -155,8 +155,8 @@ HttpOnly session cookie. API requests and the `/hub` socket without a session ge
 `/signout` ends the session.
 
 Password users (test accounts, or a browser without Google) sign in at `/signin/password`, which exists only once a
-user has been added; mymind's own sign-in page stays as recorded and does not link to it, the plain one does. A password session
-reaches the same library as the owner. Ten wrong passwords for a username, or 30 from one address, lock it for 15
+user has been added; mymind's own sign-in page stays as recorded and does not link to it, the plain one does. A
+password session reaches the same library as the owner. Ten wrong passwords for a username, or 30 from one address, lock it for 15
 minutes.
 
 ```bash

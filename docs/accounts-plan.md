@@ -1,7 +1,7 @@
 # Accounts (roadmap phase 8)
 
-Status: owner-only Google sign-in is built (`lib/auth.mjs`, proven by `tools/check-auth.mjs`). A library per
-person and dropping Cloudflare Access are decided, not built.
+Status: owner-only Google sign-in is built (`lib/auth.mjs`, proven by `tools/check-auth.mjs`), and Cloudflare Access
+is gone (2026-10-16). A library per person is decided, not built.
 
 ## What is built
 
@@ -24,8 +24,8 @@ person and dropping Cloudflare Access are decided, not built.
 
 Installed on mini-002 (README, Hosting): `deploy/install.sh` runs the server as a systemd user service with
 `AUTH=google` on `127.0.0.1:4330`, behind the Cloudflare tunnel `mymind` at `mymind.octaviantocan.com`, and serves
-the packaged desktop app at `/download` to anyone with a session. The whole host sits behind the Cloudflare Access
-application "mymind" (owner plus `@octaviantocan.com`) until Access is removed (below). The Google
+the packaged desktop app at `/download` to anyone with a session. Nothing sits in front of the server's sign-in (see
+"Done: removing Cloudflare Access" below). The Google
 client (project `mymind-replica`, consent screen in Testing with the owner as the only test user) lists that host's
 callback and the two localhost ones. The same process serves the host without sign-in on `LOCAL_PORT` (4331), so
 one process owns `data/mymind.db`; verification reads its own `data/verify.db`.
@@ -62,17 +62,20 @@ login.
 - Proof: the test user's screenshots stay pixel-identical; a second account sees an empty library and cannot read or
   write anyone else's cards.
 
-## Not done: removing Cloudflare Access
+## Done: removing Cloudflare Access (2026-10-16)
 
-Remove the Access application "mymind" and its policies (including the "mymind-bypass" service token), drop
-`access.required` from the tunnel config (`deploy/install.sh`), drop the Access token check from
-`deploy/download-server.mjs` (keeping the session check), and switch `tools/check-hosted.mjs`, README and AGENTS.md
-rule 7 to the sign-in gate alone.
-
-Open, to settle with the user first: what a signed-out visitor sees. Today `/signin` is mymind's own recorded sign-in
-page and `/signin/password` a "Sign in to mymind" form. Behind Access only the owner's domain can load them; without
-it anyone can, and an exact copy of a real company's sign-in page with a password form on another domain is what
-phishing filters (Google Safe Browsing, Cloudflare) flag, which can put a warning on the whole domain and invites
-people to type their mymind password. Proposed: signed-out visitors on the public hostname get a plain sign-in page
-of our own (no mymind name or logo) and `noindex`; mymind's recorded page stays for loopback and verification, and
-everything after sign-in is unchanged.
+- **Cloudflare:** the Access application "mymind", its two policies ("mymind-bypass", "owner and
+  @octaviantocan.com") and the "mymind-bypass" service token are deleted; the tunnel stays. No other Access
+  application, policy or token was touched.
+- **Code:** the tunnel config no longer requires an Access token (`deploy/install.sh`), and `/download` checks only
+  the library session (`deploy/download-server.mjs`). `tools/check-hosted.mjs` needs no service token, and the
+  `CF_ACCESS_*` variables are gone from both `.env` files.
+- **What a signed-out visitor sees (the user agreed):** an exact copy of a real company's sign-in page on another
+  domain is what phishing filters flag, so requests arriving through the tunnel (`cf-connecting-ip`) get a plain
+  sign-in page of our own:
+  - no mymind name, logo, favicon or assets, and `noindex`, with `robots.txt` disallowing everything;
+  - only `/signin` and the Google OAuth paths are open; mymind's assets and the API answer 401.
+  Loopback visitors and verification still get mymind's recorded page, and everything after sign-in is unchanged
+  (`lib/auth.mjs`, `tools/check-auth.mjs`).
+- **Proof:** `tools/check-auth.mjs` 40/40, `tools/check-download.mjs` 7/7, `tools/check-hosted.mjs --browser` 11/11
+  against `https://mymind.octaviantocan.com`.
