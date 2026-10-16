@@ -1,12 +1,13 @@
 // Proves Google sign-in against a local stand-in for Google (its own keys, token endpoint and JWKS): the gate,
 // the PKCE/state/nonce checks, every ID-token rejection, owner-only access, sessions, sign-out, the hub and the
-// sign-in-free LOCAL_PORT listener.
+// sign-in-free LOCAL_PORT listener; then password sign-in, its lockout and user removal.
 import { ok, strictEqual } from 'node:assert';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import http from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openAuthStore, removeUser, setPassword } from '../lib/auth-store.mjs';
 import { testServer } from './http-check.mjs';
 
 const OWNER = 'owner@example.com';
@@ -61,6 +62,8 @@ const server = await testServer({ readonly: true, env: {
   GOOGLE_AUTH_URL: `${IDP}/authorize`, GOOGLE_TOKEN_URL: `${IDP}/token`, GOOGLE_CERTS_URL: `${IDP}/certs`, GOOGLE_ISSUER: ISSUER,
 } });
 const get = (path, headers = {}) => fetch(server.base + path, { redirect: 'manual', headers, signal: AbortSignal.timeout(10000) });
+const post = (path, fields, headers = {}) => fetch(server.base + path, { method: 'POST', redirect: 'manual', body: new URLSearchParams(fields),
+  headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers }, signal: AbortSignal.timeout(10000) });
 const setCookie = (res, name) => res.headers.getSetCookie().map((c) => c.split(';')[0]).find((c) => c.startsWith(`${name}=`));
 
 // Start a sign-in like mymind's Google button does; returns what Google would see plus the browser's state cookie.
@@ -107,7 +110,10 @@ const rejected = async (res, error = 'SignInFailed') => {
 };
 
 let session;
+const users = openAuthStore(join(authDir, 'auth.db'));
+const PASSWORD = 'correct horse battery staple';
 try {
+  await check('password sign-in is off until a password user exists', async () => strictEqual((await get('/signin/password')).status, 404));
   await check('signed-out page load redirects to the sign-in page', async () => {
     const res = await get('/everything', { accept: 'text/html', 'sec-fetch-dest': 'document' });
     strictEqual(res.status, 302);
@@ -159,6 +165,43 @@ try {
     strictEqual(res.headers.get('location'), '/signin');
     strictEqual((await get('/cards', { accept: 'application/msgpack', cookie: session })).status, 401);
   });
+  await setPassword(users, 'Tester', PASSWORD);
+  await check('password page is served once a password user exists', async () => {
+    const res = await get('/signin/password', { accept: 'text/html' });
+    strictEqual(res.status, 200);
+    const html = await res.text();
+    ok(html.includes('action="/signin/password"') && html.includes('type="password"'));
+  });
+  await check('mymind\'s sign-in page is unchanged by password users', async () => ok(!(await (await get('/signin')).text()).includes('/signin/password')));
+  const refused = (res, error = 'invalid') => {
+    strictEqual(res.status, 303);
+    strictEqual(res.headers.get('location'), `/signin/password?error=${error}`);
+    ok(!setCookie(res, 'mm_session'), 'no session cookie');
+  };
+  await check('wrong password is refused', async () => refused(await post('/signin/password', { username: 'tester', password: 'not the password at all' })));
+  await check('unknown user is refused the same way', async () => refused(await post('/signin/password', { username: 'nobody', password: PASSWORD })));
+  await check('cross-origin password post is refused', async () => strictEqual((await post('/signin/password', { username: 'tester', password: PASSWORD }, { origin: 'https://evil.test' })).status, 403));
+  let passwordSession;
+  await check('password user signs in', async () => {
+    const res = await post('/signin/password', { username: 'TESTER', password: PASSWORD });
+    strictEqual(res.status, 303);
+    strictEqual(res.headers.get('location'), '/everything');
+    passwordSession = setCookie(res, 'mm_session');
+    ok(res.headers.getSetCookie().some((c) => c.startsWith('mm_session=') && /HttpOnly/.test(c) && /SameSite=Lax/.test(c)));
+    strictEqual((await get('/cards', { accept: 'application/msgpack', cookie: passwordSession })).status, 200);
+    strictEqual(await hubOpens(passwordSession), true);
+  });
+  await check('signed-in password user skips the password page', async () => strictEqual((await get('/signin/password', { cookie: passwordSession })).headers.get('location'), '/everything'));
+  await check('repeated failures lock the username', async () => {
+    await setPassword(users, 'locked', PASSWORD);
+    for (let i = 0; i < 10; i++) refused(await post('/signin/password', { username: 'locked', password: `wrong guess number ${i}` }));
+    refused(await post('/signin/password', { username: 'locked', password: PASSWORD }), 'locked');
+  });
+  await check('removing a password user ends their sessions', async () => {
+    ok(removeUser(users, 'tester'));
+    strictEqual((await get('/cards', { accept: 'application/msgpack', cookie: passwordSession })).status, 401);
+    refused(await post('/signin/password', { username: 'tester', password: PASSWORD }));
+  });
   await check('LOCAL_PORT serves this computer without sign-in', async () => {
     strictEqual((await fetch(`${LOCAL}/cards`, { headers: { accept: 'application/msgpack' } })).status, 200);
     strictEqual(await hubOpens(null, LOCAL), true);
@@ -169,6 +212,7 @@ try {
     strictEqual(await hubOpens(null, LOCAL, tunnelled), false);
   });
 } finally {
+  users.close();
   await server.close();
   idp.close();
   await rm(authDir, { recursive: true, force: true });
