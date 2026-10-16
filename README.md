@@ -126,7 +126,7 @@ checks are explicitly skipped. The host browser probe uses local TCP/UDP sinks a
 check preconnect/WebRTC isolation. `check-media` uses a synthetic database, real filesystem streams/Sharp and
 stubbed media executables. Tests use isolated databases/media roots and `STORE_LOAD_ENV=0`, so they never load the
 user's `.env`. `check-auth` runs a stand-in Google (its own keys, token endpoint and JWKS) and never contacts
-Google; `check-download` likewise stands in for Cloudflare Access's signing keys.
+Google; `check-download` uses a scratch sign-in database.
 
 ## Sign-in (remote access)
 
@@ -140,19 +140,22 @@ To reach the library from other computers, run the server with Google sign-in an
 |---|---|
 | `AUTH=google` | Turns sign-in on. Requires the three below. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | A Google OAuth "Web application" client whose redirect URI is `{PUBLIC_URL}/google/oauth2-callback`. |
-| `OWNER_EMAIL` | The only Google account let in; any other gets mymind's "could not find an account" page. |
+| `OWNER_EMAIL` | The only Google account let in; any other gets an "account not found" message. |
 | `PUBLIC_URL` | The address browsers use, default `http://localhost:PORT`. An `https://` URL makes cookies `Secure`. |
 | `AUTH_DB` | Sessions and password users, default `data/auth.db`. |
 | `LOCAL_PORT` | Also serves this computer without sign-in on `127.0.0.1:LOCAL_PORT`; tunnelled requests there get 403. |
 
-Signed-out visitors get mymind's own sign-in page (`capture/signin/`, recorded signed out by
-`node tools/capture-signin.mjs`). Its Google button opens the usual popup; the server runs the OAuth flow (PKCE,
-`state`, `nonce`), verifies Google's ID token and sets a 30-day HttpOnly session cookie. The Apple button does
-nothing. API requests and the `/hub` socket without a session get 401, cross-origin writes 403. `/signout` ends
-the session.
+Signed-out visitors on this machine get mymind's own sign-in page (`capture/signin/`, recorded signed out by
+`node tools/capture-signin.mjs`); its Apple button does nothing. Signed-out visitors through a Cloudflare tunnel
+(`cf-connecting-ip`) get a plain sign-in page of the replica's own instead, with no mymind name, logo, favicon or
+assets, `noindex`, and a `robots.txt` that disallows everything: a public copy of a real company's sign-in page is
+what phishing filters flag. After sign-in everything is mymind's front-end as usual. Both pages' Google buttons open
+a popup; the server runs the OAuth flow (PKCE, `state`, `nonce`), verifies Google's ID token and sets a 30-day
+HttpOnly session cookie. API requests and the `/hub` socket without a session get 401, cross-origin writes 403.
+`/signout` ends the session.
 
 Password users (test accounts, or a browser without Google) sign in at `/signin/password`, which exists only once a
-user has been added; mymind's own sign-in page stays as recorded and does not link to it. A password session
+user has been added; mymind's own sign-in page stays as recorded and does not link to it, the plain one does. A password session
 reaches the same library as the owner. Ten wrong passwords for a username, or 30 from one address, lock it for 15
 minutes.
 
@@ -167,7 +170,7 @@ node tools/auth-user.mjs remove tester                     # also signs that use
 
 The library is hosted on **mini-002** (`mini-002-netcup` on Tailscale, a Debian server) from the checkout
 `~/apps/mymind-reconstruction`, which serves `https://mymind.octaviantocan.com` through the Cloudflare tunnel
-`mymind`, behind Cloudflare Access (see Setting up a host). Reach the machine itself over Tailscale
+`mymind`, with the library's own sign-in as the only gate (see Setting up a host). Reach the machine itself over Tailscale
 (`ssh mini-002-netcup`). That checkout holds the only writable `data/mymind.db` and `data/auth.db`, plus `.env`, the
 capture videos and `downloads/`, none of which are in Git. Every other machine, the development one included, uses
 the hosted URL.
@@ -193,28 +196,21 @@ the tunnel's traffic, and the database must have one writer), copy `data/`, `.en
 
 `deploy/install.sh` runs the replica as systemd user services that start at boot: the server with sign-in on
 `127.0.0.1:4330`, the desktop app downloads on `127.0.0.1:4332`, and a Cloudflare tunnel that publishes both at your
-hostname behind Cloudflare Access. Every request meets Access first, then the library's own sign-in. It needs
-`cloudflared` logged in (`cloudflared tunnel login`), the sign-in variables in `.env`, and a Google client whose
-redirect URIs include `https://<hostname>/google/oauth2-callback`.
+hostname. There is no Cloudflare Access in front (the user's decision, 2026-10-16): every request meets the library's
+own sign-in, which admits only `OWNER_EMAIL` through Google and the password users. It needs `cloudflared` logged in
+(`cloudflared tunnel login`), the sign-in variables in `.env`, and a Google client whose redirect URIs include
+`https://<hostname>/google/oauth2-callback`.
 
-1. In Cloudflare Zero Trust, add a self-hosted Access application for the whole `<hostname>` (no path), with Google
-   and one-time PIN as login methods and one Allow policy for the people who may reach it. mymind.octaviantocan.com
-   uses the application "mymind" and the policy "owner and @octaviantocan.com" (`tocanoctavian@gmail.com`, plus
-   emails ending in `octaviantocan.com`).
-2. Put its audience tag and your team domain in `.env`: `CF_ACCESS_AUD=…` and
-   `CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com`. `install.sh` refuses to run without them, and the tunnel
-   rejects any request that lacks that application's token, so the site stays closed even if the Access
-   application is deleted.
-3. Create the tunnel, package the app and install:
+Create the tunnel, package the app and install:
 
-   ```bash
-   cloudflared tunnel create mymind                          # once; prints the tunnel id
-   cloudflared tunnel route dns mymind mymind.example.com    # once
-   deploy/package-app.sh https://mymind.example.com          # downloads/mymind-linux-x86_64.tar.gz, about 5 min the first time
-   deploy/install.sh mymind.example.com <tunnel-id>
-   journalctl --user -u mymind-replica -u mymind-tunnel -f   # logs
-   systemctl --user stop mymind-replica                      # stops the tunnel too
-   ```
+```bash
+cloudflared tunnel create mymind                          # once; prints the tunnel id
+cloudflared tunnel route dns mymind mymind.example.com    # once
+deploy/package-app.sh https://mymind.example.com          # downloads/mymind-linux-x86_64.tar.gz, about 5 min the first time
+deploy/install.sh mymind.example.com <tunnel-id>
+journalctl --user -u mymind-replica -u mymind-tunnel -f   # logs
+systemctl --user stop mymind-replica                      # stops the tunnel too
+```
 
 The service is the one process that writes `data/mymind.db`. `LOCAL_PORT=4331` serves the host from the same
 process without sign-in (loopback only; tunnelled requests are refused), and the desktop app opens that port by
@@ -224,33 +220,22 @@ default, so an app on the host and the hosted site share one library and its liv
 
 `https://<hostname>/download` serves the desktop app, packaged to open the hosted library, to anyone signed in to
 the library (Google or password). The tunnel sends `/download` to `deploy/download-server.mjs`, which itself checks
-each request's Access token (signature, team, audience, expiry) and mymind session (`data/auth.db`), so the files stay
-private even if the tunnel's routing changes. Visitors without a session are sent to mymind's sign-in page; open
-`/download` again after signing in. It logs why it refused a request (`journalctl --user -u mymind-download`). There is a Linux build
-only: `deploy/package-app.sh` builds for the machine it runs on.
+each request's session (`data/auth.db`), so the files stay private even if the tunnel's routing changes. Visitors
+without a session are sent to the sign-in page; open `/download` again after signing in. It logs why it refused a
+request (`journalctl --user -u mymind-download`). There is a Linux build only: `deploy/package-app.sh` builds for the
+machine it runs on.
 
 Run `deploy/package-app.sh` again after changing `desktop/`.
 
 #### Testing the hosted library
 
-Scripts and agents get past Cloudflare Access with a service token instead of a Google login, then sign in to the
-library as the `TEST_USER_*` password user. The token only opens Access; the library still needs its own session.
+Scripts and agents sign in as the `TEST_USER_*` password user (`TEST_USER_NAME` and `TEST_USER_PASSWORD` in `.env`),
+never with the owner's Google login:
 
-1. In Zero Trust, under Access → Service credentials, create a service token (mymind.octaviantocan.com uses
-   "mymind-bypass", valid one year). In the application "mymind", add a second policy with the action Service Auth
-   that includes that service token.
-2. Put its client ID and secret in `.env` as `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`, next to
-   `TEST_USER_NAME` and `TEST_USER_PASSWORD`.
-3. Check the hosted site:
-
-   ```bash
-   node tools/check-hosted.mjs             # Access, test-user sign-in, library reads and /download over HTTP
-   node tools/check-hosted.mjs --browser   # also signs in with headless Chromium; screenshot in evidence/hosted/
-   ```
-
-Any other client gets in the same way by sending the headers `CF-Access-Client-Id` and `CF-Access-Client-Secret`
-on requests to the hosted origin only. Treat the token like a password: it lets its holder reach mymind's sign-in
-page. Revoke or refresh it under Service credentials.
+```bash
+node tools/check-hosted.mjs             # signed-out surface, test-user sign-in, library reads and /download over HTTP
+node tools/check-hosted.mjs --browser   # also signs in with headless Chromium; screenshot in evidence/hosted/
+```
 
 ## Desktop app
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Hosts the replica on this computer for other machines: the server with Google sign-in, the packaged desktop app at
-# /download, and the Cloudflare tunnel that publishes both, as systemd user services that start at boot. The whole
-# hostname must sit behind the Cloudflare Access application named by CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD in
-# .env; the tunnel also refuses any request without that application's token.
+# /download, and the Cloudflare tunnel that publishes both, as systemd user services that start at boot. The library's
+# own sign-in is the only gate: signed-out visitors through the tunnel get a plain sign-in page and nothing else.
 # Usage: deploy/install.sh <hostname> <tunnel-id>
 set -euo pipefail
 
@@ -17,23 +16,14 @@ config="$HOME/.cloudflared/mymind.yml"
 units="$HOME/.config/systemd/user"
 
 [[ -f $credentials ]] || { echo "No $credentials: create the tunnel with cloudflared tunnel create." >&2; exit 1; }
-for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OWNER_EMAIL CF_ACCESS_TEAM_DOMAIN CF_ACCESS_AUD; do
+for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OWNER_EMAIL; do
   grep -q "^$name=." "$root/.env" 2>/dev/null || { echo "$root/.env has no $name (README, Hosting)." >&2; exit 1; }
 done
-setting() { sed -n "s/^$1=//p" "$root/.env" | tail -1 | tr -d "\"'"; }
-access_team=$(setting CF_ACCESS_TEAM_DOMAIN)
-access_aud=$(setting CF_ACCESS_AUD)
 
 mkdir -p "$units"
 cat > "$config" <<EOF
 tunnel: $tunnel
 credentials-file: $credentials
-originRequest:
-  access:
-    required: true
-    teamName: ${access_team%%.*}
-    audTag:
-      - $access_aud
 ingress:
   - hostname: $host
     path: ^/download(/.*)?\$
@@ -79,14 +69,14 @@ EOF
 
 cat > "$units/mymind-download.service" <<EOF
 [Unit]
-Description=mymind desktop app downloads behind Cloudflare Access
+Description=mymind desktop app downloads for signed-in users
 After=network-online.target
 Wants=network-online.target
 PartOf=mymind-replica.service
 
 [Service]
 WorkingDirectory=$root
-Environment=DOWNLOAD_PORT=4332 CF_ACCESS_TEAM_DOMAIN=$access_team CF_ACCESS_AUD=$access_aud
+Environment=DOWNLOAD_PORT=4332
 ExecStart=$node deploy/download-server.mjs
 Restart=always
 RestartSec=5
@@ -99,4 +89,4 @@ services=(mymind-replica.service mymind-tunnel.service mymind-download.service)
 systemctl --user daemon-reload
 systemctl --user enable "${services[@]}"
 systemctl --user restart "${services[@]}"
-echo "https://$host is served by mymind-replica.service behind Cloudflare Access; this machine can also use http://localhost:4331 without sign-in."
+echo "https://$host is served by mymind-replica.service behind its sign-in; this machine can also use http://localhost:4331 without sign-in."

@@ -1,10 +1,9 @@
-// Serves the packaged desktop app at /download to anyone signed in to the hosted library: each request needs a valid
-// token of the site's Cloudflare Access application and a mymind session (Google or password), so the files stay
-// private even if the tunnel's routing changes. Signed-out visitors are sent to mymind's sign-in page.
-// Env: CF_ACCESS_TEAM_DOMAIN (e.g. you.cloudflareaccess.com), CF_ACCESS_AUD (the Access application's audience tag),
-// DOWNLOAD_PORT (default 4332), DOWNLOAD_DIR (default downloads/), AUTH_DB (default data/auth.db, shared with the
-// library server), CF_ACCESS_CERTS_URL (default the team's).
-import { createHash, createPublicKey, verify } from 'node:crypto';
+// Serves the packaged desktop app at /download to anyone signed in to the hosted library (Google or password): each
+// request needs a session from the library's sign-in, so the files stay private even if the tunnel's routing changes.
+// Signed-out visitors are sent to the sign-in page.
+// Env: DOWNLOAD_PORT (default 4332), DOWNLOAD_DIR (default downloads/), AUTH_DB (default data/auth.db, shared with the
+// library server).
+import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import http from 'node:http';
@@ -13,54 +12,10 @@ import { fileURLToPath } from 'node:url';
 import { openAuthStore } from '../lib/auth-store.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { CF_ACCESS_TEAM_DOMAIN: team, CF_ACCESS_AUD: audience } = process.env;
 const port = Number(process.env.DOWNLOAD_PORT ?? 4332);
 const dir = path.resolve(root, process.env.DOWNLOAD_DIR ?? 'downloads');
-if (!team || !audience) {
-  console.error('CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD are required.');
-  process.exit(1);
-}
-const issuer = `https://${team}`;
-const certs = process.env.CF_ACCESS_CERTS_URL ?? `${issuer}/cdn-cgi/access/certs`;
-let keys = { fetched: 0, byKid: new Map() };
 const auth = openAuthStore(process.env.AUTH_DB ?? path.join(root, 'data', 'auth.db'));
 auth.exec('PRAGMA busy_timeout = 2000');
-
-// Cloudflare Access's public key for `kid`.
-async function signingKey(kid) {
-  if (!keys.byKid.has(kid) || Date.now() - keys.fetched > 3_600_000) {
-    const res = await fetch(certs);
-    if (!res.ok) throw new Error(`certs ${res.status}`);
-    const { keys: jwks } = await res.json();
-    keys = { fetched: Date.now(), byKid: new Map(jwks.map((jwk) => [jwk.kid, createPublicKey({ key: jwk, format: 'jwk' })])) };
-  }
-  const key = keys.byKid.get(kid);
-  if (!key) throw new Error('unknown signing key');
-  return key;
-}
-
-// Who a verified Access token of this application names (a person's email or a service token's client ID), or why
-// the token is refused.
-async function accessIdentity(token) {
-  if (!token) return { refused: 'no Access token' };
-  try {
-    const [header, payload, signature] = token.split('.');
-    const { alg, kid } = JSON.parse(Buffer.from(header, 'base64url'));
-    if (alg !== 'RS256') return { refused: `algorithm ${alg}` };
-    if (!verify('RSA-SHA256', Buffer.from(`${header}.${payload}`), await signingKey(kid), Buffer.from(signature, 'base64url'))) {
-      return { refused: 'bad signature' };
-    }
-    const claims = JSON.parse(Buffer.from(payload, 'base64url'));
-    const now = Date.now() / 1000;
-    if (claims.iss !== issuer) return { refused: `issuer ${claims.iss}` };
-    if (![claims.aud].flat().includes(audience)) return { refused: 'another application' };
-    if (!(claims.exp > now) || (claims.nbf ?? 0) > now + 60) return { refused: 'expired' };
-    const identity = claims.email || claims.common_name;
-    return identity ? { identity } : { refused: 'no email or service token' };
-  } catch (error) {
-    return { refused: error.message };
-  }
-}
 
 // The email of the unexpired mymind session in the request's cookie, or null. Same cookie and stored hash as
 // lib/auth.mjs.
@@ -99,12 +54,6 @@ mymind/install.sh        # ~/.local/bin/mymind and a launcher entry</pre>
 }
 
 http.createServer(async (req, res) => {
-  const { identity, refused } = await accessIdentity(req.headers['cf-access-jwt-assertion']);
-  if (!identity) {
-    console.warn(`refused ${req.method} ${req.url}: ${refused}`);
-    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
-    return res.end('Sign in through Cloudflare Access to download the app.\n');
-  }
   const { pathname } = new URL(req.url, 'http://download');
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { allow: 'GET, HEAD' });
@@ -113,10 +62,10 @@ http.createServer(async (req, res) => {
   const listing = pathname === '/download' || pathname === '/download/';
   const user = mymindUser(req);
   if (!user) {
-    console.warn(`refused ${req.method} ${req.url}: no mymind session (${identity})`);
+    console.warn(`refused ${req.method} ${req.url}: no session`);
     if (listing) res.writeHead(302, { location: '/signin', 'cache-control': 'no-store' });
     else res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
-    return res.end(listing ? undefined : 'Sign in to mymind to download the app.\n');
+    return res.end(listing ? undefined : 'Sign in to download the app.\n');
   }
   if (listing) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
@@ -138,4 +87,4 @@ http.createServer(async (req, res) => {
   });
   if (req.method === 'HEAD') return res.end();
   createReadStream(path.join(dir, file.name)).pipe(res);
-}).listen(port, '127.0.0.1', () => console.log(`downloads for signed-in users behind Cloudflare Access on http://127.0.0.1:${port}/download`));
+}).listen(port, '127.0.0.1', () => console.log(`downloads for signed-in users on http://127.0.0.1:${port}/download`));

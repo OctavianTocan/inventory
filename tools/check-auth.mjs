@@ -1,6 +1,7 @@
 // Proves Google sign-in against a local stand-in for Google (its own keys, token endpoint and JWKS): the gate,
 // the PKCE/state/nonce checks, every ID-token rejection, owner-only access, sessions, sign-out, the hub and the
-// sign-in-free LOCAL_PORT listener; then password sign-in, its lockout and user removal.
+// sign-in-free LOCAL_PORT listener; the plain sign-in page tunnelled visitors get; then password sign-in, its lockout
+// and user removal.
 import { ok, strictEqual } from 'node:assert';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import http from 'node:http';
@@ -64,6 +65,7 @@ const server = await testServer({ readonly: true, env: {
 const get = (path, headers = {}) => fetch(server.base + path, { redirect: 'manual', headers, signal: AbortSignal.timeout(10000) });
 const post = (path, fields, headers = {}) => fetch(server.base + path, { method: 'POST', redirect: 'manual', body: new URLSearchParams(fields),
   headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers }, signal: AbortSignal.timeout(10000) });
+const TUNNELLED = { 'cf-connecting-ip': '203.0.113.9' };
 const setCookie = (res, name) => res.headers.getSetCookie().map((c) => c.split(';')[0]).find((c) => c.startsWith(`${name}=`));
 
 // Start a sign-in like mymind's Google button does; returns what Google would see plus the browser's state cookie.
@@ -127,6 +129,25 @@ try {
     ok(html.includes('signin-button-google') && html.includes('/_auth/signin.js') && !html.includes('appleid.cdn-apple.com'));
   });
   await check('sign-in error page shows mymind\'s message', async () => ok((await (await get('/signin?error=AccountNotFound&identityProvider=Google')).text()).includes('could not find an account')));
+  await check('through the tunnel, the sign-in page is plain, not mymind\'s', async () => {
+    const res = await get('/signin', { accept: 'text/html', ...TUNNELLED });
+    strictEqual(res.status, 200);
+    const html = await res.text();
+    ok(!/mymind/i.test(html), 'no mymind name');
+    ok(html.includes('href="/google/oauth2-redirect"') && html.includes('noindex') && html.includes('rel="icon" href="data:,"'));
+    ok(!html.includes('/signin/password'), 'no password link before a password user exists');
+  });
+  await check('through the tunnel, sign-in errors are plain', async () => {
+    const html = await (await get('/signin?error=AccountNotFound&identityProvider=Google', TUNNELLED)).text();
+    ok(html.includes('does not have access') && !/mymind/i.test(html));
+  });
+  await check('through the tunnel, mymind\'s assets stay closed until sign-in', async () => {
+    for (const path of ['/favicon.ico', '/manifest.webmanifest', '/_static/134/0.109.0/styles/main.css', '/jserrors']) {
+      strictEqual((await get(path, TUNNELLED)).status, 401, path);
+    }
+    ok((await get('/favicon.ico')).status !== 401, 'still public on this machine');
+  });
+  await check('robots are asked to stay out', async () => strictEqual(await (await get('/robots.txt', TUNNELLED)).text(), 'User-agent: *\nDisallow: /\n'));
   await check('signed-out hub upgrade is refused', async () => strictEqual(await hubOpens(), false));
   await check('forged ID token is rejected', async () => rejected(await finish(await begin(), {}, { key: strangerKey })));
   await check('wrong nonce is rejected', async () => rejected(await finish(await begin(), { nonce: 'other' })));
@@ -173,6 +194,10 @@ try {
     ok(html.includes('action="/signin/password"') && html.includes('type="password"'));
   });
   await check('mymind\'s sign-in page is unchanged by password users', async () => ok(!(await (await get('/signin')).text()).includes('/signin/password')));
+  await check('through the tunnel, the plain page offers the password form', async () => {
+    ok((await (await get('/signin', TUNNELLED)).text()).includes('href="/signin/password"'));
+    ok(!/mymind/i.test(await (await get('/signin/password', TUNNELLED)).text()));
+  });
   const refused = (res, error = 'invalid') => {
     strictEqual(res.status, 303);
     strictEqual(res.headers.get('location'), `/signin/password?error=${error}`);
@@ -207,9 +232,8 @@ try {
     strictEqual(await hubOpens(null, LOCAL), true);
   });
   await check('LOCAL_PORT refuses tunnelled requests', async () => {
-    const tunnelled = { 'cf-connecting-ip': '203.0.113.9' };
-    strictEqual((await fetch(`${LOCAL}/everything`, { headers: tunnelled })).status, 403);
-    strictEqual(await hubOpens(null, LOCAL, tunnelled), false);
+    strictEqual((await fetch(`${LOCAL}/everything`, { headers: TUNNELLED })).status, 403);
+    strictEqual(await hubOpens(null, LOCAL, TUNNELLED), false);
   });
 } finally {
   users.close();

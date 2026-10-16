@@ -1,34 +1,13 @@
-// Proves deploy/download-server.mjs serves the app only to requests with a valid token of its Cloudflare Access
-// application and a mymind session, against a stand-in for Cloudflare's signing keys and a scratch sign-in database;
-// it never contacts Cloudflare.
+// Proves deploy/download-server.mjs serves the app only to requests with a session from the library's sign-in, against
+// a scratch sign-in database.
 import { ok, strictEqual } from 'node:assert';
 import { spawn } from 'node:child_process';
-import { createHash, generateKeyPairSync, sign } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openAuthStore } from '../lib/auth-store.mjs';
-
-const TEAM = 'team.cloudflareaccess.test';
-const AUD = 'test-audience';
-const PERSON = 'person@example.com';
-const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-const { privateKey: strangerKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-
-// An RS256 Access token carrying `claims` over valid ones, signed with the stand-in's key or `key`.
-function token(claims = {}, key = privateKey) {
-  const now = Math.floor(Date.now() / 1000);
-  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
-  const body = `${encode({ alg: 'RS256', kid: 'test-key', typ: 'JWT' })}.${encode({ iss: `https://${TEAM}`, aud: [AUD], email: PERSON, iat: now, nbf: now, exp: now + 3600, type: 'app', ...claims })}`;
-  return `${body}.${sign('RSA-SHA256', Buffer.from(body), key).toString('base64url')}`;
-}
-
-const certs = http.createServer((_req, res) => {
-  res.writeHead(200, { 'content-type': 'application/json' });
-  res.end(JSON.stringify({ keys: [{ ...publicKey.export({ format: 'jwk' }), kid: 'test-key', alg: 'RS256' }] }));
-}).listen(0, '127.0.0.1');
-await new Promise((ready) => certs.once('listening', ready));
 
 const spare = http.createServer().listen(0, '127.0.0.1');
 await new Promise((ready) => spare.once('listening', ready));
@@ -50,15 +29,14 @@ await writeFile(join(dir, 'manifest.json'), JSON.stringify({ library: 'https://m
   { name: 'mymind-linux-x86_64.tar.gz', label: 'Linux (x86_64)', bytes: app.length, sha256: 'abc', built: new Date().toISOString() },
 ] }));
 const server = spawn(process.execPath, ['deploy/download-server.mjs'], {
-  env: { PATH: process.env.PATH, CF_ACCESS_TEAM_DOMAIN: TEAM, CF_ACCESS_AUD: AUD, DOWNLOAD_PORT: String(port), DOWNLOAD_DIR: dir, AUTH_DB: join(dir, 'auth.db'),
-    CF_ACCESS_CERTS_URL: `http://127.0.0.1:${certs.address().port}/cdn-cgi/access/certs` },
+  env: { PATH: process.env.PATH, DOWNLOAD_PORT: String(port), DOWNLOAD_DIR: dir, AUTH_DB: join(dir, 'auth.db') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 await new Promise((ready) => server.stdout.once('data', ready));
 
 const base = `http://127.0.0.1:${port}`;
-const get = (path, jwt, init = {}, session = SESSION) => fetch(base + path, { redirect: 'manual', ...init, headers: {
-  ...(jwt && { 'cf-access-jwt-assertion': jwt }), ...(session && { cookie: `theme=dark; mm_session=${session}` }) } });
+const get = (path, session = SESSION, init = {}) => fetch(base + path, { redirect: 'manual', ...init, headers: {
+  ...(session && { cookie: `theme=dark; mm_session=${session}` }) } });
 const failures = [];
 async function check(label, fn) {
   try { await fn(); console.log(`PASS  ${label}`); }
@@ -66,48 +44,35 @@ async function check(label, fn) {
 }
 
 try {
-  await check('without an Access token the page is refused', async () => strictEqual((await get('/download', undefined, {}, null)).status, 403));
-  await check('without an Access token the file is refused', async () => strictEqual((await get('/download/mymind-linux-x86_64.tar.gz', undefined, {}, null)).status, 403));
-  await check('a token signed by another key is refused', async () => strictEqual((await get('/download', token({}, strangerKey))).status, 403));
-  await check('another application\'s token is refused', async () => strictEqual((await get('/download', token({ aud: ['other'] }))).status, 403));
-  await check('another team\'s token is refused', async () => strictEqual((await get('/download', token({ iss: 'https://evil.cloudflareaccess.com' }))).status, 403));
-  await check('an expired token is refused', async () => strictEqual((await get('/download', token({ exp: Math.floor(Date.now() / 1000) - 60 }))).status, 403));
-  await check('a token naming no one is refused', async () => strictEqual((await get('/download', token({ email: undefined }))).status, 403));
-  await check('a token without a signature is refused', async () => strictEqual((await get('/download', token().replace(/\.[^.]+$/, '.'))).status, 403));
-  await check('signed out of mymind, the page sends you to mymind\'s sign-in', async () => {
-    const res = await get('/download', token(), {}, null);
+  await check('signed out, the page sends you to sign in', async () => {
+    const res = await get('/download', null);
     strictEqual(res.status, 302);
     strictEqual(res.headers.get('location'), '/signin');
   });
-  await check('signed out of mymind, the file is refused', async () => strictEqual((await get('/download/mymind-linux-x86_64.tar.gz', token(), {}, null)).status, 401));
-  await check('an expired or unknown mymind session is refused', async () => {
-    strictEqual((await get('/download', token(), {}, EXPIRED)).status, 302);
-    strictEqual((await get('/download/mymind-linux-x86_64.tar.gz', token(), {}, 'made-up')).status, 401);
+  await check('signed out, the file is refused', async () => strictEqual((await get('/download/mymind-linux-x86_64.tar.gz', null)).status, 401));
+  await check('an expired or unknown session is refused', async () => {
+    strictEqual((await get('/download', EXPIRED)).status, 302);
+    strictEqual((await get('/download/mymind-linux-x86_64.tar.gz', 'made-up')).status, 401);
   });
-  await check('a mymind session without an Access token is refused', async () => strictEqual((await get('/download')).status, 403));
-  await check('a signed-in user Access let in gets the download page', async () => {
-    const res = await get('/download', token());
+  await check('a signed-in user gets the download page', async () => {
+    const res = await get('/download');
     strictEqual(res.status, 200);
     const html = await res.text();
     ok(html.includes('href="/download/mymind-linux-x86_64.tar.gz"') && html.includes('Signed in as tester'));
   });
-  await check('a signed-in user behind a service token gets the download page', async () => {
-    strictEqual((await get('/download', token({ email: undefined, common_name: 'abc.access' }))).status, 200);
-  });
-  await check('a signed-in user Access let in downloads the app', async () => {
-    const res = await get('/download/mymind-linux-x86_64.tar.gz', token());
+  await check('a signed-in user downloads the app', async () => {
+    const res = await get('/download/mymind-linux-x86_64.tar.gz');
     strictEqual(res.status, 200);
     ok(res.headers.get('content-disposition').includes('attachment'));
     ok(Buffer.from(await res.arrayBuffer()).equals(app));
   });
   await check('only packaged files are served', async () => {
-    strictEqual((await get('/download/manifest.json', token())).status, 404);
-    strictEqual((await get('/download/..%2Fdownload-server.mjs', token())).status, 404);
+    strictEqual((await get('/download/manifest.json')).status, 404);
+    strictEqual((await get('/download/..%2Fdownload-server.mjs')).status, 404);
   });
-  await check('writes are refused', async () => strictEqual((await get('/download', token(), { method: 'POST' })).status, 405));
+  await check('writes are refused', async () => strictEqual((await get('/download', SESSION, { method: 'POST' })).status, 405));
 } finally {
   server.kill();
-  certs.close();
   await rm(dir, { recursive: true, force: true });
 }
 
