@@ -1,5 +1,5 @@
 // Desktop app: a Tauri window around the web UI that server.mjs serves, starting the server when none is running.
-// Env: PORT (default 4321), MYMIND_ROOT (repo checkout), MYMIND_NODE (node binary); STORE_* pass through to the server.
+// Env: PORT (default 4331), MYMIND_ROOT (repo checkout), MYMIND_NODE (node binary); STORE_* pass through to the server.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(target_os = "linux")]
@@ -200,7 +200,7 @@ fn replica_url(port: u16) -> Url {
 }
 
 fn main() {
-    let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(4321);
+    let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(4331);
     let app = tauri::Builder::default()
         .setup(move |app| {
             app.manage(Server(Mutex::new(None)));

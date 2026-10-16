@@ -2,19 +2,22 @@
 // and prints one table of how many screenshots REA found pixel-identical.
 // Usage: node tools/verify-all.mjs [--parallel 3] [--port-base 9333] [--reseed | --replica-only] [run ...]
 // Runs are `profile-suite` names (default: the whole matrix); patch runs such as `iphone-cards@media` work too.
-// --reseed records every live pass first, then backs up and reseeds data/mymind.db from those recordings and
-// restarts the replica before any replica pass, so a library that changed since the last seed still compares.
+// The replica it starts reads data/verify.db, a database seeded from the recordings (created on first use), never
+// the working library in data/mymind.db.
+// --reseed records every live pass first, then reseeds data/verify.db from those recordings and restarts the
+// replica before any replica pass, so a library that changed since the last seed still compares.
 // --replica-only re-runs only the replica passes against each run's recorded live pass, e.g. after a code change.
 // The replica it starts runs with OFFLINE=1, which REA's coverage needs to prove it renders without mymind.
 import { spawn } from 'node:child_process';
-import { createWriteStream } from 'node:fs';
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createWriteStream, existsSync } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DRIVE = path.join(ROOT, 'evidence', 'drive');
+const VERIFY_DB = path.join(ROOT, 'data', 'verify.db');
 const MATRIX = [
   ['desktop-dark', 'ui'],
   ['iphone', 'ui'],
@@ -46,7 +49,8 @@ const up = () => fetch('http://localhost:4321/__replay/reload', { method: 'POST'
 const run = (args) => new Promise((resolve) => spawn('node', args, { cwd: ROOT, stdio: 'inherit' }).on('exit', resolve));
 let server = null;
 async function startServer() {
-  server = spawn('node', ['server.mjs'], { cwd: ROOT, env: { ...process.env, OFFLINE: '1', STORE_READONLY: '1' }, stdio: 'ignore' });
+  if (!existsSync(VERIFY_DB) && (await run(['tools/seed-db.mjs', '--db', VERIFY_DB])) !== 0) throw new Error('seed-db failed');
+  server = spawn('node', ['server.mjs'], { cwd: ROOT, env: { ...process.env, OFFLINE: '1', STORE_READONLY: '1', STORE_DB: VERIFY_DB }, stdio: 'ignore' });
   while (!(await up())) await new Promise((r) => setTimeout(r, 200));
 }
 const running = await up();
@@ -56,6 +60,7 @@ if (running) {
     process.exit(2);
   }
   if (!running.offline) console.error('warning: the server on :4321 is not OFFLINE=1, so coverage cannot prove offline rendering.');
+  if (running.store !== VERIFY_DB) console.error('warning: the server on :4321 does not read data/verify.db (STORE_DB), so it compares your working library.');
 } else await startServer();
 await mkdir(DRIVE, { recursive: true });
 
@@ -105,9 +110,7 @@ try {
     await pool([...jobs], 'live');
     server.kill();
     await new Promise((r) => server.once('exit', r));
-    const db = path.join(ROOT, 'data', 'mymind.db');
-    await copyFile(db, `${db}.bak-${Date.now()}`).catch(() => {});
-    if ((await run(['tools/seed-db.mjs'])) !== 0) throw new Error('seed-db failed; the backup is next to data/mymind.db');
+    if ((await run(['tools/seed-db.mjs', '--db', VERIFY_DB])) !== 0) throw new Error('seed-db failed');
     await startServer();
     await pool([...jobs], 'replica');
   } else await pool([...jobs], opts['replica-only'] ? 'replica' : undefined);

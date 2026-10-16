@@ -114,17 +114,17 @@ node tools/check-search.mjs --in-process
 node tools/check-auth.mjs
 ```
 
-The HTTP checks back up the seeded database to temporary files, start isolated offline servers on OS-assigned
-loopback ports, and clean them up. They never use port 4321. If a sandbox prohibits socket listeners, pass
-`--in-process` to the HTTP checks to exercise the real server request callbacks and hub framing in memory;
-that mode does not establish socket or browser parity. `check-capture` starts a temporary fixture HTTP server
-and local Gemini/TypeSafe stubs, generates synthetic PNG/MP4/PDF files and never contacts hosted services. Its
-`--in-process` mode runs those handlers in memory and injects a PNG at the screenshot seam; the real Chromium
-screenshot and native-network probe checks are explicitly skipped. The host browser probe uses local TCP/UDP
-sinks and an unguarded positive control to check preconnect/WebRTC isolation. `check-media` uses a synthetic
-database, real filesystem streams/Sharp and stubbed media executables. Tests use isolated databases/media roots
-and `STORE_LOAD_ENV=0`, so they never load
-the user's `.env`. `check-auth` runs a stand-in Google (its own keys, token endpoint and JWKS) and never contacts
+The HTTP checks back up the verification database (`data/verify.db`, see [Verify against
+live](#verify-against-live-11)) to temporary files, start isolated offline servers on OS-assigned loopback ports,
+and clean them up. They never use port 4321. If a sandbox prohibits socket listeners, pass `--in-process` to the
+HTTP checks to exercise the real server request callbacks and hub framing in memory; that mode does not establish
+socket or browser parity. `check-capture` starts a temporary fixture HTTP server and local Gemini/TypeSafe stubs,
+generates synthetic PNG/MP4/PDF files and never contacts hosted services. Its `--in-process` mode runs those
+handlers in memory and injects a PNG at the screenshot seam; the real Chromium screenshot and native-network probe
+checks are explicitly skipped. The host browser probe uses local TCP/UDP sinks and an unguarded positive control to
+check preconnect/WebRTC isolation. `check-media` uses a synthetic database, real filesystem streams/Sharp and
+stubbed media executables. Tests use isolated databases/media roots and `STORE_LOAD_ENV=0`, so they never load the
+user's `.env`. `check-auth` runs a stand-in Google (its own keys, token endpoint and JWKS) and never contacts
 Google.
 
 ## Sign-in (remote access)
@@ -142,6 +142,7 @@ To reach the library from other computers, run the server with Google sign-in an
 | `OWNER_EMAIL` | The only Google account let in; any other gets mymind's "could not find an account" page. |
 | `PUBLIC_URL` | The address browsers use, default `http://localhost:PORT`. An `https://` URL makes cookies `Secure`. |
 | `AUTH_DB` | Session database, default `data/auth.db`. |
+| `LOCAL_PORT` | Also serves this computer without sign-in on `127.0.0.1:LOCAL_PORT`; tunnelled requests there get 403. |
 
 Signed-out visitors get mymind's own sign-in page (`capture/signin/`, recorded signed out by
 `node tools/capture-signin.mjs`). Its Google button opens the usual popup; the server runs the OAuth flow (PKCE,
@@ -149,10 +150,30 @@ Signed-out visitors get mymind's own sign-in page (`capture/signin/`, recorded s
 nothing. API requests and the `/hub` socket without a session get 401, cross-origin writes 403. `/signout` ends
 the session.
 
+### Hosting on this computer
+
+`deploy/install.sh` runs the replica as systemd user services that start at boot: the server with sign-in on
+`127.0.0.1:4330`, and a Cloudflare tunnel that publishes it at your hostname. It needs `cloudflared` logged in
+(`cloudflared tunnel login`), the sign-in variables in `.env`, and a Google client whose redirect URIs include
+`https://<hostname>/google/oauth2-callback`:
+
+```bash
+cloudflared tunnel create mymind                          # once; prints the tunnel id
+cloudflared tunnel route dns mymind mymind.example.com    # once
+deploy/install.sh mymind.example.com <tunnel-id>
+journalctl --user -u mymind-replica -u mymind-tunnel -f   # logs
+systemctl --user stop mymind-replica                      # stops the tunnel too
+```
+
+The service is the one process that writes `data/mymind.db`. `LOCAL_PORT=4331` serves this computer from the same
+process without sign-in (loopback only; tunnelled requests are refused), and the desktop app opens that port by
+default, so the app here and the hosted site share one library and its live updates.
+
 ## Desktop app
 
 `desktop/` wraps the replica in a native window (Tauri 2). The app uses the server already listening on `PORT`
-(default 4321), or starts `node server.mjs` from this checkout and stops it when the window closes.
+(default 4331, which the hosted service serves on this computer), or starts `node server.mjs` from this checkout
+and stops it when the window closes. It stays off `:4321`, which belongs to verification.
 
 ### Install
 
@@ -204,7 +225,7 @@ but its edits never reach the host.
 
 | Variable | Default | Effect |
 |---|---|---|
-| `PORT` | `4321` | Port of the replica the window opens, and of the server the app starts. |
+| `PORT` | `4331` | Port of the replica the window opens, and of the server the app starts. |
 | `MYMIND_ROOT` | the checkout it was built in | Where `server.mjs` lives. |
 | `MYMIND_NODE` | `node` on `PATH` | Node binary that runs the server. |
 | `STORE_DB`, `STORE_MEDIA`, … | as for `npm run serve` | Passed through to the server it starts. |
@@ -249,7 +270,7 @@ Every pass only sends GETs. `--details-only` reads the card list from `data/mymi
 ## Verify against live, 1:1
 
 ```bash
-OFFLINE=1 STORE_READONLY=1 npm run serve   # replica on :4321, as verification requires
+OFFLINE=1 STORE_READONLY=1 STORE_DB=data/verify.db npm run serve   # replica on :4321, as verification requires
 npm run drive -- --profile desktop-light --suite ui     # one profile x suite: live, then replica, then REA diffs
 npm run verify                             # every profile (desktop light/dark, iPhone, Android) x suite (ui, cards)
 npm run verify -- --reseed                 # after the live library changed: all live passes, reseed, then replica passes
@@ -257,15 +278,17 @@ npm run verify -- --replica-only           # after a code change: replica passes
 npm run coverage                           # REA's fail-closed verdict over all runs: ready / partial / failed
 ```
 
-`--reseed` needs no server running on `:4321`: it starts one, backs up `data/mymind.db` next to itself, reseeds it
-from the fresh recordings and restarts the server before the first replica pass.
+Verification never touches your working library: its server reads `data/verify.db`, a database seeded from the
+recordings that `tools/verify-all.mjs` creates on first use. `--reseed` needs no server running on `:4321`: it
+starts one, reseeds `data/verify.db` from the fresh recordings and restarts the server before the first replica
+pass.
 
 Needs the agent Chromium on CDP `:9222` signed in to mymind; only its two mymind session cookies and the page's
 localStorage are read, in memory, to sign in the verifier.
 
-Every verification server must use `STORE_READONLY=1`, because live writes are intercepted and sent to the replica
-as well, and `OFFLINE=1`, because `npm run coverage` only accepts runs that prove the replica renders without
-mymind's servers. `tools/verify-all.mjs` sets both when starting a server. If a server is already running, restart it yourself in
+Every verification server must use `STORE_DB=data/verify.db`, `STORE_READONLY=1`, because live writes are
+intercepted and sent to the replica as well, and `OFFLINE=1`, because `npm run coverage` only accepts runs that
+prove the replica renders without mymind's servers. `tools/verify-all.mjs` sets all three when starting a server. If a server is already running, restart it yourself in
 that mode before verifying; the verifier does not change the environment of an existing process.
 
 How a run makes live and replica comparable pixel for pixel (`tools/drive.mjs`, `tools/side.mjs`,
@@ -337,7 +360,14 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 - Recorded detail views cover every card that existed at the last `--details-only` pass. A card without one
   (e.g. saved on live mymind afterwards) gets a generated detail whose body is its grid card.
 - Generated details and rich prose nodes have route/data coverage, but still need browser and REA parity checks.
-- Uncaptured historical media retains its placeholder fallback. Generated AI thumbnails remain later work.
+- Uncaptured historical media retains its placeholder fallback (6 of the 511 detail media and 3 grid videos failed
+  to download). Generated AI thumbnails remain later work.
+- The sign-in page is not part of the REA matrix, whose verifier is signed in. Compared signed out under a frozen
+  clock with its animated WebGL background hidden, it matches live at 390x844 (0 pixels differ, also for "account
+  not found") and at 1440x900 differs in 1,505 edge pixels by at most 3 levels, the same noise as live against
+  itself. The background runs mymind's own mirrored script, but its phase is not frozen.
+- New cards saved on live mymind reach the replica only through a re-capture and reseed (`npm run verify --
+  --reseed` for verification, `node tools/seed-db.mjs` for the working library, which replaces local edits).
 - Local search approximates the live ranking engine; historical cards without vectors need an explicit hosted
   embedding backfill. Text-only backfill skips historical cards with no usable text; new visual analysis can
   embed their image. Browser and screenshot parity have not been claimed for generated search results.

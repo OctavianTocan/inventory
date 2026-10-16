@@ -183,11 +183,11 @@ function buildChecks(store, rec) {
 
 // Resolve the database path from the command-line flags.
 function parseArgs(args) {
-  let db = join(ROOT, 'data/mymind.db');
+  let db = join(ROOT, 'data/verify.db');
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--db' && args[i + 1]) db = resolve(args[++i]);
     else if (args[i].startsWith('--db=')) db = resolve(args[i].slice(5));
-    else throw new Error('Usage: node tools/check-store.mjs [--db data/mymind.db]');
+    else throw new Error('Usage: node tools/check-store.mjs [--db data/verify.db]');
   }
   return db;
 }

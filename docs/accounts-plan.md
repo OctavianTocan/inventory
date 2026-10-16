@@ -22,9 +22,13 @@ are not.
 
 ## Hosting on this computer
 
-The plan for reaching the library from other machines: run the server here with `AUTH=google`,
-`PUBLIC_URL=https://<host>` and a Cloudflare tunnel to `127.0.0.1:4321`. The Google client needs
-`https://<host>/google/oauth2-callback` as a redirect URI. Open questions:
+Built, not yet installed: `deploy/install.sh` (README, Hosting on this computer) runs the server as a systemd user
+service with `AUTH=google` on `127.0.0.1:4330`, behind a Cloudflare tunnel at `mymind.octaviantocan.com`. The
+Google client (project `mymind-replica`, consent screen in Testing with the owner as the only test user) lists
+that host's callback and the two localhost ones. The same process serves this computer without sign-in on
+`LOCAL_PORT` (4331), so one process owns `data/mymind.db`; verification reads its own `data/verify.db`.
+
+Open questions:
 
 - Google may refuse sign-in inside the desktop app's WebKitGTK webview; the app may need to sign in through the
   system browser and hand the session over.

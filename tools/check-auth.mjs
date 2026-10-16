@@ -1,5 +1,6 @@
 // Proves Google sign-in against a local stand-in for Google (its own keys, token endpoint and JWKS): the gate,
-// the PKCE/state/nonce checks, every ID-token rejection, owner-only access, sessions, sign-out and the hub.
+// the PKCE/state/nonce checks, every ID-token rejection, owner-only access, sessions, sign-out, the hub and the
+// sign-in-free LOCAL_PORT listener.
 import { ok, strictEqual } from 'node:assert';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import http from 'node:http';
@@ -49,9 +50,14 @@ idp.listen(0, '127.0.0.1');
 await new Promise((ready) => idp.once('listening', ready));
 const IDP = `http://127.0.0.1:${idp.address().port}`;
 
+const spare = http.createServer().listen(0, '127.0.0.1');
+await new Promise((ready) => spare.once('listening', ready));
+const LOCAL = `http://127.0.0.1:${spare.address().port}`;
+await new Promise((closed) => spare.close(closed));
+
 const authDir = await mkdtemp(join(tmpdir(), 'mymind-auth-'));
 const server = await testServer({ readonly: true, env: {
-  AUTH: 'google', GOOGLE_CLIENT_ID: CLIENT_ID, GOOGLE_CLIENT_SECRET: 'test-secret', OWNER_EMAIL: OWNER, AUTH_DB: join(authDir, 'auth.db'),
+  LOCAL_PORT: LOCAL.split(':').pop(), AUTH: 'google', GOOGLE_CLIENT_ID: CLIENT_ID, GOOGLE_CLIENT_SECRET: 'test-secret', OWNER_EMAIL: OWNER, AUTH_DB: join(authDir, 'auth.db'),
   GOOGLE_AUTH_URL: `${IDP}/authorize`, GOOGLE_TOKEN_URL: `${IDP}/token`, GOOGLE_CERTS_URL: `${IDP}/certs`, GOOGLE_ISSUER: ISSUER,
 } });
 const get = (path, headers = {}) => fetch(server.base + path, { redirect: 'manual', headers, signal: AbortSignal.timeout(10000) });
@@ -79,9 +85,9 @@ async function finish(start, claims = {}, { key, cookie = start.cookie, state = 
 }
 
 // Open a hub WebSocket upgrade; resolves true when the server switches protocols.
-function hubOpens(cookie) {
+function hubOpens(cookie, base = server.base, headers = {}) {
   return new Promise((resolve) => {
-    const req = http.request(`${server.base}/hub`, { headers: { connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13', 'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==', ...(cookie ? { cookie } : {}) } });
+    const req = http.request(`${base}/hub`, { headers: { connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13', 'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==', ...(cookie ? { cookie } : {}), ...headers } });
     req.on('upgrade', (_res, socket) => { socket.destroy(); resolve(true); });
     req.on('error', () => resolve(false));
     req.on('close', () => resolve(false));
@@ -152,6 +158,15 @@ try {
     const res = await get('/signout', { cookie: session });
     strictEqual(res.headers.get('location'), '/signin');
     strictEqual((await get('/cards', { accept: 'application/msgpack', cookie: session })).status, 401);
+  });
+  await check('LOCAL_PORT serves this computer without sign-in', async () => {
+    strictEqual((await fetch(`${LOCAL}/cards`, { headers: { accept: 'application/msgpack' } })).status, 200);
+    strictEqual(await hubOpens(null, LOCAL), true);
+  });
+  await check('LOCAL_PORT refuses tunnelled requests', async () => {
+    const tunnelled = { 'cf-connecting-ip': '203.0.113.9' };
+    strictEqual((await fetch(`${LOCAL}/everything`, { headers: tunnelled })).status, 403);
+    strictEqual(await hubOpens(null, LOCAL, tunnelled), false);
   });
 } finally {
   await server.close();

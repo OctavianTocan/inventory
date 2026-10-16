@@ -146,11 +146,12 @@ function sendRange(req, res, status, body, headers) {
   });
 }
 
-async function serveFile(res, file, { localizeText = false } = {}) {
+async function serveFile(res, file, { localizeText = false, req = null } = {}) {
   const ext = path.extname(file).toLowerCase();
   let body = await readFile(file);
   if (localizeText && TEXT_EXTENSIONS.has(ext)) body = localize(body.toString('utf8'));
-  send(res, 200, body, { 'content-type': TYPES[ext] ?? 'application/octet-stream' });
+  const headers = { 'content-type': TYPES[ext] ?? 'application/octet-stream' };
+  return req ? sendRange(req, res, 200, body, headers) : send(res, 200, body, headers);
 }
 
 async function serveStatic(res, relative, search) {
@@ -179,13 +180,13 @@ async function siblingRendition(file, relative) {
   return best ? path.join(path.dirname(file), best) : null;
 }
 
-async function serveMedia(res, root, relative) {
+async function serveMedia(req, res, root, relative) {
   const file = fileInside(root, relative);
   try {
-    if (file) return await serveFile(res, file);
+    if (file) return await serveFile(res, file, { req });
   } catch {}
   const sibling = await siblingRendition(file, relative);
-  if (sibling) return await serveFile(res, sibling);
+  if (sibling) return await serveFile(res, sibling, { req });
   console.log(`[placeholder] ${root.slice(CAPTURE.length)}/${relative}`);
   if (/\.(mp4|mov|webm)$/i.test(relative)) return send(res, 404, 'video not captured');
   send(res, 200, IMAGE_PLACEHOLDER, { 'content-type': 'image/svg+xml' });
@@ -258,22 +259,28 @@ const api = await createApi({ root: ROOT, dbPath: process.env.STORE_DB, readonly
   msgpack, localize, send, push: (target, payload) => push(target, payload),
   hasReplay: (req, url) => Boolean(replayedFor(req, url)) || Object.hasOwn(details, /^\/cards\/([^/]+)\/detail$/.exec(url.pathname)?.[1] ?? '') });
 
-const server = http.createServer(async (req, res) => {
+// With sign-in on, LOCAL_PORT also serves this computer without it, on loopback only; like a server without sign-in,
+// that listener refuses requests that arrive through a tunnel.
+const LOCAL_PORT = auth && process.env.LOCAL_PORT ? Number(process.env.LOCAL_PORT) : null;
+const server = http.createServer((req, res) => handle(req, res, auth));
+const local = LOCAL_PORT ? http.createServer((req, res) => handle(req, res, null)) : null;
+
+async function handle(req, res, gate) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const { pathname, search } = url;
   const key = `${req.method} ${pathname}${search}`;
   try {
-    if (auth && await auth.handle(req, res, url)) return;
+    if (gate && await gate.handle(req, res, url)) return;
     // A request through a Cloudflare tunnel reaches a server without sign-in only by mistake; keep the library private.
-    if (!auth && req.headers['cf-connecting-ip']) return send(res, 403, 'This server has no sign-in configured.');
+    if (!gate && req.headers['cf-connecting-ip']) return send(res, 403, 'This server has no sign-in configured.');
     // mymind redirects framed media (PDFs) to its media host, so the viewer runs in a cross-site frame. Mirror
     // that with a cross-site loopback address: frame rendering differs between same-site and cross-site frames.
     const dest = req.headers['sec-fetch-dest'];
     if (req.method === 'GET' && pathname.startsWith('/media/') && (dest === 'iframe' || dest === 'frame') && req.headers.host?.startsWith('localhost')) {
-      return send(res, 302, '', { location: `http://127.0.0.1:${PORT}/_mediahost/${pathname.slice('/media/'.length)}${search}` });
+      return send(res, 302, '', { location: `http://127.0.0.1:${req.socket.localPort}/_mediahost/${pathname.slice('/media/'.length)}${search}` });
     }
     if (req.method === 'POST' && pathname === '/__replay/reload') {
-      return send(res, 200, JSON.stringify({ responses: await reloadReplay(), offline: OFFLINE }), { 'content-type': 'application/json' });
+      return send(res, 200, JSON.stringify({ responses: await reloadReplay(), offline: OFFLINE, store: process.env.STORE_DB ? path.resolve(process.env.STORE_DB) : null }), { 'content-type': 'application/json' });
     }
     if (api && await api.handle(req, res, url)) return;
     const replayed = replayedFor(req, url);
@@ -284,14 +291,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname.startsWith('/_static/')) return await serveStatic(res, pathname.slice('/_static/'.length), search);
-    if (pathname.startsWith('/media/')) return await serveMedia(res, path.join(CAPTURE, 'media'), pathname.slice('/media/'.length));
+    if (pathname.startsWith('/media/')) return await serveMedia(req, res, path.join(CAPTURE, 'media'), pathname.slice('/media/'.length));
     if (pathname.startsWith('/_mediahost/')) {
       const relative = pathname.slice('/_mediahost/'.length);
       const hosted = fileInside(path.join(CAPTURE, 'mediahost'), relative);
       const root = hosted && (await readFile(hosted).then(() => true, () => false)) ? 'mediahost' : 'media';
-      return await serveMedia(res, path.join(CAPTURE, root), relative);
+      return await serveMedia(req, res, path.join(CAPTURE, root), relative);
     }
-    if (pathname.startsWith('/_carbon/')) return await serveMedia(res, path.join(CAPTURE, 'carbon'), pathname.slice('/_carbon/'.length));
+    if (pathname.startsWith('/_carbon/')) return await serveMedia(req, res, path.join(CAPTURE, 'carbon'), pathname.slice('/_carbon/'.length));
 
     if (req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document') {
       const replayedShell = replayedFor(req, new URL('/everything', url));
@@ -326,13 +333,16 @@ const server = http.createServer(async (req, res) => {
     console.error(`[error] ${key}`, error);
     if (!res.headersSent) send(res, 500, String(error));
   }
-});
+}
 
-push = createHub(server, auth ? (req) => auth.allows(req) : (req) => !req.headers['cf-connecting-ip']);
-server.on('close', () => { api?.close(); auth?.close(); });
+const hubs = [createHub(server, auth ? (req) => auth.allows(req) : (req) => !req.headers['cf-connecting-ip'])];
+if (local) hubs.push(createHub(local, (req) => !req.headers['cf-connecting-ip']));
+push = (target, payload) => { for (const broadcast of hubs) broadcast(target, payload); };
+server.on('close', () => { local?.close(); api?.close(); auth?.close(); });
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`mymind replica on http://localhost:${server.address().port}/everything`);
   console.log(`${cards.length} cards, ${Object.keys(details).length} detail views, captured ${meta.capturedAt}${OFFLINE ? ', offline' : ''}`);
   console.log(`${Object.keys(replayIndex).length} replayed responses from REA scenarios`);
 });
+local?.listen(LOCAL_PORT, '127.0.0.1', () => console.log(`without sign-in for this computer on http://127.0.0.1:${local.address().port}`));

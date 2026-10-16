@@ -11,6 +11,8 @@ import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
+/** Database seeded from the recordings that verification servers and checks read; never the working library. */
+export const VERIFY_DB = join(ROOT, 'data/verify.db');
 export const msgpack = await import(pathToFileURL(join(ROOT, 'mirror/static/134/0.109.0/scripts/vendor/msgpack.min.js')).href);
 
 /**
@@ -90,12 +92,12 @@ async function memoryTransport(dbPath, readonly) {
  * Never binds port 4321; PORT=0 lets the OS allocate a free loopback port.
  * @param {object} [options] Test server configuration.
  * @param {boolean} [options.readonly=false] Start in verification mode.
- * @param {string} [options.source] Seeded database to copy; defaults to `$TEST_SOURCE_DB`, then data/mymind.db.
+ * @param {string} [options.source] Seeded database to copy; defaults to `$TEST_SOURCE_DB`, then data/verify.db.
  * @param {boolean} [options.noStore=false] Exercise the legacy path with a nonexistent database.
  * @param {Record<string,string>} [options.env={}] Extra server environment (spawned servers only).
  * @returns {Promise<object>} Base URL, database path, temporary directory, request helpers and async cleanup.
  */
-export async function testServer({ readonly = false, source = process.env.TEST_SOURCE_DB ?? join(ROOT, 'data/mymind.db'), noStore = false, env = {} } = {}) {
+export async function testServer({ readonly = false, source = process.env.TEST_SOURCE_DB ?? VERIFY_DB, noStore = false, env = {} } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'mymind-http-'));
   const dbPath = join(dir, 'test.db');
   let child;

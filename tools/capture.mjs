@@ -142,9 +142,10 @@ function attributeMediaUrls(html, includeVideos) {
 
 // Where a media URL is stored under capture/.
 // The media host signs each URL with an expiring query; the server looks files up by path alone.
+// Fragments (#t=0.001 on videos, PDF viewer options) never reach the server, so they are not part of the file name.
 const mediaFile = (url) => url.startsWith(MEDIA_HOST)
-  ? `mediahost/${decodeURIComponent(url.slice(MEDIA_HOST.length).split('?')[0])}`
-  : `media/${decodeURIComponent(url.slice('/media/'.length))}`;
+  ? `mediahost/${decodeURIComponent(url.slice(MEDIA_HOST.length).split(/[?#]/)[0])}`
+  : `media/${decodeURIComponent(url.slice('/media/'.length).split('#')[0])}`;
 
 // Loads media URLs through the page's DevTools session, six at a time, and stores each under capture/; returns how many were saved.
 async function recordMedia(page, urls) {
