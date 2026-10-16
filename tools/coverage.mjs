@@ -7,25 +7,17 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
 import { normalizationDigest, replicaDigest } from './digests.mjs';
+import { reaRoot } from './rea-root.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DRIVE = path.join(ROOT, 'evidence', 'drive');
 const run = promisify(execFile);
 const { values: opts } = parseArgs({ options: { 'max-age-days': { type: 'string', default: '7' } } });
 
-function reaRoot() {
-  const cache = path.join(process.env.npm_config_cache ?? path.join(os.tmpdir(), 'npm-cache'), '_npx');
-  for (const dir of existsSync(cache) ? readdirSync(cache) : []) {
-    const root = path.join(cache, dir, 'node_modules', 'rea-agents');
-    if (existsSync(path.join(root, 'scripts', 'rea.mjs'))) return root;
-  }
-  throw new Error('rea-agents not found; run: npx -y rea-agents@6.4.0 --version');
-}
 const REA = reaRoot();
 const { createEvidenceBundle } = await import(pathToFileURL(path.join(REA, 'dist', 'domain', 'evidenceBundle.js')).href);
 const { createReconstructionVerifierContract } = await import(pathToFileURL(path.join(REA, 'dist', 'domain', 'reconstructionCoverage.js')).href);

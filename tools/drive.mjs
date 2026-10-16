@@ -5,7 +5,7 @@
 // Usage: node tools/drive.mjs [--profile desktop-light|desktop-dark|iphone|android] [--suite ui|cards|...]
 //        [--sides live,replica] [--no-record]
 import { execFile, spawn } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
 import { chromium, devices } from 'playwright-core';
 import { normalizationDigest, replicaDigest } from './digests.mjs';
+import { reaRoot } from './rea-root.mjs';
 import { openStore } from './replay-store.mjs';
 import { Side } from './side.mjs';
 import { SUITES } from './suites.mjs';
@@ -64,14 +65,6 @@ if (existsSync(CLAIMS)) {
 }
 const sides = opts.sides.split(',');
 
-function reaScript() {
-  const cache = path.join(process.env.npm_config_cache ?? path.join(os.tmpdir(), 'npm-cache'), '_npx');
-  for (const dir of existsSync(cache) ? readdirSync(cache) : []) {
-    const script = path.join(cache, dir, 'node_modules', 'rea-agents', 'scripts', 'rea.mjs');
-    if (existsSync(script)) return script;
-  }
-  throw new Error(`rea-agents not found under ${cache}; run: npx -y rea-agents@6.4.0 --version`);
-}
 
 async function ensureReplica() {
   const up = await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.ok, () => false);
@@ -232,7 +225,7 @@ async function runSide(side, plan) {
 }
 
 async function compareAll() {
-  const rea = reaScript();
+  const rea = path.join(reaRoot(), 'scripts', 'rea.mjs');
   const names = (await readdir(path.join(OUT, 'live'))).filter((f) => f.endsWith('.artifact.json')).map((f) => f.slice(0, -'.artifact.json'.length));
   const replicaFiles = new Set(await readdir(path.join(OUT, 'replica')).catch(() => []));
   const results = [];
