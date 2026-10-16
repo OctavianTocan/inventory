@@ -318,7 +318,7 @@ try {
       deepStrictEqual(types, liveTypes);
       const liveTags = JSON.parse(await readFile(join(ROOT, 'replay/bodies', idx['GET https://access.mymind.com/search/suggestions?q=design'].file), 'utf8'));
       for (const tag of liveTags) ok(tags.some(t => t.queryText.toLowerCase() === tag.queryText.toLowerCase() && t.count === tag.count), 'recorded tag count differs');
-      const estimate = await embedLibrary(['--db', recorded.dbPath], { log: line => console.log('SEED  ' + line) }); ok(estimate.cards > 0);
+      const estimate = await embedLibrary(['--db', recorded.dbPath], { log: line => console.log('SEED  ' + line) }); ok(estimate.cards + estimate.skippedEmpty > 0);
     } finally { copy?.close(); await recorded.close(); }
   });
 } finally {

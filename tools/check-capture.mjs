@@ -411,15 +411,19 @@ try {
     const readonly = await testServer({ readonly: true });
     fixtures.allowOrigin(readonly.base);
     const before = fixtures.requests.length;
+    const counts = () => {
+      const db = new DatabaseSync(readonly.dbPath, { readOnly: true });
+      try { return { uploads: db.prepare('SELECT COUNT(*) n FROM uploads').get().n, embeddings: db.prepare('SELECT COUNT(*) n FROM embeddings').get().n }; }
+      finally { db.close(); }
+    };
     try {
+      const seeded = counts();
       await readonly.request('/objects', { method: 'POST', body: { content: `${fixtures.base}/WebPage` } });
       await readonly.request('/uploads/authorize', { method: 'POST' });
       await readonly.request(`/cards/${articleId}/analyze`, { method: 'POST' });
       await new Promise(resolve => setTimeout(resolve, 50));
       strictEqual(fixtures.requests.length, before);
-      const db = new DatabaseSync(readonly.dbPath, { readOnly: true });
-      try { strictEqual(db.prepare('SELECT COUNT(*) n FROM uploads').get().n, 0); strictEqual(db.prepare('SELECT COUNT(*) n FROM embeddings').get().n, 0); }
-      finally { db.close(); }
+      deepStrictEqual(counts(), seeded);
     } finally { await readonly.close(); }
   });
 } finally {

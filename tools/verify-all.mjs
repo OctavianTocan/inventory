@@ -1,8 +1,11 @@
 // Runs every profile x suite through tools/drive.mjs (several at once, each with its own verifier browser)
 // and prints one table of how many screenshots REA found pixel-identical.
-// Usage: node tools/verify-all.mjs [--parallel 3] [--port-base 9333] [--reseed] [profile-suite ...] (default: all)
+// Usage: node tools/verify-all.mjs [--parallel 3] [--port-base 9333] [--reseed | --replica-only] [run ...]
+// Runs are `profile-suite` names (default: the whole matrix); patch runs such as `iphone-cards@media` work too.
 // --reseed records every live pass first, then backs up and reseeds data/mymind.db from those recordings and
 // restarts the replica before any replica pass, so a library that changed since the last seed still compares.
+// --replica-only re-runs only the replica passes against each run's recorded live pass, e.g. after a code change.
+// The replica it starts runs with OFFLINE=1, which REA's coverage needs to prove it renders without mymind.
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -28,22 +31,31 @@ const { values: opts, positionals } = parseArgs({
     parallel: { type: 'string', default: '3' },
     'port-base': { type: 'string', default: '9333' },
     reseed: { type: 'boolean', default: false },
+    'replica-only': { type: 'boolean', default: false },
   },
 });
-const jobs = positionals.length ? MATRIX.filter(([p, s]) => positionals.includes(`${p}-${s}`)) : [...MATRIX];
+const PROFILES = [...new Set(MATRIX.map(([profile]) => profile))];
+const parseRun = (run) => {
+  const profile = PROFILES.find((p) => run.startsWith(`${p}-`));
+  if (!profile) throw new Error(`Unknown run ${run}; runs look like desktop-light-ui or iphone-cards@media`);
+  return [profile, run.slice(profile.length + 1)];
+};
+const jobs = positionals.length ? positionals.map(parseRun) : [...MATRIX];
 
-const up = () => fetch('http://localhost:4321/__replay/reload', { method: 'POST' }).then((r) => r.ok, () => false);
+const up = () => fetch('http://localhost:4321/__replay/reload', { method: 'POST' }).then((r) => (r.ok ? r.json() : null), () => null);
 const run = (args) => new Promise((resolve) => spawn('node', args, { cwd: ROOT, stdio: 'inherit' }).on('exit', resolve));
 let server = null;
 async function startServer() {
-  server = spawn('node', ['server.mjs'], { cwd: ROOT, env: { ...process.env, STORE_READONLY: '1' }, stdio: 'ignore' });
+  server = spawn('node', ['server.mjs'], { cwd: ROOT, env: { ...process.env, OFFLINE: '1', STORE_READONLY: '1' }, stdio: 'ignore' });
   while (!(await up())) await new Promise((r) => setTimeout(r, 200));
 }
-if (await up()) {
+const running = await up();
+if (running) {
   if (opts.reseed) {
     console.error('--reseed restarts the replica after seeding: stop the server on :4321 first.');
     process.exit(2);
   }
+  if (!running.offline) console.error('warning: the server on :4321 is not OFFLINE=1, so coverage cannot prove offline rendering.');
 } else await startServer();
 await mkdir(DRIVE, { recursive: true });
 
@@ -98,7 +110,7 @@ try {
     if ((await run(['tools/seed-db.mjs'])) !== 0) throw new Error('seed-db failed; the backup is next to data/mymind.db');
     await startServer();
     await pool([...jobs], 'replica');
-  } else await pool([...jobs]);
+  } else await pool([...jobs], opts['replica-only'] ? 'replica' : undefined);
 } finally {
   server?.kill();
 }

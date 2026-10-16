@@ -225,10 +225,11 @@ npm run mirror                                             # static JS/CSS/fonts
 ## Verify against live, 1:1
 
 ```bash
-STORE_READONLY=1 npm run serve             # replica on :4321; required for verification
+OFFLINE=1 STORE_READONLY=1 npm run serve   # replica on :4321, as verification requires
 npm run drive -- --profile desktop-light --suite ui     # one profile x suite: live, then replica, then REA diffs
 npm run verify                             # every profile (desktop light/dark, iPhone, Android) x suite (ui, cards)
 npm run verify -- --reseed                 # after the live library changed: all live passes, reseed, then replica passes
+npm run verify -- --replica-only           # after a code change: replica passes against the recorded live passes
 npm run coverage                           # REA's fail-closed verdict over all runs: ready / partial / failed
 ```
 
@@ -239,7 +240,8 @@ Needs the agent Chromium on CDP `:9222` signed in to mymind; only its two mymind
 localStorage are read, in memory, to sign in the verifier.
 
 Every verification server must use `STORE_READONLY=1`, because live writes are intercepted and sent to the replica
-as well. `tools/verify-all.mjs` sets it when starting a server. If a server is already running, restart it yourself in
+as well, and `OFFLINE=1`, because `npm run coverage` only accepts runs that prove the replica renders without
+mymind's servers. `tools/verify-all.mjs` sets both when starting a server. If a server is already running, restart it yourself in
 that mode before verifying; the verifier does not change the environment of an existing process.
 
 How a run makes live and replica comparable pixel for pixel (`tools/drive.mjs`, `tools/side.mjs`,
