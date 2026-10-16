@@ -383,6 +383,12 @@ try {
     shell = (await server.request('/everything', { headers: { 'sec-fetch-dest': 'document' }, accept: 'text/html' })).value;
     config = JSON.parse(shell.match(/<script id="config" type="application\/json">([\s\S]*?)<\/script>/)[1]);
     ok(!(config.onboardFlags & 4096));
+    ok(shell.includes('<mymind-top-of-mind class="tom ">'));
+    await write('POST', '/onboard/flags/128/set');
+    shell = (await server.request('/everything', { headers: { 'sec-fetch-dest': 'document' }, accept: 'text/html' })).value;
+    ok(shell.includes('<mymind-top-of-mind class="tom introduced">'), 'Top of Mind stays introduced');
+    const intro = await server.request('/components/TomIntroductionModal', { accept: '*/*' });
+    ok(intro.value.includes('data-name="tom-introduction-modal"'), 'recorded introduction modal');
   });
   await check('one final change per card prevents delete and restore races', async () => {
     const since = await checkpoint();

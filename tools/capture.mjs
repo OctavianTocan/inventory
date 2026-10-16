@@ -1,5 +1,6 @@
 // Records the logged-in mymind app (shell, card stream, side endpoints, card details, media)
 // from an open Chrome tab, so server.mjs can replay it offline.
+// --gets-only records just the side endpoints missing from an existing capture and leaves everything else as is.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -12,6 +13,7 @@ const { values: opts } = parseArgs({
     'media-cards': { type: 'string', default: '300' },
     'detail-cards': { type: 'string', default: '30' },
     videos: { type: 'boolean', default: false },
+    'gets-only': { type: 'boolean', default: false },
   },
 });
 
@@ -27,6 +29,7 @@ const GETS = [
   { path: '/search/suggestions', accept: 'application/json' },
   { path: '/ui', accept: 'application/json' },
   { path: '/components/NewSpaceModal', accept: '*/*' },
+  { path: '/components/TomIntroductionModal', accept: '*/*' },
 ];
 
 function pageFetch(requests) {
@@ -128,9 +131,31 @@ async function fetchInBatches(page, requests, label) {
   return all;
 }
 
+// Fetches `gets` in the page, stores their bodies under responses/ and writes the merged responses.json.
+async function recordGets(page, gets, responses) {
+  for (const res of await page.evaluate(pageFetch, gets.map((g) => ({ url: g.path, accept: g.accept })))) {
+    if (res.error) {
+      console.warn(`  ${res.url}: ${res.error}`);
+      continue;
+    }
+    const file = `responses/${toFileName(res.url)}.body`;
+    await writeInside(OUT, file, Buffer.from(res.base64, 'base64'));
+    responses[`GET ${res.url}`] = { status: res.status, headers: res.headers, file };
+  }
+  await writeFile(path.join(OUT, 'responses.json'), JSON.stringify(responses, null, 2));
+  console.log(`Side endpoints: ${Object.keys(responses).length}`);
+}
+
 const page = await connectToPage(opts.cdp, ORIGIN);
 console.log(`Attached to ${page.url}`);
 await mkdir(OUT, { recursive: true });
+
+if (opts['gets-only']) {
+  const responses = JSON.parse(await readFile(path.join(OUT, 'responses.json'), 'utf8'));
+  await recordGets(page, GETS.filter((g) => !(`GET ${g.path}` in responses)), responses);
+  page.close();
+  process.exit(0);
+}
 
 const loaded = await page.evaluate(pageLoadCards);
 const cards = [];
@@ -143,17 +168,7 @@ await writeFile(path.join(OUT, 'static-urls.json'), JSON.stringify([...new Set(l
 console.log(`Cards: ${cards.length}, shell: ${loaded.shell.length} chars`);
 
 const responses = {};
-for (const res of await page.evaluate(pageFetch, GETS.map((g) => ({ url: g.path, accept: g.accept })))) {
-  if (res.error) {
-    console.warn(`  ${res.url}: ${res.error}`);
-    continue;
-  }
-  const file = `responses/${toFileName(res.url)}.body`;
-  await writeInside(OUT, file, Buffer.from(res.base64, 'base64'));
-  responses[`GET ${res.url}`] = { status: res.status, headers: res.headers, file };
-}
-await writeFile(path.join(OUT, 'responses.json'), JSON.stringify(responses, null, 2));
-console.log(`Side endpoints: ${Object.keys(responses).length}`);
+await recordGets(page, GETS, responses);
 
 const detailIds = cards
   .slice(0, Number(opts['detail-cards']))
