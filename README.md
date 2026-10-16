@@ -120,26 +120,71 @@ the user's `.env`.
 
 ## Desktop app
 
+`desktop/` wraps the replica in a native window (Tauri 2). The app uses the server already listening on `PORT`
+(default 4321), or starts `node server.mjs` from this checkout and stops it when the window closes.
+
+### Install
+
+1. Make sure the replica itself runs: `npm run serve` shows your library at http://localhost:4321/everything.
+2. Install Rust (`curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh`) and the system libraries from
+   [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/). On Linux, also install GStreamer's good
+   plugins; without them WebKitGTK cannot create an audio sink, leaves the grid blank and aborts within a minute:
+
+   ```bash
+   sudo pacman -S --needed webkit2gtk-4.1 base-devel gst-plugins-good                 # Arch
+   sudo apt install libwebkit2gtk-4.1-dev build-essential gstreamer1.0-plugins-good   # Debian/Ubuntu
+   ```
+
+3. Build (about 5 min the first time, about 1 min after a change):
+
+   ```bash
+   cd desktop/src-tauri && cargo build --release
+   ```
+
+4. Run `desktop/src-tauri/target/release/mymind-desktop`. The binary remembers this checkout's path, so it runs
+   from any directory as long as the checkout stays where it was built (or `MYMIND_ROOT` points to it).
+
+To start it from your app launcher on Linux, add a desktop entry. Launchers do not load shell setup such as mise or
+nvm, so the entry carries the full path to `node`. Run this from `desktop/src-tauri`:
+
 ```bash
-cd desktop/src-tauri && cargo build --release   # first build ~5 min
-./target/release/mymind-desktop
+cat > ~/.local/share/applications/mymind.desktop <<EOF
+[Desktop Entry]
+Type=Application
+Name=mymind
+Exec=env MYMIND_NODE=$(command -v node) $PWD/target/release/mymind-desktop
+Icon=$PWD/icons/icon.png
+Categories=Utility;
+EOF
 ```
 
-Linux needs `webkit2gtk-4.1` and GStreamer's `gst-plugins-good` (Arch: `pacman -S gst-plugins-good`). Without
-the latter, WebKitGTK's web process cannot create an audio sink, leaves the grid blank and aborts within a minute.
+### Configure
 
-The app opens the replica in a Tauri 2 window. When nothing listens on `PORT` (default 4321) it starts
-`node server.mjs` from this checkout and stops it when the window closes; otherwise it uses the running server.
-`MYMIND_NODE` and `MYMIND_ROOT` select the node binary and the checkout; `STORE_DB`, `STORE_MEDIA` and the other
-server variables pass through. Links to other sites open in the default browser, and files dropped on the window
-reach the page's own upload handler, as in a browser. On Linux the app reads dropped files itself and hands them to
-the page as a `drop` event (`src/file_drop.rs`), because WebKitGTK currently gives pages an empty
-`dataTransfer.files` ([WebKit bug 323277](https://bugs.webkit.org/show_bug.cgi?id=323277)).
-`cargo run --release --example drag_source -- <file>` opens a window that drags a file, for testing drops on a
-display without a file manager.
+| Variable | Default | Effect |
+|---|---|---|
+| `PORT` | `4321` | Port of the replica the window opens, and of the server the app starts. |
+| `MYMIND_ROOT` | the checkout it was built in | Where `server.mjs` lives. |
+| `MYMIND_NODE` | `node` on `PATH` | Node binary that runs the server. |
+| `STORE_DB`, `STORE_MEDIA`, … | as for `npm run serve` | Passed through to the server it starts. |
 
-The app does not define `mymind.native`. mymind's Mac and phone apps use that bridge to hand card views, sheets
-and menus to native code; without it the page runs as the browser UI that the REA runs verify.
+The server reads `.env` in the checkout, so AI features work in the app when they work in `npm run serve`.
+
+### How it behaves
+
+- Links to other sites open in your default browser; the window only shows the replica.
+- Files dropped on the window go through mymind's own upload code, as in a browser. WebKitGTK currently gives pages
+  an empty `dataTransfer.files` ([WebKit bug 323277](https://bugs.webkit.org/show_bug.cgi?id=323277)), so on Linux
+  the app reads dropped files itself and hands them to the page as a `drop` event (`src/file_drop.rs`).
+- The app does not define `mymind.native`. mymind's Mac and phone apps use that bridge to hand card views, sheets
+  and menus to native code; without it the page runs as the browser UI that the REA runs verify.
+
+### Troubleshooting
+
+- **Grid stays blank, log says `GStreamer element autoaudiosink not found`:** install `gst-plugins-good` (step 2).
+- **Window shows "mymind could not start":** the message names the node binary and checkout it tried; set
+  `MYMIND_NODE` or `MYMIND_ROOT`.
+- **Testing drops without a file manager** (e.g. on Xvfb): `cargo run --release --example drag_source -- <file>`
+  opens a small window whose button drags that file.
 
 ## Re-capture
 
