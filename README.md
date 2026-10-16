@@ -230,6 +230,27 @@ only: `deploy/package-app.sh` builds for the machine it runs on.
 
 Run `deploy/package-app.sh` again after changing `desktop/`.
 
+#### Testing the hosted library
+
+Scripts and agents get past Cloudflare Access with a service token instead of a Google login, then sign in to the
+library as the `TEST_USER_*` password user. The token only opens Access; the library still needs its own session.
+
+1. In Zero Trust, under Access → Service credentials, create a service token (mymind.octaviantocan.com uses
+   "mymind-bypass", valid one year). In the application "mymind", add a second policy with the action Service Auth
+   that includes that service token.
+2. Put its client ID and secret in `.env` as `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`, next to
+   `TEST_USER_NAME` and `TEST_USER_PASSWORD`.
+3. Check the hosted site:
+
+   ```bash
+   node tools/check-hosted.mjs             # Access, test-user sign-in, library reads and /download over HTTP
+   node tools/check-hosted.mjs --browser   # also signs in with headless Chromium; screenshot in evidence/hosted/
+   ```
+
+Any other client gets in the same way by sending the headers `CF-Access-Client-Id` and `CF-Access-Client-Secret`
+on requests to the hosted origin only. Treat the token like a password: it lets its holder reach the sign-in page
+and `/download`. Revoke or refresh it under Service credentials.
+
 ## Desktop app
 
 `desktop/` wraps the replica in a native window (Tauri 2). The app uses the server already listening on `PORT`

@@ -28,7 +28,8 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
 7. **Nothing public without sign-in.** A server reachable from outside the machine (tunnel, port forward) runs
    with `AUTH=google` and `OWNER_EMAIL` (README, Sign-in). Password users exist only through
    `tools/auth-user.mjs`, with generated passwords kept in `.env` (`--save-env`); use the `TEST_USER_*` account to
-   test a signed-in site, never the owner's Google login. The whole hosted hostname stays behind the Cloudflare
+   test a signed-in site, never the owner's Google login. Reach the hosted site through Access with the service
+   token in `.env` (`CF_ACCESS_CLIENT_*`, `node tools/check-hosted.mjs`, README "Testing the hosted library"). The whole hosted hostname stays behind the Cloudflare
    Access application "mymind" (owner plus `@octaviantocan.com`, through Google or a one-time PIN), and the tunnel
    checks its token (`deploy/install.sh`). Never weaken that, the gate in `lib/auth.mjs`, the tunnel refusal in
    `server.mjs` or the Access token check in `deploy/download-server.mjs`, and ask the user before publishing any
