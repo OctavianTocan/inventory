@@ -182,6 +182,12 @@ fn is_google_sign_in(url: &Url) -> bool {
         })
 }
 
+/// True for Cloudflare Access login pages (`<team>.cloudflareaccess.com`), which a hosted library behind Access
+/// redirects to before it loads.
+fn is_access_login(url: &Url) -> bool {
+    url.scheme() == "https" && url.host_str().is_some_and(|host| host.ends_with(".cloudflareaccess.com"))
+}
+
 /// Hands web and mail links to the system; anything else (a file dropped outside a drop zone) goes nowhere.
 fn open_in_browser(url: &Url) {
     if !matches!(url.scheme(), "http" | "https" | "mailto") {
@@ -223,7 +229,8 @@ fn replica_url(port: u16) -> Url {
     Url::parse(&format!("http://localhost:{port}/everything")).expect("a localhost URL parses")
 }
 
-/// Whether a Google sign-in started from the library is under way, so its Google pages stay in the window.
+/// Whether a sign-in started from the library or its Cloudflare Access login is under way, so its Google pages stay
+/// in the window.
 struct SigningIn(AtomicBool);
 
 fn main() {
@@ -256,6 +263,10 @@ fn main() {
                         if !url.path().starts_with("/google/") {
                             leaving.0.store(false, Ordering::SeqCst);
                         }
+                        return true;
+                    }
+                    if is_access_login(url) {
+                        leaving.0.store(true, Ordering::SeqCst);
                         return true;
                     }
                     if leaving.0.load(Ordering::SeqCst) && is_google_sign_in(url) {
@@ -316,6 +327,14 @@ mod tests {
         assert!(!is_library(&url("http://mymind.example.com/everything"), 4331, Some(&hosted)));
         assert!(!is_library(&url("https://mymind.example.com.evil.test/"), 4331, Some(&hosted)));
         assert!(!is_library(&url("https://mymind.example.com/everything"), 4331, None));
+    }
+
+    #[test]
+    fn access_login_hosts() {
+        assert!(is_access_login(&url("https://team.cloudflareaccess.com/cdn-cgi/access/login/mymind.example.com")));
+        for bad in ["http://team.cloudflareaccess.com/", "https://cloudflareaccess.com.evil.test/", "https://evilcloudflareaccess.com/"] {
+            assert!(!is_access_login(&url(bad)), "{bad}");
+        }
     }
 
     #[test]
