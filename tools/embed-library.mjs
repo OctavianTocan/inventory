@@ -27,6 +27,18 @@ function options(args) {
 }
 
 /**
+ * Build the item a card's library embedding is computed from; its `documentText` identifies the vector's input.
+ * @param {{type: string, data: string, extras?: string|null}} card Stored card row.
+ * @param {string|null|undefined} body Stored `card_content.body` JSON, if any.
+ * @returns {object} Analysis item, falling back to the card summary when it has no other text.
+ */
+export function embeddingItem(card, body) {
+  const item = analysisItem(card, body ? JSON.parse(body) : null);
+  if (!documentText(item)) item.text = JSON.parse(card.data).summary ?? '';
+  return item;
+}
+
+/**
  * Estimate or run resumable text-only Gemini embeddings for cards without vectors.
  * @param {string[]} [args] CLI arguments; --run explicitly enables hosted calls and vector writes.
  * @param {{log?:Function}} [dependencies] Optional progress logger for in-process checks.
@@ -41,8 +53,7 @@ export async function embedLibrary(args = process.argv.slice(2), { log = console
       LEFT JOIN card_content b ON b.card_id = c.id LEFT JOIN embeddings e ON e.card_id = c.id
       WHERE e.card_id IS NULL AND c.deleted_ns IS NULL AND (c.flags & ${GRID_HIDDEN_FLAGS}) = 0 ORDER BY c.id`)
       .all().flatMap(row => {
-        const item = analysisItem(row, row.body ? JSON.parse(row.body) : null);
-        if (!documentText(item)) item.text = JSON.parse(row.data).summary ?? '';
+        const item = embeddingItem(row, row.body);
         if (!documentText(item)) { empty++; return []; }
         return [{ id: row.id, userId: row.user_id, item }];
       }).slice(0, config.limit);
@@ -73,9 +84,7 @@ export async function embedLibrary(args = process.argv.slice(2), { log = console
           const current = store.card(row.id, row.userId);
           if (!current) return;
           const content = store.db.prepare('SELECT body FROM card_content WHERE card_id = ?').get(row.id);
-          const item = analysisItem(current, content ? JSON.parse(content.body) : null);
-          if (!documentText(item)) item.text = JSON.parse(current.data).summary ?? '';
-          if (documentText(item) !== documentText(row.item)) return;
+          if (documentText(embeddingItem(current, content?.body)) !== documentText(row.item)) return;
           const bytes = Buffer.alloc(3072);
           vectors[i].forEach((value, index) => bytes.writeFloatLE(value, index * 4));
           result.embedded += Number(insert.run(bytes, row.id, row.userId).changes);

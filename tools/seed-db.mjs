@@ -1,9 +1,12 @@
-import { readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { nsFromIso, openStore } from '../lib/store.mjs';
 import { recordingExtras } from './check-render.mjs';
 import { importReadMetadata } from '../lib/read-metadata.mjs';
+import { documentText } from '../lib/ai.mjs';
+import { embeddingItem } from './embed-library.mjs';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const API = 'https://access.mymind.com';
@@ -112,14 +115,45 @@ function userRecord(config, idPrefix) {
   return { id: config.user.uid, accountUid: config.account.uid, idPrefix, flags: config.user.flags, settings: JSON.stringify(settings) };
 }
 
+// Read an existing database's embeddings with the text each was computed from, so a reseed need not pay for them again.
+function previousEmbeddings(dbPath) {
+  if (!existsSync(dbPath)) return new Map();
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'embeddings'").get()) return new Map();
+    return new Map(db.prepare(`SELECT e.card_id, e.vector, c.type, c.data, c.extras, b.body FROM embeddings e
+      JOIN cards c ON c.id = e.card_id LEFT JOIN card_content b ON b.card_id = e.card_id`).all()
+      .map((row) => [row.card_id, { vector: row.vector, text: documentText(embeddingItem(row, row.body)) }]));
+  } finally { db.close(); }
+}
+
+// Keep each previous vector whose card still has exactly the text it was computed from.
+function restoreEmbeddings(store, previous) {
+  const { db } = store;
+  const insert = db.prepare('INSERT INTO embeddings (card_id, user_id, dimensions, vector) VALUES (?, ?, 768, ?)');
+  const content = db.prepare('SELECT body FROM card_content WHERE card_id = ?');
+  let kept = 0;
+  store.transaction(() => {
+    for (const card of db.prepare('SELECT id, user_id, type, data, extras FROM cards').all()) {
+      const old = previous.get(card.id);
+      if (!old || documentText(embeddingItem(card, content.get(card.id)?.body)) !== old.text) continue;
+      insert.run(card.id, card.user_id, old.vector);
+      kept++;
+    }
+  });
+  return kept;
+}
+
 /**
  * Rebuild the SQLite database from the recordings, replacing any existing file.
- * @param {string} dbPath Database file path; the file and its WAL sidecars are deleted first.
+ * @param {string} dbPath Database file path; the file and its WAL sidecars are deleted first, keeping only the
+ *   embeddings of cards whose text is unchanged.
  * @param {string} [root] Project root containing the recordings.
  * @returns {Promise<Record<string, number>>} Counts of what was written, plus `tieInversions`, `extrasFailures`
  *   and `leftoverCaptureCards`, which are 0 for a clean seed.
  */
 export async function seedDatabase(dbPath, root = ROOT) {
+  const embeddings = previousEmbeddings(dbPath);
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${dbPath}${suffix}`, { force: true });
   const recordings = await readRecordings(root);
   const { byId, stats } = mergeCards(recordings);
@@ -201,6 +235,7 @@ export async function seedDatabase(dbPath, root = ROOT) {
     }
   });
   await importReadMetadata(store, root);
+  counts.embeddingsKept = restoreEmbeddings(store, embeddings);
   store.close();
   return { ...counts, ...Object.fromEntries(Object.entries(stats).map(([k, v]) => [`merge_${k}`, v])),
     tieInversions: inversions, extrasFailures, leftoverCaptureCards: leftover.length };
