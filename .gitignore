@@ -10,3 +10,7 @@ replay/
 
 # Local database.
 data/
+
+# Desktop app build output.
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

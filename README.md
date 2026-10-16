@@ -118,6 +118,29 @@ database, real filesystem streams/Sharp and stubbed media executables. Tests use
 and `STORE_LOAD_ENV=0`, so they never load
 the user's `.env`.
 
+## Desktop app
+
+```bash
+cd desktop/src-tauri && cargo build --release   # first build ~5 min
+./target/release/mymind-desktop
+```
+
+Linux needs `webkit2gtk-4.1` and GStreamer's `gst-plugins-good` (Arch: `pacman -S gst-plugins-good`). Without
+the latter, WebKitGTK's web process cannot create an audio sink, leaves the grid blank and aborts within a minute.
+
+The app opens the replica in a Tauri 2 window. When nothing listens on `PORT` (default 4321) it starts
+`node server.mjs` from this checkout and stops it when the window closes; otherwise it uses the running server.
+`MYMIND_NODE` and `MYMIND_ROOT` select the node binary and the checkout; `STORE_DB`, `STORE_MEDIA` and the other
+server variables pass through. Links to other sites open in the default browser, and files dropped on the window
+reach the page's own upload handler, as in a browser. On Linux the app reads dropped files itself and hands them to
+the page as a `drop` event (`src/file_drop.rs`), because WebKitGTK currently gives pages an empty
+`dataTransfer.files` ([WebKit bug 323277](https://bugs.webkit.org/show_bug.cgi?id=323277)).
+`cargo run --release --example drag_source -- <file>` opens a window that drags a file, for testing drops on a
+display without a file manager.
+
+The app does not define `mymind.native`. mymind's Mac and phone apps use that bridge to hand card views, sheets
+and menus to native code; without it the page runs as the browser UI that the REA runs verify.
+
 ## Re-capture
 
 Needs Chrome with remote debugging on port 9222 and a logged-in mymind tab open.
