@@ -1,6 +1,6 @@
 // Runs every profile x suite through tools/drive.mjs (several at once, each with its own verifier browser)
 // and prints one table of how many screenshots REA found pixel-identical.
-// Usage: node tools/verify-all.mjs [--parallel 3] [--port-base 9333] [--reseed | --replica-only] [run ...]
+// Usage: node tools/verify-all.mjs [--parallel 2] [--port-base 9333] [--reseed | --replica-only] [run ...]
 // Runs are `profile-suite` names (default: the whole matrix); patch runs such as `iphone-cards@media` work too.
 // The replica it starts reads data/verify.db, a database seeded from the recordings (created on first use), never
 // the working library in data/mymind.db.
@@ -31,7 +31,7 @@ const MATRIX = [
 const { values: opts, positionals } = parseArgs({
   allowPositionals: true,
   options: {
-    parallel: { type: 'string', default: '3' },
+    parallel: { type: 'string', default: '2' },
     'port-base': { type: 'string', default: '9333' },
     reseed: { type: 'boolean', default: false },
     'replica-only': { type: 'boolean', default: false },

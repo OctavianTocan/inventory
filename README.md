@@ -416,8 +416,9 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 - Recorded detail views cover every card that existed at the last `--details-only` pass. A card without one
   (e.g. saved on live mymind afterwards) gets a generated detail whose body is its grid card.
 - Generated details and rich prose nodes have route/data coverage, but still need browser and REA parity checks.
-- Uncaptured historical media retains its placeholder fallback (6 of the 511 detail media and 3 grid videos failed
-  to download). Generated AI thumbnails remain later work.
+- Uncaptured historical media retains its placeholder fallback: 6 of the 511 detail media failed to download, all
+  reader images of one card ("Sub-agents are just wrong"); every grid video is present. Generated AI thumbnails
+  remain later work.
 - The sign-in page is not part of the REA matrix, whose verifier is signed in. Compared signed out under a frozen
   clock with its animated WebGL background hidden, it matches live at 390x844 (0 pixels differ, also for "account
   not found") and at 1440x900 differs in 1,505 edge pixels by at most 3 levels, the same noise as live against

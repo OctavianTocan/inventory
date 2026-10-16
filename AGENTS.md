@@ -41,7 +41,9 @@ Verification is slow: a desktop `ui` suite takes 40–60 min, a phone `ui` suite
    `tools/page-determinism.js`, verifier flags). Run the full matrix once, at the end, before claiming parity.
 3. `npm run coverage` lists exactly which runs are stale (`verifier-result-incompatible`); re-run only those.
 4. Before starting anything over 5 minutes, say how long it will take, run it in the background and wait for the
-   completion notification instead of polling. At most 3 drive runs in parallel; check `free -g` first.
+   completion notification instead of polling. Start runs over 30 minutes with `systemd-run --user --unit <name>` so
+   they outlive the agent session (a session restart killed one), and wait on the unit. At most 2 drive runs in
+   parallel (3 got the agent Chromium OOM-killed); check `free -g` first.
 5. Delete `evidence/drive/claims/` before a fresh matrix, or every run is skipped as already claimed.
 6. Never edit replica code (`server.mjs`, `tools/replay-store.mjs`, `lib/**/*.mjs`) while drive runs are going.
    Coverage hashes those files when it reports, so every run that finished before the edit becomes
