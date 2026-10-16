@@ -22,3 +22,8 @@ desktop/src-tauri/gen/
 
 # Packaged desktop app that /download serves (deploy/package-app.sh).
 downloads/
+
+# mymind's own Android app and what is decoded from it: their code and assets, studied locally, never committed.
+android/apk/
+android/decoded/
+android/jadx/

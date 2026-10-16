@@ -1,6 +1,7 @@
 # Plan: a pixel-identical mymind Android app
 
-Status: research only. Nothing below has been run against a phone or an APK yet.
+Status (2026-10-16): steps 0 and 1 are done (the phone is reachable over wireless debugging and the installed APK set
+is pulled). Nothing is decompiled or built yet.
 
 ## Decisions (the user, 2026-10-16)
 
@@ -11,18 +12,58 @@ Status: research only. Nothing below has been run against a phone or an APK yet.
 - **Fully separate from mymind's servers.** Our app talks only to our own library (the hosted replica). Never fetch
   live mymind pages posing as the app or with its User-Agent. The real app on the phone or emulator is only the
   visual reference.
-- The user turns on USB debugging on their phone later (step 0).
+- **Some leeway, still to be agreed.** The user wants room for things native Kotlin does better than the original.
+  Which screens or behaviours may differ, and by how much, is to be discussed with the user before building them.
 
-Consequences for the steps below: steps 0–4 (pull, decompile, run and capture the real app, point it at the replica
-so both apps show the same data) still produce the reference; step 5 becomes a native Kotlin app instead of
-WebViews. Open questions: how a native app signs in to the hosted library behind Cloudflare Access and mymind's
-Google sign-in (Google refuses OAuth inside embedded WebViews; a native client needs an Android OAuth client or a
-system-browser handoff), and how close native text rendering gets to the real app's WebView text at a pixel
-threshold of 0.
+Consequences for the steps below: steps 2–4 (decompile, run and capture the real app, point it at the replica so
+both apps show the same data) produce the reference; step 5 is a native Kotlin app instead of WebViews.
+
+## The phone
+
+Samsung SM-F976B (foldable; folded, the cover screen is 1080x2520 at density 480, overridden to 450), Android 17
+(API 37), with mymind 2.14 (code 280) from Play. It is on wireless debugging and already paired with the development
+machine: `adb mdns services` lists it, then `adb connect <ip:port>` with the address shown (the port changes).
+`android/apk/com.mymind.access/` holds the six pulled APKs (base, arm64_v8a, xxhdpi, en, es, ro; base.apk SHA-256
+`8d6e6b06fdbd7413e82f49d50cada0c9eaf8a8073305362aaef01f281cf0e69a`), Git-ignored like everything decoded from
+them.
+
+## What our app talks to
+
+The server's existing HTTP API, the same one the web front-end and the desktop app (a window around the hosted site)
+already use: the card list and card details, spaces, tags, search, writes, uploads, `/changes` and live updates on
+the `/hub` WebSocket (`docs/write-api.md`, `lib/`). The data side needs nothing new. The web gets card bodies as
+HTML that `lib/render-card.mjs` renders from card JSON; the app draws them natively from the JSON instead.
+
+## Open: how the app signs in (to discuss with the user)
+
+Every request meets two gates: Cloudflare Access at the edge, then mymind's own session (Google for the owner,
+password users). Google refuses sign-in inside embedded WebViews, and a service token compiled into an APK can be
+extracted, so the app has to obtain its credentials after the person signs in. Options:
+
+- **A. Sign in once in the browser, then per-device tokens (recommended).** The app opens the sign-in in a Custom
+  Tab, a real browser where Google allows it: Cloudflare Access, then mymind's sign-in. The server then creates a
+  Cloudflare service token for that device (Cloudflare API) and a mymind session, and hands both to the app through
+  a one-time code on an app link; the app keeps them in the Android Keystore and sends them with every request. Each
+  device can be revoked on its own, and the outer Access wall stays whole. Costs: the server holds a Cloudflare API
+  token that can edit Access, and that first sign-in shows a browser page.
+- **B. Open only the app's API path at the edge.** A Cloudflare Bypass policy for something like `/api/app/*`; the
+  app signs in natively (Android Credential Manager for Google, or a password) and the server checks the Google ID
+  token and issues an app session. Fully native and 1:1, but that path is reachable from the internet with only our
+  own sign-in in front of it, which AGENTS.md rule 7 forbids unless the user agrees.
+- **C. Pass the Access token through.** Like A, but the server hands the app the Access token from the browser
+  sign-in and the app sends it as `cf-access-token`. No Cloudflare API credential on the server; the person signs in
+  again whenever the Access session expires.
+
+## Open: how strict the screenshot match is
+
+The web replica is matched at REA channel threshold 0: every pixel identical. The real app draws most screens as web
+pages inside WebViews, while native Kotlin draws text and anti-aliased edges with Android's own renderer, so a native
+screen can look identical to a person and still differ in edge pixels. Agree with the user what tolerance counts as a
+match, per screen if needed; it goes together with the leeway decision above.
 
 ## What the app is (evidence so far)
 
-- Package `com.mymind.access`, v2.14 (code 280), min Android 12, target SDK 35, shipped as split APKs.
+- Package `com.mymind.access`, v2.14 (code 280), min SDK 32 (Android 12L), target SDK 35, shipped as split APKs.
 - It is a **native shell around WebViews that load the same server-rendered pages and ES modules as the web app.**
   The web bundle already contains the Android side of that contract:
   - `scripts/native/api.js` exposes `mymind.api` (`ui.update`, `cards.open`, `synchronize`, `objects.*`, `query/find`)
@@ -53,8 +94,8 @@ Installed 2026-10-16 on the development machine (mini-001):
 |---|---|
 | Android SDK `~/Android/Sdk` | platforms 36 and 37, build-tools 36.0.0/37.0.0, emulator, platform-tools, cmdline-tools |
 | AVDs | `Pixel_9_API_36` (google_apis, rootable), `fold`, `latest`, `pulls_demo` |
-| Java | Temurin 21 through mise (Gradle's daemon uses it via `org.gradle.java.home`); pacman also pulled in OpenJDK 27 as Gradle's dependency, not first on `PATH` |
-| `gradle` 9.8.1, `kotlin` 2.4.21 | pacman |
+| Java 27 (default) | Temurin 27 through mise (global) and in `~/.gradle/gradle.properties` (`org.gradle.java.home`), OpenJDK 27 as the system `java`. A probe app (AGP 9.4.1, built-in Kotlin, compileSdk 36) built with it. Temurin 21 stays installed |
+| `gradle` 9.8.1, `kotlin` 2.4.21 | pacman; latest stable Android Gradle Plugin is 9.4.1 |
 | `jadx` 1.5.6, `mitmproxy` 12.2.3 | pacman |
 | `apktool` 3.0.3 | AUR `android-apktool-bin` |
 | `frida` 17.23.3, `objection` 1.12.5 | `uv tool install frida-tools` / `objection`, only if WebView debugging is off or pinning blocks step 4 |
@@ -67,13 +108,16 @@ REA (`npx -y rea-agents@6.4.0`): `list-adb-devices`, `pull-adb-package`, `inspec
 
 ## Plan, best first
 
-### 0. On the phone (you, 5 min)
+### 0. On the phone (done 2026-10-16)
 
-1. Settings → About phone → tap **Build number** 7 times.
-2. Developer options → turn on **USB debugging** (or **Wireless debugging**, then `adb pair <ip:port>` with the code).
-3. Plug in, accept the RSA prompt on the phone.
+Wireless debugging is on and the machine is paired. Reconnect after a phone restart or network change:
 
-### 1. Pull the exact APK set you have installed (10 min)
+```bash
+adb mdns services              # lists _adb-tls-connect with the current ip:port
+adb connect <ip:port>
+```
+
+### 1. Pull the exact APK set you have installed (done 2026-10-16)
 
 ```bash
 rea list-adb-devices
@@ -87,8 +131,8 @@ Plain adb equivalent: `adb shell pm path com.mymind.access`, then `adb pull` eac
 ### 2. Decompile and read the shell (1–2 h)
 
 ```bash
-apktool d android/apk/base.apk -o android/decoded        # manifest, layouts, drawables, fonts, Lottie, dimens
-jadx -d android/jadx android/apk/base.apk                # Kotlin/Java
+apktool d android/apk/com.mymind.access/base.apk -o android/decoded        # manifest, layouts, drawables, fonts, Lottie, dimens
+jadx -d android/jadx android/apk/com.mymind.access/base.apk                # Kotlin/Java
 grep -rE "addJavascriptInterface|addDocumentStartJavaScript|evaluateJavascript|setUserAgentString|shouldInterceptRequest|mymind://" android/jadx
 ```
 
@@ -99,7 +143,7 @@ and every native screen's layout and resources.
 
 ```bash
 emulator -avd Pixel_9_API_36 -gpu host            # or a new AVD sized to the phone's display
-adb -e install-multiple android/apk/*.apk
+adb -e install-multiple android/apk/com.mymind.access/*.apk
 ```
 
 On `google_apis` (userdebug) images every WebView is inspectable:
