@@ -336,7 +336,7 @@ try {
       strictEqual(Buffer.from(embedding.vector).readFloatLE(0), 1);
       ok(events.some(event => event.target === 'object:analyzed' && event.payload.id === imageId));
       const detail = await server.request(`/cards/${imageId}/detail`, { accept: 'text/html' });
-      ok(detail.value.includes('<mymind-tldr><p>A fixture summary &lt;safe&gt;.</p>'));
+      ok(detail.value.includes('<mymind-tldr data-watchable="false"><p>A fixture summary &lt;safe&gt;.</p>'));
       const embed = fixtures.requests.slice(beforeAI).find(request => request.path.endsWith(':embedContent'));
       strictEqual(embed.body.content.parts.find(part => part.inline_data).inline_data.mime_type, 'image/png');
       const jpeg = fixtures.requests.slice(beforeAI).find(request => request.path === '/v1/systemone');
