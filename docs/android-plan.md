@@ -15,10 +15,10 @@ is pulled). Nothing is decompiled or built yet.
 - **Leeway (agreed).** Layout, colours and sizes match exactly; tiny differences in text and edge anti-aliasing are
   allowed; each native extra (predictive back gesture, haptics, system share sheet, …) gets the user's yes or no one
   at a time before it ships.
-- **Native sign-in, no Cloudflare in the app.** A sign-in screen in the app with one-tap Google sign-in; the app never
-  deals with Cloudflare Access. Welcome: the owner's Google account, any Google account with a verified
-  `@octaviantocan.com` address, and the test user (password). Nobody else, and no sign-up form. Details in "Sign-in"
-  below.
+- **Native sign-in, no Cloudflare Access anywhere.** A sign-in screen in the app with one-tap Google sign-in; Access
+  is dropped for the whole host (the tunnel stays). Welcome: the owner's Google account, any Google account with a
+  verified `@octaviantocan.com` address, and the test user (password), each with their own library. Nobody else, and
+  no sign-up form. Details in "Sign-in" below.
 - **Structured card data for the app.** The app gets cards as typed JSON, not web markup (see "What our app talks
   to").
 
@@ -49,33 +49,26 @@ the Kotlin models are generated or checked against it.
 
 ## Sign-in (decided 2026-10-16)
 
-The user's choice: a native sign-in screen with one-tap Google sign-in, and no Cloudflare in the app. Option A
-(browser sign-in, then per-device Cloudflare tokens) and C (passing the Access token through) were rejected.
+The user's choice: a native sign-in screen with one-tap Google sign-in, and no Cloudflare Access at all (the tunnel
+stays). Option A (browser sign-in, then per-device Cloudflare tokens), C (passing the Access token through) and an
+Access exemption for an app path were rejected. Accounts, per-user libraries and removing Access are planned in
+`docs/accounts-plan.md`; the app builds on them.
 
 - **Who can sign in (the user):** "the test user, my main email, and then my domain. Anyone from those is completely
-  welcome." Google for `OWNER_EMAIL` and for any verified `@octaviantocan.com` address (the same people the Access
-  policy admits); passwords only for users made with `tools/auth-user.mjs` (the `TEST_USER_*` account for automated
-  tests). No sign-up form. The website's Google sign-in should admit the domain too: `lib/auth.mjs` allows only
-  `OWNER_EMAIL` today, so change it together with the app's server work (editing `lib/` makes every verification
-  result stale). Every signed-in person reaches the same library, the owner's (`lib/auth.mjs`); separate libraries
-  per person would be a new decision. If the Google consent screen is still in Testing, only its listed test users
-  can sign in.
+  welcome." Google for `OWNER_EMAIL` and any verified `@octaviantocan.com` address, passwords only for users made
+  with `tools/auth-user.mjs` (the `TEST_USER_*` account for automated tests). No sign-up form. Each person gets their
+  own library.
 - **In the app:** Android Credential Manager with Sign in with Google, `serverClientId` set to the existing Web client
   ID. Google also needs an Android OAuth client in the same Google Cloud project for the app's package name and the
-  SHA-1 of each signing key (debug and release); ask the user before creating it. A password form serves the test
+  SHA-1 of each signing key (debug and release). The user authorized the agent to do this Google Cloud setup itself,
+  the way the Web client was set up (the agent browser, signed in as the owner). A password form serves the test
   user.
-- **On the server:** a sign-in endpoint under the app path takes the Google ID token, verifies it against Google's
-  published keys (`aud` = Web client ID, issuer, expiry, `email_verified`, email = owner or `@octaviantocan.com`;
-  `lib/auth.mjs` `verifyIdToken` already does all but the domain check), or takes the test user's
-  name and password with rate limiting, and returns an opaque app token stored hashed and revocable like `sessions`.
-  Every other app route requires `Authorization: Bearer <token>`, including media. The app keeps the token encrypted
-  with an Android Keystore key.
-- **At the edge:** only the app API path (for example `/api/app/`) leaves Cloudflare Access, through an Access Bypass
-  rule for that path and a matching tunnel ingress rule without `access.required` (`deploy/install.sh` sets it for
-  the whole host today). The website, `/download` and every other path stay behind Access. The user floated dropping
-  Cloudflare entirely; the default here keeps it for the website. Confirm the exact path with the user before
-  changing Access or the tunnel.
-- AGENTS.md rule 7 records this exception.
+- **On the server:** a sign-in endpoint takes the Google ID token and verifies it against Google's published keys
+  (`aud` = Web client ID, issuer, expiry, `email_verified`, allowed email; `verifyIdToken` in `lib/auth.mjs` already
+  does all but the domain check), or takes a password user's name and password with rate limiting, and returns an
+  opaque app token stored hashed and revocable like `sessions`. Every other route accepts `Authorization: Bearer
+  <token>` as well as the session cookie, including media. The app keeps the token encrypted with an Android
+  Keystore key.
 
 ## Screenshot match
 

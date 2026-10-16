@@ -9,13 +9,13 @@ resume_focus: "Build the native Kotlin Android app (roadmap phase 9) per docs/an
 repository: "github.com/OctavianTocan/mymind-reconstruction (private)"
 repo_root_sha: "56f02615980e94ac90c0176f2be977d6f660708e"
 branch: "main"
-head: "8fe7056a8a78c0b7f9884ec5a2d4e22350e11b24 (this update is committed on top)"
+head: "ec1d397e7312687782d0c69569cb16c1db370789 (this update is committed on top)"
 ---
 
 # mymind native Kotlin Android app: handoff
 
 The plan of record is `docs/android-plan.md`; this file only adds the session context around it. Read the plan's
-"Decisions", "What our app talks to", "Sign-in" and "Screenshot match" sections first. Updated after the user
+"Decisions", "What our app talks to", "Sign-in" and "Screenshot match" sections, and `docs/accounts-plan.md`, first. Updated after the user
 answered the open questions (same day); `git log -p` on this file shows the earlier version.
 
 ## The user's decisions (their own answers, 2026-10-16)
@@ -35,33 +35,33 @@ answered the open questions (same day); `git log -p` on this file shows the earl
    Cloudflare sign-in ... We just restrict the actual sign-in through Google and account creation to only me and the
    test user." Moments later they widened it: "We have the test user, my main email, and then my domain. Anyone
    from those is completely welcome", so any verified `@octaviantocan.com` Google account too, on the app and the
-   website (`lib/auth.mjs` admits only the owner today; not changed yet because editing `lib/` makes every
-   verification result stale). They want a native screen with one-tap Google sign-in. They also floated dropping Cloudflare
-   entirely ("or maybe we just don't have it"); my default, written into the plan, keeps Access on the website and
-   exempts only the app API path. Not confirmed by the user.
+   website. They want a native screen with one-tap Google sign-in.
+9. **No Cloudflare Access at all; the tunnel stays.** "We can actually fully drop Cloudflare ... in terms of access.
+   We are still using it as a tunnel thing." The server's sign-in is the only gate; AGENTS.md rule 7 says so.
+10. **A library per person** in a proper multi-user database, planned before the Kotlin app or in parallel. "The
+    test user would actually just get the library that I have right now, just one-to-one", and the parity checks
+    run as the test user. Re-verifying after `lib/` changes can wait; it is no reason to hold a change.
+11. **Google Cloud setup by the agent**, "the same way you did the other setup" (agent browser signed in as the
+    owner): the Android OAuth client, and test users or publishing for domain accounts.
 8. **Card data:** asked why the app should get web markup at all; they want a format both apps render properly.
    Recorded as typed JSON for the app from the same stored data the web's HTML is made from (the web keeps HTML only
    because mymind's own front-end code requires it).
 
-Roadmap row 9 (`docs/roadmap.md`) records 1–3.
+Roadmap row 9 (`docs/roadmap.md`) records 1–3; `docs/accounts-plan.md` "Decisions" records 7 and 9–11.
 
 ## Still open
 
-- **The exact app API path and whether Cloudflare stays on the website.** Plan default: Access keeps the website,
-  only something like `/api/app/` leaves it (Access Bypass for that path plus a tunnel ingress rule without
-  `access.required`). Confirm with the user before changing Access or the tunnel; AGENTS.md rule 7 now names this
-  exception.
-- **The Android OAuth client** (package name plus signing-key SHA-1s) in the existing Google Cloud project; ask before
-  creating it.
-- **Domain users on the website.** `lib/auth.mjs` still admits only `OWNER_EMAIL` for Google; widen it to verified
-  `@octaviantocan.com` together with the app's server work. Every signed-in person reaches the owner's one library
-  today; nobody has asked for separate libraries.
+- **What a signed-out visitor sees once Access is gone.** I raised it with the user and they have not answered: today
+  `/signin` is mymind's recorded sign-in page and `/signin/password` a "Sign in to mymind" form; public, that is a
+  copy of a real company's sign-in page that phishing filters flag. My proposal (`docs/accounts-plan.md`, "Not done:
+  removing Cloudflare Access"): a plain page of our own for the public hostname, mymind's page kept for loopback and
+  verification. Access stays until this is settled.
 - **The numeric screenshot tolerance** that encodes the agreed leeway; to be chosen and proven on a known-good pair
   (plan "Screenshot match").
 
 The user also asked what the downloaded app talks to. Answer given: the desktop app is a window around the hosted
 site, whose JavaScript calls the server's existing HTTP API (`lib/`, `docs/write-api.md`); the Kotlin app uses the
-same server and library through its own bearer-token API path.
+same server, with a bearer token instead of the session cookie.
 
 ## Current state
 
@@ -72,7 +72,8 @@ same server and library through its own bearer-token API path.
 | mymind APK set | Pulled to `android/apk/com.mymind.access/` (six splits; machine-local and Git-ignored, never commit or share). Not decompiled yet (plan step 2). |
 | Reference captures | None yet (plan steps 3–4). |
 | Toolchain | Installed and version-checked (plan "Tools on this machine"). Java default is Temurin 27 (mise global plus `org.gradle.java.home` in `~/.gradle/gradle.properties`); a throwaway probe app with AGP 9.4.1 and built-in Kotlin built with it. REA's jadx JAR is hash-verified but unused so far. |
-| Hosted library | `https://mymind.octaviantocan.com` on mini-002 behind Cloudflare Access app "mymind" plus mymind's own sign-in; `node tools/check-hosted.mjs` passed 9/9 at c7ac205. |
+| Hosted library | `https://mymind.octaviantocan.com` on mini-002, still behind Cloudflare Access app "mymind" plus the server's sign-in (owner-only Google, password users); `node tools/check-hosted.mjs` passed 9/9 at c7ac205. |
+| Accounts | One shared library; per-person libraries and removing Access are planned in `docs/accounts-plan.md`, not built. |
 | /download | Linux desktop build, for anyone with a mymind session on the hosted site (c7ac205). |
 
 ## How parity is proven today
@@ -90,7 +91,7 @@ our replica through mitmproxy) and the same compare, with the tolerance still to
   load for the hosted library; the same two-gate problem the Android app has.
 - `tools/check-hosted.mjs`: reaching the hosted site with the Access service token (sent only to that origin) and
   signing in as the test user.
-- `deploy/download-server.mjs`: the Access-token plus `mm_session` checks a new app endpoint would follow.
+- `deploy/download-server.mjs`: the `mm_session` check (its Access-token check goes when Access is removed).
 - `AGENTS.md`: hard rules 1 (never change the mymind account), 4 (no bot-detection workarounds), 6 (no replica-code
   edits during drive runs), 7 (nothing public without sign-in); delegation table; long-running process rules.
 - `README.md`: "Sign-in (remote access)", "Hosting", "Testing the hosted library".
@@ -110,7 +111,8 @@ our replica through mitmproxy) and the same compare, with the tolerance still to
 
 1. Plan step 2: decompile the pulled APK (apktool, jadx) and record the shell's views, layouts, fonts, colours and
    network client in `docs/android-plan.md`.
-2. Write a detailed build plan (for example with `ce-plan`): the app API and its JSON card format, server sign-in
-   endpoint, edge change, app architecture, screen order; bring the still-open items above to the user.
+2. Write detailed plans (for example with `ce-plan`), in parallel if useful: accounts (per-person libraries, the test
+   user's copy, verification as the test user, removing Access) and the app (JSON card format, bearer-token
+   sign-in endpoint, architecture, screen order). Bring the still-open items above to the user.
 3. Plan steps 3–4 on the emulator for reference captures, then build screens in Kotlin on a branch, each proven
    against the real app's screenshot.

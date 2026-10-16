@@ -26,19 +26,18 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
 6. **No local models.** Never run or download models locally (no Ollama, llama.cpp, transformers.js). Every AI
    feature calls a hosted API (see External services).
 7. **Nothing public without sign-in.** A server reachable from outside the machine (tunnel, port forward) runs
-   with `AUTH=google` and `OWNER_EMAIL` (README, Sign-in). Password users exist only through
-   `tools/auth-user.mjs`, with generated passwords kept in `.env` (`--save-env`); use the `TEST_USER_*` account to
-   test a signed-in site, never the owner's Google login. Reach the hosted site through Access with the service
-   token in `.env` (`CF_ACCESS_CLIENT_*`, `node tools/check-hosted.mjs`, README "Testing the hosted library").
-   The whole hosted hostname stays behind the Cloudflare Access application "mymind" (owner plus
-   `@octaviantocan.com`, through Google or a one-time PIN), and the tunnel checks its token (`deploy/install.sh`).
-   Never weaken that, the gate in `lib/auth.mjs`, the tunnel refusal in `server.mjs` or the Access token and mymind
-   session checks in `deploy/download-server.mjs`, and ask the user before publishing any hostname. One exception,
-   decided by the user on 2026-10-16 and not built yet: the native Android app's API path may leave Access, guarded
-   by the app's own sign-in (Google for `OWNER_EMAIL` and verified `@octaviantocan.com` addresses, passwords for
-   `tools/auth-user.mjs` users, bearer tokens on every other route). The user also wants the website's Google
-   sign-in to admit `@octaviantocan.com`. Only that path; see `docs/android-plan.md`, "Sign-in", and confirm the path with the user
-   before changing Access or the tunnel.
+   with `AUTH=google` and `OWNER_EMAIL` (README, Sign-in); a server without sign-in refuses tunnel requests
+   (`server.mjs`). The server's own sign-in is the only gate the user wants: Google for `OWNER_EMAIL` and verified
+   `@octaviantocan.com` addresses, passwords only for users made with `tools/auth-user.mjs` (generated passwords in
+   `.env` via `--save-env`), and no sign-up. Use the `TEST_USER_*` account to test a signed-in site, never the
+   owner's Google login. Never weaken `lib/auth.mjs`, the tunnel refusal, or the session check in
+   `deploy/download-server.mjs`, and ask the user before publishing any hostname.
+
+   Cloudflare (the user, 2026-10-16): drop Cloudflare Access entirely, keep the tunnel. Not done yet (plan in
+   `docs/accounts-plan.md`); until then the hostname sits behind the Access application "mymind" (owner plus
+   `@octaviantocan.com`), the tunnel and `/download` check its token (`deploy/install.sh`), and the hosted site is
+   reached with the service token in `.env` (`CF_ACCESS_CLIENT_*`, `node tools/check-hosted.mjs`). Google sign-in
+   admits only `OWNER_EMAIL` until per-user libraries exist.
 
 ## Long-running processes
 
