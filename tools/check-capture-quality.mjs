@@ -70,7 +70,7 @@ export async function checkCaptureQuality({ check, server, fixtures, mediaBytes,
       ok(!/inaccessible-guts|blocking us/.test(pending.html));
       strictEqual(fixtures.requests.length, before);
       const detail = await server.request(`/cards/${articleId}/detail`, { accept: 'text/html' });
-      ok(detail.value.includes('<mymind-tldr class="processing"><div class="processing-content">'));
+      ok(!detail.value.includes('<mymind-tldr'));
     }
     const item = await captured(articleId);
     strictEqual(item.data.title, 'Mind map');
@@ -156,7 +156,7 @@ export async function checkCaptureQuality({ check, server, fixtures, mediaBytes,
       jobs.schedule(articleId);
       await until(() => fixtures.requests.slice(start), requests => requests.some(request => request.path === '/chat/completions'));
       const detail = await server.request(`/cards/${articleId}/detail`, { accept: 'text/html' });
-      ok(detail.value.includes('<mymind-tldr class="processing">'));
+      strictEqual(detail.value.includes('<mymind-tldr data-watchable="false"><p>'), Boolean(row(articleId).data.summary), 'detail keeps the last summary while reanalysis runs');
       writer.run(() => writer.prose(articleId, doc('Latest edited reader content about databases. '.repeat(6)), 'content'));
       await jobs.drain();
       const chats = fixtures.requests.slice(start).filter(request => request.path === '/chat/completions');

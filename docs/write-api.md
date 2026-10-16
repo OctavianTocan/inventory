@@ -558,7 +558,8 @@ Partial HTML (`x-partial` header). Structure of every recorded detail:
   - `<mymind-card-sidebar data-object-id="<id>" data-modified="<7-digit ISO>">` with
     - `<mymind-editable data-action="/objects/<id>">` (title input, `maxlength=100`),
     - the `<time datetime>` line and the source link,
-    - `<mymind-tldr>`,
+    - `<mymind-tldr data-watchable="true|false"><p>summary</p></mymind-tldr>`, only when the card has a summary
+      (`true` for `youtube-video` and `instagram-reel`, which the client labels TLDW),
     - `<mymind-tag-cloud data-object-id="<id>">`: add-tag form plus `<mymind-tag-list tags='[...]' object-type
       object-type-name object-type-slug>`,
     - `<mymind-card-note>` with `<mymind-editor data-type="note" data-card-id="<id>" data-action="/objects/<id>/note">`,
