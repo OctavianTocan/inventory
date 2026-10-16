@@ -14,7 +14,7 @@ OFFLINE=1 npm run serve                # no network at all; static assets come f
 
 The recordings of your library and mymind's front-end are committed (see [Private data](#private-data)), so a fresh
 clone runs as is. The working database `data/mymind.db` is not: it stays on the computer that hosts the library,
-which other machines reach over HTTPS (see [Hosting on this computer](#hosting-on-this-computer)).
+which other machines reach over HTTPS (see [Hosting](#hosting)).
 `SHARP_IGNORE_GLOBAL_LIBVIPS=1` keeps sharp on its prebuilt binaries; without it, a machine with a system libvips
 makes `npm ci` try to compile sharp and fail.
 
@@ -151,7 +151,32 @@ Signed-out visitors get mymind's own sign-in page (`capture/signin/`, recorded s
 nothing. API requests and the `/hub` socket without a session get 401, cross-origin writes 403. `/signout` ends
 the session.
 
-### Hosting on this computer
+### Hosting
+
+The library is hosted on **mini-002** (`mini-002-netcup` on Tailscale, a Debian server) from the checkout
+`~/apps/mymind-reconstruction`, which serves `https://mymind.octaviantocan.com` through the Cloudflare tunnel
+`mymind`. Reach the machine itself over Tailscale (`ssh mini-002-netcup`). That checkout holds the only writable
+`data/mymind.db` and `data/auth.db`, plus `.env`, the capture videos and `downloads/`, none of which are in Git.
+Every other machine, the development one included, uses the hosted URL.
+
+To deploy a change, push to that checkout (`receive.denyCurrentBranch=updateInstead` updates its files on push) and
+restart the service:
+
+```bash
+git remote add mini-002 mini-002-netcup:apps/mymind-reconstruction   # once
+git push mini-002 main
+ssh mini-002-netcup 'cd ~/apps/mymind-reconstruction && SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci && systemctl --user restart mymind-replica'
+# after a re-capture, also copy the videos Git leaves out:
+rsync -a -m --include='*/' --include='*.mp4' --include='*.webm' --include='*.mov' --exclude='*' \
+  capture/ mini-002-netcup:apps/mymind-reconstruction/capture/
+```
+
+To move the host to another machine, stop and disable the services on the old one first (two connectors would split
+the tunnel's traffic, and the database must have one writer), copy `data/`, `.env`, `downloads/` and
+`~/.cloudflared/<tunnel-id>.json`, enable lingering (`sudo loginctl enable-linger $USER`), then run
+`deploy/install.sh` there.
+
+#### Setting up a host
 
 `deploy/install.sh` runs the replica as systemd user services that start at boot: the server with sign-in on
 `127.0.0.1:4330`, and a Cloudflare tunnel that publishes it at your hostname. It needs `cloudflared` logged in
@@ -166,9 +191,9 @@ journalctl --user -u mymind-replica -u mymind-tunnel -f   # logs
 systemctl --user stop mymind-replica                      # stops the tunnel too
 ```
 
-The service is the one process that writes `data/mymind.db`. `LOCAL_PORT=4331` serves this computer from the same
+The service is the one process that writes `data/mymind.db`. `LOCAL_PORT=4331` serves the host from the same
 process without sign-in (loopback only; tunnelled requests are refused), and the desktop app opens that port by
-default, so the app here and the hosted site share one library and its live updates.
+default, so an app on the host and the hosted site share one library and its live updates.
 
 #### Downloading the desktop app
 
@@ -193,7 +218,7 @@ Run `deploy/package-app.sh` again after changing `desktop/`. It builds for the m
 ## Desktop app
 
 `desktop/` wraps the replica in a native window (Tauri 2). The app uses the server already listening on `PORT`
-(default 4331, which the hosted service serves on this computer), or starts `node server.mjs` from this checkout
+(default 4331, which the hosted service serves on its host), or starts `node server.mjs` from this checkout
 and stops it when the window closes; with `MYMIND_URL` it opens that hosted library instead of starting a server.
 It stays off `:4321`, which belongs to verification.
 

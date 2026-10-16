@@ -20,19 +20,18 @@ are not.
 5. **The gate.** Signed-out page loads redirect to `/signin`; API calls and `/hub` upgrades get 401; cross-origin
    writes get 403.
 
-## Hosting on this computer
+## Hosting
 
-Built, not yet installed: `deploy/install.sh` (README, Hosting on this computer) runs the server as a systemd user
-service with `AUTH=google` on `127.0.0.1:4330`, behind a Cloudflare tunnel at `mymind.octaviantocan.com`. The
-Google client (project `mymind-replica`, consent screen in Testing with the owner as the only test user) lists
-that host's callback and the two localhost ones. The same process serves this computer without sign-in on
-`LOCAL_PORT` (4331), so one process owns `data/mymind.db`; verification reads its own `data/verify.db`.
+Installed on mini-002 (README, Hosting): `deploy/install.sh` runs the server as a systemd user service with
+`AUTH=google` on `127.0.0.1:4330`, behind the Cloudflare tunnel `mymind` at `mymind.octaviantocan.com`, and serves
+the packaged desktop app at `/download` behind a Cloudflare Access application (owner's email only). The Google
+client (project `mymind-replica`, consent screen in Testing with the owner as the only test user) lists that host's
+callback and the two localhost ones. The same process serves the host without sign-in on `LOCAL_PORT` (4331), so
+one process owns `data/mymind.db`; verification reads its own `data/verify.db`.
 
-Open questions:
-
-- Google may refuse sign-in inside the desktop app's WebKitGTK webview; the app may need to sign in through the
-  system browser and hand the session over.
-- The desktop app needs a setting to open a remote URL instead of starting a local server.
+The desktop app opens the hosted library when built with `MYMIND_URL` and signs in with Google inside its window.
+Password users (`tools/auth-user.mjs`, `/signin/password`) exist for testing the signed-in site without a Google
+login.
 
 ## Not built: more than one account
 

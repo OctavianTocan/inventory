@@ -90,7 +90,7 @@ EOF
 else
   systemctl --user disable --now mymind-download.service 2>/dev/null || true
   rm -f "$units/mymind-download.service"
-  echo "/download is off: put CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD in .env (README, Hosting on this computer)."
+  echo "/download is off: put CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD in .env (README, Hosting)."
 fi
 
 systemctl --user daemon-reload
