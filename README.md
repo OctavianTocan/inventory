@@ -126,6 +126,8 @@ the user's `.env`.
 ### Install
 
 1. Make sure the replica itself runs: `npm run serve` shows your library at http://localhost:4321/everything.
+   A fresh clone cannot do that yet, because your library is not in Git; copy it first (see
+   [On another machine](#on-another-machine)).
 2. Install Rust (`curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh`) and the system libraries from
    [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/). On Linux, also install GStreamer's good
    plugins; without them WebKitGTK cannot create an audio sink, leaves the grid blank and aborts within a minute:
@@ -158,6 +160,22 @@ Categories=Utility;
 EOF
 ```
 
+### On another machine
+
+A clone has the code only. Your library lives in four gitignored folders that never go to GitHub: `capture/` and
+`replay/` (recordings of your account), `mirror/` (mymind's front-end) and `data/` (the SQLite library with your
+local edits). Without them `server.mjs` cannot start, and the app's window lists the files it is missing.
+
+Copy the folders from the machine that has them. Stop the replica there first so the database copy is consistent,
+then run this from that checkout:
+
+```bash
+rsync -a capture mirror replay data <other-laptop>:<path-to-the-clone>/
+rsync -a .env <other-laptop>:<path-to-the-clone>/   # optional: API keys for AI summaries and search
+```
+
+Each machine then has its own copy: edits on one do not reach the other.
+
 ### Configure
 
 | Variable | Default | Effect |
@@ -181,8 +199,10 @@ The server reads `.env` in the checkout, so AI features work in the app when the
 ### Troubleshooting
 
 - **Grid stays blank, log says `GStreamer element autoaudiosink not found`:** install `gst-plugins-good` (step 2).
-- **Window shows "mymind could not start":** the message names the node binary and checkout it tried; set
-  `MYMIND_NODE` or `MYMIND_ROOT`.
+- **Window says the checkout "has no copy of your library":** copy `capture/`, `mirror/`, `replay/` and `data/`
+  into it ([On another machine](#on-another-machine)), or point `MYMIND_ROOT` at a checkout that has them.
+- **Window says it "could not run" node or that `server.mjs` exited:** set `MYMIND_NODE` to the full path of `node`,
+  or run `node server.mjs` in the checkout to see the server's error.
 - **Testing drops without a file manager** (e.g. on Xvfb): `cargo run --release --example drag_source -- <file>`
   opens a small window whose button drags that file.
 
@@ -290,5 +310,6 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 
 ## Private data
 
-`capture/` and `replay/` hold your own library. `mirror/` and `evidence/` hold mymind's code. All four are
-gitignored; keep them on this machine.
+`capture/`, `replay/` and `data/` hold your own library; `mirror/` holds mymind's code and `evidence/` the
+verification screenshots. All five are gitignored. Keep them on your own machines; to move them, see
+[On another machine](#on-another-machine).

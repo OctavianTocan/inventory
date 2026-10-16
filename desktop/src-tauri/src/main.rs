@@ -6,7 +6,7 @@
 mod file_drop;
 
 use std::net::{SocketAddr, TcpStream};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -21,11 +21,41 @@ fn listening(port: u16) -> bool {
     TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_millis(200)).is_ok()
 }
 
-/// Starts `node server.mjs` in the repo and waits until it listens.
-fn start_server(port: u16) -> Result<Child, String> {
+/// The checkout whose `server.mjs` the app runs.
+fn checkout() -> PathBuf {
     let root = std::env::var_os("MYMIND_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../..")));
+    root.canonicalize().unwrap_or(root)
+}
+
+/// Names the library files `server.mjs` cannot start without that are missing from `root`.
+fn missing_library(root: &Path) -> Vec<&'static str> {
+    const REQUIRED: [&str; 6] = [
+        "capture/meta.json",
+        "capture/shell.html",
+        "capture/cards.json",
+        "capture/responses.json",
+        "capture/details.json",
+        "mirror/static",
+    ];
+    REQUIRED.into_iter().filter(|file| !root.join(file).exists()).collect()
+}
+
+/// Starts `node server.mjs` in the repo and waits until it listens.
+fn start_server(port: u16) -> Result<Child, String> {
+    let root = checkout();
+    let missing = missing_library(&root);
+    if !missing.is_empty() {
+        return Err(format!(
+            "{} has no copy of your library: {} {} missing. capture/, mirror/, replay/ and data/ hold your private \
+             mymind data, so they are not in the Git repository. Copy them from the machine where you captured the \
+             library, as the README explains under \"Desktop app → On another machine\".",
+            root.display(),
+            missing.join(", "),
+            if missing.len() == 1 { "is" } else { "are" }
+        ));
+    }
     let node = std::env::var_os("MYMIND_NODE").unwrap_or_else(|| "node".into());
     let mut command = Command::new(&node);
     command.arg("server.mjs").current_dir(&root).env("PORT", port.to_string());
@@ -44,7 +74,10 @@ fn start_server(port: u16) -> Result<Child, String> {
     let started = Instant::now();
     while !listening(port) {
         if let Ok(Some(status)) = child.try_wait() {
-            return Err(format!("server.mjs exited ({status}) before listening on port {port}."));
+            return Err(format!(
+                "server.mjs exited ({status}) before listening on port {port}. Run `node server.mjs` in {} to see why.",
+                root.display()
+            ));
         }
         if started.elapsed() > Duration::from_secs(60) {
             let _ = child.kill();
@@ -64,6 +97,21 @@ fn stop_server(mut child: Child) {
     #[cfg(not(unix))]
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// A `data:` URL of a page that shows why the app could not start.
+fn error_page(message: &str) -> String {
+    let text = message.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    let html = format!("<body style=\"font:15px/1.5 system-ui;padding:40px;max-width:720px\"><h3>mymind could not start</h3><p>{text}</p>");
+    let mut url = String::from("data:text/html;charset=utf-8,");
+    for byte in html.bytes() {
+        if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) {
+            url.push(byte as char);
+        } else {
+            url.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    url
 }
 
 /// True for pages of the replica itself and for the about:, blob: and data: URLs the UI creates.
@@ -96,8 +144,7 @@ fn main() {
                 Ok(_) => Url::parse(&format!("http://localhost:{port}/everything"))?,
                 Err(message) => {
                     eprintln!("{message}");
-                    let page = format!("<body style=\"font:15px system-ui;padding:40px\"><h3>mymind could not start</h3><p>{message}</p>");
-                    Url::parse(&format!("data:text/html;charset=utf-8,{}", page.replace('%', "%25").replace('#', "%23")))?
+                    Url::parse(&error_page(message))?
                 }
             };
             app.manage(Server(Mutex::new(started.unwrap_or(None))));

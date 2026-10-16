@@ -8,7 +8,8 @@ publish = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# The "could not start" page is a data: URL.
+tauri = { version = "2", features = ["webview-data-url"] }
 tauri-plugin-opener = "2"
 
 [target.'cfg(unix)'.dependencies]
