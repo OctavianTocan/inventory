@@ -7,12 +7,14 @@ persist locally; unsupported reads still use the recordings. No write is forward
 ## Run it
 
 ```bash
-SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci   # once per clone: dependencies, and data/ from the bundled library
+SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci   # once per clone
 npm run serve                          # http://localhost:4321/everything
 OFFLINE=1 npm run serve                # no network at all; static assets come from mirror/
 ```
 
-Your library is committed with the code (see [Private data](#private-data)), so a fresh clone runs as is.
+The recordings of your library and mymind's front-end are committed (see [Private data](#private-data)), so a fresh
+clone runs as is. The working database `data/mymind.db` is not: it stays on the computer that hosts the library,
+which other machines reach over HTTPS (see [Hosting on this computer](#hosting-on-this-computer)).
 `SHARP_IGNORE_GLOBAL_LIBVIPS=1` keeps sharp on its prebuilt binaries; without it, a machine with a system libvips
 makes `npm ci` try to compile sharp and fail.
 
@@ -154,8 +156,7 @@ the session.
 
 ### Install
 
-1. Install Node 22 or newer. The app runs `npm ci` itself on its first start, which also copies the bundled
-   library into `data/`.
+1. Install Node 22 or newer. The app runs `npm ci` itself on its first start.
 2. Install Rust (`curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh`) and the system libraries from
    [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/). On Linux, also install GStreamer's good
    plugins; without them WebKitGTK cannot create an audio sink, leaves the grid blank and aborts within a minute:
@@ -190,20 +191,14 @@ EOF
 
 ### On another machine
 
-Clone the repository (or `git pull` an older clone), build the app as above and start it. The first start shows
-"Starting mymind" while it runs `npm ci` and copies `library/mymind.db` into `data/mymind.db`; then your library
-appears. Copy `.env` over yourself if you want AI summaries and semantic search there; it is never committed.
+Your library lives in `data/mymind.db` on the computer that hosts it and is not in Git. From another machine, open
+the hosted address in a browser (see [Hosting on this computer](#hosting-on-this-computer)); the desktop app cannot
+open a remote library yet.
 
-Each machine then has its own `data/`: edits on one do not reach the other, and `npm ci` never overwrites an
-existing `data/mymind.db`. To hand this machine's library to the others:
-
-```bash
-npm run bundle                                   # snapshot data/ into library/, drop unused replay bodies
-git add capture mirror replay library && git commit -m "Update the bundled library" && git push
-```
-
-On the other machine, `git pull`, then move its own `data/mymind.db` aside (its local edits stay in that file)
-and start the app again.
+A clone elsewhere still runs: build the app as above and start it. Without a database it shows the recorded library
+and ignores edits; `node tools/seed-db.mjs` gives it a writable copy seeded from the recordings, which lacks what
+changed on the host since. A clone that kept `data/mymind.db` from when the database was committed keeps that copy,
+but its edits never reach the host.
 
 ### Configure
 
@@ -349,12 +344,14 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 
 ## Private data
 
-`capture/`, `replay/` and `library/` hold your own library (cards, recorded responses and a snapshot of the
-SQLite database) and `mirror/` holds mymind's front-end. All four are committed so that a clone runs by itself,
-which makes this repository private data: keep it private. Before committing them, `npm run bundle` refreshes
-`library/` and moves replay bodies no recording uses into the gitignored `replay/unreferenced/`.
+`capture/` and `replay/` hold your own library (cards and recorded responses) and `mirror/` holds mymind's
+front-end. All three are committed so that a clone runs by itself, which makes this repository private data: keep it
+private. Before committing them, run `npm run bundle`: it moves replay bodies no recording uses into the gitignored
+`replay/unreferenced/` and snapshots `data/` into `library/` as a local backup.
 
-Never committed: `.env` (API keys), `data/` (each machine's working database), `evidence/` (verification
-screenshots) and `replay/unreferenced/`. Replay recordings keep only content-type, CORS and app `x-` headers, so
-no cookies are stored; recorded pages still carry mymind's per-session authenticity token, which is useless
-without the session cookie.
+Never committed: `.env` (API keys), `data/` (the working database), `library/` (its snapshot), recorded videos
+(`capture/**/*.mp4`, `*.webm`, `*.mov`), `evidence/` (verification screenshots) and `replay/unreferenced/`. Commits
+made before the database left Git still contain `library/mymind.db`; removing it from them means rewriting history.
+
+Replay recordings keep only content-type, CORS and app `x-` headers, so no cookies are stored; recorded pages still
+carry mymind's per-session authenticity token, which is useless without the session cookie.

@@ -1,5 +1,5 @@
-// Copies the library bundled in library/ into data/ on a fresh checkout. An existing data/mymind.db is never touched.
-// Runs as npm's postinstall; the desktop app also runs it before starting the server.
+// Restores data/ from the local snapshot in library/ (written by npm run bundle) when data/mymind.db is missing; does
+// nothing without a snapshot. Runs as npm's postinstall; the desktop app also runs it before starting the server.
 import { copyFileSync, cpSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

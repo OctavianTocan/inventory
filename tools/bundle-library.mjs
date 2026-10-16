@@ -1,6 +1,6 @@
-// Prepares the library for committing: snapshots data/mymind.db (and data/media) into library/, and moves replay
-// bodies that no recording references into replay/unreferenced/ (gitignored), so Git only carries what a clone uses.
-// Usage: npm run bundle, then commit capture/, mirror/, replay/ and library/.
+// Prepares the recordings for committing: moves replay bodies that no recording references into replay/unreferenced/
+// (gitignored), so Git only carries what a clone uses, and snapshots data/mymind.db (and data/media) into library/
+// as a local backup that stays out of Git. Usage: npm run bundle, then commit capture/, mirror/ and replay/.
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';

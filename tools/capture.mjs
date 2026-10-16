@@ -233,12 +233,10 @@ if (opts['details-only']) {
     accept: 'text/html,image/webp',
     headers: { 'x-viewport-width': String(screenWidth), 'x-viewport-height': String(screenHeight), 'x-partial': '1' },
   }));
-  let html = '';
   for (const res of await fetchInBatches(page, detailRequests, 'Card details')) {
     if (res.error || res.status !== 200) continue;
     const id = res.url.split('/')[2];
     const body = Buffer.from(res.base64, 'base64');
-    html += body.toString();
     await writeInside(OUT, `details/${toFileName(id)}.html`, body);
     details[id] = { headers: res.headers };
   }
@@ -250,12 +248,16 @@ if (opts['details-only']) {
     if (res.error || res.status !== 200) continue;
     const file = `responses/${toFileName(res.url)}.body`;
     const body = Buffer.from(res.base64, 'base64');
-    html += body.toString();
     await writeInside(OUT, file, body);
     responses[`GET ${res.url}`] = { status: res.status, headers: res.headers, file };
   }
   await writeFile(path.join(OUT, 'responses.json'), JSON.stringify(responses, null, 2));
-  const media = attributeMediaUrls(html, opts.videos)
+  // Media of every recorded detail and reader, so a later pass (e.g. with --videos) fills what earlier ones skipped.
+  const stored = await Promise.all([
+    ...Object.keys(details).map((id) => readFile(path.join(OUT, 'details', `${toFileName(id)}.html`), 'utf8').catch(() => '')),
+    ...Object.entries(responses).filter(([key]) => /^GET \/cards\/[^/]+\/reader$/.test(key)).map(([, { file }]) => readFile(path.join(OUT, file), 'utf8').catch(() => '')),
+  ]);
+  const media = attributeMediaUrls(stored.join('\n'), opts.videos)
     .filter((url) => !existsSync(path.join(OUT, mediaFile(url))) && !replayed[replayKey('GET', url.startsWith('/') ? ORIGIN + url : url, false)]);
   const saved = await recordMedia(page, media);
   await writeFile(path.join(OUT, 'meta.json'), JSON.stringify({ ...meta, details: Object.keys(details).length, media: meta.media + saved }, null, 2));

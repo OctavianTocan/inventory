@@ -7,8 +7,14 @@ replay/unreferenced/
 # Local secrets (API keys).
 .env
 
-# The working database; library/ holds the copy that is committed.
+# The working database and its snapshots stay on this machine; other machines use the hosted server.
 data/
+library/
+
+# Videos are too large for Git; the hosted server serves them from this machine.
+capture/**/*.mp4
+capture/**/*.webm
+capture/**/*.mov
 
 # Desktop app build output.
 desktop/src-tauri/target/

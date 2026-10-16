@@ -65,7 +65,7 @@ fn path_with(node: &OsStr) -> OsString {
     std::env::join_paths(dirs).unwrap_or_default()
 }
 
-/// Installs npm dependencies on a fresh checkout and copies the bundled library into `data/` when it has none.
+/// Installs npm dependencies on a fresh checkout and restores `data/` from a local `library/` snapshot when it has none.
 fn prepare(root: &Path, node: &OsStr) -> Result<(), String> {
     let (program, args): (&OsStr, &[&str]) = if root.join("node_modules").exists() {
         (node, &["tools/install-library.mjs"])

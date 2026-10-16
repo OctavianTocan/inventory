@@ -14,10 +14,11 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
 1. **Never change the user's mymind account.** Only the live pass of `tools/drive.mjs` and `tools/capture.mjs` talk
    to live mymind, and every non-GET they would send is answered by the replica instead. Keep it that way; never
    add code that writes to `access.mymind.com`.
-2. **The repository is private data.** The user chose to commit their library (`capture/`, `mirror/`, `replay/`,
-   `library/`) so a clone runs by itself; the GitHub repository must stay private. `.env`, `data/` and
-   `evidence/` stay local. Run `npm run bundle` before committing library changes, and never put cookies, JWTs
-   or API keys into commits, reports, logs or prompts (Codex prompts leave the machine too).
+2. **The repository is private data.** The user chose to commit the recordings of their library (`capture/`,
+   `mirror/`, `replay/`) so a clone runs by itself; the GitHub repository must stay private. The database stays
+   off Git: `.env`, `data/`, `library/`, recorded videos and `evidence/` stay local. Run `npm run bundle` before
+   committing library changes, and never put cookies, JWTs or API keys into commits, reports, logs or prompts
+   (Codex prompts leave the machine too).
 3. **Secrets live in `.env` only** (`TYPESAFE_API_KEY`, LLM keys, OAuth client secrets), read through
    `process.env` on the server, never shipped to the browser.
 4. **No bot-detection workarounds.** No user-agent spoofing or stealth tricks against mymind.
