@@ -26,7 +26,9 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
 6. **No local models.** Never run or download models locally (no Ollama, llama.cpp, transformers.js). Every AI
    feature calls a hosted API (see External services).
 7. **Nothing public without sign-in.** A server reachable from outside the machine (tunnel, port forward) runs
-   with `AUTH=google` and `OWNER_EMAIL` (README, Sign-in). Never weaken the gate in `lib/auth.mjs`, the tunnel
+   with `AUTH=google` and `OWNER_EMAIL` (README, Sign-in). Password users exist only through
+   `tools/auth-user.mjs`, with generated passwords kept in `.env` (`--save-env`); use the `TEST_USER_*` account to
+   test a signed-in site, never the owner's Google login. Never weaken the gate in `lib/auth.mjs`, the tunnel
    refusal in `server.mjs` or the Access token check in `deploy/download-server.mjs` (`/download` stays behind
    Cloudflare Access), and ask the user before publishing any hostname.
 

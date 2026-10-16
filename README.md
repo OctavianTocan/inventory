@@ -142,7 +142,7 @@ To reach the library from other computers, run the server with Google sign-in an
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | A Google OAuth "Web application" client whose redirect URI is `{PUBLIC_URL}/google/oauth2-callback`. |
 | `OWNER_EMAIL` | The only Google account let in; any other gets mymind's "could not find an account" page. |
 | `PUBLIC_URL` | The address browsers use, default `http://localhost:PORT`. An `https://` URL makes cookies `Secure`. |
-| `AUTH_DB` | Session database, default `data/auth.db`. |
+| `AUTH_DB` | Sessions and password users, default `data/auth.db`. |
 | `LOCAL_PORT` | Also serves this computer without sign-in on `127.0.0.1:LOCAL_PORT`; tunnelled requests there get 403. |
 
 Signed-out visitors get mymind's own sign-in page (`capture/signin/`, recorded signed out by
@@ -150,6 +150,18 @@ Signed-out visitors get mymind's own sign-in page (`capture/signin/`, recorded s
 `state`, `nonce`), verifies Google's ID token and sets a 30-day HttpOnly session cookie. The Apple button does
 nothing. API requests and the `/hub` socket without a session get 401, cross-origin writes 403. `/signout` ends
 the session.
+
+Password users (test accounts, or a browser without Google) sign in at `/signin/password`, which exists only once a
+user has been added; mymind's own sign-in page stays as recorded and does not link to it. A password session
+reaches the same library as the owner. Ten wrong passwords for a username, or 30 from one address, lock it for 15
+minutes.
+
+```bash
+node tools/auth-user.mjs add tester --save-env TEST_USER   # generates a password into .env as TEST_USER_NAME/_PASSWORD
+read -rs pw && printf '%s\n' "$pw" | node tools/auth-user.mjs add alice   # your own password (16+ characters)
+node tools/auth-user.mjs list
+node tools/auth-user.mjs remove tester                     # also signs that user out everywhere
+```
 
 ### Hosting on this computer
 
