@@ -5,6 +5,7 @@
 #[cfg(target_os = "linux")]
 mod file_drop;
 
+use std::ffi::{OsStr, OsString};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
@@ -12,7 +13,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use tauri::webview::NewWindowResponse;
-use tauri::{Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder};
 
 struct Server(Mutex<Option<Child>>);
 
@@ -42,23 +43,55 @@ fn missing_library(root: &Path) -> Vec<&'static str> {
     REQUIRED.into_iter().filter(|file| !root.join(file).exists()).collect()
 }
 
-/// Starts `node server.mjs` in the repo and waits until it listens.
-fn start_server(port: u16) -> Result<Child, String> {
-    let root = checkout();
-    let missing = missing_library(&root);
-    if !missing.is_empty() {
-        return Err(format!(
-            "{} has no copy of your library: {} {} missing. capture/, mirror/, replay/ and data/ hold your private \
-             mymind data, so they are not in the Git repository. Copy them from the machine where you captured the \
-             library, as the README explains under \"Desktop app → On another machine\".",
-            root.display(),
-            missing.join(", "),
-            if missing.len() == 1 { "is" } else { "are" }
-        ));
+/// Fails with a readable message when `root` lacks part of the library.
+fn check_library(root: &Path) -> Result<(), String> {
+    let missing = missing_library(root);
+    if missing.is_empty() {
+        return Ok(());
     }
-    let node = std::env::var_os("MYMIND_NODE").unwrap_or_else(|| "node".into());
-    let mut command = Command::new(&node);
-    command.arg("server.mjs").current_dir(&root).env("PORT", port.to_string());
+    Err(format!(
+        "{} has no copy of your library: {} {} missing. The library is part of the Git repository; run \
+         `git pull` in that checkout, or point MYMIND_ROOT at a complete one.",
+        root.display(),
+        missing.join(", "),
+        if missing.len() == 1 { "is" } else { "are" }
+    ))
+}
+
+/// PATH with the directory of `node` first, so npm's `#!/usr/bin/env node` runs the same node.
+fn path_with(node: &OsStr) -> OsString {
+    let mut dirs: Vec<PathBuf> = Path::new(node).parent().filter(|dir| !dir.as_os_str().is_empty()).map(Path::to_path_buf).into_iter().collect();
+    dirs.extend(std::env::var_os("PATH").map(|path| std::env::split_paths(&path).collect::<Vec<_>>()).unwrap_or_default());
+    std::env::join_paths(dirs).unwrap_or_default()
+}
+
+/// Installs npm dependencies on a fresh checkout and copies the bundled library into `data/` when it has none.
+fn prepare(root: &Path, node: &OsStr) -> Result<(), String> {
+    let (program, args): (&OsStr, &[&str]) = if root.join("node_modules").exists() {
+        (node, &["tools/install-library.mjs"])
+    } else {
+        // postinstall runs tools/install-library.mjs.
+        (OsStr::new("npm"), &["ci", "--no-audit", "--no-fund"])
+    };
+    let shown = format!("{} {}", program.to_string_lossy(), args.join(" "));
+    let status = Command::new(program)
+        .args(args)
+        .current_dir(root)
+        .env("PATH", path_with(node))
+        // With a system libvips installed, sharp would otherwise try to compile itself against it and fail.
+        .env("SHARP_IGNORE_GLOBAL_LIBVIPS", "1")
+        .status()
+        .map_err(|err| format!("Could not run {shown} in {}: {err}. Set MYMIND_NODE to the full path of node.", root.display()))?;
+    if !status.success() {
+        return Err(format!("{shown} failed ({status}) in {}. Run it there to see why.", root.display()));
+    }
+    Ok(())
+}
+
+/// Starts `node server.mjs` in `root` and waits until it listens.
+fn start_server(root: &Path, node: &OsStr, port: u16) -> Result<Child, String> {
+    let mut command = Command::new(node);
+    command.arg("server.mjs").current_dir(root).env("PORT", port.to_string());
     // The server must not outlive the app, however the app ends.
     #[cfg(target_os = "linux")]
     unsafe {
@@ -99,10 +132,10 @@ fn stop_server(mut child: Child) {
     let _ = child.wait();
 }
 
-/// A `data:` URL of a page that shows why the app could not start.
-fn error_page(message: &str) -> String {
+/// A `data:` URL of a page with a heading and a message.
+fn page(title: &str, message: &str) -> Url {
     let text = message.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
-    let html = format!("<body style=\"font:15px/1.5 system-ui;padding:40px;max-width:720px\"><h3>mymind could not start</h3><p>{text}</p>");
+    let html = format!("<body style=\"font:15px/1.5 system-ui;padding:40px;max-width:720px\"><h3>{title}</h3><p>{text}</p>");
     let mut url = String::from("data:text/html;charset=utf-8,");
     for byte in html.bytes() {
         if byte.is_ascii_alphanumeric() || b"-_.~".contains(&byte) {
@@ -111,7 +144,7 @@ fn error_page(message: &str) -> String {
             url.push_str(&format!("%{byte:02X}"));
         }
     }
-    url
+    Url::parse(&url).expect("an escaped data: URL parses")
 }
 
 /// True for pages of the replica itself and for the about:, blob: and data: URLs the UI creates.
@@ -135,19 +168,48 @@ fn open_in_browser(url: &Url) {
     }
 }
 
+/// Prepares the checkout and starts the server off the main thread, then shows the replica or the error.
+fn start_in_background(handle: AppHandle, port: u16) {
+    std::thread::spawn(move || {
+        let root = checkout();
+        let node = std::env::var_os("MYMIND_NODE").unwrap_or_else(|| "node".into());
+        let prepared = check_library(&root).and_then(|()| prepare(&root, &node));
+        let main = handle.clone();
+        // The server is spawned on the main thread: PR_SET_PDEATHSIG fires when the spawning thread exits.
+        let _ = handle.run_on_main_thread(move || {
+            let url = match prepared.and_then(|()| start_server(&root, &node, port)) {
+                Ok(child) => {
+                    *main.state::<Server>().0.lock().unwrap() = Some(child);
+                    replica_url(port)
+                }
+                Err(message) => {
+                    eprintln!("{message}");
+                    page("mymind could not start", &message)
+                }
+            };
+            if let Some(window) = main.get_webview_window("main") {
+                let _ = window.navigate(url);
+            }
+        });
+    });
+}
+
+/// The replica's library page.
+fn replica_url(port: u16) -> Url {
+    Url::parse(&format!("http://localhost:{port}/everything")).expect("a localhost URL parses")
+}
+
 fn main() {
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(4321);
     let app = tauri::Builder::default()
         .setup(move |app| {
-            let started = if listening(port) { Ok(None) } else { start_server(port).map(Some) };
-            let url = match &started {
-                Ok(_) => Url::parse(&format!("http://localhost:{port}/everything"))?,
-                Err(message) => {
-                    eprintln!("{message}");
-                    Url::parse(&error_page(message))?
-                }
+            app.manage(Server(Mutex::new(None)));
+            let running = listening(port);
+            let url = if running {
+                replica_url(port)
+            } else {
+                page("Starting mymind", "The first start on a new machine installs dependencies, which takes about a minute.")
             };
-            app.manage(Server(Mutex::new(started.unwrap_or(None))));
             #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("mymind")
@@ -169,6 +231,9 @@ fn main() {
                 .build()?;
             #[cfg(target_os = "linux")]
             file_drop::attach(&window)?;
+            if !running {
+                start_in_background(app.handle().clone(), port);
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

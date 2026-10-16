@@ -7,9 +7,14 @@ persist locally; unsupported reads still use the recordings. No write is forward
 ## Run it
 
 ```bash
-npm run serve                 # http://localhost:4321/everything
-OFFLINE=1 npm run serve       # no network at all; static assets come from mirror/
+SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci   # once per clone: dependencies, and data/ from the bundled library
+npm run serve                          # http://localhost:4321/everything
+OFFLINE=1 npm run serve                # no network at all; static assets come from mirror/
 ```
+
+Your library is committed with the code (see [Private data](#private-data)), so a fresh clone runs as is.
+`SHARP_IGNORE_GLOBAL_LIBVIPS=1` keeps sharp on its prebuilt binaries; without it, a machine with a system libvips
+makes `npm ci` try to compile sharp and fail.
 
 When `data/mymind.db` exists, desktop card grids, individual cards, trash, spaces, tags, changes and object quotas
 come from SQLite. `POST /cards/grid` also hydrates current SQLite cards. Phone requests keep their device-specific
@@ -89,7 +94,7 @@ or supply `GEMINI_API_KEY` in the environment. It retries 429/5xx, commits each 
 resume, and reports provider token usage when available. Empty text-only documents are reported and skipped.
 In a worktree with shared read-only `data/`, always select a temporary database; never backfill the symlink target.
 
-Install dependencies with `npm ci`. PDF/video previews require host `pdftoppm` (Poppler), `ffmpeg` and `ffprobe`.
+Install dependencies with `npm ci` (see [Run it](#run-it)). PDF/video previews require host `pdftoppm` (Poppler), `ffmpeg` and `ffprobe`.
 Page screenshots use `VERIFIER_CHROMIUM`, default `/usr/lib/chromium/chromium`, without touching the verifier's
 running browser. New screenshot output still needs host/browser verification before making a parity claim.
 Permanent delete and empty trash have no captured client calls, so only trash and restore are implemented.
@@ -125,9 +130,8 @@ the user's `.env`.
 
 ### Install
 
-1. Make sure the replica itself runs: `npm run serve` shows your library at http://localhost:4321/everything.
-   A fresh clone cannot do that yet, because your library is not in Git; copy it first (see
-   [On another machine](#on-another-machine)).
+1. Install Node 22 or newer. The app runs `npm ci` itself on its first start, which also copies the bundled
+   library into `data/`.
 2. Install Rust (`curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh`) and the system libraries from
    [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/). On Linux, also install GStreamer's good
    plugins; without them WebKitGTK cannot create an audio sink, leaves the grid blank and aborts within a minute:
@@ -162,19 +166,20 @@ EOF
 
 ### On another machine
 
-A clone has the code only. Your library lives in four gitignored folders that never go to GitHub: `capture/` and
-`replay/` (recordings of your account), `mirror/` (mymind's front-end) and `data/` (the SQLite library with your
-local edits). Without them `server.mjs` cannot start, and the app's window lists the files it is missing.
+Clone the repository (or `git pull` an older clone), build the app as above and start it. The first start shows
+"Starting mymind" while it runs `npm ci` and copies `library/mymind.db` into `data/mymind.db`; then your library
+appears. Copy `.env` over yourself if you want AI summaries and semantic search there; it is never committed.
 
-Copy the folders from the machine that has them. Stop the replica there first so the database copy is consistent,
-then run this from that checkout:
+Each machine then has its own `data/`: edits on one do not reach the other, and `npm ci` never overwrites an
+existing `data/mymind.db`. To hand this machine's library to the others:
 
 ```bash
-rsync -a capture mirror replay data <other-laptop>:<path-to-the-clone>/
-rsync -a .env <other-laptop>:<path-to-the-clone>/   # optional: API keys for AI summaries and search
+npm run bundle                                   # snapshot data/ into library/, drop unused replay bodies
+git add capture mirror replay library && git commit -m "Update the bundled library" && git push
 ```
 
-Each machine then has its own copy: edits on one do not reach the other.
+On the other machine, `git pull`, then move its own `data/mymind.db` aside (its local edits stay in that file)
+and start the app again.
 
 ### Configure
 
@@ -199,8 +204,10 @@ The server reads `.env` in the checkout, so AI features work in the app when the
 ### Troubleshooting
 
 - **Grid stays blank, log says `GStreamer element autoaudiosink not found`:** install `gst-plugins-good` (step 2).
-- **Window says the checkout "has no copy of your library":** copy `capture/`, `mirror/`, `replay/` and `data/`
-  into it ([On another machine](#on-another-machine)), or point `MYMIND_ROOT` at a checkout that has them.
+- **Window says the checkout "has no copy of your library":** run `git pull` in it; clones made before the library
+  was committed lack it. Or point `MYMIND_ROOT` at a complete checkout.
+- **`npm ci` fails with "Please add node-addon-api to your dependencies":** a system libvips is installed; run
+  `SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci` (the app sets this itself).
 - **Window says it "could not run" node or that `server.mjs` exited:** set `MYMIND_NODE` to the full path of `node`,
   or run `node server.mjs` in the checkout to see the server's error.
 - **Testing drops without a file manager** (e.g. on Xvfb): `cargo run --release --example drag_source -- <file>`
@@ -310,6 +317,12 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 
 ## Private data
 
-`capture/`, `replay/` and `data/` hold your own library; `mirror/` holds mymind's code and `evidence/` the
-verification screenshots. All five are gitignored. Keep them on your own machines; to move them, see
-[On another machine](#on-another-machine).
+`capture/`, `replay/` and `library/` hold your own library (cards, recorded responses and a snapshot of the
+SQLite database) and `mirror/` holds mymind's front-end. All four are committed so that a clone runs by itself,
+which makes this repository private data: keep it private. Before committing them, `npm run bundle` refreshes
+`library/` and moves replay bodies no recording uses into the gitignored `replay/unreferenced/`.
+
+Never committed: `.env` (API keys), `data/` (each machine's working database), `evidence/` (verification
+screenshots) and `replay/unreferenced/`. Replay recordings keep only content-type, CORS and app `x-` headers, so
+no cookies are stored; recorded pages still carry mymind's per-session authenticity token, which is useless
+without the session cookie.

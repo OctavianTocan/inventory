@@ -1,14 +1,13 @@
-# Private account data and third-party code captured from the live app.
-capture/
-mirror/
+# Verification evidence, local caches and backups.
 evidence/
 node_modules/
-replay/
+replay/unreferenced/
+*.bak-*
 
 # Local secrets (API keys).
 .env
 
-# Local database.
+# The working database; library/ holds the copy that is committed.
 data/
 
 # Desktop app build output.

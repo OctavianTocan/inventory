@@ -1,0 +1,9 @@
+# Recorded bytes must reach every clone unchanged.
+capture/** -text
+mirror/** -text
+replay/** -text
+library/** -text
+replay/bodies/** -diff
+library/** -diff
+capture/media/** -diff
+capture/mediahost/** -diff
