@@ -12,8 +12,15 @@ is pulled). Nothing is decompiled or built yet.
 - **Fully separate from mymind's servers.** Our app talks only to our own library (the hosted replica). Never fetch
   live mymind pages posing as the app or with its User-Agent. The real app on the phone or emulator is only the
   visual reference.
-- **Some leeway, still to be agreed.** The user wants room for things native Kotlin does better than the original.
-  Which screens or behaviours may differ, and by how much, is to be discussed with the user before building them.
+- **Leeway (agreed).** Layout, colours and sizes match exactly; tiny differences in text and edge anti-aliasing are
+  allowed; each native extra (predictive back gesture, haptics, system share sheet, …) gets the user's yes or no one
+  at a time before it ships.
+- **Native sign-in, no Cloudflare in the app.** A sign-in screen in the app with one-tap Google sign-in; the app never
+  deals with Cloudflare Access. Welcome: the owner's Google account, any Google account with a verified
+  `@octaviantocan.com` address, and the test user (password). Nobody else, and no sign-up form. Details in "Sign-in"
+  below.
+- **Structured card data for the app.** The app gets cards as typed JSON, not web markup (see "What our app talks
+  to").
 
 Consequences for the steps below: steps 2–4 (decompile, run and capture the real app, point it at the replica so
 both apps show the same data) produce the reference; step 5 is a native Kotlin app instead of WebViews.
@@ -29,37 +36,55 @@ them.
 
 ## What our app talks to
 
-The server's existing HTTP API, the same one the web front-end and the desktop app (a window around the hosted site)
-already use: the card list and card details, spaces, tags, search, writes, uploads, `/changes` and live updates on
-the `/hub` WebSocket (`docs/write-api.md`, `lib/`). The data side needs nothing new. The web gets card bodies as
-HTML that `lib/render-card.mjs` renders from card JSON; the app draws them natively from the JSON instead.
+The same server and library as the web front-end and the desktop app (a window around the hosted site): cards,
+spaces, tags, search, writes, uploads, `/changes` and live updates on the `/hub` WebSocket (`docs/write-api.md`,
+`lib/`).
 
-## Open: how the app signs in (to discuss with the user)
+Card content is already stored as structured data: each card's JSON (`data`, prose as a document tree) plus its
+source metadata (`extras`, documented on `renderCard` in `lib/render-card.mjs`). The server turns that into HTML only
+because mymind's own web code, which the replica serves unchanged for pixel parity, understands nothing else
+(`lib/render-card.mjs`, `lib/render/views.mjs`). The app gets a typed JSON form of the same data from its own API
+(below) and draws it natively: one source, two renderers. Define that JSON once (for example `docs/app-api.md`) so
+the Kotlin models are generated or checked against it.
 
-Every request meets two gates: Cloudflare Access at the edge, then mymind's own session (Google for the owner,
-password users). Google refuses sign-in inside embedded WebViews, and a service token compiled into an APK can be
-extracted, so the app has to obtain its credentials after the person signs in. Options:
+## Sign-in (decided 2026-10-16)
 
-- **A. Sign in once in the browser, then per-device tokens (recommended).** The app opens the sign-in in a Custom
-  Tab, a real browser where Google allows it: Cloudflare Access, then mymind's sign-in. The server then creates a
-  Cloudflare service token for that device (Cloudflare API) and a mymind session, and hands both to the app through
-  a one-time code on an app link; the app keeps them in the Android Keystore and sends them with every request. Each
-  device can be revoked on its own, and the outer Access wall stays whole. Costs: the server holds a Cloudflare API
-  token that can edit Access, and that first sign-in shows a browser page.
-- **B. Open only the app's API path at the edge.** A Cloudflare Bypass policy for something like `/api/app/*`; the
-  app signs in natively (Android Credential Manager for Google, or a password) and the server checks the Google ID
-  token and issues an app session. Fully native and 1:1, but that path is reachable from the internet with only our
-  own sign-in in front of it, which AGENTS.md rule 7 forbids unless the user agrees.
-- **C. Pass the Access token through.** Like A, but the server hands the app the Access token from the browser
-  sign-in and the app sends it as `cf-access-token`. No Cloudflare API credential on the server; the person signs in
-  again whenever the Access session expires.
+The user's choice: a native sign-in screen with one-tap Google sign-in, and no Cloudflare in the app. Option A
+(browser sign-in, then per-device Cloudflare tokens) and C (passing the Access token through) were rejected.
 
-## Open: how strict the screenshot match is
+- **Who can sign in (the user):** "the test user, my main email, and then my domain. Anyone from those is completely
+  welcome." Google for `OWNER_EMAIL` and for any verified `@octaviantocan.com` address (the same people the Access
+  policy admits); passwords only for users made with `tools/auth-user.mjs` (the `TEST_USER_*` account for automated
+  tests). No sign-up form. The website's Google sign-in should admit the domain too: `lib/auth.mjs` allows only
+  `OWNER_EMAIL` today, so change it together with the app's server work (editing `lib/` makes every verification
+  result stale). Every signed-in person reaches the same library, the owner's (`lib/auth.mjs`); separate libraries
+  per person would be a new decision. If the Google consent screen is still in Testing, only its listed test users
+  can sign in.
+- **In the app:** Android Credential Manager with Sign in with Google, `serverClientId` set to the existing Web client
+  ID. Google also needs an Android OAuth client in the same Google Cloud project for the app's package name and the
+  SHA-1 of each signing key (debug and release); ask the user before creating it. A password form serves the test
+  user.
+- **On the server:** a sign-in endpoint under the app path takes the Google ID token, verifies it against Google's
+  published keys (`aud` = Web client ID, issuer, expiry, `email_verified`, email = owner or `@octaviantocan.com`;
+  `lib/auth.mjs` `verifyIdToken` already does all but the domain check), or takes the test user's
+  name and password with rate limiting, and returns an opaque app token stored hashed and revocable like `sessions`.
+  Every other app route requires `Authorization: Bearer <token>`, including media. The app keeps the token encrypted
+  with an Android Keystore key.
+- **At the edge:** only the app API path (for example `/api/app/`) leaves Cloudflare Access, through an Access Bypass
+  rule for that path and a matching tunnel ingress rule without `access.required` (`deploy/install.sh` sets it for
+  the whole host today). The website, `/download` and every other path stay behind Access. The user floated dropping
+  Cloudflare entirely; the default here keeps it for the website. Confirm the exact path with the user before
+  changing Access or the tunnel.
+- AGENTS.md rule 7 records this exception.
+
+## Screenshot match
 
 The web replica is matched at REA channel threshold 0: every pixel identical. The real app draws most screens as web
 pages inside WebViews, while native Kotlin draws text and anti-aliased edges with Android's own renderer, so a native
-screen can look identical to a person and still differ in edge pixels. Agree with the user what tolerance counts as a
-match, per screen if needed; it goes together with the leeway decision above.
+screen can look identical to a person and still differ in edge pixels. Per the leeway decision, a screen matches when
+layout, colours and sizes are identical and only text and edge anti-aliasing differ. Pick the compare tolerance that
+encodes this (a channel threshold and a ratio of differing pixels, or a check that differences lie only along glyph
+and shape edges), prove it on a known-good pair, and record it here.
 
 ## What the app is (evidence so far)
 

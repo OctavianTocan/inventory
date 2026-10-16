@@ -1,21 +1,22 @@
 ---
 artifact_contract: "ce-handoff/v1"
 created_at: "2026-10-16T13:08:23Z"
-title: "mymind native Kotlin Android app: phone connected, APK pulled, sign-in open"
-summary: "Native Kotlin Android app matched 1:1 to mymind's app (roadmap phase 9): decisions recorded, toolchain on Java 27, phone on wireless debugging, APK set pulled; sign-in design and screenshot tolerance still to discuss with the user."
+title: "mymind native Kotlin Android app: phone connected, APK pulled, design decided"
+summary: "Native Kotlin Android app matched 1:1 to mymind's app (roadmap phase 9): toolchain on Java 27, phone on wireless debugging, APK set pulled; user decided native Google sign-in without Cloudflare in the app, typed JSON card data, and the screenshot leeway."
 keywords: ["mymind", "android", "kotlin", "native", "apk", "adb", "rea", "pixel-parity", "sign-in", "cloudflare-access", "phase-9"]
 cwd: "/home/octaviantocan/Projects/20-29_Personal_Products_and_Platforms/25_Experiments_and_Labs/25.03-mymind-reconstruction"
-resume_focus: "Build the native Kotlin Android app (roadmap phase 9) per docs/android-plan.md, starting with plan step 2 and the two open questions"
+resume_focus: "Build the native Kotlin Android app (roadmap phase 9) per docs/android-plan.md, starting with plan step 2 and the items under Still open"
 repository: "github.com/OctavianTocan/mymind-reconstruction (private)"
 repo_root_sha: "56f02615980e94ac90c0176f2be977d6f660708e"
 branch: "main"
-head: "129e3f526e400baaa8f27120afc681bb109993ae (this handoff is committed on top)"
+head: "8fe7056a8a78c0b7f9884ec5a2d4e22350e11b24 (this update is committed on top)"
 ---
 
 # mymind native Kotlin Android app: handoff
 
 The plan of record is `docs/android-plan.md`; this file only adds the session context around it. Read the plan's
-"Decisions", "Open: how the app signs in" and "Open: how strict the screenshot match is" sections first.
+"Decisions", "What our app talks to", "Sign-in" and "Screenshot match" sections first. Updated after the user
+answered the open questions (same day); `git log -p` on this file shows the earlier version.
 
 ## The user's decisions (their own answers, 2026-10-16)
 
@@ -25,31 +26,42 @@ The plan of record is `docs/android-plan.md`; this file only adds the session co
 3. **Fully separate from mymind's servers.** "We do not care about the live pages. We are reconstructing the app
    from scratch." Never fetch live mymind posing as the app or with its User-Agent; the real app is only the visual
    reference.
-4. **Leeway for native niceties, to be discussed.** "Leave a bit of tolerance for things because there are niceties
-   to Kotlin native stuff that we would not get without it ... this needs to be discussed probably." Which screens
-   or behaviours may differ, and by how much, is not agreed yet.
+4. **Leeway for native niceties, agreed.** The user asked for tolerance for Kotlin-native niceties, then accepted my
+   proposal: layout, colours and sizes match exactly; tiny text-edge differences are allowed; each native extra
+   (back gesture, haptics, …) gets their yes or no one at a time.
 5. **Tools:** install the latest of everything needed; set the newest Java as the default "if that works fine".
 6. **Handoff location:** committed to `main` of this repo, not `/tmp`.
+7. **Sign-in: native Google in the app, no Cloudflare in the app.** "I don't think the app should really need
+   Cloudflare sign-in ... We just restrict the actual sign-in through Google and account creation to only me and the
+   test user." Moments later they widened it: "We have the test user, my main email, and then my domain. Anyone
+   from those is completely welcome", so any verified `@octaviantocan.com` Google account too, on the app and the
+   website (`lib/auth.mjs` admits only the owner today; not changed yet because editing `lib/` makes every
+   verification result stale). They want a native screen with one-tap Google sign-in. They also floated dropping Cloudflare
+   entirely ("or maybe we just don't have it"); my default, written into the plan, keeps Access on the website and
+   exempts only the app API path. Not confirmed by the user.
+8. **Card data:** asked why the app should get web markup at all; they want a format both apps render properly.
+   Recorded as typed JSON for the app from the same stored data the web's HTML is made from (the web keeps HTML only
+   because mymind's own front-end code requires it).
 
 Roadmap row 9 (`docs/roadmap.md`) records 1–3.
 
-## Open questions for the user (not decided)
+## Still open
 
-- **How the app signs in.** The user's own framing: they understand the token should not be built into the app and
-  guess the app calls an API to get a token after signing in; they want to talk it through. Three options are in
-  the plan (A: browser sign-in once in a Custom Tab, then the server mints a per-device Cloudflare service token plus
-  an app session, handed over by one-time code and kept in the Android Keystore; B: a Cloudflare Bypass for an app
-  API path plus native Google sign-in, which needs the user to relax AGENTS.md rule 7; C: pass the Access token
-  through, re-sign-in when it expires). A is my recommendation, not the user's choice.
-- **Screenshot tolerance.** The web replica is matched at channel threshold 0. The real app draws most screens as
-  WebView pages; native Kotlin rasterizes text and anti-aliased edges differently, so exact pixel equality is
-  unlikely even where a person sees no difference. The user did not know what my earlier "text-matching risk"
-  question meant; it is this. It merges with decision 4.
+- **The exact app API path and whether Cloudflare stays on the website.** Plan default: Access keeps the website,
+  only something like `/api/app/` leaves it (Access Bypass for that path plus a tunnel ingress rule without
+  `access.required`). Confirm with the user before changing Access or the tunnel; AGENTS.md rule 7 now names this
+  exception.
+- **The Android OAuth client** (package name plus signing-key SHA-1s) in the existing Google Cloud project; ask before
+  creating it.
+- **Domain users on the website.** `lib/auth.mjs` still admits only `OWNER_EMAIL` for Google; widen it to verified
+  `@octaviantocan.com` together with the app's server work. Every signed-in person reaches the owner's one library
+  today; nobody has asked for separate libraries.
+- **The numeric screenshot tolerance** that encodes the agreed leeway; to be chosen and proven on a known-good pair
+  (plan "Screenshot match").
 
 The user also asked what the downloaded app talks to. Answer given: the desktop app is a window around the hosted
-site, whose JavaScript calls the server's existing HTTP API (`lib/`, `docs/write-api.md`); the Kotlin app will call
-that same API. The only Android-specific gap is that card bodies reach the web as server-rendered HTML
-(`lib/render-card.mjs`), so the app renders them natively from card JSON.
+site, whose JavaScript calls the server's existing HTTP API (`lib/`, `docs/write-api.md`); the Kotlin app uses the
+same server and library through its own bearer-token API path.
 
 ## Current state
 
@@ -89,16 +101,16 @@ our replica through mitmproxy) and the same compare, with the tolerance still to
   Google client values. Never print or commit them.
 - `REA_JADX_MCP_JAR=~/.local/share/rea/jadx-headless-mcp-0.7.1-all.jar` must be exported for REA's APK code
   commands; it is in no shell profile.
-- Verification run `mymind-verify-merge` (systemd user unit, started 14:30 CEST, log
-  `evidence/drive/replica-merge.log`) was still running at 15:08 CEST; every finished suite was fully identical so
-  far (desktop-dark-ui had 5 step errors). Until it ends, do not edit `server.mjs`, `tools/replay-store.mjs` or
-  `lib/**/*.mjs`. The previous session will report it and run `npm run coverage`.
+- Verification run `mymind-verify-merge` finished 15:13 CEST: `npm run coverage` reports ready, 917 surfaces, 0 open
+  reasons. `android-cards` showed 34/36 because its live video capture predates the "watched" button loading; the
+  later `android-cards@media` live capture is byte-identical to the replica. No drive run is going now.
 - Shell: zsh; stop processes by PID, never `pkill -f`; foreground `sleep` is blocked.
 
 ## Plausible path
 
 1. Plan step 2: decompile the pulled APK (apktool, jadx) and record the shell's views, layouts, fonts, colours and
    network client in `docs/android-plan.md`.
-2. Settle sign-in and tolerance with the user, then write a detailed build plan (for example with `ce-plan`).
+2. Write a detailed build plan (for example with `ce-plan`): the app API and its JSON card format, server sign-in
+   endpoint, edge change, app architecture, screen order; bring the still-open items above to the user.
 3. Plan steps 3–4 on the emulator for reference captures, then build screens in Kotlin on a branch, each proven
    against the real app's screenshot.

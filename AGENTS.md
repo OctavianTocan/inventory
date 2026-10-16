@@ -33,7 +33,12 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
    The whole hosted hostname stays behind the Cloudflare Access application "mymind" (owner plus
    `@octaviantocan.com`, through Google or a one-time PIN), and the tunnel checks its token (`deploy/install.sh`).
    Never weaken that, the gate in `lib/auth.mjs`, the tunnel refusal in `server.mjs` or the Access token and mymind
-   session checks in `deploy/download-server.mjs`, and ask the user before publishing any hostname.
+   session checks in `deploy/download-server.mjs`, and ask the user before publishing any hostname. One exception,
+   decided by the user on 2026-10-16 and not built yet: the native Android app's API path may leave Access, guarded
+   by the app's own sign-in (Google for `OWNER_EMAIL` and verified `@octaviantocan.com` addresses, passwords for
+   `tools/auth-user.mjs` users, bearer tokens on every other route). The user also wants the website's Google
+   sign-in to admit `@octaviantocan.com`. Only that path; see `docs/android-plan.md`, "Sign-in", and confirm the path with the user
+   before changing Access or the tunnel.
 
 ## Long-running processes
 
