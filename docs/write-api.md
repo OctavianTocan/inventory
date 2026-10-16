@@ -6,9 +6,24 @@ the responses it expects, what the UI does next, and the read-side GET shapes th
 Evidence legend: **[R]** a response was recorded in `replay/` or `capture/`; **[C]** inferred from client code only (the
 request side is exact, the response side is what the client reads); **[?]** unknown, repeated under Open questions.
 
-Only one write was ever recorded: `PATCH /users/<uid>` returning `{ "status": 200 }`. Every other write below is
+The original write recording was `PATCH /users/<uid>` returning `{ "status": 200 }`. Other write contracts below are
 **[C]**; the read-side GETs in section 6 are mostly **[R]**. Today `server.mjs` answers every non-GET with `200 {}` and
 logs `[write ignored]`. Examples are redacted: `<uid>` is the 22-char account id, `<id>` a card id.
+
+An additional real URL save on 2026-10-15 records the hub and rendered `/changes` lifecycle in
+`evidence/live-saves/2026-10-15-apk-link.jsonl`. Its APK has no resource text and its screenshot fails:
+
+1. `object:created {id}`: Placeholder, flags 0, `placeholder processing`, the head-spin saving template, no title paragraph.
+2. `object:updated {id,type:"WebPage",flags:2097152,bumped:"0001-01-01T00:00:00"}`: card flags 2097153,
+   `web-page processing`, domain bubble, "Taking screenshot…" and the normal URL title paragraph.
+3. `ai:failed {objectId}`, then `exception {id,type:"InvalidObjectException",message:"no resource text"}`.
+4. `screenshot:failed {objectId}`: card flags 6291457, with exactly the same screenshot spinner markup.
+
+Bit 2097152 identifies the fetched WebPage/pending-screenshot state in this trace; bit 4194304 is added on screenshot
+failure. Their broader meanings are unproven. Bit 1 remains set even after both failures. Exact wall-clock delays,
+details/mobile markup, successful screenshots/AI, early failures and failures with usable text were not recorded;
+the implementation preserves the existing behavior for those outcomes. The local fixture checks read the recording
+as their expectation and never copy private card data into source fixtures.
 
 ## 1. Conventions
 
@@ -165,7 +180,7 @@ description, siteName, domain, source, cover image, `type`), markdown-looking te
 
 Minimal local behavior that satisfies the client:
 
-1. `content` is a single http(s) URL: insert an `objects` row with `type: "WebPage"`, `flags: 1` (analyzing),
+1. `content` is a single http(s) URL: insert an `objects` row with `type: "Placeholder"`, `flags: 0` (saving),
    `source.url`, `domain`, `title` = host; append a `changes` row; enrich asynchronously (see 5.2).
 2. `content` is other text: `type: "Note"`, `prose` = one paragraph per line.
 3. The same URL already present (not deleted): bump (`bumped = now`) and return **200** `{id}`.
@@ -424,7 +439,7 @@ WebSocket, JSON protocol, `skipNegotiation`. The replica currently answers the h
 | Target | Payload | Client reaction |
 |---|---|---|
 | `object:created` / `object:updated` / `object:bumped` / `object:deleted` / `object:analyzed` | `{id}` | schedule `synchronize()`; `object:analyzed` also re-fetches `/objects/<id>` and `/cards/<id>/detail` |
-| `ai:failed` | `{id}` | clears analyzing state |
+| `ai:failed` | `{objectId}` [R, APK save] | clears analyzing state |
 | `screenshot:completed` / `screenshot:failed` | `{objectId}` | re-fetch `/cards/<id>/detail` |
 | `tag:created` | `{id, name, objectId, flags}` | update tag list of an open card |
 | `tag:deleted` | `{objectId, name}` | same |

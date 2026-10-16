@@ -55,9 +55,10 @@ const OUT = path.join(ROOT, 'evidence', 'drive', `${opts.profile}-${opts.suite}`
 const CLAIMS = path.join(ROOT, 'evidence', 'drive', 'claims');
 if (existsSync(CLAIMS)) {
   try {
-    await writeFile(path.join(CLAIMS, `${opts.profile}-${opts.suite}`), String(process.pid), { flag: 'wx' });
+    const claim = `${opts.profile}-${opts.suite}${opts.sides === 'live,replica' ? '' : `.${opts.sides}`}`;
+    await writeFile(path.join(CLAIMS, claim), String(process.pid), { flag: 'wx' });
   } catch {
-    console.log(`${opts.profile}-${opts.suite} is already claimed; skipping`);
+    console.log(`${opts.profile}-${opts.suite} (${opts.sides}) is already claimed; skipping`);
     process.exit(0);
   }
 }
@@ -300,16 +301,20 @@ try {
           : undefined,
     });
     console.log(`${name}: running ${steps.length} steps`);
-    const errors = await runSide(side, plan);
+    let errors, media = 0;
+    try {
+      errors = await runSide(side, plan);
+    } finally {
+      // Save what live sent even when the pass dies, or stale recordings from older library states stay in replay/.
+      if (store) {
+        media = await side.recordMedia().catch(() => 0);
+        await store.save();
+        await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).catch(() => {});
+      }
+    }
     if (name === 'replica') {
       report.replica = await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.json());
       Object.assign(report.replica, { digest: await replicaDigest(), at: new Date().toISOString() });
-    }
-    let media = 0;
-    if (store) {
-      media = await side.recordMedia();
-      await store.save();
-      await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' });
     }
     report.sides[name] = { errors, writesAnsweredLocally: side.writes, notes: side.log, mediaRecorded: media };
     console.log(`${name}: ${errors.length} step errors, ${side.writes.length} writes kept off the account, ${side.log.length} notes`);

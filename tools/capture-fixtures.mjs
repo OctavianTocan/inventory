@@ -64,7 +64,7 @@ export async function startFixtures(media, inProcess) {
     const body = text ? JSON.parse(text) : undefined;
     requests.push({ path: url.pathname, body, method: req.method });
     const send = (bytes, type = 'text/html', status = 200) => { res.writeHead(status, { 'content-type': type }); res.end(bytes); };
-    const json = value => send(JSON.stringify(value), 'application/json');
+    const json = (value, status = 200) => send(JSON.stringify(value), 'application/json', status);
     if (control.aiRedirect && req.method === 'POST') {
       res.writeHead(307, { location: 'https://redirect.invalid/should-never-be-requested' });
       return res.end();
@@ -75,6 +75,7 @@ export async function startFixtures(media, inProcess) {
     }
     if (url.pathname === '/cover.png') return send(media.png, 'image/png');
     if (url.pathname === '/doc.pdf') return send(media.pdf, 'application/pdf');
+    if (url.pathname === '/failed.apk') return send(Buffer.from([0x50, 0x4b, 3, 4, 0, 0]), 'application/octet-stream');
     if (url.pathname === '/blocked') return send('blocked', 'text/plain', 403);
     if (url.pathname === '/redirect-account') { res.writeHead(302, { location: 'https://access.mymind.com/everything' }); return res.end(); }
     if (url.pathname === '/redirect-external') { res.writeHead(302, { location: 'https://external.invalid/image.png' }); return res.end(); }
@@ -84,7 +85,13 @@ export async function startFixtures(media, inProcess) {
     if (url.pathname === '/embed') return json({ title: 'Fixture title', author_name: 'Fixture author', type: 'rich', thumbnail_url: `${base}/cover.png`,
       html: '<blockquote><p>Fixture <strong>post</strong><br>body <a href="javascript:alert(1)" onclick="bad()">bad link</a><a href="https://example.invalid/safe">safe</a></p></blockquote><script>alert(1)</script><img src=x onerror=bad()>' });
     if (url.pathname.includes('batchEmbedContents')) return json({ embeddings: body.requests.map(() => ({ values: Array.from({ length: 768 }, (_, i) => i === 0 ? 1 : 0) })) });
-    if (url.pathname.includes('embedContent')) return json({ embedding: { values: Array.from({ length: 768 }, (_, i) => i === 0 ? 1 : 0) } });
+    if (url.pathname.includes('embedContent')) {
+      if (control.embedding) {
+        const result = await control.embedding(body);
+        return json(result.body, result.status ?? 200);
+      }
+      return json({ embedding: { values: Array.from({ length: 768 }, (_, i) => i === 0 ? 1 : 0) } });
+    }
     if (url.pathname === '/chat/completions') {
       if (control.chatDelay) await new Promise(resolve => setTimeout(resolve, control.chatDelay));
       if (control.aiFailure) return send('{}', 'application/json', 400);

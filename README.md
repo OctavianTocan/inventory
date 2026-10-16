@@ -18,6 +18,9 @@ recordings because the renderer currently generates desktop markup. Unsupported 
 
 Set `STORE_DB=/path/to/library.db` to select another database. `STORE_READONLY=1` enables store reads while
 acknowledging writes without persisting them or broadcasting write events. Grid hydration still works in that mode.
+Search, suggestions and smart-space query checks use SQLite on both devices. In `STORE_READONLY=1`, exact
+recorded search/suggestion/query-check requests retain their device/run replay, while unrecorded requests use
+SQLite without persisting query-check membership changes. Normal writable mode always searches the store.
 Unrecorded API calls are logged as `[miss]`, media without a recording as `[placeholder]`.
 
 To build the initial database, run `node tools/seed-db.mjs`. Rebuilding replaces an existing database, including its
@@ -34,14 +37,18 @@ URL saves return `201` immediately, then `captureLink` enriches the placeholder 
 OpenGraph, Twitter, JSON-LD and public oEmbed metadata, detects social posts, videos, repositories, apps, products,
 articles and PDFs, downloads covers and sanitizes post HTML. Web pages without a usable cover and explicitly saved
 Screenshots use a fresh headless Chromium context with the default user agent; page fetches identify themselves as
-`mymind-replica/1.0`, since some sites (Wikimedia) refuse requests without a user agent. Failed capture retains a
-readable "blocking us" card and skips AI, which would otherwise invent a summary from the bare URL. Original source
+`mymind-replica/1.0`, since some sites (Wikimedia) refuse requests without a user agent. Failures before page metadata retain a
+readable "blocking us" card and skip AI, which would otherwise invent a summary from the bare URL. Original source
 URLs and user edits made during capture are preserved.
 Online capture permits public destinations only, including every redirect, media/oEmbed request and screenshot
 resource. Node HTTP validates DNS answers at socket lookup and limits streamed wire and decoded bodies. Screenshot
 resources share a 100 MiB wire-plus-decoded budget; native browser networking uses an unresolvable proxy with
-QUIC disabled, and WebRTC/WebTransport are removed from every frame. Pending links use minimal `processing-guts` markup and analyzing details use
-the processing TL;DR. These pending templates are inferred from the shipped CSS, not present in the recordings.
+QUIC disabled, and WebRTC/WebTransport are removed from every frame. New links start as a `Placeholder` (flags 0).
+The 2026-10-15 APK save in `evidence/live-saves/2026-10-15-apk-link.jsonl` supplies the exact saving and screenshot
+templates: the fetched WebPage has flags 2097153; after AI reports no resource text and the screenshot fails,
+flags become 6291457 and the screenshot spinner remains. The hub uses the recorded event shapes and order.
+These stages are compared byte for byte by `check-render` and exercised offline by `check-capture`; success,
+early-failure and text-bearing screenshot-failure paths retain their previous behavior without claiming live parity.
 
 Uploads use `POST /uploads/authorize`, bearer-authorized chunked `PUT /uploads/:id`, then `POST /objects` with
 `{type:"Media",uploadId}`. PNG/JPEG/WebP and other decoded raster images, videos and PDFs become local cards.
@@ -67,6 +74,21 @@ Summaries and tags use text for text-rich cards; images inform visual cards and 
 characters. Post analysis supplies headlines of at most eight words, applied only to titles the user hasn't
 edited. AI tags use normalized identity, existing vocabulary spelling, type-label filtering and a ten-tag cap.
 
+Search uses FTS5 over titles, descriptions, summaries, annotations, URLs/domains, prose/current reader content,
+card notes, capture text and OCR. It supports `type:`, `tag:`/`label:`/`#`, `site:`/`domain:`, quotes, prefix `*`,
+negation, boolean groups, date filters, formats and the client's action/completed filters. Smart spaces evaluate
+their filters at creation and refresh memberships on query checks, retaining manual additions and exclusions.
+`/embeddings/search` embeds queries with hosted Gemini; `/embeddings/related/:id` compares stored vectors without
+an API call. Missing keys, disabled hosted calls offline and provider failures return text matches or empty
+semantic matches. See [search contracts and measured recording differences](docs/search.md).
+
+Backfill historical text embeddings with `node tools/embed-library.mjs` (estimate only), then explicitly add
+`--run`; `--db /path/to/library.db` chooses a database and `--limit 10` selects a trial. The tool does not load
+`.env`; on the host use `node --env-file=.env tools/embed-library.mjs --db /path/to/library.db --limit 10 --run`
+or supply `GEMINI_API_KEY` in the environment. It retries 429/5xx, commits each batch, skips existing vectors on
+resume, and reports provider token usage when available. Empty text-only documents are reported and skipped.
+In a worktree with shared read-only `data/`, always select a temporary database; never backfill the symlink target.
+
 Install dependencies with `npm ci`. PDF/video previews require host `pdftoppm` (Poppler), `ffmpeg` and `ffprobe`.
 Page screenshots use `VERIFIER_CHROMIUM`, default `/usr/lib/chromium/chromium`, without touching the verifier's
 running browser. New screenshot output still needs host/browser verification before making a parity claim.
@@ -81,6 +103,7 @@ node tools/check-capture.mjs
 node tools/check-media.mjs --in-process
 node tools/check-store.mjs
 node tools/check-render.mjs
+node tools/check-search.mjs --in-process
 ```
 
 The HTTP checks back up the seeded database to temporary files, start isolated offline servers on OS-assigned
@@ -110,8 +133,12 @@ npm run mirror                                             # static JS/CSS/fonts
 STORE_READONLY=1 npm run serve             # replica on :4321; required for verification
 npm run drive -- --profile desktop-light --suite ui     # one profile x suite: live, then replica, then REA diffs
 npm run verify                             # every profile (desktop light/dark, iPhone, Android) x suite (ui, cards)
+npm run verify -- --reseed                 # after the live library changed: all live passes, reseed, then replica passes
 npm run coverage                           # REA's fail-closed verdict over all runs: ready / partial / failed
 ```
+
+`--reseed` needs no server running on `:4321`: it starts one, backs up `data/mymind.db` next to itself, reseeds it
+from the fresh recordings and restarts the server before the first replica pass.
 
 Needs the agent Chromium on CDP `:9222` signed in to mymind; only its two mymind session cookies and the page's
 localStorage are read, in memory, to sign in the verifier.
@@ -188,8 +215,10 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 
 - Recorded detail views cover the first 30 cards; images cover the first 300. Unchanged uncaptured cards use placeholders.
 - Generated details and rich prose nodes have route/data coverage, but still need browser and REA parity checks.
-- Uncaptured historical media retains its placeholder fallback. Full/semantic search and generated AI thumbnails
-  remain later work; embeddings from new cards are persisted for semantic search.
+- Uncaptured historical media retains its placeholder fallback. Generated AI thumbnails remain later work.
+- Local search approximates the live ranking engine; historical cards without vectors need an explicit hosted
+  embedding backfill. Text-only backfill skips historical cards with no usable text; new visual analysis can
+  embed their image. Browser and screenshot parity have not been claimed for generated search results.
 
 ## Private data
 

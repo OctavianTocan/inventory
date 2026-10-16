@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { renderCard } from '../lib/render-card.mjs';
 import { unescapeHtml } from '../lib/render/encoding.mjs';
+import { linkRenderCases } from './check-link-lifecycle.mjs';
 
 // Read a quoted attribute without interpreting or executing the recorded markup.
 function attr(tag, name) {
@@ -122,6 +123,15 @@ function main() {
       else failures.push({ index, type: data.type, detail: difference(recording.html, html) });
     } catch (error) {
       failures.push({ index, type: data.type, detail: `  ${error.name}: ${error.message}` });
+    }
+  }
+  if (!config.type) {
+    const count = { passed: 0, total: 0 };
+    counts.set('Link save lifecycle', count);
+    for (const [index, [name, check]] of linkRenderCases().entries()) {
+      count.total++;
+      try { check(); count.passed++; }
+      catch (error) { failures.push({ index, type: name, detail: error.message }); }
     }
   }
   if (!counts.size) throw new Error(`No recorded cards have type ${JSON.stringify(config.type)}`);

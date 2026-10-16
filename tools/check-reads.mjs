@@ -25,7 +25,7 @@ function equal(actual, expected, label) {
   catch { throw new Error(`${label} differs`); }
 }
 
-const server = await testServer();
+const server = await testServer({ readonly: true });
 let passed = 0;
 let failed = 0;
 try {

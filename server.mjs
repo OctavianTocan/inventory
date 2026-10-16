@@ -240,7 +240,7 @@ async function serveDetail(res, id) {
 
 let push = () => {};
 const api = await createApi({ root: ROOT, dbPath: process.env.STORE_DB, readonly: process.env.STORE_READONLY === '1',
-  msgpack, localize, send, push: (target, payload) => push(target, payload) });
+  msgpack, localize, send, push: (target, payload) => push(target, payload), hasReplay: (req, url) => Boolean(replayedFor(req, url)) });
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);

@@ -221,13 +221,15 @@ try {
     await write('POST', '/objects', { content: 'https://example.invalid/local', spaceId });
     ok((await read(`/spaces/${spaceId}`)).objects.some(value => value.id === urlId));
   });
-  await check('smart space supplied matches and query exclusions', async () => {
+  await check('smart space evaluates filters and preserves query exclusions', async () => {
     const space = await write('POST', '/spaces', { name: 'Local smart', color: '#123456',
-      query: { filters: ['type:note'], matches: [{ id: noteId, score: 2.5 }] } });
+      query: { filters: [`type:note AND title:"${(await card(noteId)).data.title}"`], matches: [] } });
     smartId = space.id;
     strictEqual(space.objects[0].queryId, space.query.id);
-    strictEqual(space.objects[0].score, 2.5);
-    deepStrictEqual(await read(`/queries/${space.query.id}/check`), { elapsed: 0, added: [], removed: [] });
+    strictEqual(space.objects[0].id, noteId);
+    const checked = await read(`/queries/${space.query.id}/check`);
+    ok(Number.isFinite(checked.elapsed));
+    deepStrictEqual(checked.added, []); deepStrictEqual(checked.removed, []);
     await write('POST', `/queries/${space.query.id}/objects/${noteId}/exclude`, {});
     strictEqual((await read(`/spaces/${smartId}`)).objects.length, 0);
   });
@@ -444,7 +446,8 @@ try {
       try {
         const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all();
         return tables.map(({ name }) => {
-          const statement = db.prepare(`SELECT * FROM "${name}" ORDER BY rowid`);
+          const columns = db.prepare(`PRAGMA table_info("${name}")`).all();
+          const statement = db.prepare(`SELECT * FROM "${name}" ORDER BY ${columns.map(c => '"' + c.name + '"').join(',')}`);
           statement.setReadBigInts(true);
           return [name, statement.all()];
         });

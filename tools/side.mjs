@@ -280,6 +280,8 @@ export class Side {
     const navigation = go()
       .catch((error) => (/ERR_NETWORK_CHANGED/.test(error.message) ? go() : Promise.reject(error)))
       .finally(() => (committed = true));
+    // If the loop below throws first (browser gone), this rejection must not crash the run unsaved.
+    navigation.catch(() => {});
     while (!committed) {
       await this.#quiet();
       await this.#release();

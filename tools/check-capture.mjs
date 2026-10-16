@@ -18,6 +18,7 @@ import { tagKey } from '../lib/ai-tags.mjs';
 import { checkCaptureHttp } from './check-capture-http.mjs';
 import { checkCaptureQuality } from './check-capture-quality.mjs';
 import { checkCaptureBrowser } from './check-capture-browser.mjs';
+import { checkLinkCapture } from './check-link-lifecycle.mjs';
 
 const inProcess = process.argv.includes('--in-process');
 const dir = await mkdtemp(join(tmpdir(), 'mymind-capture-'));
@@ -97,6 +98,7 @@ async function upload(bytes, type, name) {
 
 let imageId, imageUploadId, articleId;
 try {
+  await checkLinkCapture({ check, server, fixtures, row });
   await checkCaptureHttp(check);
   await checkCaptureBrowser(check, fixtures, mediaBytes.png, inProcess);
   await checkCaptureQuality({ check, server, fixtures, mediaBytes, save, captured, row, until, inProcess });
@@ -274,6 +276,8 @@ try {
         await jobs.drain();
         const item = row(id);
         strictEqual(item.data.type, type); ok(item.extras.cover.src.startsWith('/media/'));
+        strictEqual(item.data.flags, 0);
+        ok(!item.extras.screenshotPending && !item.extras.screenshotFailed);
         ok(item.html.includes(`class="${type === 'Screenshot' ? 'screenshot' : 'web-page'}"`));
       }
       strictEqual(shots, 3);

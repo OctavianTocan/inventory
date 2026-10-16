@@ -63,8 +63,10 @@ export async function checkCaptureQuality({ check, server, fixtures, mediaBytes,
     articleId = await save('ArticleQuality');
     if (inProcess) {
       const pending = row(articleId);
-      ok(pending.html.includes('web-page processing'));
-      ok(pending.html.includes('<div class="processing-guts"><div class="spinner"></div><div class="text">127.0.0.1</div>'));
+      strictEqual(pending.data.type, 'Placeholder');
+      strictEqual(pending.data.flags, 0);
+      ok(pending.html.includes('placeholder processing'));
+      ok(pending.html.includes('head_spin.png'));
       ok(!/inaccessible-guts|blocking us/.test(pending.html));
       strictEqual(fixtures.requests.length, before);
       const detail = await server.request(`/cards/${articleId}/detail`, { accept: 'text/html' });

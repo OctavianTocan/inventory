@@ -132,11 +132,12 @@ function buildChecks(store, rec) {
       assertEqual(store.tagsRecent(10), rec.recent, 'recent tags');
       return rec.recent.map((r) => r.name).join(',').slice(0, 70);
     }],
-    ['checkpoint and empty changes', () => {
+    ['grid checkpoint and newer changes', () => {
       const expected = rec.gridHeaders['x-checkpoint'];
-      if (store.checkpoint() !== expected) throw new Error(`checkpoint ${store.checkpoint()} != ${expected}`);
-      if (store.changesSince(expected).length) throw new Error('changes since checkpoint is not empty');
-      return `${expected}, 0 newer`;
+      if (store.gridCheckpoint() !== expected) throw new Error(`checkpoint ${store.gridCheckpoint()} != ${expected}`);
+      const newer = store.changesSince(expected);
+      if (newer.some((change) => change.type !== 2)) throw new Error('non-deletion changes newer than the grid checkpoint');
+      return `${expected}, ${newer.length} newer deletions`;
     }],
     ['changes log', () => {
       const changes = store.changesSince(0, { limit: all.length + 1 });
