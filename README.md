@@ -222,10 +222,11 @@ default, so an app on the host and the hosted site share one library and its liv
 
 #### Downloading the desktop app
 
-`https://<hostname>/download` serves the desktop app, packaged to open the hosted library. The tunnel sends
-`/download` to `deploy/download-server.mjs`, which itself checks each request's Access token (signature, team,
-audience, expiry), so everyone the Access policy lets in can download and the files stay private even if the tunnel's
-routing changes. It logs why it refused a request (`journalctl --user -u mymind-download`). There is a Linux build
+`https://<hostname>/download` serves the desktop app, packaged to open the hosted library, to anyone signed in to
+the library (Google or password). The tunnel sends `/download` to `deploy/download-server.mjs`, which itself checks
+each request's Access token (signature, team, audience, expiry) and mymind session (`data/auth.db`), so the files stay
+private even if the tunnel's routing changes. Visitors without a session are sent to mymind's sign-in page; open
+`/download` again after signing in. It logs why it refused a request (`journalctl --user -u mymind-download`). There is a Linux build
 only: `deploy/package-app.sh` builds for the machine it runs on.
 
 Run `deploy/package-app.sh` again after changing `desktop/`.
@@ -248,8 +249,8 @@ library as the `TEST_USER_*` password user. The token only opens Access; the lib
    ```
 
 Any other client gets in the same way by sending the headers `CF-Access-Client-Id` and `CF-Access-Client-Secret`
-on requests to the hosted origin only. Treat the token like a password: it lets its holder reach the sign-in page
-and `/download`. Revoke or refresh it under Service credentials.
+on requests to the hosted origin only. Treat the token like a password: it lets its holder reach mymind's sign-in
+page. Revoke or refresh it under Service credentials.
 
 ## Desktop app
 

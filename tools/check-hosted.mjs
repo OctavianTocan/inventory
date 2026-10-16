@@ -1,6 +1,6 @@
 // Checks the hosted library end to end through Cloudflare Access: signed-out requests go to the Access login, the
 // Access service token gets through, the TEST_USER password user signs in and reads the library, and /download serves
-// the app. With --browser it also signs in with headless Chromium and screenshots /everything.
+// the app only once signed in. With --browser it also signs in with headless Chromium and screenshots /everything.
 // Usage: node tools/check-hosted.mjs [--url https://mymind.octaviantocan.com] [--browser] [--out evidence/hosted]
 // Reads CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET, TEST_USER_NAME and TEST_USER_PASSWORD from .env; prints none.
 import { ok, strictEqual } from 'node:assert';
@@ -50,6 +50,11 @@ await check('the service token reaches mymind\'s sign-in page', async () => {
   ok((await res.text()).includes('Access <br>your mind'));
 });
 await check('the library API stays closed without a mymind session', async () => strictEqual((await get('/cards')).status, 401));
+await check('/download sends visitors without a mymind session to sign in', async () => {
+  const res = await get('/download');
+  strictEqual(res.status, 302);
+  strictEqual(res.headers.get('location'), '/signin');
+});
 await check('a wrong password is refused', async () => {
   const res = await fetch(`${base}/signin/password`, { method: 'POST', redirect: 'manual',
     headers: { ...access, origin: base, 'content-type': 'application/x-www-form-urlencoded' },
@@ -73,8 +78,8 @@ await check('the test user reads the library', async () => {
   strictEqual(cards.status, 200);
   ok((await cards.arrayBuffer()).byteLength > 1000, 'a non-empty card stream');
 });
-await check('/download serves the packaged app', async () => {
-  const res = await get('/download');
+await check('/download serves the packaged app to the signed-in test user', async () => {
+  const res = await get('/download', { cookie });
   strictEqual(res.status, 200);
   ok((await res.text()).includes('href="/download/'));
 });

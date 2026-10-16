@@ -1,14 +1,16 @@
-// Serves the packaged desktop app at /download, only to requests that carry a valid token of the hosted site's
-// Cloudflare Access application, so whoever its policy lets in can download and the files stay behind Access even if
-// the tunnel's routing changes.
+// Serves the packaged desktop app at /download to anyone signed in to the hosted library: each request needs a valid
+// token of the site's Cloudflare Access application and a mymind session (Google or password), so the files stay
+// private even if the tunnel's routing changes. Signed-out visitors are sent to mymind's sign-in page.
 // Env: CF_ACCESS_TEAM_DOMAIN (e.g. you.cloudflareaccess.com), CF_ACCESS_AUD (the Access application's audience tag),
-// DOWNLOAD_PORT (default 4332), DOWNLOAD_DIR (default downloads/), CF_ACCESS_CERTS_URL (default the team's).
-import { createPublicKey, verify } from 'node:crypto';
+// DOWNLOAD_PORT (default 4332), DOWNLOAD_DIR (default downloads/), AUTH_DB (default data/auth.db, shared with the
+// library server), CF_ACCESS_CERTS_URL (default the team's).
+import { createHash, createPublicKey, verify } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openAuthStore } from '../lib/auth-store.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { CF_ACCESS_TEAM_DOMAIN: team, CF_ACCESS_AUD: audience } = process.env;
@@ -21,6 +23,8 @@ if (!team || !audience) {
 const issuer = `https://${team}`;
 const certs = process.env.CF_ACCESS_CERTS_URL ?? `${issuer}/cdn-cgi/access/certs`;
 let keys = { fetched: 0, byKid: new Map() };
+const auth = openAuthStore(process.env.AUTH_DB ?? path.join(root, 'data', 'auth.db'));
+auth.exec('PRAGMA busy_timeout = 2000');
 
 // Cloudflare Access's public key for `kid`.
 async function signingKey(kid) {
@@ -58,11 +62,20 @@ async function accessIdentity(token) {
   }
 }
 
+// The email of the unexpired mymind session in the request's cookie, or null. Same cookie and stored hash as
+// lib/auth.mjs.
+function mymindUser(req) {
+  const id = /(?:^|;\s*)mm_session=([^;]+)/.exec(req.headers.cookie ?? '')?.[1];
+  if (!id) return null;
+  const row = auth.prepare('SELECT email, expires_ms FROM sessions WHERE hash = ?').get(createHash('sha256').update(id).digest('hex'));
+  return row && row.expires_ms > Date.now() ? row.email : null;
+}
+
 const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const size = (bytes) => `${(bytes / 1_048_576).toFixed(1)} MB`;
 
 // The download page: every packaged file with its size and checksum, and how to install it.
-async function page(identity) {
+async function page(user) {
   const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8').catch(() => '{"files":[]}'));
   const rows = manifest.files.map((file) => `<li><a href="/download/${encodeURIComponent(file.name)}">${escape(file.label)}</a>
     <span>${size(file.bytes)} · built ${escape(file.built.slice(0, 10))}</span><code>sha256 ${escape(file.sha256)}</code></li>`).join('');
@@ -81,7 +94,7 @@ pre{background:var(--card);border-radius:14px;padding:16px;overflow-x:auto;font-
 <pre>tar -xzf mymind-linux-x86_64.tar.gz
 mymind/install.sh        # ~/.local/bin/mymind and a launcher entry</pre>
 <p>Needs WebKitGTK 4.1 and GStreamer's good plugins (Arch: <code>webkit2gtk-4.1 gst-plugins-good</code>).</p>
-<p>Signed in to Cloudflare Access as ${escape(identity)} · <a href="/cdn-cgi/access/logout">Sign out</a></p>
+<p>Signed in as ${escape(user)} · <a href="/signout">Sign out</a></p>
 </main></body></html>`;
 }
 
@@ -97,9 +110,17 @@ http.createServer(async (req, res) => {
     res.writeHead(405, { allow: 'GET, HEAD' });
     return res.end();
   }
-  if (pathname === '/download' || pathname === '/download/') {
+  const listing = pathname === '/download' || pathname === '/download/';
+  const user = mymindUser(req);
+  if (!user) {
+    console.warn(`refused ${req.method} ${req.url}: no mymind session (${identity})`);
+    if (listing) res.writeHead(302, { location: '/signin', 'cache-control': 'no-store' });
+    else res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
+    return res.end(listing ? undefined : 'Sign in to mymind to download the app.\n');
+  }
+  if (listing) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-    return res.end(await page(identity));
+    return res.end(await page(user));
   }
   const name = decodeURIComponent(pathname.slice('/download/'.length));
   const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8').catch(() => '{"files":[]}'));
@@ -117,4 +138,4 @@ http.createServer(async (req, res) => {
   });
   if (req.method === 'HEAD') return res.end();
   createReadStream(path.join(dir, file.name)).pipe(res);
-}).listen(port, '127.0.0.1', () => console.log(`downloads behind Cloudflare Access on http://127.0.0.1:${port}/download`));
+}).listen(port, '127.0.0.1', () => console.log(`downloads for signed-in users behind Cloudflare Access on http://127.0.0.1:${port}/download`));
