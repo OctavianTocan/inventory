@@ -166,17 +166,29 @@ node tools/auth-user.mjs remove tester                     # also signs that use
 ### Hosting on this computer
 
 `deploy/install.sh` runs the replica as systemd user services that start at boot: the server with sign-in on
-`127.0.0.1:4330`, and a Cloudflare tunnel that publishes it at your hostname. It needs `cloudflared` logged in
-(`cloudflared tunnel login`), the sign-in variables in `.env`, and a Google client whose redirect URIs include
-`https://<hostname>/google/oauth2-callback`:
+`127.0.0.1:4330`, the desktop app downloads on `127.0.0.1:4332`, and a Cloudflare tunnel that publishes both at your
+hostname behind Cloudflare Access. Every request meets Access first, then the library's own sign-in. It needs
+`cloudflared` logged in (`cloudflared tunnel login`), the sign-in variables in `.env`, and a Google client whose
+redirect URIs include `https://<hostname>/google/oauth2-callback`.
 
-```bash
-cloudflared tunnel create mymind                          # once; prints the tunnel id
-cloudflared tunnel route dns mymind mymind.example.com    # once
-deploy/install.sh mymind.example.com <tunnel-id>
-journalctl --user -u mymind-replica -u mymind-tunnel -f   # logs
-systemctl --user stop mymind-replica                      # stops the tunnel too
-```
+1. In Cloudflare Zero Trust, add a self-hosted Access application for the whole `<hostname>` (no path), with Google
+   and one-time PIN as login methods and one Allow policy for the people who may reach it. mymind.octaviantocan.com
+   uses the application "mymind" and the policy "owner and @octaviantocan.com" (`tocanoctavian@gmail.com`, plus
+   emails ending in `octaviantocan.com`).
+2. Put its audience tag and your team domain in `.env`: `CF_ACCESS_AUD=…` and
+   `CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com`. `install.sh` refuses to run without them, and the tunnel
+   rejects any request that lacks that application's token, so the site stays closed even if the Access
+   application is deleted.
+3. Create the tunnel, package the app and install:
+
+   ```bash
+   cloudflared tunnel create mymind                          # once; prints the tunnel id
+   cloudflared tunnel route dns mymind mymind.example.com    # once
+   deploy/package-app.sh https://mymind.example.com          # downloads/mymind-linux-x86_64.tar.gz, about 5 min the first time
+   deploy/install.sh mymind.example.com <tunnel-id>
+   journalctl --user -u mymind-replica -u mymind-tunnel -f   # logs
+   systemctl --user stop mymind-replica                      # stops the tunnel too
+   ```
 
 The service is the one process that writes `data/mymind.db`. `LOCAL_PORT=4331` serves this computer from the same
 process without sign-in (loopback only; tunnelled requests are refused), and the desktop app opens that port by
@@ -184,21 +196,9 @@ default, so the app here and the hosted site share one library and its live upda
 
 #### Downloading the desktop app
 
-`https://<hostname>/download` serves the desktop app, packaged to open the hosted library, behind Cloudflare
-Access rather than the library's own sign-in. The tunnel sends `/download` to `deploy/download-server.mjs` on
-`127.0.0.1:4332`, which itself refuses every request without a valid Access token for `OWNER_EMAIL`, so the files
-stay private even if the Access application is removed. To turn it on:
-
-1. In Cloudflare Zero Trust, add a self-hosted Access application for `<hostname>/download` with one Allow policy
-   for your email address.
-2. Put its audience tag and your team domain in `.env`: `CF_ACCESS_AUD=…` and
-   `CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com`.
-3. Package the app and reinstall:
-
-   ```bash
-   deploy/package-app.sh https://<hostname>    # downloads/mymind-linux-x86_64.tar.gz, about 5 min the first time
-   deploy/install.sh <hostname> <tunnel-id>
-   ```
+`https://<hostname>/download` serves the desktop app, packaged to open the hosted library. The tunnel sends
+`/download` to `deploy/download-server.mjs`, which itself refuses every request without a valid Access token for
+`OWNER_EMAIL`, so other people Access lets in can reach the site but not the downloads.
 
 Run `deploy/package-app.sh` again after changing `desktop/`. It builds for the machine it runs on (Linux here).
 
