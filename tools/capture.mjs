@@ -1,10 +1,13 @@
 // Records the logged-in mymind app (shell, card stream, side endpoints, card details, media)
 // from an open Chrome tab, so server.mjs can replay it offline.
 // --gets-only records just the side endpoints missing from an existing capture and leaves everything else as is.
+// --media-only records the media of every captured card that neither capture/ nor replay/ has yet.
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { connectToPage, loadThroughDevTools } from './cdp.mjs';
+import { replayKey, STORE } from './replay-store.mjs';
 
 const { values: opts } = parseArgs({
   options: {
@@ -14,6 +17,7 @@ const { values: opts } = parseArgs({
     'detail-cards': { type: 'string', default: '30' },
     videos: { type: 'boolean', default: false },
     'gets-only': { type: 'boolean', default: false },
+    'media-only': { type: 'boolean', default: false },
   },
 });
 
@@ -121,6 +125,33 @@ function mediaUrlsIn(html, includeVideos) {
   return [...found].filter((u) => includeVideos || !/\.(mp4|mov|webm)(\?|$)/i.test(u));
 }
 
+// Where a media URL is stored under capture/.
+const mediaFile = (url) => url.startsWith(MEDIA_HOST)
+  ? `mediahost/${decodeURIComponent(url.slice(MEDIA_HOST.length))}`
+  : `media/${decodeURIComponent(url.slice('/media/'.length))}`;
+
+// Loads media URLs through the page's DevTools session, six at a time, and stores each under capture/; returns how many were saved.
+async function recordMedia(page, urls) {
+  const { frameTree } = await page.send('Page.getFrameTree');
+  const queue = [...urls];
+  let saved = 0;
+  let done = 0;
+  await Promise.all(
+    Array.from({ length: 6 }, async () => {
+      for (let url = queue.shift(); url; url = queue.shift()) {
+        const body = await loadThroughDevTools(page, frameTree.frame.id, url.startsWith('/') ? ORIGIN + url : url).catch(() => null);
+        if (body) {
+          await writeInside(OUT, mediaFile(url), body);
+          saved++;
+        }
+        process.stdout.write(`\rMedia: ${++done}/${urls.length}`);
+      }
+    }),
+  );
+  if (urls.length) process.stdout.write('\n');
+  return saved;
+}
+
 async function fetchInBatches(page, requests, label) {
   const all = [];
   for (let i = 0; i < requests.length; i += 40) {
@@ -153,6 +184,19 @@ await mkdir(OUT, { recursive: true });
 if (opts['gets-only']) {
   const responses = JSON.parse(await readFile(path.join(OUT, 'responses.json'), 'utf8'));
   await recordGets(page, GETS.filter((g) => !(`GET ${g.path}` in responses)), responses);
+  page.close();
+  process.exit(0);
+}
+
+if (opts['media-only']) {
+  const cards = JSON.parse(await readFile(path.join(OUT, 'cards.json'), 'utf8'));
+  const replayed = JSON.parse(await readFile(path.join(STORE, 'index.json'), 'utf8').catch(() => '{}'));
+  const missing = mediaUrlsIn(cards.map((c) => c.html).join('\n'), opts.videos)
+    .filter((url) => !existsSync(path.join(OUT, mediaFile(url))) && !replayed[replayKey('GET', url.startsWith('/') ? ORIGIN + url : url, false)]);
+  const saved = await recordMedia(page, missing);
+  const meta = JSON.parse(await readFile(path.join(OUT, 'meta.json'), 'utf8'));
+  await writeFile(path.join(OUT, 'meta.json'), JSON.stringify({ ...meta, media: meta.media + saved }, null, 2));
+  console.log(`Media saved: ${saved}/${missing.length} missing`);
   page.close();
   process.exit(0);
 }
@@ -198,26 +242,7 @@ const mediaSource = [
   ...(await Promise.all(Object.values(responses).map((r) => readFile(path.join(OUT, r.file), 'utf8')))),
 ].join('\n');
 const mediaUrls = mediaUrlsIn(mediaSource, opts.videos);
-const { frameTree } = await page.send('Page.getFrameTree');
-const mediaQueue = [...mediaUrls];
-let saved = 0;
-let done = 0;
-await Promise.all(
-  Array.from({ length: 6 }, async () => {
-    for (let url = mediaQueue.shift(); url; url = mediaQueue.shift()) {
-      const body = await loadThroughDevTools(page, frameTree.frame.id, url.startsWith('/') ? ORIGIN + url : url).catch(() => null);
-      if (body) {
-        const relative = url.startsWith(MEDIA_HOST)
-          ? `mediahost/${decodeURIComponent(url.slice(MEDIA_HOST.length))}`
-          : `media/${decodeURIComponent(url.slice('/media/'.length))}`;
-        await writeInside(OUT, relative, body);
-        saved++;
-      }
-      process.stdout.write(`\rMedia: ${++done}/${mediaUrls.length}`);
-    }
-  }),
-);
-if (mediaUrls.length) process.stdout.write('\n');
+const saved = await recordMedia(page, mediaUrls);
 
 await writeFile(
   path.join(OUT, 'meta.json'),

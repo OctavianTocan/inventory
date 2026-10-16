@@ -219,6 +219,7 @@ Needs Chrome with remote debugging on port 9222 and a logged-in mymind tab open.
 
 ```bash
 npm run capture -- --media-cards 300 --detail-cards 30   # add --videos to include mp4s
+npm run capture -- --media-only                            # only the card media still missing (add --videos for mp4s)
 npm run mirror                                             # static JS/CSS/fonts for OFFLINE=1
 ```
 
