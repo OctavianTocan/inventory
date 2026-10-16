@@ -1,7 +1,11 @@
 # Plan: a pixel-identical mymind Android app
 
-Status (2026-10-16): steps 0 and 1 are done (the phone is reachable over wireless debugging and the installed APK set
-is pulled). Nothing is decompiled or built yet.
+Status (2026-10-16): steps 0–2 are done (phone on wireless debugging, APK set pulled and decompiled; findings in
+"What the app is"). Step 2 showed that the emulator route of steps 3–4 is blocked, so reference screenshots come from
+the phone (see "Reference screenshots"). Our app is started on branch `android-app` (`android/`, `docs/app-api.md`):
+on the emulator against a local server it signs in with a password, lists the library with images, pages through
+it in the server's order, keeps the session across restarts and signs out (the token is deleted on the server).
+Screens are plain placeholders until the reference screenshots exist.
 
 ## Decisions (the user, 2026-10-16)
 
@@ -30,6 +34,9 @@ both apps show the same data) produce the reference; step 5 is a native Kotlin a
 Samsung SM-F976B (foldable; folded, the cover screen is 1080x2520 at density 480, overridden to 450), Android 17
 (API 37), with mymind 2.14 (code 280) from Play. It is on wireless debugging and already paired with the development
 machine: `adb mdns services` lists it, then `adb connect <ip:port>` with the address shown (the port changes).
+With the phone and the emulator both connected, set `ANDROID_SERIAL` (for example `emulator-5554`) before any adb or
+Gradle install: `./gradlew :app:installDebug` installs on every connected device, and on 2026-10-16 it put our debug
+app on the phone too (uninstalled the same minute).
 `android/apk/com.mymind.access/` holds the six pulled APKs (base, arm64_v8a, xxhdpi, en, es, ro; base.apk SHA-256
 `8d6e6b06fdbd7413e82f49d50cada0c9eaf8a8073305362aaef01f281cf0e69a`), Git-ignored like everything decoded from
 them.
@@ -62,7 +69,9 @@ are planned in `docs/accounts-plan.md`, and the app builds on them.
   ID. Google also needs an Android OAuth client in the same Google Cloud project for the app's package name and the
   SHA-1 of each signing key (debug and release). The user authorized the agent to do this Google Cloud setup itself,
   the way the Web client was set up (the agent browser, signed in as the owner). A password form serves the test
-  user.
+  user. Done 2026-10-16: Android client "mymind Android (debug, mini-001)" in project `mymind-replica`, package
+  `com.octaviantocan.mymind`, SHA-1 of mini-001's debug key (`~/.android/debug.keystore`). A release key, or a debug
+  build from another machine, needs its own Android client.
 - **On the server:** a sign-in endpoint takes the Google ID token and verifies it against Google's published keys
   (`aud` = Web client ID, issuer, expiry, `email_verified`, allowed email; `verifyIdToken` in `lib/auth.mjs` already
   does all but the domain check), or takes a password user's name and password with rate limiting, and returns an
@@ -79,7 +88,44 @@ layout, colours and sizes are identical and only text and edge anti-aliasing dif
 encodes this (a channel threshold and a ratio of differing pixels, or a check that differences lie only along glyph
 and shape edges), prove it on a known-good pair, and record it here.
 
-## What the app is (evidence so far)
+## What the app is
+
+### Decompiled (step 2, 2026-10-16)
+
+Paths are under `android/jadx/sources/` and `android/decoded/` (Git-ignored); class names are R8-obfuscated.
+
+- **A Compose shell around one WebView class.** Single activity `com.mymind.access.activities.MainActivity` (Compose
+  `setContent`); `yf/c0.java` is the WebView, its type one of `MainView`, `CardView`, `UpgradeView`,
+  `AccountDebugView`, `EditorView`, `AccountClosedView` (`yf/z0.java`). There are no app layouts in `res/layout/`
+  and only one app colour resource (`onboardingBackground` `#ffeeb7c9`), so the shell's colours live in Compose code.
+- **Native parts:** the bottom tab bar (`wf/c.java`; Spaces runs `mymind.trigger({"type":"navigate","path":"/spaces"})`),
+  its Lottie icons (`res/raw/everything_*`, `serendipity_*`, `spaces_*`, light and dark), the `load_spin.json` spinner,
+  onboarding (`res/raw/onboarding1–7.mp4`, a carousel), the share target `feature.share.NewShareSheetActivity`
+  (text, images, video, PDF, http/https links), `VideoPlayerActivity` (Media3), the notes notification service, Play
+  Billing with a Rive upgrade animation, 25 alternative launcher icons, and Google sign-in through Credential Manager.
+  Image viewer, PDF viewer, menus and sheets were not found by name; they are WebView content or unnamed Compose code.
+- **Fonts:** `res/font/avenir_roman.otf`, `louize_regular.otf`, `nunito.ttf` (Nunito in Medium, SemiBold and Bold), held
+  in `xf/f.java`.
+- **WebView contract:** User-Agent `mymind/<versionName> Android/<release>` (`yf/c0.java:99`), with no `Mobile` token,
+  so the replica's `deviceVariant` would call it `android-tablet`. Pages load from `https://access.mymind.com/<path>`
+  with headers `color-scheme`, `Viewport-Width`, `Viewport-Height`, `DPR` and a `_jwt` cookie. Bridge:
+  `addJavascriptInterface(…, "appInterface")` with one `postMessage(String)`; native calls the page through
+  `evaluateJavascript` (`mymind.bridge.receiveMessage`, `mymind.native.callback`, keyboard frames, tag and space
+  events). No `shouldInterceptRequest` for `mymind://` was found.
+- **Native API:** Retrofit and OkHttp against `https://api.mymind.com/` (`/authorize`, `/access-token/refresh`,
+  `/objects`, `/spaces`, `/tags`, …). No certificate pinning and no network security config.
+- **Licence check:** `com.pairip.licensecheck` binds Google Play's licensing service at startup and, on failure, shows
+  "Check that Google Play is enabled…" and calls `System.exit(0)`. No Play Integrity, root or emulator blocking.
+
+### Consequences
+
+- The real app sideloaded on a Play-less emulator exits at the licence check; a Play Store image runs it but cannot
+  be rooted, so mitmproxy cannot be trusted system-wide. Pointing the unmodified app at our replica (step 4) is
+  therefore off; patching or re-signing their APK is not pursued.
+- The pages mymind serves to its app (app User-Agent, `_jwt` cookie, viewport headers) were never recorded, by the
+  user's decision. Our app is native anyway, so this only matters for the reference: it comes from screenshots.
+
+### Earlier evidence from the web bundle
 
 - Package `com.mymind.access`, v2.14 (code 280), min SDK 32 (Android 12L), target SDK 35, shipped as split APKs.
 - It is a **native shell around WebViews that load the same server-rendered pages and ES modules as the web app.**
@@ -156,6 +202,26 @@ grep -rE "addJavascriptInterface|addDocumentStartJavaScript|evaluateJavascript|s
 
 Outputs we need: the User-Agent string, each view's start URL, the injected bridge JS, the `mymind://` handler,
 and every native screen's layout and resources.
+
+### Reference screenshots (replaces steps 3–4, 2026-10-16)
+
+Step 2 ruled out the emulator: the licence check needs Play, and a Play image cannot trust mitmproxy. References come
+from the real app on the phone, which is also the device our app is matched on (same display, same density):
+
+- The agent drives the real app over adb and captures each screen (`rea capture-adb-screen`, demo-mode status bar);
+  the user does not open screens (the user, 2026-10-16). The real app talks to live mymind, so to keep AGENTS.md
+  rule 1 every tap is navigation only: tabs, scrolling, opening a card, opening a menu or sheet and closing it with
+  Back. Before each tap the agent reads the screen (screenshot and UI dump) and taps a named element, never a guessed
+  coordinate. Never tapped: anything that saves, deletes, edits, tags, adds to or removes from a space, pins, types
+  text, changes a setting, shares, buys or signs out. Every tap is logged.
+- The phone must be unlocked, on its charger ("Stay awake" while charging is already on) and not in use while the
+  agent captures.
+- The real app shows the live library. For data-dependent screens (grid, card) our server's test-user library must
+  hold the same cards in the same order; the recorded library is a recent snapshot of the live one, so most cards
+  are already there.
+- Signed-out screens (onboarding, sign-in) need the real app signed out once on the phone; the user's call.
+
+Steps 3 and 4 below are kept for the record and not planned.
 
 ### 3. Run the real app on the emulator and record it (1–2 h)
 

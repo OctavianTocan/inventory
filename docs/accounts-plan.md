@@ -1,7 +1,7 @@
 # Accounts (roadmap phase 8)
 
 Status: owner-only Google sign-in is built (`lib/auth.mjs`, proven by `tools/check-auth.mjs`), and Cloudflare Access
-is gone (2026-10-16). A library per person is decided, not built.
+is gone (2026-10-16). A library per person is decided and planned below, not built.
 
 ## What is built
 
@@ -46,21 +46,65 @@ login.
 5. **Google Cloud setup by the agent.** Consent screen, test users or publishing, and the Android OAuth client: the
    agent does them itself in the agent browser, as it did for the Web client.
 
-## Not built: a library per person
+## Plan: a library per person (not built)
 
-- `server.mjs` falls back to `replay/` and `capture/`, the recorded library. That becomes the test user's library;
-  the owner's library is the one in `data/mymind.db` today; every other account starts empty.
-- Each request resolves its user and passes it to the store, writer, search, uploads and media
-  (`lib/store.mjs` already takes a `userId`, every table has `user_id`); hub connections only receive their own
-  user's events.
-- The page shell is the recorded `/everything`; other accounts need one generated from their own config, pins and
-  spaces.
-- A Google sign-in from an allowed domain address with no account creates one with an empty library; Google admits
-  only `OWNER_EMAIL` until this exists. The consent screen is in Testing with only the owner listed, so domain
-  accounts also need adding as test users or the consent screen published.
-- Verification (`tools/drive.mjs`) signs in as the test user instead of running with sign-in off.
-- Proof: the test user's screenshots stay pixel-identical; a second account sees an empty library and cannot read or
-  write anyone else's cards.
+The user (2026-10-16): one database per person is fine if it runs on Cloudflare, with D1 and a Worker in place of the
+tunnel; how to set that up is still being discussed. The local plan below is the starting point.
+
+### Where each library lives
+
+**Recommended: one SQLite file per person**, all with today's schema, plus a list of who owns which file.
+
+- Card, space and tag ids are the tables' primary keys, and the test user's copy must keep the recorded ids, or the
+  recorded detail views and replays (keyed by those ids) stop lining up with it. In one shared file the owner's
+  2,278 cards would collide with the test user's copy: either the owner's real library gets new ids (rewriting its
+  rows and the media paths that embed them) or every key in every table becomes (user, id) and every query in
+  `lib/` changes. Separate files keep every id as it is and need no SQL changes.
+- Isolation comes from the file, not from remembering a `WHERE user_id = ?`. Today `store.space(id)`,
+  `store.cardTags`, `spaceCards`, shares, pins and `api_metadata` read by id alone, and the search index has no
+  user column; in a shared file each of those would leak another person's cards.
+- The other choice, one shared file with per-user rows, is possible only with the key change above.
+
+Layout:
+
+| Who | Library | Recordings (`capture/`, `replay/`) |
+|---|---|---|
+| Owner (`OWNER_EMAIL`, Google) | `data/mymind.db`, `data/media`, `data/uploads`: unchanged, nothing moves | yes |
+| Test user (`TEST_USER_NAME`, password) | `data/libraries/<name>/library.db` (+ `media/`, `uploads/`), a one-to-one copy of `data/verify.db`, the recorded library | yes |
+| A verified `@octaviantocan.com` account (stage 2) | `data/libraries/<id>/library.db`, created empty at first sign-in | no |
+
+`data/auth.db` gets a `libraries` table: sign-in identity (the Google email, or `password:<name>`), folder, whether
+the recordings apply, created time. Without `AUTH=google` nothing changes: one library from `STORE_DB`, as the
+desktop app and verification use today.
+
+### Stage 1: owner and test user
+
+1. `lib/auth.mjs` exports who a request is (`user(req)`: identity, email, kind) next to `allows(req)`.
+2. A library registry opens a library's store, writer, search, uploads, media, enrichment and app API on its first
+   request and keeps them open; `server.mjs` routes each signed-in request to its library. `LOCAL_PORT` (loopback,
+   no sign-in) keeps serving the owner's library.
+3. The hub ties each connection to its library and sends a library's events only to its own connections.
+4. The recordings are served only to libraries marked for them, so a library without them can never be answered
+   from the owner's recorded cards, details or shell.
+5. `tools/library.mjs` creates the test user's library from `data/verify.db` and lists libraries.
+6. Verification: `tools/drive.mjs` signs the replica side in as the test user through `/signin/password`; the
+   server it checks keeps reading a pristine copy (`data/verify.db`), so writes made while testing as the test user
+   never reach a parity run.
+7. Proof: the owner's library is byte-for-byte unchanged (row counts and a checksum before and after); the test
+   user sees the recorded library; a second password user sees nothing of either and gets 404 for their card ids,
+   media and spaces, on the web routes, `/app/v1/*` and the hub; every check suite passes; a drive sample signed in
+   as the test user stays pixel-identical (the full re-proof can wait, as the user agreed).
+
+### Stage 2: domain accounts
+
+- A verified `@octaviantocan.com` Google sign-in without a library gets a new empty one; the access rule in
+  `lib/auth.mjs` widens in its one place.
+- A library without recordings gets a shell page generated from its own settings, pins and spaces, with nothing
+  from the owner's recorded page in it.
+- Google Cloud: add the domain accounts as test users on the consent screen, or publish it (the agent does this in
+  the agent browser).
+- Proof: a domain account signs in on the web and in the app, sees an empty library, saves a card, and neither
+  library can read the other's.
 
 ## Done: removing Cloudflare Access (2026-10-16)
 

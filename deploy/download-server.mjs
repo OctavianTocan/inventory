@@ -71,7 +71,8 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     return res.end(await page(user));
   }
-  const name = decodeURIComponent(pathname.slice('/download/'.length));
+  let name;
+  try { name = decodeURIComponent(pathname.slice('/download/'.length)); } catch { name = null; }
   const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8').catch(() => '{"files":[]}'));
   const file = manifest.files.find((entry) => entry.name === name);
   const info = file && (await stat(path.join(dir, file.name)).catch(() => null));

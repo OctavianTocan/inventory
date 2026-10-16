@@ -27,3 +27,13 @@ downloads/
 android/apk/
 android/decoded/
 android/jadx/
+
+# Android build output.
+android/.gradle/
+android/build/
+android/app/build/
+android/.kotlin/
+android/local.properties
+android/.idea/
+# The app's Kotlin package called data is source code, not a library database.
+!android/app/src/main/kotlin/com/octaviantocan/mymind/data/

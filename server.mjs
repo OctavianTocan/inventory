@@ -266,7 +266,8 @@ const server = http.createServer((req, res) => handle(req, res, auth));
 const local = LOCAL_PORT ? http.createServer((req, res) => handle(req, res, null)) : null;
 
 async function handle(req, res, gate) {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+  let url;
+  try { url = new URL(req.url, `http://${req.headers.host}`); } catch { return send(res, 400, 'Bad request'); }
   const { pathname, search } = url;
   const key = `${req.method} ${pathname}${search}`;
   try {
