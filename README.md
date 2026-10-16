@@ -112,6 +112,7 @@ node tools/check-store.mjs
 node tools/check-render.mjs
 node tools/check-search.mjs --in-process
 node tools/check-auth.mjs
+node tools/check-download.mjs
 ```
 
 The HTTP checks back up the verification database (`data/verify.db`, see [Verify against
@@ -125,7 +126,7 @@ checks are explicitly skipped. The host browser probe uses local TCP/UDP sinks a
 check preconnect/WebRTC isolation. `check-media` uses a synthetic database, real filesystem streams/Sharp and
 stubbed media executables. Tests use isolated databases/media roots and `STORE_LOAD_ENV=0`, so they never load the
 user's `.env`. `check-auth` runs a stand-in Google (its own keys, token endpoint and JWKS) and never contacts
-Google.
+Google; `check-download` likewise stands in for Cloudflare Access's signing keys.
 
 ## Sign-in (remote access)
 
@@ -169,11 +170,32 @@ The service is the one process that writes `data/mymind.db`. `LOCAL_PORT=4331` s
 process without sign-in (loopback only; tunnelled requests are refused), and the desktop app opens that port by
 default, so the app here and the hosted site share one library and its live updates.
 
+#### Downloading the desktop app
+
+`https://<hostname>/download` serves the desktop app, packaged to open the hosted library, behind Cloudflare
+Access rather than the library's own sign-in. The tunnel sends `/download` to `deploy/download-server.mjs` on
+`127.0.0.1:4332`, which itself refuses every request without a valid Access token for `OWNER_EMAIL`, so the files
+stay private even if the Access application is removed. To turn it on:
+
+1. In Cloudflare Zero Trust, add a self-hosted Access application for `<hostname>/download` with one Allow policy
+   for your email address.
+2. Put its audience tag and your team domain in `.env`: `CF_ACCESS_AUD=…` and
+   `CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com`.
+3. Package the app and reinstall:
+
+   ```bash
+   deploy/package-app.sh https://<hostname>    # downloads/mymind-linux-x86_64.tar.gz, about 5 min the first time
+   deploy/install.sh <hostname> <tunnel-id>
+   ```
+
+Run `deploy/package-app.sh` again after changing `desktop/`. It builds for the machine it runs on (Linux here).
+
 ## Desktop app
 
 `desktop/` wraps the replica in a native window (Tauri 2). The app uses the server already listening on `PORT`
 (default 4331, which the hosted service serves on this computer), or starts `node server.mjs` from this checkout
-and stops it when the window closes. It stays off `:4321`, which belongs to verification.
+and stops it when the window closes; with `MYMIND_URL` it opens that hosted library instead of starting a server.
+It stays off `:4321`, which belongs to verification.
 
 ### Install
 
@@ -212,9 +234,17 @@ EOF
 
 ### On another machine
 
-Your library lives in `data/mymind.db` on the computer that hosts it and is not in Git. From another machine, open
-the hosted address in a browser (see [Hosting on this computer](#hosting-on-this-computer)); the desktop app cannot
-open a remote library yet.
+Your library lives in `data/mymind.db` on the computer that hosts it and is not in Git. From another machine, use
+the hosted address: in a browser, or in the desktop app from `https://<hostname>/download` (see [Downloading the
+desktop app](#downloading-the-desktop-app)), which needs no checkout, Node or Rust:
+
+```bash
+tar -xzf mymind-linux-x86_64.tar.gz
+mymind/install.sh    # ~/.local/bin/mymind and a launcher entry; needs webkit2gtk-4.1 and gst-plugins-good
+```
+
+The app signs in with Google inside its window the first time and keeps the session for 30 days. A build from a
+checkout opens the hosted library the same way with `MYMIND_URL=https://<hostname>`.
 
 A clone elsewhere still runs: build the app as above and start it. Without a database it shows the recorded library
 and ignores edits; `node tools/seed-db.mjs` gives it a writable copy seeded from the recordings, which lacks what
@@ -226,6 +256,7 @@ but its edits never reach the host.
 | Variable | Default | Effect |
 |---|---|---|
 | `PORT` | `4331` | Port of the replica the window opens, and of the server the app starts. |
+| `MYMIND_URL` | none; the build's value | A hosted library to open when nothing listens on `PORT`, instead of starting a server. Set at build time, it becomes the default (`deploy/package-app.sh`). |
 | `MYMIND_ROOT` | the checkout it was built in | Where `server.mjs` lives. |
 | `MYMIND_NODE` | `node` on `PATH` | Node binary that runs the server. |
 | `STORE_DB`, `STORE_MEDIA`, … | as for `npm run serve` | Passed through to the server it starts. |

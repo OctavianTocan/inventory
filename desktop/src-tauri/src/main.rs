@@ -1,5 +1,7 @@
-// Desktop app: a Tauri window around the web UI that server.mjs serves, starting the server when none is running.
-// Env: PORT (default 4331), MYMIND_ROOT (repo checkout), MYMIND_NODE (node binary); STORE_* pass through to the server.
+// Desktop app: a Tauri window around the web UI that server.mjs serves, starting the server when none is running,
+// or around a hosted library when MYMIND_URL is set (at run time, or at build time for the downloadable app).
+// Env: PORT (default 4331), MYMIND_URL, MYMIND_ROOT (repo checkout), MYMIND_NODE (node binary); STORE_* pass through
+// to the server.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(target_os = "linux")]
@@ -9,7 +11,8 @@ use std::ffi::{OsStr, OsString};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tauri::webview::NewWindowResponse;
@@ -147,15 +150,36 @@ fn page(title: &str, message: &str) -> Url {
     Url::parse(&url).expect("an escaped data: URL parses")
 }
 
-/// True for pages of the replica itself and for the about:, blob: and data: URLs the UI creates.
-fn is_replica(url: &Url, port: u16) -> bool {
+/// The hosted library to open when no local server runs: `MYMIND_URL` at run time, else at build time.
+fn hosted_library() -> Option<Url> {
+    let url = std::env::var("MYMIND_URL").ok().or_else(|| option_env!("MYMIND_URL").map(String::from))?;
+    Url::parse(&url).ok().filter(|url| matches!(url.scheme(), "http" | "https"))
+}
+
+/// True for pages of the library (local replica or `hosted`) and for the about:, blob: and data: URLs the UI creates.
+fn is_library(url: &Url, port: u16, hosted: Option<&Url>) -> bool {
     match url.scheme() {
         "about" | "blob" | "data" => true,
         "http" | "https" => {
-            matches!(url.host_str(), Some("localhost" | "127.0.0.1")) && url.port_or_known_default() == Some(port)
+            hosted.is_some_and(|hosted| hosted.origin() == url.origin())
+                || (matches!(url.host_str(), Some("localhost" | "127.0.0.1")) && url.port_or_known_default() == Some(port))
         }
         _ => false,
     }
+}
+
+/// True for the Google pages a sign-in passes through (google.com, google.ro, google.co.uk and their subdomains).
+fn is_google_sign_in(url: &Url) -> bool {
+    let Some(host) = url.host_str().filter(|_| url.scheme() == "https") else {
+        return false;
+    };
+    let labels: Vec<&str> = host.split('.').collect();
+    host == "accounts.youtube.com"
+        || labels.iter().rposition(|label| *label == "google").is_some_and(|at| match &labels[at + 1..] {
+            ["com"] => true,
+            [country] | ["co" | "com", country] => country.len() == 2,
+            _ => false,
+        })
 }
 
 /// Hands web and mail links to the system; anything else (a file dropped outside a drop zone) goes nowhere.
@@ -199,17 +223,27 @@ fn replica_url(port: u16) -> Url {
     Url::parse(&format!("http://localhost:{port}/everything")).expect("a localhost URL parses")
 }
 
+/// Whether a Google sign-in started from the library is under way, so its Google pages stay in the window.
+struct SigningIn(AtomicBool);
+
 fn main() {
     let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(4331);
+    let hosted = hosted_library();
     let app = tauri::Builder::default()
         .setup(move |app| {
             app.manage(Server(Mutex::new(None)));
+            let signing_in = Arc::new(SigningIn(AtomicBool::new(false)));
             let running = listening(port);
-            let url = if running {
-                replica_url(port)
-            } else {
-                page("Starting mymind", "The first start on a new machine installs dependencies, which takes about a minute.")
+            let url = match (&hosted, running) {
+                (_, true) => replica_url(port),
+                (Some(hosted), false) => hosted.join("/everything")?,
+                (None, false) => {
+                    page("Starting mymind", "The first start on a new machine installs dependencies, which takes about a minute.")
+                }
             };
+            let (navigating, opening) = (hosted.clone(), hosted.clone());
+            let (leaving, entering) = (signing_in.clone(), signing_in);
+            let handle = app.handle().clone();
             #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("mymind")
@@ -218,20 +252,37 @@ fn main() {
                 // Let the page's own drop handler receive dragged files, as in a browser.
                 .disable_drag_drop_handler()
                 .on_navigation(move |url| {
-                    let inside = is_replica(url, port);
-                    if !inside {
-                        open_in_browser(url);
+                    if is_library(url, port, navigating.as_ref()) {
+                        if !url.path().starts_with("/google/") {
+                            leaving.0.store(false, Ordering::SeqCst);
+                        }
+                        return true;
                     }
-                    inside
+                    if leaving.0.load(Ordering::SeqCst) && is_google_sign_in(url) {
+                        return true;
+                    }
+                    open_in_browser(url);
+                    false
                 })
                 .on_new_window(move |url, _| {
-                    open_in_browser(&url);
+                    if is_library(&url, port, opening.as_ref()) && url.path() == "/google/oauth2-redirect" {
+                        // mymind signs in through a popup; running it in the window keeps the session cookie here.
+                        entering.0.store(true, Ordering::SeqCst);
+                        let window = handle.clone();
+                        let _ = handle.run_on_main_thread(move || {
+                            if let Some(main) = window.get_webview_window("main") {
+                                let _ = main.navigate(url);
+                            }
+                        });
+                    } else {
+                        open_in_browser(&url);
+                    }
                     NewWindowResponse::Deny
                 })
                 .build()?;
             #[cfg(target_os = "linux")]
             file_drop::attach(&window)?;
-            if !running {
+            if !running && hosted.is_none() {
                 start_in_background(app.handle().clone(), port);
             }
             Ok(())
@@ -245,4 +296,35 @@ fn main() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn url(text: &str) -> Url {
+        Url::parse(text).unwrap()
+    }
+
+    #[test]
+    fn library_pages_are_the_local_replica_or_the_hosted_origin() {
+        let hosted = url("https://mymind.example.com");
+        assert!(is_library(&url("http://localhost:4331/everything"), 4331, None));
+        assert!(is_library(&url("http://127.0.0.1:4331/cards/x"), 4331, Some(&hosted)));
+        assert!(!is_library(&url("http://localhost:4330/everything"), 4331, None));
+        assert!(is_library(&url("https://mymind.example.com/google/oauth2-callback?code=x"), 4331, Some(&hosted)));
+        assert!(!is_library(&url("http://mymind.example.com/everything"), 4331, Some(&hosted)));
+        assert!(!is_library(&url("https://mymind.example.com.evil.test/"), 4331, Some(&hosted)));
+        assert!(!is_library(&url("https://mymind.example.com/everything"), 4331, None));
+    }
+
+    #[test]
+    fn google_sign_in_hosts() {
+        for ok in ["https://accounts.google.com/o/oauth2/v2/auth", "https://www.google.ro/", "https://accounts.google.co.uk/", "https://accounts.youtube.com/accounts/SetSID"] {
+            assert!(is_google_sign_in(&url(ok)), "{ok}");
+        }
+        for bad in ["http://accounts.google.com/", "https://google.evil.test/", "https://accounts.google.com.evil.test/", "https://evilgoogle.com/"] {
+            assert!(!is_google_sign_in(&url(bad)), "{bad}");
+        }
+    }
 }

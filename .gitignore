@@ -19,3 +19,6 @@ capture/**/*.mov
 # Desktop app build output.
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
+
+# Packaged desktop app that /download serves (deploy/package-app.sh).
+downloads/
