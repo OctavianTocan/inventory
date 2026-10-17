@@ -133,6 +133,11 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
   uninstalled first.
 - 2026-10-17: updates install with no tap (decision 5 changed): `update/AutoInstaller.kt`, `UpdateInstallWorker.kt`,
   `ForegroundTracker.kt` and `UploadActivity.kt`; the pre-install sheet and the Install notification are gone.
+- 2026-10-18: published `mymind-0.3.0.apk` (0.3.0 (3), 37,596,212 bytes, sha256 `ed90ffbd…`; share sheet and
+  automatic installs), read back as the test user; `/download` lists it with the extension. A phone on 0.2.0 gets it
+  through the 0.2.0 sheet's Install tap; from 0.3.0 on, updates install by themselves. Not proven on the emulator: an
+  install held back by a running upload (unit tests only), a share from Chrome's own menu, and Back right after a
+  picture share.
 
 ## Order
 
