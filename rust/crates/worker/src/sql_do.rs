@@ -119,16 +119,16 @@ impl Sql for DoSql {
 
     fn transaction_dyn(&self, work: &mut dyn FnMut() -> Result<()>) -> Result<()> {
         let failure: RefCell<Option<Error>> = RefCell::new(None);
-        let mut body = || -> std::result::Result<JsValue, JsValue> {
-            work().map(|()| JsValue::UNDEFINED).map_err(|error| {
-                *failure.borrow_mut() = Some(error);
-                JsValue::from_str("rollback")
-            })
+        let outcome = {
+            let mut body = || -> std::result::Result<JsValue, JsValue> {
+                work().map(|()| JsValue::UNDEFINED).map_err(|error| {
+                    *failure.borrow_mut() = Some(error);
+                    JsValue::from_str("rollback")
+                })
+            };
+            let closure = ScopedClosure::borrow_mut(&mut body);
+            call(&self.storage, "transactionSync", &[closure.as_ref().clone()])
         };
-        let closure = ScopedClosure::borrow_mut(&mut body);
-        let outcome = call(&self.storage, "transactionSync", &[closure.as_ref().clone()]);
-        drop(closure);
-        drop(body);
         match failure.into_inner() {
             Some(error) => Err(error),
             None => outcome.map(|_| ()),

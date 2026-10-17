@@ -169,6 +169,7 @@ card and bumped it. Also send `x-object-quota`.
 | Intent | Body |
 |---|---|
 | URL or any pasted text | `{ "content": "https://example.com/post", "source": "clipboard", "spaceId": "<id>?" }` |
+| Selected text from the extension | `{ "type": "Content", "content": "Selected words", "source": "https://example.com/page" }`; stored as `Content` with `source: {"url": "..."}` (recorded Content shape) |
 | Note from composer | `{ "type": "Note", "prose": { "type": "doc", "content": [...] } }` |
 | Note with title | `{ "type": "Note", "title": "...", "prose": {...}, "spaceId": "...", "source": "clipboard" }` |
 | Wiki stub | `{ "title": "Idea", "type": "Note", "isStub": true }` |
@@ -195,6 +196,20 @@ Draft flow (kept client-side in `localStorage.draft`): `POST /objects {type:"Not
 draft bit and the card appears in the grid. `composer.save()`: draft with id calls `commit`; existing card id calls
 `PUT /objects/<id>/prose` (doc body, no wrapper); otherwise `POST /objects {type:"Note", prose}`. After a 200 the UI
 calls `mymind.synchronize()` and bumps; after a 201 it calls `prependCard`.
+
+### 4.1.1 Screenshot attachments [C]
+
+`POST /objects/<id>/attachments?type=screenshot` accepts the same raw image body, completed `uploadId`, or
+`remoteUrl` as ordinary attachments. It retains the original in `extras.attachments` (including `uploadId`
+for retry lookup), sets `extras.cover` to the bounded WebP rendition, and refreshes the card HTML and change
+checkpoint transactionally. The card's source and primary blob stay intact. Ordinary attachments keep the
+existing cover. The JSON response stays `{path, width, height}` for the original image.
+
+`extension/worker.js` sends the screenshot after saving a page. The web's `components/composer.js`, `notes.js`
+and `editor.js` send ordinary attachments without the screenshot query. Recorded card JSON in
+`capture/cards.json` omits `cover`/`media`; the corresponding HTML carries image source, dimensions and colour.
+Those become `extras.cover: {src, width, height, dominantColor}` in the replica; `/objects/<id>` exposes it as
+`mainEntity.cover`. The extension attachment's write response itself was not recorded.
 
 ### 4.2 Uploads (image, PDF, audio, video) [C]
 
@@ -470,6 +485,26 @@ All lists come from SQLite; the client never needs a replayed byte. Data to use 
 - `GET /cards/<id>` with `Accept: application/msgpack`: one `{html,json}` value. With `Accept: application/json`:
   the card json object only. With `?template=PinnedCard`: HTML with `x-partial: PinnedCard`.
 - `GET /objects/<id>` returns JSON with `title`, `tags`, `entityType`; used after `object:analyzed`.
+
+### 6.2.1 `GET /cards/<id>/markdown` [C]
+
+The Rust `mm-core` API serves UTF-8 text with `Content-Type: text/markdown; charset=utf-8`, status 200;
+a missing card returns the normal 404 problem response. The existing host authentication gate admits cookie
+sessions, app bearer tokens and extension bearer sessions. This route works in read-only libraries too.
+
+**The response format is inferred, not recorded.** There is no `/markdown` entry in `replay/index.json` or
+response file in `capture/`. `mirror/static/134/0.109.0/scripts/components/card.js` (`getMarkdown`) requests
+`Accept: text/markdown` and reads `response.text()`; `components/menu.js` puts that string into the text clipboard.
+`modules/externalFileExport.js` also uses it for file export. Image Copy on the web uses `getBlob()` separately.
+
+The inferred export serializes the full current `card_content` document, falling back to card `prose`, without
+preview truncation: paragraphs, headings, hard breaks, bold/italic/strike, inline and fenced code, links,
+images, blockquotes, ordered/bullet/task lists, wiki links and tables. Underline, subscript, superscript and
+highlight use inline HTML. Only characters that would start Markdown syntax are escaped (`\`, backticks, `*`,
+`_` outside words, `[`, `]`, `~`, `<` before a tag, `|` in tables, and heading, list and quote markers at a line
+start), so copied text stays readable. Blocks use blank lines and nonempty output ends in one newline. Without
+prose, an Image exports `![title](</media/original-path>)`; other cards use their description, then source URL,
+then empty text. These fallback and whitespace choices have synthetic tests, not live parity proof.
 
 ### 6.3 `GET /cards/trash` [R]
 
