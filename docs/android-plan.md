@@ -45,6 +45,22 @@ the local Rust server with a scratch library exercised uploads (library and spac
 server stopped mid-upload), pull to refresh, pins and the deck. Details and the differences from the real app are in
 `docs/android-screens.md` ("Haptics", S06, S08, S21).
 
+Status (2026-10-17, updates): versions come from `android/CHANGELOG.md` (parser in `android/buildSrc`, `-PmymindChangelog`
+overrides it, the file ships as an asset). Release builds sign from `MYMIND_RELEASE_STORE`, `MYMIND_RELEASE_ALIAS` and
+`ANDROID_RELEASE_PASSWORD`; `mymindDownloads` names the server the updater asks. The updater (`update/`, `ui/update/`)
+checks `/download/android.json` on launch, on return after an hour and every 6 hours (WorkManager), verifies size and
+sha256, and installs through a PackageInstaller session; Settings has Version, Check for updates and Changelog rows.
+`deploy/publish-android.sh --local <dir>` publishes into a local downloads directory. Cleartext to 10.0.2.2, localhost
+and 127.0.0.1 is allowed in debug builds, and in a release build only when `mymindServer` or `mymindDownloads` is an
+`http://` address (the end-to-end run); the published release allows no cleartext. An emulator run
+installed 0.2.0 from the download page, then updated to 0.2.1 from the sheet and to 0.2.2 from the background
+notification, both without a system prompt; evidence in `evidence/android-updates/`.
+
+Status (2026-10-17, share target): the app is a share target (0.3.0). A link or text is saved with `POST /objects`;
+pictures, videos and PDFs go through the upload flow with an upload strip; the sheet (Tags, Notes, Spaces, Save) applies
+its details to every saved card, and the five error states (S22) are drawn. An emulator run shared a link twice (one
+card, bumped), a PDF, a picture, two pictures, and a link while signed out; evidence in `evidence/android-share/`.
+
 ## Decisions (the user, 2026-10-16)
 
 - **A working app that matches the real app 1:1.** Both at once: it has to work, and every screen has to look

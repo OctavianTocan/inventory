@@ -166,6 +166,30 @@ class MymindApiTest {
     }
 
     @Test
+    fun contentCreationTreatsCreatedAndBumpedAlike() = runBlocking {
+        answer("""{"id":"c1"}""", 201)
+        answer("""{"id":"c1"}""", 200)
+        assertEquals(ApiResult.Ok("c1"), api.createFromContent("https://example.com", "clipboard", null))
+        assertEquals(ApiResult.Ok("c1"), api.createFromContent("https://example.com", "clipboard", "s1"))
+        val first = server.takeRequest()
+        assertEquals("POST /objects", "${first.method} ${first.path}")
+        assertEquals("""{"content":"https://example.com","source":"clipboard"}""", first.body.readUtf8())
+        assertEquals("""{"content":"https://example.com","source":"clipboard","spaceId":"s1"}""", server.takeRequest().body.readUtf8())
+    }
+
+    @Test
+    fun aNoteIsAProseDocumentWithOneParagraphPerLine() = runBlocking {
+        answer("""{"id":"n1"}""")
+        assertEquals(ApiResult.Ok(Unit), api.setNote("c1", "one\n\ntwo"))
+        val request = server.takeRequest()
+        assertEquals("PUT /objects/c1/note", "${request.method} ${request.path}")
+        assertEquals(
+            """{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"one"}]},{"type":"paragraph"},{"type":"paragraph","content":[{"type":"text","text":"two"}]}]}""",
+            request.body.readUtf8(),
+        )
+    }
+
+    @Test
     fun aFileThatEndsEarlyFailsItsPiece() = runBlocking {
         answer("{}")
         val authorization = UploadAuthorization("/uploads/u1", "up-1")

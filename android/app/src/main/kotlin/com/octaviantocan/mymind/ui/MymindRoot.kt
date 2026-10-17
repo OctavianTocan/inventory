@@ -4,7 +4,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.octaviantocan.mymind.BuildConfig
+import com.octaviantocan.mymind.update.allowInstallsIntent
+import com.octaviantocan.mymind.ui.update.UpdateOverlays
+import com.octaviantocan.mymind.ui.update.UpdateViewModel
+import com.octaviantocan.mymind.ui.settings.SettingsUpdates
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -52,5 +65,30 @@ fun MymindRoot(container: AppContainer) {
 private fun SignedIn(container: AppContainer) {
     val library = viewModel { LibraryViewModel(container.repository, container.downloads) }
     val settings = viewModel { SettingsViewModel(container.repository) }
-    MainShell(library, settings)
+    val context = LocalContext.current
+    val updates = viewModel {
+        UpdateViewModel(
+            container.updater,
+            container.whatsNew,
+            { context.packageManager.canRequestPackageInstalls() },
+            "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+        )
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_START) updates.onResume() }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    val sheet by updates.sheet.collectAsStateWithLifecycle()
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(sheet != null) {
+        if (sheet != null && !container.updateNotifier.allowed() && !container.updatePrefs.askedNotifications) {
+            container.updatePrefs.askedNotifications = true
+            askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    val allow = { context.startActivity(allowInstallsIntent(context)) }
+    val rows by updates.settings.collectAsStateWithLifecycle()
+    MainShell(library, settings, rows.copy(onAllow = allow)) { UpdateOverlays(updates, allow) }
 }

@@ -84,6 +84,11 @@ class Repository(private val api: MymindApi, private val session: Session) : Lib
 
     override suspend fun createMedia(uploadId: String, spaceId: String?): ApiResult<String> = api.createMedia(uploadId, spaceId)
 
+    override suspend fun createFromContent(content: String, source: String, spaceId: String?): ApiResult<String> =
+        api.createFromContent(content, source, spaceId)
+
+    override suspend fun setNote(cardId: String, text: String): ApiResult<Unit> = api.setNote(cardId, text)
+
     private suspend fun finish(answer: ApiResult<TokenAnswer>): SignInOutcome = when (answer) {
         is ApiResult.Ok -> {
             session.signIn(answer.value.token)

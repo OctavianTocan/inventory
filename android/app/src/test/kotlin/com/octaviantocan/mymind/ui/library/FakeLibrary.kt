@@ -206,6 +206,11 @@ class FakeLibrary(
 
     override suspend fun createMedia(uploadId: String, spaceId: String?) = write("media:$uploadId:$spaceId") { "card-$uploadId" }
 
+    override suspend fun createFromContent(content: String, source: String, spaceId: String?) =
+        write("content:$content:$source:$spaceId") { "card-${content.hashCode()}" }
+
+    override suspend fun setNote(cardId: String, text: String) = write("note:$cardId:$text") {}
+
     private var authorized = 0
 
     private fun <T> write(call: String, value: () -> T): ApiResult<T> {

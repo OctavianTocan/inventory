@@ -161,4 +161,19 @@ interface Library {
      * @return The new Media card's id.
      */
     suspend fun createMedia(uploadId: String, spaceId: String?): ApiResult<String>
+
+    /**
+     * @param content A link or text to save.
+     * @param source Where the card came from.
+     * @param spaceId Space the new card joins, or null.
+     * @return The card's id; a link that is already saved answers the existing card's id.
+     */
+    suspend fun createFromContent(content: String, source: String, spaceId: String?): ApiResult<String>
+
+    /**
+     * @param cardId Card id.
+     * @param text Note text.
+     * @return Success, or the failure.
+     */
+    suspend fun setNote(cardId: String, text: String): ApiResult<Unit>
 }
