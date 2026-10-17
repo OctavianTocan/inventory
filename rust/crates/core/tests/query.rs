@@ -23,15 +23,17 @@ fn strings(values: &[String]) -> Value {
 
 #[test]
 fn mime_table_matches_node() {
-    let js = common::call(&driver("render.mjs"), "mimeTable", vec![]).unwrap();
+    let _goldens = common::test_guard();
+    let js = common::call(&driver("render.mjs"), "mimeTable", vec![]);
     let rust: Value = MIME.iter().map(|(key, value)| arr![*key, *value]).collect::<Vec<_>>().into();
-    assert_eq!(common::text(&rust), common::text(&js));
+    common::assert_value(&rust, &js, "MIME table");
     assert_eq!(mime("png"), Some("image/png"));
     assert_eq!(mime("constructor"), None);
 }
 
 #[test]
 fn rendition_matches_node() {
+    let _goldens = common::test_guard();
     let pieces = [
         "a/b.png", ";", ";", "original.png", "original.PNG", "original.", "100x200.webp", "100x200-t.jpg", "100x200-c.jpeg", "10x10/hevc.mp4",
         "0x5.png", "4096x4096.png", "4097x1.png", "1x4097.png", "/", "background(fff)", "page(2)", "page(0)", "page(1001)", "page(1000)",
@@ -51,14 +53,16 @@ fn rendition_matches_node() {
     let js = calls("lib/media-files.mjs", &paths.iter().map(|path| ("parseRendition", vec![Value::from(path.as_str())])).collect::<Vec<_>>());
     let mut ok = 0;
     for (path, js) in paths.iter().zip(&js) {
-        ok += usize::from(js.is_ok());
-        same(parse_rendition(path).map(|rendition| rendition.to_value()), js, &format!("parseRendition({path:?})"));
+        let rust = parse_rendition(path).map(|rendition| rendition.to_value());
+        ok += usize::from(rust.is_ok());
+        same(rust, js, &format!("parseRendition({path:?})"));
     }
     assert!(ok > 300, "{ok}");
 }
 
 #[test]
 fn byte_range_matches_node() {
+    let _goldens = common::test_guard();
     let pieces = ["bytes=", "bytes=", "0", "1", "5", "9", "-", "-", "abc", "007", "9007199254740991", "9007199254740993", "99999999999999999999", " ", "\n", "bytes=0-", "bytes=-0", "bytes=-"];
     let mut random = Random(5);
     let mut ranges: Vec<Option<String>> = vec![None];
@@ -92,6 +96,7 @@ fn byte_range_matches_node() {
 
 #[test]
 fn cover_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(9);
     let numbers = [0.0, 1.0, 3.0, 640.0, 800.0, 801.0, 1000.0, 1999.0, 12345.0, 0.5, -3.0, 1e9];
     let mut cases: Vec<(Value, f64, f64)> = Vec::new();
@@ -120,6 +125,7 @@ fn cover_matches_node() {
 
 #[test]
 fn download_page_matches_node() {
+    let _goldens = common::test_guard();
     let labels = ["Linux <x86> & \"64\"", "é😀", "", "plain"];
     let sizes: [Value; 8] = [0.into(), 1_048_576.into(), 1_572_864.into(), "5000000".into(), Value::Undefined, Value::Null, 1e22.into(), (-3).into()];
     let built: [Value; 7] = ["2026-10-16T12:00:00Z".into(), "2026".into(), arr!["a", 2, Value::Null, arr![1, 2]], 5.into(), Value::Null, Value::Undefined, "😀😀😀😀😀😀😀😀😀😀😀".into()];
@@ -184,6 +190,7 @@ const TYPES: &[&str] = &[
 
 #[test]
 fn tag_keys_match_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(77);
     let mut names: Vec<String> = WORDS.iter().map(|word| (*word).to_string()).collect();
     for _ in 0..4000 {
@@ -202,6 +209,7 @@ fn tag_keys_match_node() {
 
 #[test]
 fn relevant_tags_match_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(78);
     let mut cases: Vec<(String, &str)> = Vec::new();
     for word in WORDS {
@@ -221,6 +229,7 @@ fn relevant_tags_match_node() {
 
 #[test]
 fn curated_tags_match_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(79);
     type Case<'a> = (Vec<Value>, &'a str, Vec<String>, Vec<String>);
     let mut requests: Vec<Case> = Vec::new();
@@ -246,8 +255,9 @@ fn curated_tags_match_node() {
     let js = calls("lib/ai-tags.mjs", &requests.iter().map(|(tags, kind, vocabulary, existing)| ("curateTags", vec![Value::Array(tags.clone()), Value::from(*kind), strings(vocabulary), strings(existing)])).collect::<Vec<_>>());
     let mut kept = 0;
     for ((tags, kind, vocabulary, existing), js) in requests.iter().zip(&js) {
-        kept += js.as_ref().map_or(0, |value| value.as_array().map_or(0, Vec::len));
-        same(curate_tags(tags, kind, vocabulary, existing).map(Value::Array), js, &format!("curateTags({}, {kind}, {vocabulary:?}, {existing:?})", common::text(&Value::Array(tags.clone()))));
+        let rust = curate_tags(tags, kind, vocabulary, existing);
+        kept += rust.as_ref().map_or(0, Vec::len);
+        same(rust.map(Value::Array), js, &format!("curateTags({}, {kind}, {vocabulary:?}, {existing:?})", common::text(&Value::Array(tags.clone()))));
     }
     assert!(kept > 1000, "{kept}");
 }
@@ -261,6 +271,7 @@ const QUERY: &[&str] = &[
 
 #[test]
 fn type_slugs_match_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(13);
     let mut kinds: Vec<String> = TYPES.iter().map(|kind| (*kind).to_string()).collect();
     let extra = ["XPost", "YouTubeVideo", "InstagramReel", "TikTokPost", "TedTalk", "RealProperty", "Palette", "Music", "Recording", "URL", "HTMLElement", "ABCdef", "aBC", "A", "a1B2c", "iOSApp", "WebPage", "Quote", "Quotation", "VideoGame", "Embed", "BlueskyPost", "x-post", "É", ""];
@@ -296,6 +307,7 @@ fn queries() -> Vec<String> {
 
 #[test]
 fn parse_query_matches_node() {
+    let _goldens = common::test_guard();
     let queries = queries();
     let mut requests = Vec::new();
     for query in &queries {
@@ -326,6 +338,7 @@ fn hash(text: &str) -> u64 {
 
 #[test]
 fn evaluate_matches_node() {
+    let _goldens = common::test_guard();
     let ids: Vec<String> = (0..24).map(|index| format!("id{index}é")).collect();
     let queries: Vec<String> = queries().into_iter().filter(|query| query.len() < 400).take(2500).collect();
     let mut requests = Vec::new();
@@ -340,7 +353,7 @@ fn evaluate_matches_node() {
         let parsed = match parse_query(query, wildcard) {
             Ok(parsed) => parsed,
             Err(error) => {
-                assert!(js.is_err(), "{query:?}: Rust {error:?}, JS {js:?}");
+                common::assert_throws(&Err(error), js, &format!("parse query {query:?}"));
                 continue;
             }
         };

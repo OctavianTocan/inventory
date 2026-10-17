@@ -1,16 +1,15 @@
-//! The native server's view of requests against Node's: the same raw requests go to a Node server and to the hyper
-//! adapter, each answering with the method, URL, headers and body it saw.
+//! Frozen Node HTTP request semantics checked against the live native adapter, including known parser differences.
 
-#[path = "../../core/tests/common/mod.rs"]
 mod common;
 
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::rc::Rc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use common::{Batch, Server, TestGuard, recording};
 use mm_core::http::{Headers, Request, Response, search};
 use mm_core::{Value, obj};
 use mm_js::json;
@@ -45,7 +44,9 @@ fn rust_server() -> u16 {
             serve(listener, Rc::new(Echo)).await;
         });
     });
-    port_rx.recv().unwrap()
+    let port = port_rx.recv().unwrap();
+    mm_test_support::golden::register_loopback_port(port);
+    port
 }
 
 // Status and decoded body of the response to one raw request on its own connection.
@@ -78,14 +79,16 @@ fn exchange(port: u16, raw: &[u8]) -> (u16, String) {
 
 #[test]
 fn requests_read_as_node_reads_them() {
-    let mut node = Command::new("node")
-        .arg(common::root().join("rust/crates/server/tests/drivers/echo-server.mjs"))
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("node runs");
-    let mut line = String::new();
-    BufReader::new(node.stdout.take().unwrap()).read_line(&mut line).unwrap();
-    let node_port: u16 = line.trim().parse().unwrap();
+    let inventory = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "http");
+    let node = recording().then(|| {
+        let mut command = Command::new("node");
+        command
+            .arg(common::repo().join("rust/crates/server/tests/drivers/echo-server.mjs"))
+            .current_dir(common::server_root())
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default());
+        Server::start(command, "")
+    });
     let rust_port = rust_server();
 
     let close = "Connection: close\r\n";
@@ -120,30 +123,84 @@ fn requests_read_as_node_reads_them() {
     latin.extend_from_slice(b"\r\n");
     requests.push(latin);
 
-    let mut differences = Vec::new();
-    for raw in &requests {
-        let (node_status, node_body) = exchange(node_port, raw);
-        let (rust_status, rust_body) = exchange(rust_port, raw);
-        // Requests the HTTP parser itself refuses get each server's own error page.
-        let same = node_status == rust_status && (node_body == rust_body || node_status >= 400 && (node_body.is_empty() || rust_body.is_empty()));
-        if !same {
-            differences.push(format!("{}\n  node {node_status} {node_body}\n  rust {rust_status} {rust_body}", String::from_utf8_lossy(raw).lines().next().unwrap_or("")));
-        }
-    }
     // Known differences, none of which a browser or `fetch` produces: they percent-encode backticks and angle
     // brackets in paths and raw non-ASCII bytes, and never send a fragment.
     let known: [(&[u8], u16, u16, &str); 3] = [
         (b"GET /a`b HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", 200, 400, ""),
-        (b"GET /raw\xc3\xa9 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", 400, 200, "http://localhost/raw%C3%A9"),
-        (b"GET /a#frag HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", 200, 200, "http://localhost/a\""),
+        (
+            b"GET /raw\xc3\xa9 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            400,
+            200,
+            "http://localhost/raw%C3%A9",
+        ),
+        (
+            b"GET /a#frag HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            200,
+            200,
+            "http://localhost/a\"",
+        ),
     ];
-    for (raw, node_expected, rust_expected, rust_url) in known {
-        let (node_status, _) = exchange(node_port, raw);
-        let (rust_status, rust_body) = exchange(rust_port, raw);
-        assert_eq!((node_status, rust_status), (node_expected, rust_expected), "{}", String::from_utf8_lossy(raw));
-        assert!(rust_body.contains(rust_url), "{rust_body}");
+    assert_eq!(requests.len(), 23);
+    let mut identities = requests.clone();
+    identities.extend(known.iter().map(|(raw, _, _, _)| raw.to_vec()));
+    let scenario: Vec<u8> = identities
+        .iter()
+        .flat_map(|raw| [(raw.len() as u64).to_be_bytes().to_vec(), raw.clone()].concat())
+        .collect();
+    let scenario = common::digest(&scenario);
+    for identity in &mut identities {
+        *identity = [scenario.as_bytes(), b"\0", identity].concat();
     }
-    node.kill().unwrap();
-    node.wait().unwrap();
-    assert!(differences.is_empty(), "{}", differences.join("\n"));
+    let mut golden = Batch::new(env!("CARGO_MANIFEST_DIR"), "http", "request-semantics", &identities);
+    golden.allow_inline_synthetic();
+    let encode = |status: u16, body: &str| json::to_string(&obj! { "status" => status, "body" => body }.into()).into_bytes();
+    for (index, raw) in requests.iter().enumerate() {
+        let want = node.as_ref().map(|server| exchange(server.port, raw));
+        let (rust_status, rust_body) = exchange(rust_port, raw);
+        let frozen = golden
+            .inline_answer(index)
+            .map(|bytes| json::parse(std::str::from_utf8(bytes).unwrap()).unwrap());
+        let oracle = want.as_ref().map(|(status, body)| encode(*status, body));
+        let (expected_status, expected_body) = match &want {
+            Some((status, body)) => (*status, body.as_str()),
+            None => {
+                let answer = frozen.as_ref().expect("synthetic HTTP expectation must be inline");
+                (answer.get("status").as_f64().unwrap() as u16, answer.get("body").as_str().unwrap())
+            }
+        };
+        // Retain the original allowance for parser refusals with an empty error page on either side.
+        assert!(
+            expected_status == rust_status && (expected_body == rust_body || expected_status >= 400 && (expected_body.is_empty() || rust_body.is_empty())),
+            "HTTP case {index}: request parser semantics changed"
+        );
+        let actual = if expected_status >= 400 && (expected_body.is_empty() || rust_body.is_empty()) {
+            encode(rust_status, expected_body)
+        } else {
+            encode(rust_status, &rust_body)
+        };
+        golden.check(index, &actual, oracle.as_deref());
+    }
+    for (offset, (raw, node_expected, rust_expected, rust_url)) in known.into_iter().enumerate() {
+        let node_status = node.as_ref().map(|server| exchange(server.port, raw).0);
+        let (rust_status, rust_body) = exchange(rust_port, raw);
+        if let Some(status) = node_status {
+            assert_eq!(status, node_expected);
+        }
+        assert_eq!(rust_status, rust_expected, "{}", String::from_utf8_lossy(raw));
+        assert!(rust_body.contains(rust_url), "{rust_body}");
+        let contract = |node_status, rust_status, url_matches| {
+            json::to_string(
+                &obj! {
+                    "node_status" => node_status, "rust_status" => rust_status, "url_matches" => url_matches,
+                }
+                .into(),
+            )
+            .into_bytes()
+        };
+        let actual = contract(node_expected, rust_status, rust_body.contains(rust_url));
+        let oracle = node_status.map(|status| contract(status, rust_expected, true));
+        golden.check(requests.len() + offset, &actual, oracle.as_deref());
+    }
+    golden.finish();
+    inventory.finish();
 }

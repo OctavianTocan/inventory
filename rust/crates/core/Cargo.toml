@@ -22,6 +22,7 @@ rsa.workspace = true
 subtle.workspace = true
 
 [dev-dependencies]
+mm-test-support = { path = "../../test-support" }
 mm-sqlite.workspace = true
 futures-executor.workspace = true
 

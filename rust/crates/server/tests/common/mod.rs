@@ -1,5 +1,4 @@
-//! What the differential tests of the native servers share: a server process, a keep-alive HTTP client and the
-//! answers both compare.
+//! Native HTTP tests compare normalized responses with frozen pre-switch expectations.
 // Each test binary uses only part of it.
 #![allow(dead_code)]
 
@@ -10,11 +9,163 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use mm_js::{Value, json};
+use mm_js::{Value, json, obj};
+use sha2::{Digest, Sha256};
+
+#[allow(unused_imports)]
+pub use mm_test_support::golden::{Batch, TestGuard, recording};
 
 /// The repository root: `MYMIND_ROOT`, or the checkout this crate sits in.
 pub fn repo() -> PathBuf {
-    std::env::var_os("MYMIND_ROOT").map_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.."), PathBuf::from).canonicalize().unwrap()
+    std::env::var_os("MYMIND_ROOT")
+        .map_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.."), PathBuf::from)
+        .canonicalize()
+        .unwrap()
+}
+
+/// Build an isolated server root with the recorded assets and no environment files.
+///
+/// # Returns
+/// A process-specific temporary directory, reused by this test binary.
+///
+/// # Panics
+/// If a required asset cannot be linked or the legacy entry point cannot be copied while recording.
+pub fn server_root() -> PathBuf {
+    static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| {
+        let parent = Path::new(env!("CARGO_TARGET_TMPDIR"));
+        std::fs::create_dir_all(parent).unwrap();
+        let mut counter = 0u64;
+        let root = loop {
+            let candidate = parent.join(format!("http-root-{}-{counter}", std::process::id()));
+            match std::fs::create_dir(&candidate) {
+                Ok(()) => break candidate,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => counter += 1,
+                Err(error) => panic!("cannot create isolated server root: {error}"),
+            }
+        };
+        for name in ["capture", "mirror", "replay"] {
+            std::os::unix::fs::symlink(repo().join(name), root.join(name)).unwrap();
+        }
+        if recording() {
+            std::fs::copy(repo().join("server.mjs"), root.join("server.mjs")).unwrap();
+            for name in ["lib", "node_modules"] {
+                std::os::unix::fs::symlink(repo().join(name), root.join(name)).unwrap();
+            }
+        }
+        assert!(!root.join(".env").exists() && !root.join(".dev.vars").exists());
+        root
+    })
+    .clone()
+}
+
+/// Hash opaque bytes without retaining private response or library contents.
+///
+/// # Arguments
+/// * `bytes` - Exact bytes to fingerprint.
+///
+/// # Returns
+/// Lower-case SHA-256 hexadecimal text.
+pub fn digest(bytes: &[u8]) -> String {
+    mm_js::base64::hex(&Sha256::digest(bytes))
+}
+
+/// Fingerprint an immutable fixture file before a server can mutate its copy.
+///
+/// # Arguments
+/// * `file` - Existing frozen fixture.
+///
+/// # Returns
+/// The file's byte length and SHA-256, without its path.
+///
+/// # Panics
+/// If the fixture cannot be read.
+pub fn fixture_identity(file: &Path) -> Value {
+    let bytes = std::fs::read(file).unwrap();
+    obj! { "length" => bytes.len(), "sha256" => digest(&bytes) }.into()
+}
+
+// Replace assigned paths so scratch directories never enter lookup identity or expected metadata.
+fn normalized(bytes: &[u8]) -> Vec<u8> {
+    let mut bytes = bytes.to_vec();
+    for (path, placeholder) in [(server_root(), "<root>"), (repo(), "<repo>")] {
+        bytes = replace(&bytes, path.to_string_lossy().as_bytes(), placeholder.as_bytes());
+    }
+    bytes
+}
+
+/// Encode complete ordered scenarios into request identities, including fixture state and trailing observations.
+///
+/// # Arguments
+/// * `requests` - Ordered requests, including duplicate cases.
+/// * `fixture` - Fingerprint of the initial database or synthetic fixture recipe.
+/// * `observations` - Names of additional observations, such as aggregate application logs.
+///
+/// # Returns
+/// One opaque identity per request followed by one for each additional observation.
+pub fn request_cases(requests: &[Sent], fixture: Value, observations: &[&str]) -> Vec<Vec<u8>> {
+    let requests: Vec<Vec<u8>> = requests.iter().map(Sent::identity).collect();
+    let mut scenario = json::to_string(&fixture).into_bytes();
+    for request in &requests {
+        scenario.extend_from_slice(&(request.len() as u64).to_be_bytes());
+        scenario.extend_from_slice(request);
+    }
+    let scenario = digest(&scenario);
+    requests
+        .into_iter()
+        .enumerate()
+        .map(|(index, request)| [scenario.as_bytes(), b"\0request\0", &(index as u64).to_be_bytes(), &request].concat())
+        .chain(
+            observations
+                .iter()
+                .map(|name| [scenario.as_bytes(), b"\0observation\0", name.as_bytes()].concat()),
+        )
+        .collect()
+}
+
+/// Encode status, ordered normalized headers and a body's length and hash, without its content.
+///
+/// # Arguments
+/// * `answer` - Response after the test's clock and fixture-copy normalization.
+///
+/// # Returns
+/// Canonical JSON bytes suitable for golden comparison.
+pub fn answer_bytes(answer: &Answer) -> Vec<u8> {
+    let headers: Vec<Value> = answer
+        .headers
+        .iter()
+        .map(|(name, value)| Value::Array(vec![name.clone().into(), value.clone().into()]))
+        .collect();
+    let body = normalized(&answer.body);
+    normalized(
+        json::to_string(
+            &obj! {
+                "status" => answer.status.as_str(),
+                "headers" => Value::Array(headers),
+                "body" => obj! { "length" => body.len(), "sha256" => digest(&body) },
+            }
+            .into(),
+        )
+        .as_bytes(),
+    )
+}
+
+/// Preserve the ordered application-log transcript without storing its potentially private text.
+///
+/// # Arguments
+/// * `lines` - Already filtered and normalized application logs in arrival order.
+///
+/// # Returns
+/// Canonical JSON with a length and SHA-256 for every line, preserving count and order.
+pub fn log_bytes(lines: &[String]) -> Vec<u8> {
+    let lines = lines
+        .iter()
+        .map(|line| {
+            let bytes = normalized(line.as_bytes());
+            Value::from(obj! { "length" => bytes.len(), "sha256" => digest(&bytes) })
+        })
+        .collect();
+    json::to_string(&Value::Array(lines)).into_bytes()
 }
 
 /// A server process, killed when dropped, with everything it printed.
@@ -35,7 +186,7 @@ impl Server {
     /// Start `command`, its environment already set, and wait for the stdout line that starts with `ready` and
     /// names the port after it.
     pub fn start(mut command: Command, ready: &'static str) -> Self {
-        let mut child = command.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+        let mut child = command.env("TMPDIR", env!("CARGO_TARGET_TMPDIR")).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
         let log = Arc::new(Mutex::new(Vec::new()));
         let (port_tx, port_rx) = mpsc::channel();
         let stdout = BufReader::new(child.stdout.take().unwrap());
@@ -56,12 +207,19 @@ impl Server {
             }
         });
         let port = port_rx.recv_timeout(Duration::from_secs(120)).expect("the server starts");
+        mm_test_support::golden::register_loopback_port(port);
         Self { child, port, log }
     }
 
     /// The lines the server printed so far that start with one of `prefixes`.
     pub fn logged(&self, prefixes: &[&str]) -> Vec<String> {
-        self.log.lock().unwrap().iter().filter(|line| prefixes.iter().any(|prefix| line.starts_with(prefix))).cloned().collect()
+        self.log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|line| prefixes.iter().any(|prefix| line.starts_with(prefix)))
+            .cloned()
+            .collect()
     }
 }
 
@@ -77,7 +235,34 @@ impl Sent {
     /// A request without a body.
     pub fn new(method: &str, target: &str, headers: &[(&str, &str)]) -> Self {
         let headers = headers.iter().map(|(name, value)| ((*name).to_owned(), (*value).to_owned())).collect();
-        Self { method: method.to_owned(), target: target.to_owned(), headers, body: String::new() }
+        Self {
+            method: method.to_owned(),
+            target: target.to_owned(),
+            headers,
+            body: String::new(),
+        }
+    }
+
+    /// Encode every request field in order, normalizing only assigned scratch paths.
+    ///
+    /// # Returns
+    /// Canonical JSON request bytes; repeated header order and exact body bytes are preserved.
+    pub fn identity(&self) -> Vec<u8> {
+        let headers = self
+            .headers
+            .iter()
+            .map(|(name, value)| Value::Array(vec![name.clone().into(), value.clone().into()]))
+            .collect();
+        normalized(
+            json::to_string(
+                &obj! {
+                    "method" => self.method.as_str(), "target" => self.target.as_str(),
+                    "headers" => Value::Array(headers), "body" => self.body.as_str(),
+                }
+                .into(),
+            )
+            .as_bytes(),
+        )
     }
 }
 
@@ -144,7 +329,11 @@ impl Client {
         for _ in 0..2 {
             if self.stream.is_none() {
                 let Ok(stream) = TcpStream::connect(("127.0.0.1", self.port)) else {
-                    return Answer { status: "connection refused".to_owned(), headers: Vec::new(), body: Vec::new() };
+                    return Answer {
+                        status: "connection refused".to_owned(),
+                        headers: Vec::new(),
+                        body: Vec::new(),
+                    };
                 };
                 stream.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
                 self.stream = Some(BufReader::new(stream));
@@ -161,7 +350,11 @@ impl Client {
             }
             self.stream = None;
         }
-        Answer { status: "no answer".to_owned(), headers: Vec::new(), body: Vec::new() }
+        Answer {
+            status: "no answer".to_owned(),
+            headers: Vec::new(),
+            body: Vec::new(),
+        }
     }
 
     fn normalized(&self, answer: Answer, head: bool) -> Answer {
@@ -173,7 +366,11 @@ impl Client {
             .map(|(name, value)| (name.to_ascii_lowercase(), value.replace(&port, ":PORT")))
             .filter(|(name, _)| !hop.contains(&name.as_str()) && (head || name != "content-length"))
             .collect();
-        Answer { status: answer.status, headers, body: replace(&answer.body, port.as_bytes(), b":PORT") }
+        Answer {
+            status: answer.status,
+            headers,
+            body: replace(&answer.body, port.as_bytes(), b":PORT"),
+        }
     }
 }
 
@@ -196,7 +393,12 @@ fn read_answer(reader: &mut BufReader<TcpStream>, head: bool) -> Option<(Answer,
         let (name, value) = line.split_once(':')?;
         headers.push((name.to_owned(), value.trim().to_owned()));
     }
-    let header = |wanted: &str| headers.iter().find(|(name, _)| name.eq_ignore_ascii_case(wanted)).map(|(_, value)| value.to_ascii_lowercase());
+    let header = |wanted: &str| {
+        headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(wanted))
+            .map(|(_, value)| value.to_ascii_lowercase())
+    };
     let code: u16 = status.get(9..12)?.parse().ok()?;
     let closes = header("connection").is_some_and(|value| value.contains("close"));
     let mut body = Vec::new();
@@ -228,13 +430,51 @@ fn read_answer(reader: &mut BufReader<TcpStream>, head: bool) -> Option<(Answer,
     Some((Answer { status, headers, body }, closes))
 }
 
-/// The requests of `tests/drivers/replica-requests.mjs`: every replayed and recorded response and each route's edge
-/// cases.
+/// Load the immutable request inventory, recording it from the legacy enumerator only in recording mode.
+///
+/// # Returns
+/// Every replayed and recorded request and the original route edge cases in their frozen order.
+///
+/// # Panics
+/// If the inventory is missing, its enumeration inputs changed, or the legacy enumerator fails while recording.
 pub fn replica_requests() -> Vec<Sent> {
     let root = repo();
-    let output = Command::new("node").arg(root.join("rust/crates/server/tests/drivers/replica-requests.mjs")).env("MYMIND_ROOT", &root).output().unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-    let list = json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap();
+    let frozen = root.join("rust/test-fixtures/http/replica-requests.json");
+    let inputs = enumeration_inputs();
+    let manifest = if recording() {
+        let output = Command::new("node")
+            .arg(root.join("rust/crates/server/tests/drivers/replica-requests.mjs"))
+            .current_dir(server_root())
+            .env_clear()
+            .env("MYMIND_ROOT", &root)
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "legacy request enumeration failed");
+        let requests = json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap();
+        let manifest: Value = obj! { "version" => 1, "inputs" => inputs.clone(), "requests" => requests }.into();
+        let bytes = json::to_string(&manifest).into_bytes();
+        if frozen.exists() {
+            assert!(
+                mm_test_support::golden::read_input(&frozen) == bytes,
+                "frozen HTTP request inventory changed; restore its exact recorded inputs instead of regenerating it"
+            );
+        } else {
+            std::fs::create_dir_all(frozen.parent().unwrap()).unwrap();
+            std::fs::write(&frozen, bytes).unwrap();
+        }
+        manifest
+    } else {
+        let bytes = mm_test_support::golden::read_input(&frozen);
+        json::parse(std::str::from_utf8(&bytes).unwrap()).unwrap()
+    };
+    assert_eq!(manifest.get("version").as_f64(), Some(1.0), "unsupported HTTP request inventory");
+    assert_eq!(
+        json::to_string(manifest.get("inputs")),
+        json::to_string(&inputs),
+        "HTTP enumeration corpus changed; use the frozen recordings"
+    );
+    let list = manifest.get("requests").clone();
     let Value::Array(list) = list else { panic!("requests are a list") };
     let text = |value: &Value| value.as_str().unwrap_or_default().to_owned();
     list.iter()
@@ -243,7 +483,41 @@ pub fn replica_requests() -> Vec<Sent> {
                 Value::Array(pairs) => pairs.iter().map(|pair| (text(pair.get("0")), text(pair.get("1")))).collect(),
                 _ => Vec::new(),
             };
-            Sent { method: text(request.get("method")), target: text(request.get("target")), headers, body: text(request.get("body")) }
+            Sent {
+                method: text(request.get("method")),
+                target: text(request.get("target")),
+                headers,
+                body: text(request.get("body")),
+            }
         })
         .collect()
+}
+
+// Fingerprint all enumeration source documents and ordered directory entries, without copying file contents.
+fn enumeration_inputs() -> Value {
+    let root = repo();
+    let mut inputs: Vec<Value> = ["replay/index.json", "capture/responses.json", "capture/cards.json", "capture/details.json"]
+        .into_iter()
+        .map(|path| obj! { "path" => path, "file" => fixture_identity(&root.join(path)) }.into())
+        .collect();
+    for directory in ["mirror/static", "capture/media", "capture/mediahost"] {
+        let mut paths = Vec::new();
+        enumerate(&root.join(directory), &root, &mut paths);
+        paths.sort();
+        let names = json::to_string(&Value::Array(paths.into_iter().map(Value::from).collect()));
+        inputs.push(obj! { "directory" => directory, "entries_sha256" => digest(names.as_bytes()) }.into());
+    }
+    Value::Array(inputs)
+}
+
+// Enumerate required files without silently accepting missing directories or unreadable entries.
+fn enumerate(directory: &Path, root: &Path, paths: &mut Vec<String>) {
+    for entry in std::fs::read_dir(directory).unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_type().unwrap().is_dir() {
+            enumerate(&entry.path(), root, paths);
+        } else if entry.file_type().unwrap().is_file() {
+            paths.push(entry.path().strip_prefix(root).unwrap().to_string_lossy().into_owned());
+        }
+    }
 }

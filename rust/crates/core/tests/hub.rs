@@ -211,9 +211,10 @@ fn steps() -> Vec<Value> {
 
 #[test]
 fn hub_bytes_match_js() {
+    let _goldens = common::test_guard();
     runtime::install(&IDLE);
     let steps = steps();
-    let Value::Array(js) = common::call(DRIVER, "run", vec![Value::Array(steps.clone())]).unwrap() else { panic!("no answers") };
+    let js = common::call(DRIVER, "run", vec![Value::Array(steps.clone())]);
 
     let users: Rc<RefCell<Value>> = Rc::new(RefCell::new(s("all")));
     let mode = users.clone();
@@ -227,7 +228,7 @@ fn hub_bytes_match_js() {
     let events: Events = Rc::default();
     let mut connections: HashMap<String, Rc<RawConnection>> = HashMap::new();
     let mut ended: Vec<String> = Vec::new();
-    let mut rust = Vec::new();
+    let mut rust: Vec<Value> = Vec::new();
     for step in &steps {
         events.borrow_mut().clear();
         let op = step.get("op").to_js_string();
@@ -267,14 +268,9 @@ fn hub_bytes_match_js() {
         }
         rust.push(obj! { "op" => op.as_str(), "events" => events.borrow().clone() }.into());
     }
-    assert_eq!(rust.len(), js.len());
-    let mut written = 0;
-    for (index, (rust, js)) in rust.iter().zip(&js).enumerate() {
-        assert_eq!(common::text(rust), common::text(js), "step {index}: {}", common::text(&steps[index]).chars().take(300).collect::<String>());
-        if let Value::Array(list) = js.get("events") {
-            written += list.len();
-        }
-    }
+    assert_eq!(rust.len(), steps.len());
+    let written: usize = rust.iter().map(|answer| answer.get("events").as_array().map_or(0, Vec::len)).sum();
+    common::assert_value(&Value::Array(rust), &js, "hub wire events");
     assert!(written > 40, "the scenario must produce traffic");
     println!("hub: {} steps compared, {written} events", steps.len());
 }

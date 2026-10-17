@@ -16,11 +16,11 @@ use mm_core::{Value, obj};
 use mm_js::{base64, json};
 use mm_sqlite::Sqlite;
 use sha2::{Digest, Sha256};
-use tools_common::{Fake, Out, Req, Resp, assert_requests, run_js, run_rust, tmproot};
+use tools_common::{Fake, Out, Req, Resp, run_js, run_rust, tmproot};
 
 const ADMIN: &str = "fixture-admin";
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 struct Mode {
     existing: Vec<(String, usize)>,
     drop_table: Option<String>,
@@ -149,6 +149,7 @@ fn request_lines(fake: &Fake) -> Vec<String> {
         .collect()
 }
 
+#[derive(Debug)]
 struct Case {
     name: &'static str,
     args: Vec<String>,
@@ -196,9 +197,9 @@ fn side(root: &Path, case: &Case, js: bool, many: bool) -> (Out, Vec<String>) {
     }
     if let Some(text) = &case.dot_env {
         if text == "<directory>" {
-            std::fs::create_dir_all(root.join(".env")).unwrap();
+            std::fs::create_dir_all(root.join("fixture-vars")).unwrap();
         } else {
-            std::fs::write(root.join(".env"), text).unwrap();
+            std::fs::write(root.join("fixture-vars"), text).unwrap();
         }
     }
     let db = if case.db { Some(common::temp_copy(&common::hosted_db())) } else { None };
@@ -228,11 +229,12 @@ fn show(out: &Out, exact_stderr: bool) -> String {
 fn compare(case: Case) -> (Out, Vec<String>) {
     let many = case.args.iter().any(|arg| arg == "many/");
     let (js_root, rust_root) = (tmproot("upload-hosted-js"), tmproot("upload-hosted"));
-    let js = side(&js_root, &case, true, many);
+    let js = tools_common::recording().then(|| side(&js_root, &case, true, many));
     let rust = side(&rust_root, &case, false, many);
-    assert_eq!(show(&rust.0, case.exact_stderr), show(&js.0, case.exact_stderr), "{}: output", case.name);
-    assert_requests(case.name, &rust.1, &js.1);
-    js
+    let actual = format!("{}\nrequests {:?}", show(&rust.0, case.exact_stderr), rust.1);
+    let oracle = js.as_ref().map(|out| format!("{}\nrequests {:?}", show(&out.0, case.exact_stderr), out.1));
+    tools_common::check(&format!("{}: {case:?}", case.name), actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+    rust
 }
 
 fn bucket(name: &'static str, extra: &[&str]) -> Case {
@@ -246,6 +248,7 @@ fn bucket(name: &'static str, extra: &[&str]) -> Case {
 
 #[test]
 fn usage_and_environment() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
     let mut none = case("no arguments", &[]);
     none.exact_stderr = true;
     assert_eq!(compare(none).0.status, 2);
@@ -270,6 +273,7 @@ fn usage_and_environment() {
 
 #[test]
 fn reads_dot_env() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
     let mut file = case("token from .env", &["{url}", "summary"]);
     file.env.clear();
     file.dot_env = Some("# comment\nexport ADMIN_TOKEN=\"fixture-admin\"\n".into());
@@ -285,6 +289,7 @@ fn reads_dot_env() {
 
 #[test]
 fn summary_and_account() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
     let mut small = case("summary", &["{url}", "summary"]);
     small.mode.libraries = vec!["main".into(), "other".into()];
     let (out, _) = compare(small);
@@ -309,6 +314,7 @@ fn summary_and_account() {
 
 #[test]
 fn uploads_the_bucket() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
     let mut first = bucket("bucket", &[]);
     first.mode.existing = vec![("bucket/a.txt".into(), 99), ("bucket/zeta/one.txt".into(), 0), ("bucket/dir/b.bin".into(), 7)];
     let (out, requests) = compare(first);
@@ -331,6 +337,7 @@ fn uploads_the_bucket() {
 
 #[test]
 fn bucket_failures() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
     let mut empty_dir = case("bucket directory missing", &["{url}", "bucket", "--bucket", "{root}/nowhere"]);
     empty_dir.sorted = true;
     let (out, requests) = compare(empty_dir);
@@ -348,6 +355,7 @@ fn bucket_failures() {
 
 #[test]
 fn logs_every_250_uploads() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
     let mut many = bucket("bucket, 260 files", &["--prefix", "many/", "--force", "--concurrency", "1"]);
     many.mode.libraries = Vec::new();
     let (out, requests) = compare(many);
@@ -357,6 +365,7 @@ fn logs_every_250_uploads() {
 
 #[test]
 fn uploads_a_library() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
     let mut full = case("library", &["{url}", "library", "test", "--db", "{db}"]);
     full.db = true;
     let (out, requests) = compare(full);
@@ -368,6 +377,7 @@ fn uploads_a_library() {
 
 #[test]
 fn library_differences_and_failures() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
     let mut tampered = case("library, digest differs", &["{url}", "library", "test", "--db", "{db}"]);
     tampered.db = true;
     tampered.mode.tamper = Some("spaces".into());
@@ -397,6 +407,7 @@ fn library_differences_and_failures() {
 
 #[test]
 fn uploads_the_password_user() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
     let named = |name| {
         let mut built = case(name, &["{url}", "user"]);
         built.env.extend([("TEST_USER_NAME", "Fixture-User".to_owned()), ("TEST_USER_PASSWORD", "fixture-password-123".to_owned())]);
@@ -426,7 +437,8 @@ fn uploads_the_password_user() {
 
 #[test]
 fn the_uploaded_hash_accepts_the_password() {
-    for js in [true, false] {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_upload_hosted.rs")));
+    for js in [true, false].into_iter().filter(|js| !*js || tools_common::recording()) {
         let root = tmproot("upload-hosted-user");
         let fake = worker(Mode::default());
         let env = [("ADMIN_TOKEN", ADMIN), ("TEST_USER_NAME", "fixture-user"), ("TEST_USER_PASSWORD", "fixture-password-123")];
@@ -438,6 +450,9 @@ fn the_uploaded_hash_accepts_the_password() {
         let hash = base64::decode(body.get("hash").as_str().unwrap());
         assert_eq!(mm_core::auth_store::hash_password("fixture-password-123", &salt), hash, "js: {js}");
         assert_eq!(body.get("username").as_str(), Some("fixture-user"));
+        if !js {
+            tools_common::check("uploaded password round trip", b"valid synthetic username, salt, hash and password", tools_common::recording().then_some(b"valid synthetic username, salt, hash and password".as_slice()));
+        }
         let _ = obj! {};
     }
 }

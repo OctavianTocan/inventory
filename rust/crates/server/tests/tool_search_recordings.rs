@@ -12,17 +12,22 @@ const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/tool-se
 
 #[test]
 fn compares_recordings_as_compare_recordings() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_search_recordings.rs")));
     let (js_root, rust_root) = (tmproot("search-recordings-js"), tmproot("search-recordings"));
     let copy = common::temp_copy(&common::test_db());
-    let js = run_node(&js_root, DRIVER, &[copy.to_str().unwrap()], &[]);
+    let js = tools_common::recording().then(|| run_node(&js_root, DRIVER, &[copy.to_str().unwrap()], &[]));
     let rust = run_rust(&rust_root, "search-recordings", &["--db", common::test_db().to_str().unwrap()], &[], None);
-    assert_eq!(js.status, 0, "{}", js.stderr);
-    assert!(js.stdout.contains("\"q\": \"design\""));
-    assert_eq!((rust.status, rust.stdout, rust.stderr), (0, js.stdout, String::new()));
+    assert_eq!(rust.status, 0, "{}", rust.stderr);
+    assert!(rust.stdout.contains("\"q\": \"design\""));
+    assert!(rust.stderr.is_empty());
+    let actual = format!("status {} stdout {:?} stderr {:?}", rust.status, rust.stdout, rust.stderr);
+    let oracle = js.as_ref().map(|out| format!("status {} stdout {:?} stderr {:?}", out.status, out.stdout, out.stderr));
+    tools_common::check("recorded prefix comparison", actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
 }
 
 #[test]
 fn a_missing_recording_fails_with_status_one() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_search_recordings.rs")));
     let (js_root, rust_root) = (tmproot("search-recordings-no-js"), tmproot("search-recordings-no"));
     for root in [&js_root, &rust_root] {
         std::fs::remove_file(root.join("replay")).unwrap();
@@ -30,8 +35,12 @@ fn a_missing_recording_fails_with_status_one() {
         std::fs::write(root.join("replay/index.json"), "{}").unwrap();
     }
     let copy = common::temp_copy(&common::test_db());
-    let js = run_node(&js_root, DRIVER, &[copy.to_str().unwrap()], &[]);
+    let js = tools_common::recording().then(|| run_node(&js_root, DRIVER, &[copy.to_str().unwrap()], &[]));
     let rust = run_rust(&rust_root, "search-recordings", &["--db", common::test_db().to_str().unwrap()], &[], None);
-    assert_eq!((js.status, rust.status, rust.stdout.as_str()), (1, 1, ""));
+    assert_eq!((rust.status, rust.stdout.as_str()), (1, ""));
     assert!(rust.stderr.contains("Missing recorded de prefix search"), "{}", rust.stderr);
+    let message = "Missing recorded de prefix search";
+    let actual = format!("status {} stdout {:?} missing-recording {}", rust.status, rust.stdout, rust.stderr.contains(message));
+    let oracle = js.as_ref().map(|out| format!("status {} stdout {:?} missing-recording {}", out.status, out.stdout, out.stderr.contains(message)));
+    tools_common::check("missing recorded prefix", actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
 }

@@ -6,8 +6,9 @@ mod tools_common;
 
 use std::path::Path;
 
-use tools_common::{Out, ai_fake, assert_requests, request_lines, run_js_flags, run_rust, tmproot};
+use tools_common::{Out, ai_fake, request_lines, run_js_flags, run_rust, tmproot};
 
+#[derive(Debug)]
 struct Case {
     name: &'static str,
     args: Vec<&'static str>,
@@ -31,9 +32,9 @@ fn side(root: &Path, case: &Case, js: bool) -> (Out, Vec<String>) {
     let base = case.base_override.unwrap_or(&url).to_owned();
     let mut env: Vec<(&str, &str)> = case.env.iter().map(|(key, value)| (*key, value.as_str())).collect();
     env.extend([("GEMINI_BASE_URL", base.as_str()), ("AI_CHAT_BASE_URL", base.as_str()), ("TYPESAFE_BASE_URL", base.as_str())]);
-    let flags: &[&str] = if case.dot_env.is_some() { &["--env-file-if-exists=.env"] } else { &[] };
+    let flags: &[&str] = if case.dot_env.is_some() { &["--env-file-if-exists=fixture-vars"] } else { &[] };
     if let Some(text) = &case.dot_env {
-        std::fs::write(root.join(".env"), text).unwrap();
+        std::fs::write(root.join("fixture-vars"), text).unwrap();
     }
     let out = if js { run_js_flags(root, flags, "try-ai", &case.args, &env, None) } else { run_rust(root, "try-ai", &case.args, &env, None) };
     let mut lines = request_lines(&fake);
@@ -43,19 +44,20 @@ fn side(root: &Path, case: &Case, js: bool) -> (Out, Vec<String>) {
 
 fn compare(case: Case) -> (Out, Vec<String>) {
     let (js_root, rust_root) = (tmproot("try-ai-js"), tmproot("try-ai"));
-    let js = side(&js_root, &case, true);
+    let js = tools_common::recording().then(|| side(&js_root, &case, true));
     let rust = side(&rust_root, &case, false);
-    // With every endpoint refusing, the chat and Gemini requests fail at once, and which rejection wins the race
-    // (`Promise.all` in JS, `try_join3` in Rust) is timing-dependent in both runtimes.
+    // Concurrent failing services may win the race in either runtime.
     let refused = |text: &str| if case.base_override.is_some() { text.replace("gemini request failed", "<service> request failed").replace("chat request failed", "<service> request failed") } else { text.to_owned() };
     let show = |out: &Out| format!("status {}\nstdout {:?}\nstderr {:?}", out.status, out.stdout, refused(&out.stderr));
-    assert_eq!(show(&rust.0), show(&js.0), "{}: output", case.name);
-    assert_requests(case.name, &rust.1, &js.1);
-    js
+    let actual = format!("{}\nrequests {:?}", show(&rust.0), rust.1);
+    let oracle = js.as_ref().map(|out| format!("{}\nrequests {:?}", show(&out.0), out.1));
+    tools_common::check(&format!("{}: {case:?}", case.name), actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+    rust
 }
 
 #[test]
 fn usage_errors() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_try_ai.rs")));
     for (name, args) in [
         ("cards zero", &["--cards", "0"][..]),
         ("cards not a number", &["--cards", "x"]),
@@ -72,6 +74,7 @@ fn usage_errors() {
 
 #[test]
 fn analyzes_recorded_cards() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_try_ai.rs")));
     let (out, requests) = compare(case("defaults", &[]));
     assert!(out.stdout.starts_with("library: "), "{}", out.stdout);
     assert!(out.stdout.contains("query \""), "{}", out.stdout);
@@ -83,6 +86,7 @@ fn analyzes_recorded_cards() {
 
 #[test]
 fn ranks_given_queries() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_try_ai.rs")));
     let (out, _) = compare(case("queries", &["--cards", "3", "--query", "dark mode interfaces", "--query", "recipes"]));
     assert!(out.stdout.contains("query \"recipes\""), "{}", out.stdout);
     compare(case("an empty query", &["--cards", "2", "--query", ""]));
@@ -90,6 +94,7 @@ fn ranks_given_queries() {
 
 #[test]
 fn missing_keys_and_endpoints() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_try_ai.rs")));
     compare(without(case("no Jev key", &["--cards", "2"]), "TYPESAFE_API_KEY"));
     let (out, _) = compare(without(case("no Gemini key", &["--cards", "2"]), "GEMINI_API_KEY"));
     assert_eq!(out.status, 1);
@@ -100,6 +105,7 @@ fn missing_keys_and_endpoints() {
 
 #[test]
 fn reads_keys_from_dot_env_without_overriding_the_environment() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_try_ai.rs")));
     let mut file = case("keys from .env", &["--cards", "2"]);
     file.env.clear();
     file.dot_env = Some("GEMINI_API_KEY=fixture-key\nTYPESAFE_API_KEY=fixture-jev\n".into());

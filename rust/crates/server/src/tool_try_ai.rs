@@ -278,7 +278,7 @@ async fn work(root: &Path, args: &[String]) -> Result<(), String> {
 /// # Returns
 /// The exit status: 0, or 1 after printing `error: <message>`.
 pub async fn run(root: &Path, args: &[String]) -> u8 {
-    let file = match env_file::load(&root.join(".env")) {
+    let file = match env_file::load(&env_file::path(root)) {
         Ok(Loaded::Vars(vars)) => vars,
         _ => HashMap::new(),
     };

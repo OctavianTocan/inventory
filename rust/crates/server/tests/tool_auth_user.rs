@@ -28,7 +28,7 @@ fn users(root: &Path) -> Vec<String> {
 }
 
 fn env_of(root: &Path) -> String {
-    let path = root.join(".env");
+    let path = root.join("fixture-vars");
     let Ok(text) = std::fs::read_to_string(&path) else { return "no .env".into() };
     let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
     let masked = text.lines().map(|line| if line.starts_with("TEST_USER_PASSWORD=") || line.starts_with("OTHER_PASSWORD=") { format!("{}=<random>", line.split('=').next().unwrap()) } else { line.to_owned() }).collect::<Vec<_>>().join("\n");
@@ -36,7 +36,7 @@ fn env_of(root: &Path) -> String {
 }
 
 fn env_password(root: &Path, key: &str) -> String {
-    let text = std::fs::read_to_string(root.join(".env")).unwrap();
+    let text = std::fs::read_to_string(root.join("fixture-vars")).unwrap();
     text.lines().find_map(|line| line.strip_prefix(&format!("{key}="))).unwrap().to_owned()
 }
 
@@ -47,6 +47,7 @@ fn accepts(root: &Path, user: &str, password: &str) -> bool {
 
 #[test]
 fn manages_users_as_auth_user() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_auth_user.rs")));
     let (js, rust) = both("auth-user", |root, run| {
         let db = root.join("auth.db");
         let db = db.to_str().unwrap();
@@ -80,7 +81,7 @@ fn manages_users_as_auth_user() {
         step!("save-env, no .env yet", run(&["add", "carol", "--save-env", "TEST_USER", "--db", db], &[], None), true);
         assert!(accepts(root, "carol", &env_password(root, "TEST_USER_PASSWORD")));
         log.push(format!("env after the first save\n{}", env_of(root)));
-        std::fs::write(root.join(".env"), "KEEP=1\nTEST_USER_NAME=old\n\nOTHER=2\nTEST_USER_PASSWORD=stale\n").unwrap();
+        std::fs::write(root.join("fixture-vars"), "KEEP=1\nTEST_USER_NAME=old\n\nOTHER=2\nTEST_USER_PASSWORD=stale\n").unwrap();
         step!("save-env over an existing .env", run(&["add", "Frank", "--save-env", "TEST_USER", "--db", db], &[], None), true);
         assert!(accepts(root, "frank", &env_password(root, "TEST_USER_PASSWORD")));
         log.push(format!("env after the second save\n{}", env_of(root)));

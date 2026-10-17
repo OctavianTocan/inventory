@@ -32,6 +32,7 @@ fn vector_bytes(random: &mut Random, kind: u64) -> Vec<u8> {
 
 #[test]
 fn helpers_match_node() {
+    let _goldens = common::test_guard();
     let keys = [None, Some(""), Some("k")];
     let bases = [None, Some("http://127.0.0.1:1/v1"), Some("http://localhost/x"), Some("http://[::1]:5/x"), Some("https://example.com"), Some("not a url"), Some("")];
     let mut cases = Vec::new();

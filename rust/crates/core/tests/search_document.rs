@@ -102,6 +102,7 @@ fn document(random: &mut Random) -> (String, String) {
 
 #[test]
 fn prose_text_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(5);
     let mut nodes: Vec<Value> = ["null", "{}", "\"x\"", "5", "[]", "{\"text\":\"a\"}", "{\"content\":[]}", "{\"text\":0,\"content\":[{\"text\":\"b\"}]}", "{\"content\":{\"length\":1}}", "{\"content\":5}"]
         .iter()
@@ -117,6 +118,7 @@ fn prose_text_matches_node() {
 
 #[test]
 fn search_document_matches_node_on_every_card() {
+    let _goldens = common::test_guard();
     let cards = fixture_cards();
     let js = calls(
         MODULE,
@@ -132,6 +134,7 @@ fn search_document_matches_node_on_every_card() {
 
 #[test]
 fn analysis_item_matches_node_on_every_card() {
+    let _goldens = common::test_guard();
     let cards = fixture_cards();
     let js = calls(MODULE, &cards.iter().map(|card| ("analysisItem", vec![obj! { "data" => card.data.as_str(), "extras" => card.extras.as_str() }.into()])).collect::<Vec<_>>());
     for (card, answer) in cards.iter().zip(&js) {
@@ -141,6 +144,7 @@ fn analysis_item_matches_node_on_every_card() {
 
 #[test]
 fn generated_documents_match_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(17);
     type Case = (String, String, Option<String>, Option<String>, Option<Value>);
     let mut cases: Vec<Case> = Vec::new();

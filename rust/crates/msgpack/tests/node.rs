@@ -1,5 +1,4 @@
-//! Differential tests: mm-msgpack against the mirrored JS codec (`tests/oracle.mjs`) on the recorded library and on
-//! generated and corrupted input.
+//! Compare mm-msgpack with frozen pre-switch goldens on the recorded library and generated inputs.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -7,12 +6,16 @@ use std::process::{Command, Stdio};
 
 use mm_js::{Object, Value, arr, base64, json};
 use mm_msgpack::{DecodeOptions, EncodeOptions, decode_multi, encode, encode_recorded};
+use mm_test_support::golden::{Batch, TestGuard};
+use rusqlite::{Connection, OpenFlags, types::ValueRef};
 use sha2::{Digest, Sha256};
 
+// Locate the committed input corpus independently of the current directory.
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
+// Run the original oracle only during an explicitly requested recording pass.
 fn oracle(request: Value) -> Vec<Value> {
     let mut child = Command::new("node")
         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/oracle.mjs"))
@@ -21,19 +24,26 @@ fn oracle(request: Value) -> Vec<Value> {
         .stdout(Stdio::piped())
         .spawn()
         .expect("node runs");
-    child.stdin.take().unwrap().write_all(json::to_string(&request).as_bytes()).unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(json::to_string(&request).as_bytes())
+        .unwrap();
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success(), "oracle failed");
     match json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap() {
         Value::Array(items) => items,
-        other => panic!("oracle answered {other:?}"),
+        _ => panic!("oracle answer is not an array"),
     }
 }
 
+// Hash exact codec output bytes.
 fn sha(bytes: &[u8]) -> String {
     base64::hex(&Sha256::digest(bytes))
 }
 
+// Decode and re-encode all values, preserving the original oracle's null-on-error contract.
 fn round_trip(bytes: &[u8], big: bool) -> Option<Vec<u8>> {
     let values = decode_multi(bytes, DecodeOptions { use_big_int64: big }).ok()?;
     let mut out = Vec::new();
@@ -43,94 +53,180 @@ fn round_trip(bytes: &[u8], big: bool) -> Option<Vec<u8>> {
     Some(out)
 }
 
-fn report(label: &str, total: usize, mismatches: &[String]) {
-    eprintln!("{label}: {total} compared");
-    assert!(mismatches.is_empty(), "{} of {total} {label} differ:\n{}", mismatches.len(), mismatches[..mismatches.len().min(20)].join("\n"));
+// Check every whole answer and reject truncated recording results.
+fn compare(label: &str, requests: &[Vec<u8>], answers: &[Value], request: impl FnOnce() -> Value) {
+    assert_eq!(requests.len(), answers.len(), "Rust answer count");
+    let mut batch = Batch::new(env!("CARGO_MANIFEST_DIR"), "node", label, requests);
+    let theirs = batch.recording().then(|| oracle(request()));
+    if let Some(expected) = &theirs {
+        assert_eq!(expected.len(), answers.len(), "oracle answer count");
+    }
+    for (index, answer) in answers.iter().enumerate() {
+        let actual = json::to_string(answer);
+        let expected = theirs.as_ref().map(|items| json::to_string(&items[index]));
+        batch.check(
+            index,
+            actual.as_bytes(),
+            expected.as_deref().map(str::as_bytes),
+        );
+    }
+    batch.finish();
+    eprintln!("{label}: {} compared", answers.len());
 }
 
 #[test]
 fn recorded_msgpack_bodies_round_trip_like_the_js_codec() {
-    let index = json::parse(&std::fs::read_to_string(root().join("replay/index.json")).unwrap()).unwrap();
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
+    let index =
+        json::parse(&std::fs::read_to_string(root().join("replay/index.json")).unwrap()).unwrap();
     let mut files: Vec<PathBuf> = index
         .as_object()
         .unwrap()
         .values()
-        .filter(|entry| entry.get("headers").get("content-type").as_str().is_some_and(|kind| kind.contains("msgpack")))
-        .map(|entry| root().join("replay/bodies").join(entry.get("file").as_str().unwrap()))
+        .filter(|entry| {
+            entry
+                .get("headers")
+                .get("content-type")
+                .as_str()
+                .is_some_and(|kind| kind.contains("msgpack"))
+        })
+        .map(|entry| {
+            root()
+                .join("replay/bodies")
+                .join(entry.get("file").as_str().unwrap())
+        })
         .collect();
-    for entry in std::fs::read_dir(root().join("capture/responses")).unwrap().flatten() {
+    for entry in std::fs::read_dir(root().join("capture/responses")).unwrap() {
+        let entry = entry.expect("recorded body directory entry is readable");
         files.push(entry.path());
     }
     files.sort();
     files.dedup();
-    files.retain(|file| file.exists());
     assert!(files.len() > 30, "the recorded library is present");
-    let theirs = oracle(mm_js::obj! { "files" => Value::Array(files.iter().map(|file| file.to_string_lossy().into_owned().into()).collect()) }.into());
-    let mut mismatches = Vec::new();
+    let mut requests = Vec::new();
+    let mut answers = Vec::new();
     let mut decoded = 0;
-    for (file, expected) in files.iter().zip(&theirs) {
-        let bytes = std::fs::read(file).unwrap();
-        let ours = arr![round_trip(&bytes, false).map(|out| sha(&out)), round_trip(&bytes, true).map(|out| sha(&out))];
+    for file in &files {
+        let bytes = std::fs::read(file).expect("required recorded MessagePack body is present");
+        requests.push(
+            json::to_string(&arr![
+                "file",
+                file.strip_prefix(root())
+                    .unwrap()
+                    .to_string_lossy()
+                    .as_ref(),
+                bytes.len() as f64,
+                sha(&bytes)
+            ])
+            .into_bytes(),
+        );
+        let ours = arr![
+            round_trip(&bytes, false).map(|out| sha(&out)),
+            round_trip(&bytes, true).map(|out| sha(&out))
+        ];
         if !ours.at(0).is_nullish() {
             decoded += 1;
         }
-        if &ours != expected {
-            mismatches.push(format!("{} ours {} node {}", file.display(), json::to_string(&ours), json::to_string(expected)));
-        }
+        answers.push(ours);
     }
     eprintln!("bodies that decode: {decoded}");
     assert!(decoded > 30);
-    report("recorded bodies", files.len(), &mismatches);
+    compare("recorded-bodies", &requests, &answers, || mm_js::obj! { "files" => Value::Array(files.iter().map(|file| file.to_string_lossy().into_owned().into()).collect()) }.into());
+    guard.finish();
 }
 
 #[test]
 fn library_json_encodes_like_both_js_encoders() {
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
     let mut texts: Vec<String> = Vec::new();
-    for file in ["capture/cards.json", "capture/details.json", "capture/meta.json"] {
+    for file in [
+        "capture/cards.json",
+        "capture/details.json",
+        "capture/meta.json",
+    ] {
         let text = std::fs::read_to_string(root().join(file)).unwrap();
         if let Value::Array(items) = json::parse(&text).unwrap() {
             texts.extend(items.iter().map(json::to_string));
         }
         texts.push(text);
     }
-    let mut request = Object::new();
-    request.insert("json", Value::Array(texts.iter().map(|text| text.as_str().into()).collect()));
-    let mut rows: Vec<Value> = oracle(request.into())
-        .into_iter()
-        .zip(&texts)
-        .map(|(answer, text)| {
-            let mut row = vec![Value::from(text)];
-            row.extend(answer.as_array().unwrap().iter().cloned());
-            Value::Array(row)
+    let captured_count = texts.len();
+    let database = fixture_database();
+    let database_texts = database_json(&database);
+    assert!(database_texts.len() > 1000, "the library database holds JSON");
+    texts.extend(database_texts);
+    assert!(
+        texts.len() > 5000,
+        "the original JSON corpus remains covered"
+    );
+    let requests: Vec<Vec<u8>> = texts
+        .iter()
+        .enumerate()
+        .map(|(index, text)| {
+            json::to_string(&arr![
+                if index < captured_count {
+                    "capture-json"
+                } else {
+                    "database-json"
+                },
+                text.as_str()
+            ])
+            .into_bytes()
         })
         .collect();
-    let database = root().join("data/mymind.db");
-    if database.exists() {
-        rows.extend(oracle(mm_js::obj! { "db" => database.to_string_lossy().into_owned() }.into()));
-    }
-    let mut mismatches = Vec::new();
-    for row in &rows {
-        let value = json::parse(row.at(0).as_str().unwrap()).unwrap();
+    let mut batch = Batch::new(
+        env!("CARGO_MANIFEST_DIR"),
+        "node",
+        "library-json",
+        &requests,
+    );
+    let theirs = batch.recording().then(|| {
+        let answers = oracle(mm_js::obj! { "json" => Value::Array(texts[..captured_count].iter().map(|text| text.as_str().into()).collect()) }.into());
+        assert_eq!(answers.len(), captured_count, "capture JSON oracle answer count");
+        let mut rows = Vec::with_capacity(texts.len());
+        for (index, answer) in answers.into_iter().enumerate() {
+            let mut row = vec![Value::from(&texts[index])];
+            row.extend(answer.as_array().expect("JSON oracle answer is an array").iter().cloned());
+            rows.push(Value::Array(row));
+        }
+        let database_rows = oracle(mm_js::obj! { "db" => database.to_string_lossy().into_owned() }.into());
+        assert_eq!(database_rows.len(), texts.len() - captured_count, "database JSON oracle answer count");
+        rows.extend(database_rows);
+        rows
+    });
+    for (index, text) in texts.iter().enumerate() {
+        let value = json::parse(text).unwrap();
         let mut recorded = Vec::new();
         encode_recorded(&mut recorded, &value);
-        let ours = [
-            sha(&encode(&value, EncodeOptions { use_big_int64: true }).unwrap()),
+        let ours = arr![
+            text.as_str(),
+            sha(&encode(
+                &value,
+                EncodeOptions {
+                    use_big_int64: true
+                }
+            )
+            .unwrap()),
             sha(&encode(&value, EncodeOptions::default()).unwrap()),
             sha(&recorded),
         ];
-        for (index, label) in ["useBigInt64", "default", "recorded"].iter().enumerate() {
-            if row.at(index + 1).as_str() != Some(ours[index].as_str()) {
-                mismatches.push(format!("{label}: {}", row.at(0).as_str().unwrap().chars().take(100).collect::<String>()));
-            }
-        }
+        let actual = json::to_string(&ours);
+        let expected = theirs.as_ref().map(|rows| json::to_string(&rows[index]));
+        batch.check(
+            index,
+            actual.as_bytes(),
+            expected.as_deref().map(str::as_bytes),
+        );
     }
-    assert!(rows.len() > 5000);
-    report("json values", rows.len(), &mismatches);
+    batch.finish();
+    eprintln!("json values: {} compared", texts.len());
+    guard.finish();
 }
 
 struct Random(u64);
 
 impl Random {
+    // Advance the original fixed-seed generator.
     fn next(&mut self) -> u64 {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 7;
@@ -138,6 +234,7 @@ impl Random {
         self.0
     }
 
+    // Select a value below the exclusive bound.
     fn below(&mut self, limit: u64) -> u64 {
         self.next() % limit
     }
@@ -151,6 +248,7 @@ const NUMBERS: &[f64] = &[
 
 const STRINGS: &[&str] = &["", "a", "id", "__proto__", "constructor", "0", "12", "-1", "1.5", "4294967295", "héllo", "😀", "\u{feff}x"];
 
+// Reconstruct the original fixed-seed generated value corpus.
 fn random_value(random: &mut Random, depth: u32) -> Value {
     match random.below(if depth > 3 { 9 } else { 12 }) {
         0 => Value::Null,
@@ -182,6 +280,7 @@ fn random_value(random: &mut Random, depth: u32) -> Value {
     }
 }
 
+// Apply the original fixed-seed mutation to a generated byte input.
 fn corrupt(random: &mut Random, bytes: &[u8]) -> Vec<u8> {
     let mut out = bytes.to_vec();
     match random.below(4) {
@@ -198,12 +297,15 @@ fn corrupt(random: &mut Random, bytes: &[u8]) -> Vec<u8> {
 
 #[test]
 fn generated_and_corrupted_input_matches_the_js_codec() {
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
     let mut random = Random(0x243f6a8885a308d3);
     let mut inputs: Vec<Vec<u8>> = Vec::new();
     for _ in 0..4000 {
         let value = random_value(&mut random, 0);
         let big = random.below(2) == 0;
-        let Ok(bytes) = encode(&value, EncodeOptions { use_big_int64: big }) else { continue };
+        let Ok(bytes) = encode(&value, EncodeOptions { use_big_int64: big }) else {
+            continue;
+        };
         if random.below(3) == 0 {
             inputs.push(corrupt(&mut random, &bytes));
         }
@@ -212,40 +314,158 @@ fn generated_and_corrupted_input_matches_the_js_codec() {
     for _ in 0..1500 {
         inputs.push(corrupt(&mut random, &[]));
     }
-    for big in [0_i128, 1, i128::from(u64::MAX), -1, i128::from(i64::MIN), 1 << 53, (1 << 53) + 1] {
-        inputs.push(encode(&Value::BigInt(big), EncodeOptions { use_big_int64: true }).unwrap());
+    for big in [
+        0_i128,
+        1,
+        i128::from(u64::MAX),
+        -1,
+        i128::from(i64::MIN),
+        1 << 53,
+        (1 << 53) + 1,
+    ] {
+        inputs.push(
+            encode(
+                &Value::BigInt(big),
+                EncodeOptions {
+                    use_big_int64: true,
+                },
+            )
+            .unwrap(),
+        );
     }
-    let theirs = oracle(mm_js::obj! { "hex" => Value::Array(inputs.iter().map(|bytes| base64::hex(bytes).into()).collect()) }.into());
-    let mut mismatches = Vec::new();
-    for (bytes, expected) in inputs.iter().zip(&theirs) {
-        let ours = arr![round_trip(bytes, false).map(|out| sha(&out)), round_trip(bytes, true).map(|out| sha(&out))];
-        if &ours != expected {
-            mismatches.push(format!("{} -> ours {} node {}", base64::hex(bytes).chars().take(200).collect::<String>(), json::to_string(&ours), json::to_string(expected)));
-        }
-    }
-    report("generated inputs", inputs.len(), &mismatches);
+    let answers: Vec<Value> = inputs
+        .iter()
+        .map(|bytes| {
+            arr![
+                round_trip(bytes, false).map(|out| sha(&out)),
+                round_trip(bytes, true).map(|out| sha(&out))
+            ]
+        })
+        .collect();
+    compare("generated-inputs", &inputs, &answers, || mm_js::obj! { "hex" => Value::Array(inputs.iter().map(|bytes| base64::hex(bytes).into()).collect()) }.into());
+    guard.finish();
 }
 
 #[test]
 fn timestamps_match_the_js_codec() {
-    let seconds = [0.0, 1.0, 4294967295.0, 4294967296.0, 17179869183.0, 17179869184.0, -1.0, -62135596800.0, 1792093660.0, 1e15];
-    let nanos = [0.0, 1.0, 999_999_999.0, 123_456_789.0, 1_073_741_823.0, 1_073_741_824.0];
-    let pairs: Vec<(f64, f64)> = seconds.iter().flat_map(|&sec| nanos.iter().map(move |&nsec| (sec, nsec))).collect();
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
+    let seconds = [
+        0.0,
+        1.0,
+        4294967295.0,
+        4294967296.0,
+        17179869183.0,
+        17179869184.0,
+        -1.0,
+        -62135596800.0,
+        1792093660.0,
+        1e15,
+    ];
+    let nanos = [
+        0.0,
+        1.0,
+        999_999_999.0,
+        123_456_789.0,
+        1_073_741_823.0,
+        1_073_741_824.0,
+    ];
+    let pairs: Vec<(f64, f64)> = seconds
+        .iter()
+        .flat_map(|&sec| nanos.iter().map(move |&nsec| (sec, nsec)))
+        .collect();
     let request = mm_js::obj! { "timestamps" => Value::Array(pairs.iter().map(|&(sec, nsec)| arr![sec, nsec]).collect()) };
-    let mut mismatches = Vec::new();
-    for ((sec, nsec), expected) in pairs.iter().zip(oracle(request.into())) {
-        let ours = base64::hex(&mm_msgpack::timestamp(*sec, *nsec));
-        if Some(ours.as_str()) != expected.as_str() {
-            mismatches.push(format!("{sec} {nsec}: ours {ours} node {}", json::to_string(&expected)));
+    let requests: Vec<Vec<u8>> = pairs
+        .iter()
+        .map(|&(sec, nsec)| json::to_string(&arr![sec, nsec]).into_bytes())
+        .collect();
+    let answers: Vec<Value> = pairs
+        .iter()
+        .map(|&(sec, nsec)| base64::hex(&mm_msgpack::timestamp(sec, nsec)).into())
+        .collect();
+    compare("timestamps", &requests, &answers, || request.into());
+    let dates = [
+        0.0,
+        1.0,
+        -1.0,
+        999.0,
+        -999.0,
+        -1000.0,
+        -1001.0,
+        1_792_093_660_123.0,
+        8.64e15,
+        -8.64e15,
+        17_179_869_184_000.0,
+    ];
+    let request =
+        mm_js::obj! { "dates" => Value::Array(dates.iter().map(|&ms| ms.into()).collect()) };
+    let requests: Vec<Vec<u8>> = dates
+        .iter()
+        .map(|&ms| json::to_string(&Value::Number(ms)).into_bytes())
+        .collect();
+    let answers: Vec<Value> = dates
+        .iter()
+        .map(|&ms| base64::hex(&encode(&Value::Date(ms), EncodeOptions::default()).unwrap()).into())
+        .collect();
+    compare("dates", &requests, &answers, || request.into());
+    guard.finish();
+}
+
+// Require the immutable fixture selected by the test environment, never a mutable data database.
+fn fixture_database() -> PathBuf {
+    let path = PathBuf::from(
+        std::env::var_os("MYMIND_TEST_DB")
+            .expect("MYMIND_TEST_DB must name the frozen library fixture"),
+    );
+    assert!(path.is_file(), "MYMIND_TEST_DB fixture is missing");
+    let canonical = path
+        .canonicalize()
+        .expect("MYMIND_TEST_DB fixture path resolves");
+    if let Ok(data) = root().join("data").canonicalize() {
+        assert!(
+            !canonical.starts_with(data),
+            "MYMIND_TEST_DB must be an immutable fixture outside data/"
+        );
+    }
+    canonical
+}
+
+// Read the original oracle's JSON cells in SQLite table, row and column order without exposing their contents.
+fn database_json(path: &Path) -> Vec<String> {
+    let database = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .expect("library fixture opens read-only");
+    let tables: Vec<String> = database
+        .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'search_fts%'",
+        )
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let mut texts = Vec::new();
+    for table in tables {
+        let mut statement = database
+            .prepare(&format!("SELECT * FROM \"{}\"", table.replace('"', "\"\"")))
+            .unwrap();
+        let count = statement.column_count();
+        let mut rows = statement.query([]).unwrap();
+        while let Some(row) = rows.next().unwrap() {
+            for column in 0..count {
+                let ValueRef::Text(bytes) = row.get_ref(column).unwrap() else {
+                    continue;
+                };
+                if !matches!(bytes.first(), Some(b'[' | b'{')) {
+                    continue;
+                }
+                let text = std::str::from_utf8(bytes).expect("fixture text is UTF-8");
+                if json::parse(text).is_ok_and(|value| !matches!(value, Value::Null)) {
+                    texts.push(text.to_owned());
+                }
+            }
         }
     }
-    let dates = [0.0, 1.0, -1.0, 999.0, -999.0, -1000.0, -1001.0, 1_792_093_660_123.0, 8.64e15, -8.64e15, 17_179_869_184_000.0];
-    let request = mm_js::obj! { "dates" => Value::Array(dates.iter().map(|&ms| ms.into()).collect()) };
-    for (ms, expected) in dates.iter().zip(oracle(request.into())) {
-        let ours = base64::hex(&encode(&Value::Date(*ms), EncodeOptions::default()).unwrap());
-        if Some(ours.as_str()) != expected.as_str() {
-            mismatches.push(format!("date {ms}: ours {ours} node {}", json::to_string(&expected)));
-        }
-    }
-    report("timestamps", pairs.len() + dates.len(), &mismatches);
+    texts
 }

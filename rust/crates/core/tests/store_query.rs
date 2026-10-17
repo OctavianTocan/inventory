@@ -105,6 +105,7 @@ fn run(file: &Path, query_id: &str, persist: bool, seed: u64, prep: usize) -> Re
 
 #[test]
 fn check_query_matches_node() {
+    let _goldens = common::test_guard();
     let mut cases = 0;
     for fixture in [test_db(), hosted_db()] {
         for query_id in QUERIES {

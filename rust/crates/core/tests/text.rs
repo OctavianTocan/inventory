@@ -25,6 +25,7 @@ fn generated(seed: u64, count: usize) -> Vec<String> {
 
 #[test]
 fn encoding_matches_node() {
+    let _goldens = common::test_guard();
     let texts = generated(7, 4000);
     let js = calls(
         "lib/render/encoding.mjs",
@@ -38,6 +39,7 @@ fn encoding_matches_node() {
 
 #[test]
 fn entities_match_node() {
+    let _goldens = common::test_guard();
     let texts = generated(11, 4000);
     let js = calls("lib/capture-entities.mjs", &texts.iter().map(|text| ("decodeEntities", vec![Value::from(text)])).collect::<Vec<_>>());
     for (text, js) in texts.iter().zip(&js) {
@@ -47,6 +49,7 @@ fn entities_match_node() {
 
 #[test]
 fn device_variants_match_node() {
+    let _goldens = common::test_guard();
     let agents = [
         "", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", "iPod touch", "Mozilla/5.0 (iPad; CPU OS 17_0)",
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) Mobile Safari", "Mozilla/5.0 (Linux; Android 14; Tab)", "Android\nMobile",

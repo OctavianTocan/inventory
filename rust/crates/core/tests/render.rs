@@ -44,6 +44,7 @@ fn same<T: Into<Value>>(rust: mm_core::Result<T>, js: &common::Answer, context: 
 
 #[test]
 fn iphone_matches_node() {
+    let _goldens = common::test_guard();
     let cards = cards();
     let js = calls("lib/render/iphone.mjs", &cards.iter().map(|card| ("iphoneCard", vec![Value::from(card.html.as_str()), Value::from(card.raw.as_str())])).collect::<Vec<_>>());
     for (card, js) in cards.iter().zip(&js) {
@@ -54,6 +55,7 @@ fn iphone_matches_node() {
 
 #[test]
 fn media_helpers_match_node() {
+    let _goldens = common::test_guard();
     let cards = cards();
     let mut inputs: Vec<Value> = Vec::new();
     for card in &cards {
@@ -141,6 +143,7 @@ fn prose_cases() -> Vec<Value> {
 
 #[test]
 fn prose_matches_node() {
+    let _goldens = common::test_guard();
     let mut docs: Vec<(String, Value)> = cards().into_iter().filter(|card| !card.data.get("prose").is_undefined()).map(|card| (card.id, card.data.get("prose").clone())).collect();
     assert!(docs.len() > 30);
     docs.extend(prose_cases().into_iter().enumerate().map(|(index, doc)| (format!("case {index}"), doc)));
@@ -196,6 +199,7 @@ fn variants(card: &Card) -> Vec<(String, Value, Value)> {
 
 #[test]
 fn render_card_matches_node() {
+    let _goldens = common::test_guard();
     let cards = cards();
     let mut requests: Vec<(String, Value, Value)> = Vec::new();
     for (index, card) in cards.iter().enumerate() {

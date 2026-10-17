@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/js", "crates/msgpack", "crates/core", "crates/sqlite", "crates/server", "crates/worker"]
+members = ["crates/js", "crates/msgpack", "crates/core", "crates/sqlite", "crates/server", "crates/worker", "test-support"]
 
 [workspace.package]
 edition = "2024"
@@ -13,6 +13,7 @@ mm-msgpack = { path = "crates/msgpack" }
 mm-core = { path = "crates/core" }
 mm-sqlite = { path = "crates/sqlite" }
 mymind = { path = "crates/server" }
+mm-test-support = { path = "test-support" }
 async-trait = "0.1.92"
 futures-core = "0.3.34"
 futures-util = "0.3.34"

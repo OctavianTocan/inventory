@@ -1,38 +1,167 @@
-//! `mymind download-server` against `node deploy/download-server.mjs`: both serve the same fixture downloads to the
-//! same sign-in database (`tests/drivers/download-fixture.mjs`), with a manifest and without one.
+//! Frozen download responses and refusal logs over Rust-built synthetic sessions and package files.
 
 mod common;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use common::{Client, Sent, Server, repo};
-use mm_js::json;
+use common::{Batch, Client, Sent, Server, TestGuard, answer_bytes, digest, log_bytes, recording, repo, request_cases, server_root};
+use mm_core::sql::Sql;
+use mm_core::{auth_store::install_auth_schema, params};
+use mm_js::{Value, json, obj};
+use mm_sqlite::Sqlite;
 
 const READY: &str = "downloads for signed-in users on http://127.0.0.1:";
 
 struct Fixture {
     dir: PathBuf,
     sessions: mm_js::Value,
+    schema_sha256: String,
 }
 
 fn fixture() -> Fixture {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("download-test");
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("download-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    let db = Sqlite::open(dir.join("auth.db"), false).unwrap();
+    install_auth_schema(&db).unwrap();
+    let schema: Vec<Value> = db
+        .query("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name", &[])
+        .unwrap()
+        .iter()
+        .map(|row| row.text("sql").unwrap().into())
+        .collect();
+    let hour = 3_600_000.0;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as f64;
+    let mut sessions = mm_js::Object::new();
+    let latin: String = "café-id".bytes().map(char::from).collect();
+    for (key, id, email, ttl) in [
+        ("owner", "owner-session-id", "owner@example.com", hour),
+        ("escaped", "escaped-session-id", "<b>\"x\"&@example.com", hour),
+        ("expired", "expired-session-id", "owner@example.com", -hour),
+        ("blank", "blank-session-id", "", hour),
+        ("latin", latin.as_str(), "latin@example.com", hour),
+    ] {
+        db.execute(
+            "INSERT INTO sessions (hash, sub, email, created_ms, expires_ms, used_ms) VALUES (?, ?, ?, ?, ?, ?)",
+            params![digest(id.as_bytes()), format!("sub-{email}"), email, now, now + ttl, now],
+        )
+        .unwrap();
+        sessions.insert(key, id);
+    }
+    std::fs::create_dir_all(dir.join("downloads/sub")).unwrap();
+    std::fs::create_dir_all(dir.join("empty")).unwrap();
+    let mut seed = 7.0_f64;
+    for (name, size) in [
+        ("mymind-linux-x86_64.tar.gz", 300_000),
+        ("my app.tar.gz", 1_000),
+        ("a+b&c=d.tar.gz", 10),
+        ("sub/inner.tar.gz", 20),
+        ("notlisted.tar.gz", 5),
+    ] {
+        let bytes: Vec<u8> = (0..size)
+            .map(|_| {
+                seed = (seed * 1_103_515_245.0 + 12_345.0) % 2_147_483_648.0;
+                (seed as u64 & 0xff) as u8
+            })
+            .collect();
+        std::fs::write(dir.join("downloads").join(name), bytes).unwrap();
+    }
+    let mut files: Vec<Value> = [
+        Value::from("mymind-linux-x86_64.tar.gz"),
+        Value::from("my app.tar.gz"),
+        Value::from("a+b&c=d.tar.gz"),
+        Value::from("sub/inner.tar.gz"),
+        Value::from("sub/../my app.tar.gz"),
+        Value::from("missing.tar.gz"),
+        Value::from(5),
+    ]
+    .into_iter()
+    .map(|name| {
+        let label = format!("Label <{}>", name.to_js_string());
+        obj! { "name" => name, "label" => label, "bytes" => 52_428_800, "built" => "2026-10-17T01:02:03Z", "sha256" => "ab&cd" }.into()
+    })
+    .collect();
+    files.push(obj! { "label" => "no name", "bytes" => 1, "built" => "", "sha256" => "" }.into());
+    let manifest = obj! { "library" => "https://library.example/<x>", "files" => Value::Array(files) };
+    std::fs::write(dir.join("downloads/manifest.json"), json::to_string(&manifest.into())).unwrap();
+    let fixture = Fixture {
+        dir,
+        sessions: sessions.into(),
+        schema_sha256: digest(json::to_string(&Value::Array(schema)).as_bytes()),
+    };
+    if recording() {
+        check_legacy_fixture(&fixture);
+    }
+    fixture
+}
+
+// Recording also proves the Rust fixture retains the legacy synthetic bytes, session identities and TTLs.
+fn check_legacy_fixture(fixture: &Fixture) {
+    let legacy = fixture.dir.join("legacy");
+    std::fs::create_dir_all(&legacy).unwrap();
     let root = repo();
-    let output = Command::new("node").arg(root.join("rust/crates/server/tests/drivers/download-fixture.mjs")).arg(&dir).env("MYMIND_ROOT", &root).output().unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-    Fixture { dir, sessions: json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap() }
+    let output = Command::new("node")
+        .arg(root.join("rust/crates/server/tests/drivers/download-fixture.mjs"))
+        .arg(&legacy)
+        .current_dir(server_root())
+        .env_clear()
+        .env("MYMIND_ROOT", &root)
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "the legacy synthetic download fixture failed");
+    assert_eq!(
+        json::to_string(&fixture.sessions),
+        json::to_string(&json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap())
+    );
+    for name in [
+        "manifest.json",
+        "mymind-linux-x86_64.tar.gz",
+        "my app.tar.gz",
+        "a+b&c=d.tar.gz",
+        "sub/inner.tar.gz",
+        "notlisted.tar.gz",
+    ] {
+        assert_eq!(
+            digest(&std::fs::read(legacy.join("downloads").join(name)).unwrap()),
+            digest(&std::fs::read(fixture.dir.join("downloads").join(name)).unwrap()),
+            "synthetic package fixture {name}"
+        );
+    }
+    let state = |file: PathBuf| {
+        let db = Sqlite::open(&file, true).unwrap();
+        let rows = db
+            .query(
+                "SELECT hash, sub, email, expires_ms - created_ms AS ttl, used_ms - created_ms AS used FROM sessions ORDER BY hash",
+                &[],
+            )
+            .unwrap();
+        assert_eq!(rows.len(), 5);
+        rows.iter()
+            .map(|row| {
+                json::to_string(
+                    &obj! {
+                        "hash" => row.text("hash").unwrap(), "sub" => row.text("sub").unwrap(), "email" => row.text("email").unwrap(),
+                        "ttl" => row.number("ttl").unwrap(), "used" => row.number("used").unwrap(),
+                    }
+                    .into(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(state(legacy.join("auth.db")), state(fixture.dir.join("auth.db")));
 }
 
 // A port nothing listens on now; download-server.mjs prints the port it was given, so port 0 cannot be read back.
 fn free_port() -> u16 {
-    std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port()
+    let port = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port();
+    mm_test_support::golden::register_loopback_port(port);
+    port
 }
 
 fn start(mut command: Command, fixture: &Fixture, downloads: &str) -> Server {
-    let root = repo();
+    let root = server_root();
     command
         .current_dir(&root)
         .env_clear()
@@ -48,7 +177,7 @@ fn start(mut command: Command, fixture: &Fixture, downloads: &str) -> Server {
 
 fn node(fixture: &Fixture, downloads: &str) -> Server {
     let mut command = Command::new("node");
-    command.arg("--no-warnings").arg("deploy/download-server.mjs");
+    command.arg("--no-warnings").arg(repo().join("deploy/download-server.mjs"));
     start(command, fixture, downloads)
 }
 
@@ -125,29 +254,40 @@ fn requests(fixture: &Fixture) -> Vec<Sent> {
 
 fn compare(fixture: &Fixture, downloads: &str) {
     let requests = requests(fixture);
-    let (reference, ported) = (node(fixture, downloads), rust(fixture, downloads));
-    let (mut expected, mut actual) = (Client::new(reference.port), Client::new(ported.port));
-    let (mut differences, mut served) = (Vec::new(), 0);
-    for sent in &requests {
-        let (want, got) = (expected.send(sent), actual.send(sent));
-        served += usize::from(want.status.ends_with("200 OK") && want.body.len() == 300_000);
-        if want != got {
-            differences.push(format!("{} {} {:?}\n  node: {want:?}\n  rust: {got:?}", sent.method, sent.target, sent.headers));
-        }
+    assert_eq!(requests.len(), 428, "the original cookie, traversal, method and streaming cases remain covered");
+    let fixture_id: Value = obj! {
+        "recipe" => "download-fixture-v1", "sessions" => fixture.sessions.clone(),
+        "schema_sha256" => fixture.schema_sha256.as_str(),
+        "manifest" => common::fixture_identity(&fixture.dir.join("downloads/manifest.json")),
+        "package" => common::fixture_identity(&fixture.dir.join("downloads/mymind-linux-x86_64.tar.gz")),
+    }
+    .into();
+    let identities = request_cases(&requests, fixture_id, &["refusal-logs"]);
+    let mut golden = Batch::new(env!("CARGO_MANIFEST_DIR"), "download", downloads, &identities);
+    golden.allow_inline_synthetic();
+    let reference = recording().then(|| node(fixture, downloads));
+    let ported = rust(fixture, downloads);
+    let mut expected = reference.as_ref().map(|server| Client::new(server.port));
+    let mut actual = Client::new(ported.port);
+    let mut served = 0;
+    for (index, sent) in requests.iter().enumerate() {
+        let want = expected.as_mut().map(|client| answer_bytes(&client.send(sent)));
+        let got = actual.send(sent);
+        served += usize::from(got.status.ends_with("200 OK") && got.body.len() == 300_000);
+        golden.check(index, &answer_bytes(&got), want.as_deref());
     }
     std::thread::sleep(std::time::Duration::from_millis(300));
-    let (want, got) = (reference.logged(&["refused "]), ported.logged(&["refused "]));
-    if want != got {
-        differences.push(format!("logs differ\n  node: {want:?}\n  rust: {got:?}"));
-    }
+    let want = reference.as_ref().map(|server| log_bytes(&server.logged(&["refused "])));
+    golden.check(requests.len(), &log_bytes(&ported.logged(&["refused "])), want.as_deref());
     assert!(downloads == "empty" || served >= 5, "the package was served {served} times");
-    let shown: Vec<&str> = differences.iter().take(30).map(String::as_str).collect();
-    assert!(differences.is_empty(), "{downloads}: {} of {} requests differ:\n{}", differences.len(), requests.len(), shown.join("\n"));
+    golden.finish();
 }
 
 #[test]
 fn downloads_as_download_server_mjs_serves_them() {
+    let inventory = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "download");
     let fixture = fixture();
     compare(&fixture, "downloads");
     compare(&fixture, "empty");
+    inventory.finish();
 }

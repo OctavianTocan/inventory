@@ -99,6 +99,7 @@ fn mutate(random: &mut common::Random, seed: &[u8]) -> Vec<u8> {
 
 #[test]
 fn forms_parse_as_node_parses_them() {
+    let _goldens = common::test_guard();
     let types = [
         "multipart/form-data; boundary=B",
         "multipart/form-data;boundary=\"B\"",
@@ -136,19 +137,11 @@ fn forms_parse_as_node_parses_them() {
     }
     let calls: Vec<(&str, Vec<Value>)> = cases.iter().map(|(content_type, body)| ("formData", vec![content_type.as_str().into(), Value::Bytes(body.clone())])).collect();
     let answers = common::calls(DRIVER, &calls);
-    let (mut differences, mut parsed_forms) = (Vec::new(), 0);
+    let mut parsed_forms = 0;
     for ((content_type, body), js) in cases.iter().zip(&answers) {
-        let rust = parsed(content_type, body);
-        let same = match (&rust, js) {
-            (Ok(rust), Ok(js)) => common::text(rust) == common::text(js),
-            (Err(_), Err(_)) => true,
-            _ => false,
-        };
-        parsed_forms += usize::from(js.is_ok());
-        if !same && differences.len() < 20 {
-            differences.push(format!("{content_type:?} {:?}\n  rust: {rust:?}\n  node: {js:?}", String::from_utf8_lossy(body)));
-        }
+        let rust = parsed(content_type, body).map_err(|_| mm_core::Error::internal("form parser rejected input"));
+        parsed_forms += usize::from(rust.is_ok());
+        common::assert_throws(&rust, js, &format!("formData({content_type:?}, {} bytes)", body.len()));
     }
-    assert!(differences.is_empty(), "{}", differences.join("\n"));
     assert!(parsed_forms > cases.len() / 8, "only {parsed_forms} of {} cases parsed", cases.len());
 }

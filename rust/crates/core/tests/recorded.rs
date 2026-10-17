@@ -66,6 +66,7 @@ fn lookups_value(lookups: &[(String, String, String)]) -> Value {
 
 #[test]
 fn recorded_matches_node_on_hosted_fixture() {
+    let _goldens = common::test_guard();
     let probe = Sqlite::open(hosted_db(), true).unwrap();
     let keys: Vec<String> = probe.query("SELECT key FROM recorded", &[]).unwrap().iter().map(|row| row.text("key").unwrap().to_owned()).collect();
     assert!(keys.len() > 2000);

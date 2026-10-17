@@ -35,4 +35,5 @@ indexmap.workspace = true
 libc = "0.2"
 
 [dev-dependencies]
+mm-test-support = { path = "../../test-support" }
 memchr = "2.8"

@@ -100,6 +100,7 @@ fn urls(random: &mut Random) -> Vec<String> {
 
 #[test]
 fn public_address_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(0x9e37_79b9);
     let mut all = v4_addresses(&mut random);
     all.extend(v6_addresses(&mut random));
@@ -117,6 +118,7 @@ fn public_address_matches_node() {
 
 #[test]
 fn capture_destination_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(0x51ed_270b);
     let all = urls(&mut random);
     let mut requests = Vec::new();

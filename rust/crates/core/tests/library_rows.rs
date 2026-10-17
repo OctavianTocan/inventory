@@ -22,6 +22,7 @@ fn names(columns: &[String]) -> Value {
 
 #[test]
 fn digests_match_node_on_every_fixture_table() {
+    let _goldens = common::test_guard();
     let mut cases = 0;
     for fixture in [test_db(), hosted_db()] {
         let copy = temp_copy(&fixture);
@@ -48,6 +49,7 @@ fn digests_match_node_on_every_fixture_table() {
 
 #[test]
 fn digest_names_are_validated() {
+    let _goldens = common::test_guard();
     let db = Sqlite::open(":memory:", false).unwrap();
     db.exec_batch("CREATE TABLE t (a, b)").unwrap();
     let cases: Vec<(&str, Vec<&str>)> = vec![("t", vec!["a x"]), ("t x", vec!["a"]), ("", vec!["a"]), ("t", vec![""]), ("t", vec!["1a"]), ("t", vec!["a\n"]), ("t", vec!["a\"b"]), ("t", vec!["é"]), ("t", vec!["a", "b"]), ("t", vec![])];
@@ -56,18 +58,17 @@ fn digest_names_are_validated() {
         let columns: Vec<String> = columns.into_iter().map(str::to_owned).collect();
         let js = calls(DRIVER, &[("digest", vec![path.to_str().unwrap().into(), table.into(), names(&columns)])]).remove(0);
         let rust = table_digest(&Sqlite::open(&path, true).unwrap(), table, &columns).map(|digest| digest.to_value());
-        if let (Err(Error::Status { .. }), Err(_)) = (&rust, &js) {
+        if matches!(rust, Err(Error::Status { .. })) {
             assert_same(&rust, &js, &format!("tableDigest({table:?}, {columns:?})"));
-        } else if js.is_err() {
-            assert!(rust.is_err(), "tableDigest({table:?}, {columns:?}): JS threw, Rust gave {rust:?}");
         } else {
-            assert_same(&rust, &js, &format!("tableDigest({table:?}, {columns:?})"));
+            common::assert_throws(&rust, &js, &format!("tableDigest({table:?}, {columns:?})"));
         }
     }
 }
 
 #[test]
 fn encode_value_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(3);
     let mut cases: Vec<SqlValue> = vec![
         SqlValue::Null, SqlValue::Integer(0), SqlValue::Integer(-1), SqlValue::Integer(i64::MAX), SqlValue::Integer(i64::MIN), SqlValue::Integer(9_007_199_254_740_993),
@@ -120,6 +121,7 @@ fn round_trip(create: &str, table: &str, columns: &[String], rows: &[Vec<Value>]
 
 #[test]
 fn insert_rows_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(9);
     let create = "CREATE TABLE t (a INTEGER, b REAL, c TEXT, d BLOB, e)";
     let columns: Vec<String> = ["a", "b", "c", "d", "e"].iter().map(|name| (*name).to_owned()).collect();
@@ -160,6 +162,7 @@ fn insert_rows_matches_node() {
 
 #[test]
 fn insert_rows_validates_names_like_node() {
+    let _goldens = common::test_guard();
     let create = "CREATE TABLE t (a, b)";
     let row = vec![Value::from(1), Value::from(2)];
     for (table, columns) in [("t", vec!["a", "b"]), ("t x", vec!["a", "b"]), ("t", vec!["a", "b c"]), ("t", vec!["a\"", "b"]), ("1t", vec!["a", "b"]), ("t", vec!["a", "b\n"]), ("", vec!["a", "b"]), ("t", vec!["é", "b"])] {

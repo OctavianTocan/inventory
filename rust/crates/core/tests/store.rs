@@ -120,11 +120,13 @@ fn check_dump(fixture: &Path) {
 
 #[test]
 fn reads_match_node_on_owner_fixture() {
+    let _goldens = common::test_guard();
     check_dump(&test_db());
 }
 
 #[test]
 fn reads_match_node_on_hosted_fixture() {
+    let _goldens = common::test_guard();
     check_dump(&hosted_db());
 }
 
@@ -158,6 +160,7 @@ fn new_ids(file: &Path) -> Result<Value> {
 
 #[test]
 fn new_id_matches_node() {
+    let _goldens = common::test_guard();
     for fixture in [test_db(), hosted_db()] {
         let js = calls(DRIVER, &[("newIds", vec![Value::from(temp_copy(&fixture).to_str().unwrap())])]).remove(0);
         assert_same(&new_ids(&temp_copy(&fixture)), &js, "newIds");
@@ -178,6 +181,7 @@ fn search_state(file: &Path, drop_search: bool) -> Result<Value> {
 
 #[test]
 fn search_index_matches_node() {
+    let _goldens = common::test_guard();
     for fixture in [test_db(), hosted_db()] {
         for drop_search in [false, true] {
             let js = calls(DRIVER, &[("searchState", vec![Value::from(temp_copy(&fixture).to_str().unwrap()), Value::from(drop_search)])]).remove(0);
@@ -236,6 +240,7 @@ fn transaction_cases(file: &Path) -> Result<Value> {
 
 #[test]
 fn transaction_matches_node() {
+    let _goldens = common::test_guard();
     for fixture in [test_db(), hosted_db()] {
         let js = calls(DRIVER, &[("transactionCases", vec![Value::from(temp_copy(&fixture).to_str().unwrap())])]).remove(0);
         assert_same(&transaction_cases(&temp_copy(&fixture)), &js, "transactionCases");
@@ -244,6 +249,7 @@ fn transaction_matches_node() {
 
 #[test]
 fn nanosecond_helpers_match_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(77);
     let mut isos: Vec<String> = [
         "2026-10-15T09:35:08.050534Z", "2026-10-15T09:35:08Z", "1970-01-01T00:00:00Z", "1969-12-31T23:59:59.5Z", "0001-01-01T00:00:00Z", "9999-12-31T23:59:59.999999999Z",

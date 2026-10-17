@@ -16,3 +16,5 @@ js-sys.workspace = true
 
 [dev-dependencies]
 sha2.workspace = true
+rusqlite.workspace = true
+mm-test-support = { path = "../../test-support" }

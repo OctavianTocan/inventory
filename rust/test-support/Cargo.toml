@@ -1,0 +1,12 @@
+[package]
+name = "mm-test-support"
+description = "Dev-only frozen opaque golden expectations for native integration tests"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+sha2.workspace = true
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+flate2.workspace = true

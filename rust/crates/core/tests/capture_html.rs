@@ -57,6 +57,7 @@ const MODULE: &str = "lib/capture-html.mjs";
 
 #[test]
 fn source_url_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(11);
     let mut cases: Vec<(Value, String)> = Vec::new();
     for raw in URLS.iter().chain(["/rel", "rel/x", "?q", "#f", "http://u:p@h/", "HTTPS://H.COM", "\\\\h.com\\p", "//h.com", "http:h.com", "mailto:a@b"].iter()) {
@@ -81,6 +82,7 @@ fn source_url_matches_node() {
 
 #[test]
 fn plain_text_matches_node() {
+    let _goldens = common::test_guard();
     let mut texts = generated(3, 1500);
     texts.extend(recorded_pages());
     let js = calls(MODULE, &texts.iter().map(|text| ("plainText", vec![Value::from(text.as_str())])).collect::<Vec<_>>());
@@ -91,6 +93,7 @@ fn plain_text_matches_node() {
 
 #[test]
 fn sanitize_post_matches_node() {
+    let _goldens = common::test_guard();
     let mut texts = generated(5, 2500);
     texts.extend(recorded_pages().into_iter().take(40));
     let js = calls(MODULE, &texts.iter().map(|text| ("sanitizePost", vec![Value::from(text.as_str()), Value::from("https://example.com/dir/")])).collect::<Vec<_>>());
@@ -101,6 +104,7 @@ fn sanitize_post_matches_node() {
 
 #[test]
 fn page_metadata_matches_node() {
+    let _goldens = common::test_guard();
     let mut cases: Vec<(String, &str)> = generated(9, 2500).into_iter().map(|text| (text, "https://www.example.com/dir/page")).collect();
     cases.extend(recorded_pages().into_iter().map(|text| (text, "https://example.org/a/b?c=d")));
     cases.push((String::new(), "not a url"));
@@ -113,6 +117,7 @@ fn page_metadata_matches_node() {
 
 #[test]
 fn capture_title_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(21);
     let titles = ["Hello - Site", "Hello | Example", "Hello \u{2014} Example Com", "Hello - Other", "Plain", "A - B - Example", "Hello  -  example", " - Example", "Foo - Apps on Google Play", "Bar on the App Store ", "", "T | www.example.com", "X \u{2013} Example"];
     let sites = ["Site", "Example", "example.com", "Exa-mple", "", "\u{c9}xample", "\u{1d4d0}"];
@@ -145,6 +150,7 @@ fn capture_title_matches_node() {
 
 #[test]
 fn profile_image_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(31);
     let mut values: Vec<String> = URLS.iter().map(|url| (*url).to_owned()).collect();
     for _ in 0..2000 {
@@ -160,6 +166,7 @@ fn profile_image_matches_node() {
 
 #[test]
 fn detect_type_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(41);
     let og = [Value::Undefined, arr!["article"], arr!["website"], arr!["x", "article:foo"]];
     let entities = [

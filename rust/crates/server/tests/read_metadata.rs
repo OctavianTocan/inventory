@@ -1,6 +1,5 @@
-//! `import_read_metadata` against `importReadMetadata` of `lib/read-metadata.mjs`: copies of the owner fixture with
-//! their imported metadata removed, over the repository's recordings and over made-up recordings with byte order
-//! marks, invalid UTF-8, reader pages, unknown cards and a missing body file.
+//! Frozen read-metadata imports over owner fixture copies with imported metadata removed. Repository and synthetic
+//! recordings cover byte order marks, invalid UTF-8, reader pages, unknown cards, a missing body and idempotence.
 
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
@@ -125,16 +124,16 @@ fn imports_as_import_read_metadata() {
     let roots = [("repository", common::root()), ("made up", recordings("account", true, false)), ("captured account", recordings("captured", false, false)), ("missing body", recordings("broken", true, true)), ("no recordings", empty)];
     for (name, root) in roots {
         let (js_copy, rust_copy) = (fresh_copy(), fresh_copy());
-        let js = common::call(DRIVER, "run", vec![js_copy.to_string_lossy().as_ref().into(), root.to_string_lossy().as_ref().into()]).unwrap();
+        let expected = common::call(DRIVER, "run", vec![js_copy.to_string_lossy().as_ref().into(), root.to_string_lossy().as_ref().into()]);
         let rust = rust_run(&rust_copy, &root);
-        assert_eq!(common::text(&rust), common::text(&js), "{name}");
+        common::assert_value(&rust, &expected, name);
         if name != "no recordings" && name != "missing body" {
-            assert!(!js.get("metadata").as_array().unwrap().is_empty(), "{name} imported nothing");
+            assert!(!rust.get("metadata").as_array().unwrap().is_empty(), "{name} imported nothing");
         }
         if name == "made up" {
             // The plain document, the reader page and the captured one; JSON.parse refuses the byte order mark and
             // the replaced bytes.
-            let content = js.get("content").as_array().unwrap();
+            let content = rust.get("content").as_array().unwrap();
             assert!(content.len() == 3, "{name} imported {} documents", content.len());
         }
         // A second import leaves existing metadata alone.

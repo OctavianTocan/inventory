@@ -1,12 +1,11 @@
-//! The native capture transport against `createCaptureTransport` of `lib/capture-http.mjs`: both fetch the same
-//! fixture URLs from a local server and must give the same bytes, headers, redirects and failure classes.
-
-#[path = "../../core/tests/common/mod.rs"]
-mod common;
+//! The native capture transport against frozen pre-switch expectations: real loopback fetches preserve bytes,
+//! headers, redirects, shared budgets and failure classes. The legacy oracle runs only when explicitly recording.
 
 use std::cell::Cell;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::path::Path;
+use std::process::{Command, Stdio};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -14,28 +13,81 @@ use flate2::Compression;
 use flate2::write::{GzEncoder, ZlibEncoder};
 use mm_core::host::ResourceOptions;
 use mm_core::{Error, Value, obj};
-use mm_js::base64;
+use mm_js::{base64, json};
+use mm_test_support::golden::{Batch, TestGuard, recording, recording_mismatch, register_loopback_port};
 use mymind::capture_http::CaptureTransport;
+use sha2::{Digest, Sha256};
 
 const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/capture-http.mjs");
-const KNOWN: [&str; 6] = ["Page unavailable", "Too many capture redirects", "Capture resource too large", "Unsupported capture encoding", "Invalid capture redirect", "Unsupported capture destination"];
+const KNOWN: [&str; 6] = [
+    "Page unavailable",
+    "Too many capture redirects",
+    "Capture resource too large",
+    "Unsupported capture encoding",
+    "Invalid capture redirect",
+    "Unsupported capture destination",
+];
 
+// Node's brotliCompressSync(page()) default options, frozen from the original synthetic fixture.
+const BROTLI: &str = "G7cL+I3URnnrgNQ8bXB50udFISXZ5LUcgQ9xIj+8vQYAOAE=";
+
+// Invoke one original transport oracle export only during explicit recording.
+fn legacy_call(name: &str, args: Vec<Value>) -> Value {
+    assert!(recording(), "the JS transport oracle is recording-only");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+    let request: Value = obj! { "module" => DRIVER, "calls" => vec![Value::from(obj! { "fn" => name, "args" => args })] }.into();
+    let mut command = Command::new("node");
+    command
+        .arg(root.join("rust/crates/core/tests/oracle.mjs"))
+        .env_clear()
+        .env("MYMIND_ROOT", &root)
+        .env("TZ", "UTC")
+        .env("STORE_LOAD_ENV", "0")
+        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"));
+    if let Some(path) = std::env::var_os("PATH") {
+        command.env("PATH", path);
+    }
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("recording requires Node");
+    child.stdin.take().unwrap().write_all(json::to_string(&request).as_bytes()).unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "capture oracle failed: {}", String::from_utf8_lossy(&output.stderr));
+    let answers = json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap();
+    let answers = answers.as_array().expect("oracle answers an array");
+    assert_eq!(answers.len(), 1, "oracle answer count");
+    assert!(answers[0].get("error").is_undefined(), "capture oracle threw");
+    answers[0].get("ok").clone()
+}
+
+// Replace the assigned loopback port in otherwise exact serialized fetch outcomes.
+fn normalized(value: &Value, port: u16) -> Vec<u8> {
+    json::to_string(value).replace(&format!(":{port}"), ":PORT").into_bytes()
+}
+
+// Build the fixed synthetic HTML payload used by every transport encoding fixture.
 fn page() -> Vec<u8> {
     (0..3000).map(|index| b"<p>hello mymind</p>\n"[index % 20]).collect()
 }
 
+// Encode fixture bytes with the existing gzip defaults.
 fn gzip(bytes: &[u8]) -> Vec<u8> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(bytes).unwrap();
     encoder.finish().unwrap()
 }
 
+// Encode fixture bytes with the existing zlib defaults.
 fn deflate(bytes: &[u8]) -> Vec<u8> {
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(bytes).unwrap();
     encoder.finish().unwrap()
 }
 
+// Write one raw fixture response with an explicit connection close.
 fn reply(stream: &mut TcpStream, status: &str, headers: &[(&str, String)], body: &[u8]) {
     let mut head = format!("HTTP/1.1 {status}\r\n");
     for (name, value) in headers {
@@ -46,6 +98,7 @@ fn reply(stream: &mut TcpStream, status: &str, headers: &[(&str, String)], body:
     let _ = stream.write_all(body);
 }
 
+// Answer one loopback request with the selected encoding, redirect or failure fixture.
 fn serve(mut stream: TcpStream, port: u16, brotli: &[u8]) {
     let mut request = Vec::new();
     let mut buffer = [0u8; 1024];
@@ -62,7 +115,19 @@ fn serve(mut stream: TcpStream, port: u16, brotli: &[u8]) {
     let html = ("Content-Type", "text/html; charset=utf-8".to_owned());
     let location = |target: String| [("Location", target), ("Content-Length", "0".to_owned())];
     match path.as_str() {
-        "/plain" => reply(&mut stream, "200 OK", &[html, length(&page), ("X-Alpha", "1".into()), ("Set-Cookie", "a=b".into()), ("X-Dup", "one".into()), ("X-Dup", "two".into())], &page),
+        "/plain" => reply(
+            &mut stream,
+            "200 OK",
+            &[
+                html,
+                length(&page),
+                ("X-Alpha", "1".into()),
+                ("Set-Cookie", "a=b".into()),
+                ("X-Dup", "one".into()),
+                ("X-Dup", "two".into()),
+            ],
+            &page,
+        ),
         "/gzip" => {
             let body = gzip(&page);
             reply(&mut stream, "200 OK", &[html, length(&body), ("Content-Encoding", "gzip".into())], &body);
@@ -114,9 +179,11 @@ fn serve(mut stream: TcpStream, port: u16, brotli: &[u8]) {
     }
 }
 
+// Start the raw fixture listener and register its assigned loopback port.
 fn start(brotli: Vec<u8>) -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
+    register_loopback_port(port);
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             let brotli = brotli.clone();
@@ -132,6 +199,7 @@ struct Case {
     budget: bool,
 }
 
+// Project fetched bytes, headers, errors and remaining budget into the oracle shape.
 fn rust_answer(result: Result<mm_core::host::FetchedResource, Error>, remaining: i64) -> Value {
     let mut answer: Value = match result {
         Ok(found) => {
@@ -158,66 +226,164 @@ fn rust_answer(result: Result<mm_core::host::FetchedResource, Error>, remaining:
 
 #[test]
 fn transport_matches_node() {
-    let encoded = common::call(DRIVER, "brotli", vec![base64::encode(&page()).into()]).unwrap();
-    let brotli = base64::decode(encoded.as_str().unwrap());
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "capture_http");
+    let brotli = base64::decode(BROTLI);
+    if recording() {
+        let input = base64::encode(&page());
+        let encoded = legacy_call("brotli", vec![input.clone().into()]);
+        let expected = base64::decode(encoded.as_str().unwrap());
+        if brotli != expected {
+            let request: Value = obj! { "builtin" => "node:zlib.brotliCompressSync", "inputBase64" => input, "options" => "defaults" }.into();
+            recording_mismatch(
+                env!("CARGO_MANIFEST_DIR"),
+                "capture_http",
+                "brotli-fixture",
+                json::to_string(&request).as_bytes(),
+                &brotli,
+                &expected,
+            );
+        }
+    }
     let port = start(brotli);
     let base = format!("http://127.0.0.1:{port}");
     let paths = [
-        "/plain", "/gzip", "/deflate", "/br", "/identity", "/zstd", "/corrupt", "/bomb", "/empty", "/typeless", "/image", "/chunked", "/redirect-plain",
-        "/redirect-relative", "/redirect-absolute", "/redirect-chain", "/redirect-loop", "/redirect-none", "/redirect-blocked", "/redirect-external",
-        "/redirect-credentials", "/redirect-scheme", "/redirect-303", "/missing", "/broken", "/informational", "/nothing-here",
+        "/plain",
+        "/gzip",
+        "/deflate",
+        "/br",
+        "/identity",
+        "/zstd",
+        "/corrupt",
+        "/bomb",
+        "/empty",
+        "/typeless",
+        "/image",
+        "/chunked",
+        "/redirect-plain",
+        "/redirect-relative",
+        "/redirect-absolute",
+        "/redirect-chain",
+        "/redirect-loop",
+        "/redirect-none",
+        "/redirect-blocked",
+        "/redirect-external",
+        "/redirect-credentials",
+        "/redirect-scheme",
+        "/redirect-303",
+        "/missing",
+        "/broken",
+        "/informational",
+        "/nothing-here",
     ];
     let mut cases: Vec<Case> = Vec::new();
     for path in paths {
-        cases.push(Case { url: format!("{base}{path}"), limit: None, budget: false });
+        cases.push(Case {
+            url: format!("{base}{path}"),
+            limit: None,
+            budget: false,
+        });
     }
     for path in ["/plain", "/gzip", "/br", "/bomb", "/chunked", "/redirect-chain", "/empty"] {
         for limit in [100, 2999, 3000] {
-            cases.push(Case { url: format!("{base}{path}"), limit: Some(limit), budget: false });
+            cases.push(Case {
+                url: format!("{base}{path}"),
+                limit: Some(limit),
+                budget: false,
+            });
         }
     }
     for path in ["/plain", "/gzip", "/plain", "/br", "/chunked", "/plain", "/empty", "/plain", "/redirect-chain"] {
-        cases.push(Case { url: format!("{base}{path}"), limit: None, budget: true });
+        cases.push(Case {
+            url: format!("{base}{path}"),
+            limit: None,
+            budget: true,
+        });
     }
     for url in [
-        "http://10.0.0.1/", "http://localhost.:1/", "https://example.com/", "ftp://127.0.0.1/", "http://127.0.0.1:1/", "http://[::1]:1/", "http://127.1/",
-        "http://user:pw@127.0.0.1/", "not a url",
+        "http://10.0.0.1/",
+        "http://localhost.:1/",
+        "https://example.com/",
+        "ftp://127.0.0.1/",
+        "http://127.0.0.1:1/",
+        "http://[::1]:1/",
+        "http://127.1/",
+        "http://user:pw@127.0.0.1/",
+        "not a url",
     ] {
-        cases.push(Case { url: url.to_owned(), limit: None, budget: false });
+        cases.push(Case {
+            url: url.to_owned(),
+            limit: None,
+            budget: false,
+        });
     }
-    cases.push(Case { url: format!("http://localhost:{port}/plain"), limit: None, budget: false });
+    cases.push(Case {
+        url: format!("http://localhost:{port}/plain"),
+        limit: None,
+        budget: false,
+    });
     let budget_total = 7000;
     let driver_cases = Value::Array(
-        cases.iter().map(|case| obj! { "url" => case.url.as_str(), "limit" => case.limit.map_or(Value::Null, |limit| (limit as f64).into()), "budget" => case.budget }.into()).collect(),
+        cases
+            .iter()
+            .map(|case| {
+                obj! { "url" => case.url.as_str(), "limit" => case.limit.map_or(Value::Null, |limit| (limit as f64).into()), "budget" => case.budget }.into()
+            })
+            .collect(),
     );
-    let js = common::call(DRIVER, "run", vec![driver_cases, Value::from(f64::from(budget_total))]).unwrap();
-    let Value::Array(js) = js else { panic!("driver answered no array") };
+    let requests: Vec<Vec<u8>> = cases
+        .iter()
+        .enumerate()
+        .map(|(index, case)| {
+            normalized(&obj! { "index" => index, "scenario" => driver_cases.clone(), "budget" => budget_total,
+                    "fixture" => obj! { "pageBytes" => page().len(), "pageSha256" => format!("{:x}", Sha256::digest(page())), "brotli" => BROTLI },
+            "case" => obj! { "url" => case.url.as_str(), "limit" => case.limit.map_or(Value::Null, |limit| (limit as f64).into()), "budget" => case.budget }
+        }.into(), port)
+        })
+        .collect();
+    let mut golden = Batch::new(env!("CARGO_MANIFEST_DIR"), "capture_http", "transport", &requests);
+    let js = recording().then(|| {
+        let value = legacy_call("run", vec![driver_cases, Value::from(f64::from(budget_total))]);
+        let Value::Array(values) = value else { panic!("driver answered no array") };
+        assert_eq!(values.len(), cases.len(), "transport oracle answer count");
+        values
+    });
     let transport = CaptureTransport::new();
     let rust: Vec<Value> = mymind::runtime::run(async {
         let budget = Rc::new(Cell::new(i64::from(budget_total)));
         let mut out = Vec::new();
         for case in &cases {
-            let options = ResourceOptions { offline: true, limit: case.limit };
+            let options = ResourceOptions {
+                offline: true,
+                limit: case.limit,
+            };
             let result = transport.fetch_resource(&case.url, options, case.budget.then(|| budget.clone())).await;
             out.push(rust_answer(result, budget.get()));
         }
         out
     });
     let mut oks = 0;
-    for ((case, rust), js) in cases.iter().zip(&rust).zip(&js) {
-        let context = format!("{} limit={:?} budget={}", case.url, case.limit, case.budget);
-        let (rust, js) = (common::text(rust), common::text(js));
-        assert_eq!(rust.replace(&port.to_string(), "PORT"), js.replace(&port.to_string(), "PORT"), "{context}");
-        oks += usize::from(rust.starts_with("{\"ok\""));
+    assert_eq!(rust.len(), cases.len(), "transport Rust answer count");
+    assert_eq!(cases.len(), 67, "the complete transport case corpus");
+    for (index, answer) in rust.iter().enumerate() {
+        let actual = normalized(answer, port);
+        let expected = js.as_ref().map(|values| normalized(&values[index], port));
+        golden.check(index, &actual, expected.as_deref());
+        oks += usize::from(answer.get("ok").is_object());
     }
+    golden.finish();
     assert!(oks > 15, "{oks} fetches succeeded");
     println!("transport cases: {} ({oks} successful)", cases.len());
+    guard.finish();
 }
 
 #[test]
 fn slow_body_times_out() {
     let port = start(Vec::new());
     let transport = CaptureTransport::with_timeout(Duration::from_millis(400));
-    let result = mymind::runtime::run(async { transport.fetch_resource(&format!("http://127.0.0.1:{port}/slow"), ResourceOptions { offline: true, limit: None }, None).await });
+    let result = mymind::runtime::run(async {
+        transport
+            .fetch_resource(&format!("http://127.0.0.1:{port}/slow"), ResourceOptions { offline: true, limit: None }, None)
+            .await
+    });
     assert!(matches!(result, Err(Error::Internal(_))), "{result:?}");
 }

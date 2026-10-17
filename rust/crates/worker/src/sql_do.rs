@@ -128,7 +128,6 @@ impl Sql for DoSql {
         let closure = ScopedClosure::borrow_mut(&mut body);
         let outcome = call(&self.storage, "transactionSync", &[closure.as_ref().clone()]);
         drop(closure);
-        drop(body);
         match failure.into_inner() {
             Some(error) => Err(error),
             None => outcome.map(|_| ()),

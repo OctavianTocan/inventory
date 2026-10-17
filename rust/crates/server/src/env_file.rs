@@ -1,7 +1,18 @@
 //! `.env` files as Node reads them (`process.loadEnvFile`, `util.parseEnv`).
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// Select the environment file, resolving a process override relative to the project root.
+///
+/// # Arguments
+/// * `root` - The project directory containing the default `.env` file.
+///
+/// # Returns
+/// The `MYMIND_ENV_FILE` path when set, otherwise `root/.env`.
+pub fn path(root: &Path) -> PathBuf {
+    std::env::var_os("MYMIND_ENV_FILE").map_or_else(|| root.join(".env"), |file| root.join(file))
+}
 
 fn trim(text: &str) -> &str {
     text.trim_matches([' ', '\t', '\n'])

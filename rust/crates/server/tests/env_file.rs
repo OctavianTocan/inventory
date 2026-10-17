@@ -1,4 +1,4 @@
-//! The env file parser against Node's `util.parseEnv`.
+//! Frozen synthetic env-parser expectations, preserving the fixed generated corpus and sorted map order.
 
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
@@ -30,7 +30,10 @@ fn env_files_parse_as_node_parses_them() {
         inputs.push(random.text(&alphabet, length));
     }
     let calls: Vec<(&str, Vec<Value>)> = inputs.iter().map(|input| ("parseEnv", vec![Value::from(input.as_str())])).collect();
-    for (input, answer) in inputs.iter().zip(common::calls(DRIVER, &calls)) {
+    let answers = common::calls(DRIVER, &calls);
+    assert_eq!(inputs.len(), 20_026, "synthetic env-parser case count");
+    assert_eq!(answers.len(), inputs.len(), "env-parser answer count");
+    for (input, answer) in inputs.iter().zip(answers) {
         common::assert_same(&Ok(sorted(env_file::parse(input))), &answer, &format!("{input:?}"));
     }
 }

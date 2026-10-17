@@ -3,6 +3,9 @@
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
 
+#[path = "tools_common/mod.rs"]
+mod tools_common;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::rc::Rc;
@@ -18,23 +21,21 @@ fn work(name: &str) -> PathBuf {
     directory
 }
 
-// A project root for the JS tools: the tools are copied, so `ROOT` is this directory; the rest is linked.
+// Both runners use isolated roots containing only immutable recording links by default.
 fn js_root(directory: &Path) -> PathBuf {
     let root = directory.join("root");
     std::fs::create_dir_all(&root).unwrap();
-    let status = Command::new("cp").arg("-r").arg(common::root().join("tools")).arg(root.join("tools")).status().unwrap();
-    assert!(status.success());
-    for name in ["lib", "mirror", "capture", "replay", "node_modules", "package.json"] {
-        std::os::unix::fs::symlink(common::root().join(name), root.join(name)).unwrap();
-    }
+    tools_common::prepare_root(&root);
     root
 }
 
 fn run_js(root: &Path, cwd: &Path, args: &[&str]) -> Output {
+    assert!(tools_common::recording(), "legacy seed requires recording mode");
     Command::new("node")
         .arg(root.join("tools/seed-db.mjs"))
         .args(args)
         .env_clear()
+        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", std::env::var_os("HOME").unwrap())
         .env("NODE_NO_WARNINGS", "1")
@@ -48,9 +49,12 @@ fn run_rust(root: &Path, cwd: &Path, args: &[&str]) -> Output {
         .arg("seed-db")
         .args(args)
         .env_clear()
+        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", std::env::var_os("HOME").unwrap())
         .env("MYMIND_ROOT", root)
+        .env("MYMIND_ENV_FILE", "fixture-vars")
+        .env("STORE_LOAD_ENV", "0")
         .current_dir(cwd)
         .output()
         .unwrap()
@@ -81,14 +85,16 @@ fn dump(file: &Path) -> Vec<(String, Vec<String>)> {
 }
 
 fn same_tables(js: &Path, rust: &Path) {
-    let (js, rust) = (dump(js), dump(rust));
-    assert_eq!(js.iter().map(|table| &table.0).collect::<Vec<_>>(), rust.iter().map(|table| &table.0).collect::<Vec<_>>());
-    for (a, b) in js.iter().zip(&rust) {
-        assert_eq!(a.1.len(), b.1.len(), "rows of {}", a.0);
-        for (index, (x, y)) in a.1.iter().zip(&b.1).enumerate() {
-            assert_eq!(x, y, "table {} row {index}", a.0);
-        }
+    let rust_columns = tools_common::table_columns(rust);
+    let js_columns = tools_common::recording().then(|| tools_common::table_columns(js));
+    let rust = dump(rust);
+    let js = tools_common::recording().then(|| dump(js));
+    if let Some(js) = &js {
+        assert!(rust == *js, "complete typed table rows and ordering differ");
     }
+    let actual = format!("columns={rust_columns:?}\n{}", tools_common::row_manifest(&rust));
+    let oracle = js.as_ref().map(|rows| format!("columns={:?}\n{}", js_columns.as_ref().unwrap(), tools_common::row_manifest(rows)));
+    tools_common::check("ordered typed table rows", actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
 }
 
 fn text(bytes: &[u8], path: &Path, label: &str) -> String {
@@ -96,12 +102,14 @@ fn text(bytes: &[u8], path: &Path, label: &str) -> String {
 }
 
 fn compare(root: &Path, cwd: &Path, rust_cwd: &Path, js_args: &[&str], rust_args: &[&str], js_db: &Path, rust_db: &Path) -> String {
-    let js = run_js(root, cwd, js_args);
+    let js = tools_common::recording().then(|| run_js(root, cwd, js_args));
     let rust = run_rust(root, rust_cwd, rust_args);
-    assert_eq!(js.status.code(), rust.status.code(), "status; JS stderr {}", String::from_utf8_lossy(&js.stderr));
-    assert_eq!(text(&js.stdout, js_db, "<db>"), text(&rust.stdout, rust_db, "<db>"));
-    assert_eq!(text(&js.stderr, js_db, "<db>"), text(&rust.stderr, rust_db, "<db>"));
-    text(&js.stdout, js_db, "<db>")
+    let show = |out: &Output, db: &Path| format!("status {:?}\nstdout {:?}\nstderr {:?}", out.status.code(), text(&out.stdout, db, "<db>"), text(&out.stderr, db, "<db>"));
+    let actual = show(&rust, rust_db);
+    let oracle = js.as_ref().map(|out| show(out, js_db));
+    let request = format!("seed CLI {:?}", js_args).replace(&js_db.to_string_lossy().into_owned(), "<db>");
+    tools_common::check(&request, actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+    text(&rust.stdout, rust_db, "<db>")
 }
 
 fn embedding_count(file: &Path) -> i64 {
@@ -122,6 +130,7 @@ fn add_vectors(file: &Path, count: usize) {
 
 #[test]
 fn fresh_seed_matches() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_seed_db.rs")));
     let directory = work("fresh");
     let root = js_root(&directory);
     let (js_db, rust_db) = (directory.join("js/a.db"), directory.join("rust/b.db"));
@@ -135,6 +144,7 @@ fn fresh_seed_matches() {
 
 #[test]
 fn relative_db_and_argument_errors() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_seed_db.rs")));
     let directory = work("args");
     let root = js_root(&directory);
     let (js_cwd, rust_cwd) = (directory.join("jscwd"), directory.join("rustcwd"));
@@ -144,17 +154,18 @@ fn relative_db_and_argument_errors() {
     assert!(out.contains("Seeded <db>"));
     same_tables(&js_cwd.join("sub/x.db"), &rust_cwd.join("sub/x.db"));
     for args in [&["--db"][..], &["--bogus"], &["--db", ""], &["extra"]] {
-        let js = run_js(&root, &js_cwd, args);
+        let js = tools_common::recording().then(|| run_js(&root, &js_cwd, args));
         let rust = run_rust(&root, &rust_cwd, args);
-        assert_eq!(js.status.code(), Some(1));
         assert_eq!(rust.status.code(), Some(1), "{args:?}");
-        assert_eq!(js.stdout, rust.stdout);
-        assert_eq!(js.stderr, rust.stderr, "{args:?}");
+        let actual = format!("status {:?} stdout {:?} stderr {:?}", rust.status.code(), rust.stdout, rust.stderr);
+        let oracle = js.as_ref().map(|out| format!("status {:?} stdout {:?} stderr {:?}", out.status.code(), out.stdout, out.stderr));
+        tools_common::check(&format!("argument error {args:?}"), actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
     }
 }
 
 #[test]
 fn reseed_keeps_embeddings() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_seed_db.rs")));
     let directory = work("reseed");
     let root = js_root(&directory);
     let (js_db, rust_db) = (directory.join("js/a.db"), directory.join("rust/b.db"));
@@ -176,8 +187,10 @@ fn reseed_keeps_embeddings() {
 
     // A seeded database with vectors whose card text is unchanged keeps all of them.
     let seeded = directory.join("seeded.db");
-    let status = run_js(&root, &directory, &["--db", &seeded.to_string_lossy()]).status;
-    assert!(status.success());
+    let js_seeded = directory.join("legacy-seeded.db");
+    let out = compare(&root, &directory, &directory, &["--db", &js_seeded.to_string_lossy()], &["--db", &seeded.to_string_lossy()], &js_seeded, &seeded);
+    assert!(out.starts_with("Seeded <db>"));
+    same_tables(&js_seeded, &seeded);
     std::fs::copy(&seeded, &js_db).unwrap();
     std::fs::copy(&seeded, &rust_db).unwrap();
     add_vectors(&js_db, 7);

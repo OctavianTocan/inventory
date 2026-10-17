@@ -141,20 +141,19 @@ fn cases(ids: &[String]) -> Vec<Value> {
 
 #[test]
 fn search_matches_node() {
+    let _goldens = common::test_guard();
     for fixture in [test_db(), hosted_db()] {
-        let db = Sqlite::open(&fixture, false).unwrap();
+        let db = Sqlite::open(&fixture, true).unwrap();
         let ids: Vec<String> = db.query("SELECT card_id FROM embeddings ORDER BY card_id LIMIT 3", &[]).unwrap().iter().map(|row| row.text("card_id").unwrap_or("").to_owned()).collect();
         let cases = cases(&ids);
         let copy = temp_copy(&fixture);
         let js = calls(DRIVER, &[("run", vec![Value::from(copy.to_str().unwrap()), Value::Array(cases.clone())])]).remove(0);
         let rust = run(&copy, &cases);
-        if let (Ok(Value::Array(rust)), Ok(Value::Array(js))) = (&rust, &js) {
-            assert_eq!(rust.len(), js.len());
+        if let Ok(Value::Array(rust)) = &rust {
+            assert_eq!(rust.len(), cases.len(), "every search case is answered");
             let populated = rust.iter().zip(&cases).filter(|(found, case)| case.as_array().unwrap()[1].as_str() == Some("embeddings") && found.get("ok").get("count").as_f64().is_some_and(|count| count > 0.0)).count();
             assert!(populated > 10, "embedding searches found nothing: {populated}");
-            for (at, (a, b)) in rust.iter().zip(js).enumerate() {
-                assert_eq!(common::text(a), common::text(b), "case {at}: {}", common::text(&cases[at]));
-            }
+
         }
         assert_same(&rust, &js, &format!("search on {}", fixture.display()));
     }

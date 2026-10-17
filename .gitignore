@@ -45,3 +45,6 @@ worker/.wrangler/
 # Rust build output
 rust/target/
 rust/libvips/
+
+# Frozen private inputs for the Rust oracle goldens.
+rust/test-fixtures/

@@ -208,18 +208,19 @@ fn make(random: &mut Random) -> (Scenario, Value, bool) {
 
 #[test]
 fn capture_link_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(0x4c49_4e4b);
     let mut made = Vec::new();
     for _ in 0..500 {
         made.push(make(&mut random));
     }
     let scenarios = Value::Array(made.iter().map(|(_, js, _)| js.clone()).collect());
-    let js = common::call(DRIVER, "run", vec![scenarios.clone()]).unwrap();
-    let Value::Array(js) = js else { panic!("driver answered no array") };
+    let js = common::call(DRIVER, "run", vec![scenarios.clone()]);
+    let mut answers = Vec::new();
     let Value::Array(inputs) = scenarios else { unreachable!() };
     let user = MediaUser { account_uid: "acc".into(), id_prefix: "p".into() };
     let (mut oks, mut covers, mut shots, mut failed) = (0, 0, 0, 0);
-    for (((scenario, _, offline), input), expected) in made.iter().zip(&inputs).zip(&js) {
+    for ((scenario, _, offline), input) in made.iter().zip(&inputs) {
         let events = RefCell::new(Vec::new());
         let fakes = Fakes { scenario, events: &events };
         let update = |patch: Value| {
@@ -235,13 +236,15 @@ fn capture_link_matches_node() {
             Err(_) => "other",
         };
         let rust: Value = obj! { "result" => result, "events" => Value::Array(events.into_inner()) }.into();
-        assert_eq!(common::text(&rust), common::text(expected), "{}", common::text(input));
+        answers.push(rust.clone());
         let text = common::text(&rust);
         oks += usize::from(result == "ok");
         covers += usize::from(text.contains("\"cover\":{\"src\""));
         shots += usize::from(text.contains("\"op\":\"screenshot\""));
         failed += usize::from(text.contains("captureFailed"));
     }
+    assert_eq!(answers.len(), made.len(), "every capture scenario is answered");
+    common::assert_value(&Value::Array(answers), &js, "capture link scenarios and events");
     assert!(oks > 300 && covers > 100 && shots > 20 && failed > 5, "ok {oks}, covers {covers}, screenshots {shots}, failed {failed}");
     println!("captureLink scenarios: {} (ok {oks}, with cover {covers}, screenshots {shots}, placeholders {failed})", made.len());
 }

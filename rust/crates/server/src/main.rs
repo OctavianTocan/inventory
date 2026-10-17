@@ -50,7 +50,7 @@ fn environment(root: &Path) -> Result<HashMap<String, String>, String> {
     let file = if skip {
         HashMap::new()
     } else {
-        match env_file::load(&root.join(".env")) {
+        match env_file::load(&env_file::path(root)) {
             Ok(Loaded::Vars(vars)) => vars,
             Ok(Loaded::Missing) => HashMap::new(),
             Err(_) => return Err("Error: Could not load server environment".to_owned()),

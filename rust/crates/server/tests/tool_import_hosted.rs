@@ -3,8 +3,10 @@
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
 
+#[path = "tools_common/mod.rs"]
+mod tools_common;
+
 use std::collections::BTreeMap;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -19,26 +21,23 @@ fn work(name: &str) -> PathBuf {
     directory
 }
 
-// A project root for the JS tool: the tools are copied, the rest of the repository is linked.
+// Legacy code is available only while explicitly recording the immutable oracle.
 fn js_root(directory: &Path) -> PathBuf {
     let root = directory.join("root");
-    if root.exists() {
-        return root;
-    }
-    std::fs::create_dir_all(&root).unwrap();
-    let status = Command::new("cp").arg("-r").arg(common::root().join("tools")).arg(root.join("tools")).status().unwrap();
-    assert!(status.success());
-    for name in ["lib", "mirror", "capture", "replay", "node_modules", "package.json"] {
-        std::os::unix::fs::symlink(common::root().join(name), root.join(name)).unwrap();
+    if !root.exists() {
+        std::fs::create_dir_all(&root).unwrap();
+        tools_common::prepare_root(&root);
     }
     root
 }
 
 fn run_js(root: &Path, cwd: &Path, args: &[&str]) -> Output {
+    assert!(tools_common::recording(), "legacy import requires recording mode");
     Command::new("node")
         .arg(root.join("tools/import-hosted.mjs"))
         .args(args)
         .env_clear()
+        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", std::env::var_os("HOME").unwrap())
         .env("NODE_NO_WARNINGS", "1")
@@ -52,9 +51,12 @@ fn run_rust(root: &Path, cwd: &Path, args: &[&str]) -> Output {
         .arg("import-hosted")
         .args(args)
         .env_clear()
+        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", std::env::var_os("HOME").unwrap())
         .env("MYMIND_ROOT", root)
+        .env("MYMIND_ENV_FILE", "fixture-vars")
+        .env("STORE_LOAD_ENV", "0")
         .current_dir(cwd)
         .output()
         .unwrap()
@@ -84,15 +86,17 @@ fn dump(file: &Path) -> Vec<(String, Vec<String>)> {
 }
 
 fn same_tables(js: &Path, rust: &Path) -> usize {
-    let (js, rust) = (dump(js), dump(rust));
-    assert_eq!(js.iter().map(|table| &table.0).collect::<Vec<_>>(), rust.iter().map(|table| &table.0).collect::<Vec<_>>());
-    for (a, b) in js.iter().zip(&rust) {
-        assert_eq!(a.1.len(), b.1.len(), "rows of {}", a.0);
-        for (index, (x, y)) in a.1.iter().zip(&b.1).enumerate() {
-            assert_eq!(x, y, "table {} row {index}", a.0);
-        }
+    let rust_columns = tools_common::table_columns(rust);
+    let js_columns = tools_common::recording().then(|| tools_common::table_columns(js));
+    let rust = dump(rust);
+    let js = tools_common::recording().then(|| dump(js));
+    if let Some(js) = &js {
+        assert!(rust == *js, "complete typed database rows differ");
     }
-    js.iter().map(|table| table.1.len()).sum()
+    let actual = format!("columns={rust_columns:?}\n{}", tools_common::row_manifest(&rust));
+    let oracle = js.as_ref().map(|rows| format!("columns={:?}\n{}", js_columns.as_ref().unwrap(), tools_common::row_manifest(rows)));
+    tools_common::check("imported ordered typed tables", actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+    rust.iter().map(|table| table.1.len()).sum()
 }
 
 fn tree(base: &Path) -> BTreeMap<String, PathBuf> {
@@ -112,18 +116,20 @@ fn tree(base: &Path) -> BTreeMap<String, PathBuf> {
     found
 }
 
-// Same relative paths, sizes and contents; files linked from one source are the same by construction.
+// Relative object names, lengths and content hashes exclude timestamps and inodes.
 fn same_tree(js: &Path, rust: &Path) -> usize {
-    let (js, rust) = (tree(js), tree(rust));
-    assert_eq!(js.keys().collect::<Vec<_>>(), rust.keys().collect::<Vec<_>>());
-    for (key, a) in &js {
-        let (x, y) = (std::fs::metadata(a).unwrap(), std::fs::metadata(&rust[key]).unwrap());
-        assert_eq!(x.len(), y.len(), "size of {key}");
-        if (x.dev(), x.ino()) != (y.dev(), y.ino()) {
-            assert_eq!(Sha256::digest(std::fs::read(a).unwrap()), Sha256::digest(std::fs::read(&rust[key]).unwrap()), "content of {key}");
-        }
-    }
-    js.len()
+    let manifest = |base: &Path| {
+        tree(base).into_iter().map(|(name, path)| {
+            let bytes = std::fs::read(path).unwrap();
+            format!("{name:?} {} {:x}", bytes.len(), Sha256::digest(bytes))
+        }).collect::<Vec<_>>()
+    };
+    let rust = manifest(rust);
+    let js = tools_common::recording().then(|| manifest(js));
+    let actual = format!("{rust:?}");
+    let oracle = js.as_ref().map(|rows| format!("{rows:?}"));
+    tools_common::check("imported object tree paths, sizes and hashes", actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+    rust.len()
 }
 
 fn text(bytes: &[u8], out: &Path) -> String {
@@ -159,18 +165,20 @@ fn compare(directory: &Path, tag: &str, args: &[&str]) -> (Outputs, String) {
     let out = Outputs { js: directory.join(format!("j{tag}/out")), rust: directory.join(format!("r{tag}/out")) };
     let with = |out: &Path| -> Vec<String> { args.iter().map(|arg| arg.replace("<out>", &out.to_string_lossy())).collect() };
     let (js_args, rust_args) = (with(&out.js), with(&out.rust));
-    let js = run_js(&root, directory, &js_args.iter().map(String::as_str).collect::<Vec<_>>());
+    let js = tools_common::recording().then(|| run_js(&root, directory, &js_args.iter().map(String::as_str).collect::<Vec<_>>()));
     let rust = run_rust(&root, directory, &rust_args.iter().map(String::as_str).collect::<Vec<_>>());
-    assert_eq!(js.status.code(), rust.status.code(), "status; JS stderr {}", String::from_utf8_lossy(&js.stderr));
-    assert_eq!(js.status.code(), Some(0), "{}", String::from_utf8_lossy(&js.stderr));
-    let (js_out, rust_out) = (text(&js.stdout, &out.js), text(&rust.stdout, &out.rust));
-    assert_eq!(js_out, rust_out);
-    assert_eq!(text(&js.stderr, &out.js), text(&rust.stderr, &out.rust));
-    (out, js_out)
+    assert_eq!(rust.status.code(), Some(0), "{}", String::from_utf8_lossy(&rust.stderr));
+    let show = |result: &Output, target: &Path| format!("status {:?}\nstdout {:?}\nstderr {:?}", result.status.code(), text(&result.stdout, target), text(&result.stderr, target));
+    let actual = show(&rust, &out.rust);
+    let oracle = js.as_ref().map(|result| show(result, &out.js));
+    tools_common::check(&format!("import CLI {tag} {args:?}"), actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+    let stdout = text(&rust.stdout, &out.rust);
+    (out, stdout)
 }
 
 #[test]
 fn bucket_matches() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_import_hosted.rs")));
     let directory = work("bucket");
     let (out, stdout) = compare(&directory, "", &["bucket", "--out", "<out>"]);
     assert!(stdout.starts_with("{ static: "), "{stdout}");
@@ -180,6 +188,7 @@ fn bucket_matches() {
 
 #[test]
 fn library_with_recordings_and_runs_matches() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_import_hosted.rs")));
     let directory = work("runs");
     let db = common::temp_copy(&common::test_db());
     let media = media_folder(&directory);
@@ -201,6 +210,7 @@ fn library_with_recordings_and_runs_matches() {
 
 #[test]
 fn library_without_recordings_matches() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_import_hosted.rs")));
     let directory = work("plain");
     let db = common::temp_copy(&common::hosted_db());
     let media = media_folder(&directory);
@@ -215,6 +225,7 @@ fn library_without_recordings_matches() {
 
 #[test]
 fn relative_paths_resolve_against_the_cwd() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_import_hosted.rs")));
     let directory = work("relative");
     let root = js_root(&directory);
     let db = common::temp_copy(&common::hosted_db());
@@ -223,12 +234,14 @@ fn relative_paths_resolve_against_the_cwd() {
         std::fs::copy(&db, directory.join(side).join("in.db")).unwrap();
     }
     let args = ["library", "rel", "--db", "in.db", "--out", "o/ut"];
-    let js = run_js(&root, &directory.join("jscwd"), &args);
+    let js = tools_common::recording().then(|| run_js(&root, &directory.join("jscwd"), &args));
     let rust = run_rust(&root, &directory.join("rustcwd"), &args);
-    assert_eq!(js.status.code(), Some(0), "{}", String::from_utf8_lossy(&js.stderr));
     assert_eq!(rust.status.code(), Some(0), "{}", String::from_utf8_lossy(&rust.stderr));
     let (js_out, rust_out) = (directory.join("jscwd/o/ut"), directory.join("rustcwd/o/ut"));
-    assert_eq!(text(&js.stdout, &js_out).replace("jscwd", "X"), text(&rust.stdout, &rust_out).replace("rustcwd", "X"));
+    let show = |result: &Output, target: &Path| format!("status {:?} stdout {:?} stderr {:?}", result.status.code(), text(&result.stdout, target), text(&result.stderr, target));
+    let actual = show(&rust, &rust_out).replace("rustcwd", "X");
+    let oracle = js.as_ref().map(|result| show(result, &js_out).replace("jscwd", "X"));
+    tools_common::check("relative import cwd", actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
     same_tables(&js_out.join("rel.db"), &rust_out.join("rel.db"));
 }
 
@@ -249,6 +262,7 @@ fn js_message(stderr: &str) -> String {
 
 #[test]
 fn usage_and_errors_match() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_import_hosted.rs")));
     let directory = work("errors");
     let root = js_root(&directory);
     let (js_cwd, rust_cwd) = (directory.join("jscwd"), directory.join("rustcwd"));
@@ -276,15 +290,16 @@ fn usage_and_errors_match() {
         vec!["--runs=yes"],
     ];
     for args in cases {
-        let js = run_js(&root, &js_cwd, &args);
+        let js = tools_common::recording().then(|| run_js(&root, &js_cwd, &args));
         let rust = run_rust(&root, &rust_cwd, &args);
-        assert_eq!(js.status.code(), rust.status.code(), "{args:?}; JS stderr {}", String::from_utf8_lossy(&js.stderr));
-        assert_eq!(js.stdout, rust.stdout, "{args:?}");
-        let (js_err, rust_err) = (String::from_utf8_lossy(&js.stderr).into_owned(), String::from_utf8_lossy(&rust.stderr).into_owned());
-        match js.status.code() {
-            Some(2) => assert_eq!(js_err, rust_err, "{args:?}"),
-            Some(1) => assert_eq!(rust_err, format!("Error: {}\n", js_message(&js_err)), "{args:?}"),
-            other => panic!("{args:?}: status {other:?}"),
-        }
+        let rust_err = String::from_utf8_lossy(&rust.stderr).into_owned();
+        assert!(matches!(rust.status.code(), Some(1 | 2)), "{args:?}");
+        let actual = format!("status {:?} stdout {:?} stderr {:?}", rust.status.code(), rust.stdout, rust_err);
+        let oracle = js.as_ref().map(|out| {
+            let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+            let stderr = if out.status.code() == Some(1) { format!("Error: {}\n", js_message(&stderr)) } else { stderr };
+            format!("status {:?} stdout {:?} stderr {:?}", out.status.code(), out.stdout, stderr)
+        });
+        tools_common::check(&format!("import argument error {args:?}"), actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
     }
 }

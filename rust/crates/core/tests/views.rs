@@ -46,6 +46,7 @@ fn all(file: &std::path::Path) -> Result<Value> {
 
 #[test]
 fn views_match_node() {
+    let _goldens = common::test_guard();
     for fixture in [test_db(), hosted_db()] {
         let copy = temp_copy(&fixture);
         let js = calls(DRIVER, &[("all", vec![Value::from(copy.to_str().unwrap())])]).remove(0);

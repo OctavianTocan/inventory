@@ -1,7 +1,7 @@
-//! Shared parts of the `tool_*` differential tests: a temporary project root for a JS tool and one for the native
-//! subcommand, runners for both, and a fake HTTP server on 127.0.0.1.
+//! Frozen operational-tool expectations, isolated scratch roots and loopback fake providers.
 #![allow(dead_code)]
 
+use std::cell::RefCell;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -9,9 +9,123 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use sha2::{Digest, Sha256};
+
+struct Comparison {
+    request: Vec<u8>,
+    actual: Vec<u8>,
+    oracle: Option<Vec<u8>>,
+}
+
+struct Session {
+    target: String,
+    namespace: String,
+    identity: String,
+    cases: Vec<Comparison>,
+    inventory: mm_test_support::golden::TestGuard,
+}
+
+thread_local! {
+    static SESSION: RefCell<Option<Session>> = const { RefCell::new(None) };
+}
+
+/// Completes one ordered scenario only after its executable assertions have succeeded.
+pub struct Golden;
+
+/// Start a scenario whose identity includes its complete test recipe and immutable database inputs.
+///
+/// # Arguments
+/// * `source` - The integration test source path from `file!()`.
+/// * `recipe` - The complete source text defining the ordered operations and synthetic fixtures.
+///
+/// # Returns
+/// A guard that verifies the complete ordered case set and finishes recording on successful scope exit.
+pub fn golden(source: &str, recipe: &str) -> Golden {
+    let target = Path::new(source).file_stem().unwrap().to_string_lossy().into_owned();
+    let namespace = std::thread::current().name().expect("named integration test").to_owned();
+    let identity = format!("recipe={:x}\n{}", Sha256::digest(recipe.as_bytes()), fixture_identity());
+    SESSION.with(|slot| {
+        assert!(slot.borrow().is_none(), "nested golden scenario");
+        let inventory = mm_test_support::golden::TestGuard::new(env!("CARGO_MANIFEST_DIR"), &target);
+        *slot.borrow_mut() = Some(Session { target, namespace, identity, cases: Vec::new(), inventory });
+    });
+    Golden
+}
+
+// Hash the immutable input databases once per integration-test process.
+fn fixture_identity() -> &'static str {
+    static IDENTITY: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    IDENTITY.get_or_init(|| {
+        ["MYMIND_TEST_DB", "MYMIND_TEST_HOSTED_DB"].iter().map(|key| {
+            let file = std::env::var_os(key).expect("required immutable database fixture path");
+            let file = PathBuf::from(file);
+            assert!(!matches!(file.file_name().and_then(|name| name.to_str()), Some(".env" | ".dev.vars")), "secret filenames cannot be test fixtures");
+            let bytes = std::fs::read(file).expect("required immutable database fixture");
+            format!("{key}={}:{:x}", bytes.len(), Sha256::digest(bytes))
+        }).collect::<Vec<_>>().join("\n")
+    })
+}
+
+impl Drop for Golden {
+    fn drop(&mut self) {
+        let session = SESSION.with(|slot| slot.borrow_mut().take()).expect("active golden scenario");
+        if std::thread::panicking() {
+            return;
+        }
+        assert!(!session.cases.is_empty(), "golden scenario must compare at least one case");
+        let requests: Vec<Vec<u8>> = session.cases.iter().map(|case| case.request.clone()).collect();
+        let mut batch = mm_test_support::golden::Batch::new(env!("CARGO_MANIFEST_DIR"), &session.target, &session.namespace, &requests);
+        for (index, case) in session.cases.iter().enumerate() {
+            batch.check(index, &case.actual, case.oracle.as_deref());
+        }
+        batch.finish();
+        session.inventory.finish();
+    }
+}
+
+/// Whether this explicit run may execute the pre-switch JavaScript oracle.
+///
+/// # Returns
+/// True only for `MYMIND_RECORD_GOLDEN=1`.
+pub fn recording() -> bool {
+    std::env::var("MYMIND_RECORD_GOLDEN").as_deref() == Ok("1")
+}
+
+/// Represent a potentially large output by its exact length and digest above 1024 bytes.
+///
+/// # Arguments
+/// * `bytes` - The already normalized, credential-free output.
+///
+/// # Returns
+/// A printable exact short output or a SHA-256 and byte length for larger outputs.
+pub fn summary(bytes: &[u8]) -> String {
+    if bytes.len() > 1024 {
+        format!("bytes={} sha256={:x}", bytes.len(), Sha256::digest(bytes))
+    } else if let Ok(text) = std::str::from_utf8(bytes) {
+        format!("bytes={} utf8={text:?}", bytes.len())
+    } else {
+        format!("bytes={} hex={}", bytes.len(), bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>())
+    }
+}
+
+/// Queue canonical Rust and optional live oracle bytes for comparison at successful scenario exit.
+///
+/// # Arguments
+/// * `request` - Stable normalized case inputs, excluding ephemeral ports, paths and credentials.
+/// * `actual` - The complete canonical Rust output or side-effect manifest.
+/// * `oracle` - The JavaScript expectation, supplied only in recording mode.
+pub fn check(request: &str, actual: &[u8], oracle: Option<&[u8]>) {
+    assert_eq!(oracle.is_some(), recording(), "oracle only exists during explicit recording");
+    SESSION.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let session = slot.as_mut().expect("start a golden scenario before comparing");
+        let request = format!("{}\nstep={}\n{request}", session.identity, session.cases.len()).into_bytes();
+        session.cases.push(Comparison { request, actual: actual.to_vec(), oracle: oracle.map(<[u8]>::to_vec) });
+    });
+}
 
 /// What a finished process left behind.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Out {
     pub status: i32,
     pub stdout: String,
@@ -19,29 +133,48 @@ pub struct Out {
 }
 
 fn repo() -> PathBuf {
-    PathBuf::from(std::env::var_os("MYMIND_ROOT").expect("MYMIND_ROOT is set"))
+    std::env::var_os("MYMIND_ROOT").map_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repository root exists"), PathBuf::from)
 }
 
-/// A new project root below the target's temporary directory: a copy of the repository's `tools/` and links to the
-/// libraries, recordings and `node_modules`. No `.env`, `data/` or `worker/` of the repository gets in.
+/// Create a native-only scratch root; legacy modules are linked only in explicit recording mode.
 pub fn tmproot(label: &str) -> PathBuf {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("tools-{}-{}-{label}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
-    let status = Command::new("cp").arg("-r").arg(repo().join("tools")).arg(root.join("tools")).status().unwrap();
-    assert!(status.success());
-    for name in ["lib", "mirror", "capture", "replay", "node_modules", "package.json"] {
+    prepare_root(&root);
+    root
+}
+
+/// Link immutable recording inputs, adding a synthetic legacy tool tree only during recording.
+///
+/// # Arguments
+/// * `root` - An existing empty temporary directory, never the repository root.
+pub fn prepare_root(root: &Path) {
+    for name in ["mirror", "capture", "replay"] {
         let from = repo().join(name);
-        if from.exists() {
-            std::os::unix::fs::symlink(from, root.join(name)).unwrap();
+        assert!(from.is_dir(), "required immutable recording directory {name} is missing");
+        std::os::unix::fs::symlink(from, root.join(name)).unwrap();
+    }
+    if recording() {
+        for name in ["lib", "node_modules", "package.json"] {
+            std::os::unix::fs::symlink(repo().join(name), root.join(name)).unwrap();
+        }
+        std::fs::create_dir_all(root.join("tools")).unwrap();
+        for entry in std::fs::read_dir(repo().join("tools")).unwrap() {
+            let entry = entry.unwrap();
+            if entry.path().extension().is_some_and(|extension| extension == "mjs") {
+                let text = std::fs::read_to_string(entry.path()).unwrap();
+                let text = text.replace("join(ROOT, '.env')", "join(ROOT, 'fixture-vars')");
+                std::fs::write(root.join("tools").join(entry.file_name()), text).unwrap();
+            }
         }
     }
-    root
 }
 
 fn collect(mut command: Command, env: &[(&str, &str)], stdin: Option<&str>) -> Out {
     command.env_clear();
+    command.env("TMPDIR", env!("CARGO_TARGET_TMPDIR"));
     for name in ["PATH", "HOME"] {
         if let Some(value) = std::env::var_os(name) {
             command.env(name, value);
@@ -64,6 +197,7 @@ pub fn run_js(root: &Path, tool: &str, args: &[&str], env: &[(&str, &str)], stdi
 
 /// `run_js` with extra flags for node itself, such as `--env-file-if-exists=.env`.
 pub fn run_js_flags(root: &Path, flags: &[&str], tool: &str, args: &[&str], env: &[(&str, &str)], stdin: Option<&str>) -> Out {
+    assert!(recording(), "Node oracle requires MYMIND_RECORD_GOLDEN=1");
     let mut command = Command::new("node");
     command.args(flags).arg(root.join("tools").join(format!("{tool}.mjs"))).args(args).current_dir(root);
     // Node's "SQLite is experimental" notice is the runtime's, not the tool's.
@@ -76,18 +210,23 @@ pub fn run_rust(root: &Path, tool: &str, args: &[&str], env: &[(&str, &str)], st
     let mut command = Command::new(env!("CARGO_BIN_EXE_mymind"));
     command.arg(tool).args(args).current_dir(root);
     let root = root.to_str().unwrap();
-    collect(command, &env.iter().copied().chain([("MYMIND_ROOT", root)]).collect::<Vec<_>>(), stdin)
+    collect(command, &env.iter().copied().chain([("MYMIND_ROOT", root), ("MYMIND_ENV_FILE", "fixture-vars"), ("STORE_LOAD_ENV", "0")]).collect::<Vec<_>>(), stdin)
 }
 
 /// Two fresh roots, run both sides through `each`, which receives the root, a runner for that side and the side's
 /// name, and returns whatever it wants to compare.
-pub fn both<T>(label: &str, mut each: impl FnMut(&Path, &dyn Fn(&[&str], &[(&str, &str)], Option<&str>) -> Out) -> T) -> (T, T) {
-    let js_root = tmproot(&format!("{label}-js"));
+pub fn both<T: Clone + std::fmt::Debug>(label: &str, mut each: impl FnMut(&Path, &dyn Fn(&[&str], &[(&str, &str)], Option<&str>) -> Out) -> T) -> (T, T) {
     let rust_root = tmproot(&format!("{label}-rust"));
     let tool = label.to_owned();
-    let js = each(&js_root, &|args, env, stdin| run_js(&js_root, &tool, args, env, stdin));
+    let js = recording().then(|| {
+        let js_root = tmproot(&format!("{label}-js"));
+        each(&js_root, &|args, env, stdin| run_js(&js_root, &tool, args, env, stdin))
+    });
     let rust = each(&rust_root, &|args, env, stdin| run_rust(&rust_root, &tool, args, env, stdin));
-    (js, rust)
+    let actual = format!("{rust:?}");
+    let oracle = js.as_ref().map(|out| format!("{out:?}"));
+    check(label, actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+    (rust.clone(), rust)
 }
 
 /// One request a fake server received.
@@ -133,6 +272,7 @@ impl Fake {
     /// Start a server whose handler `make` builds inside the server thread (so it may hold non-`Send` state).
     pub fn start<F: FnOnce() -> Handler + Send + 'static>(make: F) -> Fake {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        mm_test_support::golden::register_loopback_port(listener.local_addr().unwrap().port());
         let addr = listener.local_addr().unwrap().to_string();
         let log = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
@@ -251,6 +391,7 @@ fn write_response(stream: &mut TcpStream, request: &Req, response: &Resp) -> std
 
 /// Run a driver script with node in `root`, with `MYMIND_ROOT=<root>` and the given variables.
 pub fn run_node(root: &Path, script: &str, args: &[&str], env: &[(&str, &str)]) -> Out {
+    assert!(recording(), "Node driver requires MYMIND_RECORD_GOLDEN=1");
     let mut command = Command::new("node");
     command.arg(script).args(args).current_dir(root);
     let root = root.to_str().unwrap();
@@ -329,9 +470,41 @@ pub fn db_state(path: &Path) -> Vec<String> {
             let name = row.text("name").unwrap().to_owned();
             let columns: Vec<String> = db.query(&format!("SELECT name FROM pragma_table_info('{name}')"), &[]).unwrap().iter().map(|column| column.text("name").unwrap().to_owned()).collect();
             let digest = mm_core::library_rows::table_digest(&db, &name, &columns).unwrap();
-            format!("{name} {} {}", digest.rows, digest.sha256)
+            format!("{name} columns={columns:?} rows={} sha256={}", digest.rows, digest.sha256)
         })
         .collect()
+}
+
+/// Summarize typed rows without storing any row payload or card HTML in a golden.
+///
+/// # Arguments
+/// * `tables` - Ordered tables and their original typed, ordered row encodings.
+///
+/// # Returns
+/// Ordered table identities, row counts, byte lengths and SHA-256 digests.
+pub fn row_manifest(tables: &[(String, Vec<String>)]) -> String {
+    tables.iter().map(|(name, rows)| {
+        let bytes = format!("{rows:?}");
+        format!("{name:?} rows={} bytes={} sha256={:x}", rows.len(), bytes.len(), Sha256::digest(bytes.as_bytes()))
+    }).collect::<Vec<_>>().join("\n")
+}
+
+/// Preserve the ordered column identities that give each typed table row its meaning.
+///
+/// # Arguments
+/// * `path` - A read-only scratch database produced by the tested command.
+///
+/// # Returns
+/// Table names and their ordered column names, excluding FTS shadow tables.
+pub fn table_columns(path: &Path) -> Vec<String> {
+    use mm_core::sql::Sql;
+    let db = mm_sqlite::Sqlite::open(path, true).unwrap();
+    db.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'search_fts%' ORDER BY name", &[]).unwrap().iter().map(|row| {
+        let name = row.text("name").unwrap();
+        let quoted = name.replace('\'', "''");
+        let columns: Vec<String> = db.query(&format!("SELECT name FROM pragma_table_info('{quoted}') ORDER BY cid"), &[]).unwrap().iter().map(|row| row.text("name").unwrap().to_owned()).collect();
+        format!("{name} {columns:?}")
+    }).collect()
 }
 
 /// Assert two request logs are equal, reporting only where the first difference is (bodies can be large).
@@ -352,5 +525,6 @@ pub fn assert_requests(name: &str, rust: &[String], js: &[String]) {
 /// The URL of a loopback port nothing listens on (not port 9, which fetch refuses as a blocked port).
 pub fn closed_url() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    mm_test_support::golden::register_loopback_port(listener.local_addr().unwrap().port());
     format!("http://{}", listener.local_addr().unwrap())
 }

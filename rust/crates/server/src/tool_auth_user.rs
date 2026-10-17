@@ -18,7 +18,7 @@ const USAGE: &str = "usage: node tools/auth-user.mjs add <username> [--save-env 
 
 // Set `entries` in the root's .env, replacing earlier values and keeping the file private (`saveEnv`).
 fn save_env(root: &Path, entries: &[(String, String)]) -> std::io::Result<()> {
-    let file = root.join(".env");
+    let file = crate::env_file::path(root);
     let all: Vec<String> = match std::fs::read(&file) {
         Ok(bytes) => String::from_utf8_lossy(&bytes).split('\n').map(str::to_owned).collect(),
         Err(_) => Vec::new(),

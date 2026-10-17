@@ -1,12 +1,15 @@
-//! Differential tests: every case runs through mm-js and through Node (`tests/oracle.mjs`), and the answers must match.
+//! Compare mm-js with frozen pre-switch golden expectations for every original oracle case.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use mm_js::{Object, Value, arr, base64, date, inspect, json, number, text, uri};
+use mm_test_support::golden::{Batch, TestGuard};
+use rusqlite::{Connection, OpenFlags, types::ValueRef};
 use sha2::{Digest, Sha256};
 
+// Run the original oracle only during an explicitly requested recording pass.
 fn oracle(request: &Value) -> Vec<Value> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut child = Command::new("node")
@@ -16,18 +19,24 @@ fn oracle(request: &Value) -> Vec<Value> {
         .stdout(Stdio::piped())
         .spawn()
         .expect("node runs");
-    child.stdin.take().unwrap().write_all(json::to_string(request).as_bytes()).unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(json::to_string(request).as_bytes())
+        .unwrap();
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success(), "oracle failed");
     match json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap() {
         Value::Array(items) => items,
-        other => panic!("oracle answered {other:?}"),
+        _ => panic!("oracle answer is not an array"),
     }
 }
 
 struct Random(u64);
 
 impl Random {
+    // Advance the original fixed-seed generator.
     fn next(&mut self) -> u64 {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 7;
@@ -35,19 +44,23 @@ impl Random {
         self.0
     }
 
+    // Select a value below the exclusive bound.
     fn below(&mut self, limit: u64) -> u64 {
         self.next() % limit
     }
 }
 
+// Keep number inputs lossless, including negative zero and non-finite values.
 fn bits(number: f64) -> String {
     format!("{:016x}", number.to_bits())
 }
 
+// Preserve the sign of zero in the operations where Node exposes it.
 fn show(number: f64) -> String {
     if number == 0.0 && number.is_sign_negative() { "-0".into() } else { number::number_to_string(number) }
 }
 
+// Reconstruct the original edge cases and generated number corpus.
 fn interesting_numbers(random: &mut Random) -> Vec<f64> {
     let mut numbers = vec![
         0.0, -0.0, 1.0, -1.0, 0.5, -0.5, 1.5, 2.5, -2.5, 0.1, 0.2, 0.3, 1e21, 1e-7, 1.5e-7, 123456789012345680000.0, 1e20,
@@ -80,7 +93,7 @@ const TEXTS: &[&str] = &[
     "a", "ab", "abc", "abcd=efgh", "eyJhbGciOiJSUzI1NiJ9", "!!!",
 ];
 
-/// The `Date.parse` forms mm-js reads; V8's looser legacy forms (a bare `42` is the year 2042) give NaN instead.
+// Include the Date.parse forms mm-js reads and the original legacy-form cases.
 const DATES: &[&str] = &[
     "2026-10-17", "2026-10-17T10:20:30Z", "2026-10-17T10:20:30.123+02:00", "2026-10-17T10:20", "2026-10-17 10:20:30",
     "+002026-10-17T00:00:00Z", "-000001-01-01T00:00:00Z", "2026-02-30", "2026-02-31T00:00:00Z", "2026-04-31", "2026-02-32",
@@ -92,6 +105,7 @@ const DATES: &[&str] = &[
 
 #[test]
 fn numbers_match_node() {
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
     let mut random = Random(0x9e3779b97f4a7c15);
     let numbers = interesting_numbers(&mut random);
     let mut cases = Vec::new();
@@ -110,10 +124,12 @@ fn numbers_match_node() {
         }
     }
     compare("numbers", &cases, &ours);
+    guard.finish();
 }
 
 #[test]
 fn text_matches_node() {
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
     let mut cases = Vec::new();
     let mut ours = Vec::new();
     let mut push = |case: Value, answer: Value| {
@@ -155,6 +171,7 @@ fn text_matches_node() {
     sorted.sort_by(|a, b| mm_js::locale_compare(a, b));
     push(arr!["sort", expected], Value::Array(sorted.iter().map(|&item| item.into()).collect()));
     compare("text", &cases, &ours);
+    guard.finish();
 }
 
 const BAD_JSON: &[&str] = &[
@@ -179,6 +196,7 @@ const WORDS: &[&str] = &[
     "first line of a long text that keeps going\nsecond line of the long text that keeps going on\nthird",
 ];
 
+// Reconstruct the original fixed-seed inspect corpus.
 fn random_value(random: &mut Random, depth: usize) -> Value {
     match random.below(if depth > 5 { 4 } else { 8 }) {
         0 => Value::Null,
@@ -199,6 +217,7 @@ fn random_value(random: &mut Random, depth: usize) -> Value {
 
 #[test]
 fn inspect_matches_node() {
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
     let mut random = Random(0x9e37_79b9_7f4a_7c15);
     let mut values: Vec<Value> = (0..3000).map(|_| random_value(&mut random, 0)).collect();
     let counts = |names: &[&str]| -> Value {
@@ -224,93 +243,285 @@ fn inspect_matches_node() {
     let (multiline, grouped) = (ours.iter().filter(|value| shown(value).contains('\n')).count(), ours.iter().filter(|value| shown(value).contains(",  ")).count());
     eprintln!("inspect: {multiline} multi-line, {grouped} grouped");
     assert!(multiline > 500 && grouped > 100, "the cases cover line breaking and grouping");
+    guard.finish();
 }
 
 #[test]
 fn json_errors_match_node() {
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
     let cases: Vec<Value> = BAD_JSON.iter().map(|&text| arr!["parseError", text]).collect();
     let ours: Vec<Value> = BAD_JSON.iter().map(|&text| json::parse(text).err().map(|error| format!("SyntaxError: {error}")).into()).collect();
     compare("json errors", &cases, &ours);
+    guard.finish();
 }
 
-fn json_files() -> Vec<PathBuf> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let mut files: Vec<PathBuf> = ["capture/cards.json", "capture/details.json", "capture/meta.json", "capture/responses.json"]
-        .iter()
-        .map(|file| root.join(file))
-        .collect();
+// Preserve the original JSON corpus and add every frozen hosted response-header JSON file.
+fn json_files() -> Vec<(String, PathBuf)> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repository root resolves");
+    let mut files: Vec<PathBuf> = [
+        "capture/cards.json",
+        "capture/details.json",
+        "capture/meta.json",
+        "capture/responses.json",
+    ]
+    .iter()
+    .map(|file| root.join(file))
+    .collect();
+    assert!(
+        files.iter().all(|file| file.is_file()),
+        "required capture JSON files are present"
+    );
     for directory in ["capture/responses", "replay/bodies"] {
-        let Ok(entries) = std::fs::read_dir(root.join(directory)) else { continue };
-        for entry in entries.flatten() {
+        let entries = std::fs::read_dir(root.join(directory))
+            .expect("required recorded JSON directory is present");
+        for entry in entries {
+            let entry = entry.expect("recorded JSON directory entry is readable");
             let path = entry.path();
-            if entry.metadata().is_ok_and(|meta| meta.is_file() && meta.len() < 50_000_000) {
-                let head = std::fs::read(&path).map(|bytes| bytes.first().copied()).unwrap_or(None);
+            let metadata = entry
+                .metadata()
+                .expect("recorded JSON metadata is readable");
+            if metadata.is_file() && metadata.len() < 50_000_000 {
+                let bytes = std::fs::read(&path).expect("recorded JSON input is readable");
+                let head = bytes.first().copied();
                 if matches!(head, Some(b'{' | b'[' | b'"')) {
                     files.push(path);
                 }
             }
         }
     }
-    files.retain(|file| file.exists());
     files.sort();
-    files
+    let mut named: Vec<(String, PathBuf)> = files.into_iter().map(|file| {
+        (file.strip_prefix(&root).unwrap().to_string_lossy().into_owned(), file)
+    }).collect();
+    let bucket = PathBuf::from(std::env::var_os("MYMIND_TEST_HOSTED_BUCKET")
+        .expect("MYMIND_TEST_HOSTED_BUCKET must name the frozen hosted fixture"))
+        .canonicalize().expect("MYMIND_TEST_HOSTED_BUCKET fixture is present");
+    let headers = bucket.join(".headers");
+    assert!(headers.is_dir(), "frozen hosted response-header directory is present");
+    let mut header_files = Vec::new();
+    header_json_files(&headers, &mut header_files);
+    header_files.sort();
+    assert!(!header_files.is_empty(), "frozen hosted response-header JSON corpus is present");
+    named.extend(header_files.into_iter().map(|file| {
+        (format!("<fixture:hosted-bucket>/{}", file.strip_prefix(&bucket).unwrap().to_string_lossy()), file)
+    }));
+    named
 }
 
+// Recursively enumerate frozen header JSON files without silently losing unreadable inputs.
+fn header_json_files(directory: &Path, files: &mut Vec<PathBuf>) {
+    for entry in std::fs::read_dir(directory).expect("frozen header directory is readable") {
+        let entry = entry.expect("frozen header directory entry is readable");
+        let path = entry.path();
+        let kind = entry.file_type().expect("frozen header input type is readable");
+        assert!(!kind.is_symlink(), "frozen header inputs must not be symbolic links");
+        if kind.is_dir() {
+            header_json_files(&path, files);
+        } else if kind.is_file() && path.extension().is_some_and(|extension| extension == "json") {
+            files.push(path);
+        }
+    }
+}
+
+// Hash the exact text bytes used by the original oracle.
 fn sha(text: &str) -> String {
     base64::hex(&Sha256::digest(text.as_bytes()))
 }
 
 #[test]
 fn json_round_trips_match_node_on_the_recorded_library() {
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
     let files = json_files();
     assert!(files.len() > 50, "the recorded library is present");
-    let request = mm_js::obj! { "files" => Value::Array(files.iter().map(|file| file.to_string_lossy().into_owned().into()).collect()) };
-    let theirs = oracle(&Value::Object(request));
-    let mut mismatches = Vec::new();
-    for (file, expected) in files.iter().zip(&theirs) {
-        let text = String::from_utf8_lossy(&std::fs::read(file).unwrap()).into_owned();
+    let contents: Vec<Vec<u8>> = files
+        .iter()
+        .map(|(_, file)| std::fs::read(file).unwrap())
+        .collect();
+    let requests: Vec<Vec<u8>> = files
+        .iter()
+        .zip(&contents)
+        .map(|((name, _), bytes)| {
+            json::to_string(&arr![
+                "file",
+                name.as_str(),
+                bytes.len() as f64,
+                base64::hex(&Sha256::digest(bytes))
+            ])
+            .into_bytes()
+        })
+        .collect();
+    let mut batch = Batch::new(
+        env!("CARGO_MANIFEST_DIR"),
+        "node",
+        "recorded-json",
+        &requests,
+    );
+    let request = mm_js::obj! { "files" => Value::Array(files.iter().map(|(_, file)| file.to_string_lossy().into_owned().into()).collect()) };
+    let theirs = batch.recording().then(|| oracle(&Value::Object(request)));
+    if let Some(expected) = &theirs {
+        assert_eq!(
+            expected.len(),
+            files.len(),
+            "recorded JSON oracle answer count"
+        );
+    }
+    for (index, bytes) in contents.iter().enumerate() {
+        let text = String::from_utf8_lossy(bytes);
         let ours = match json::parse(&text) {
             Ok(Value::Null) | Err(_) => Value::Null,
-            Ok(value) => arr![sha(&json::to_string(&value)), sha(&json::stringify_indented(&value, "  ").unwrap().unwrap())],
+            Ok(value) => arr![
+                sha(&json::to_string(&value)),
+                sha(&json::stringify_indented(&value, "  ").unwrap().unwrap())
+            ],
         };
-        if &ours != expected {
-            mismatches.push(file.display().to_string());
-        }
+        let actual = json::to_string(&ours);
+        let expected = theirs
+            .as_ref()
+            .map(|answers| json::to_string(&answers[index]));
+        batch.check(
+            index,
+            actual.as_bytes(),
+            expected.as_deref().map(str::as_bytes),
+        );
     }
+    batch.finish();
     eprintln!("json: {} files compared", files.len());
-    assert!(mismatches.is_empty(), "{} of {} files differ, first: {:?}", mismatches.len(), files.len(), &mismatches[..mismatches.len().min(5)]);
+    guard.finish();
 }
 
 #[test]
 fn json_round_trips_match_node_on_the_library_database() {
-    let database = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../data/mymind.db");
-    if !database.exists() {
-        eprintln!("no local library database, skipped");
-        return;
+    let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "node");
+    let database = fixture_database();
+    let texts = database_json(&database);
+    assert!(texts.len() > 1000, "the library database holds JSON");
+    let requests: Vec<Vec<u8>> = texts
+        .iter()
+        .map(|text| json::to_string(&arr!["database-json", text.as_str()]).into_bytes())
+        .collect();
+    let mut batch = Batch::new(
+        env!("CARGO_MANIFEST_DIR"),
+        "node",
+        "database-json",
+        &requests,
+    );
+    let theirs = batch
+        .recording()
+        .then(|| oracle(&mm_js::obj! { "db" => database.to_string_lossy().into_owned() }.into()));
+    if let Some(expected) = &theirs {
+        assert_eq!(
+            expected.len(),
+            texts.len(),
+            "database JSON oracle answer count"
+        );
     }
-    let rows = oracle(&mm_js::obj! { "db" => database.to_string_lossy().into_owned() }.into());
-    let mut mismatches = Vec::new();
-    for row in &rows {
-        let text = row.at(0).as_str().unwrap();
-        let value = json::parse(text).expect("Node parsed it");
-        let ours = arr![sha(&json::to_string(&value)), sha(&json::stringify_indented(&value, "  ").unwrap().unwrap())];
-        if ours.at(0) != row.at(1) || ours.at(1) != row.at(2) {
-            mismatches.push(text.chars().take(120).collect::<String>());
-        }
+    for (index, text) in texts.iter().enumerate() {
+        let value = json::parse(text).expect("fixture JSON is valid");
+        let actual = json::to_string(&arr![
+            text.as_str(),
+            sha(&json::to_string(&value)),
+            sha(&json::stringify_indented(&value, "  ").unwrap().unwrap())
+        ]);
+        let expected = theirs
+            .as_ref()
+            .map(|answers| json::to_string(&answers[index]));
+        batch.check(
+            index,
+            actual.as_bytes(),
+            expected.as_deref().map(str::as_bytes),
+        );
     }
-    eprintln!("database json: {} values compared", rows.len());
-    assert!(rows.len() > 1000, "the library database holds JSON");
-    assert!(mismatches.is_empty(), "{} of {} values differ, first: {:?}", mismatches.len(), rows.len(), &mismatches[..mismatches.len().min(5)]);
+    batch.finish();
+    eprintln!("database json: {} values compared", texts.len());
+    guard.finish();
 }
 
+// Check every whole answer and reject truncated recording results.
 fn compare(label: &str, cases: &[Value], ours: &[Value]) {
-    let theirs = oracle(&mm_js::obj! { "cases" => Value::Array(cases.to_vec()) }.into());
-    let mismatches: Vec<String> = cases
+    assert_eq!(cases.len(), ours.len(), "Rust answer count");
+    let requests: Vec<Vec<u8>> = cases
         .iter()
-        .zip(ours.iter().zip(&theirs))
-        .filter(|(_, (ours, theirs))| ours != theirs)
-        .map(|(case, (ours, theirs))| format!("{} -> ours {} node {}", json::to_string(case), json::to_string(ours), json::to_string(theirs)))
+        .map(|case| json::to_string(case).into_bytes())
         .collect();
+    let mut batch = Batch::new(env!("CARGO_MANIFEST_DIR"), "node", label, &requests);
+    let theirs = batch
+        .recording()
+        .then(|| oracle(&mm_js::obj! { "cases" => Value::Array(cases.to_vec()) }.into()));
+    if let Some(expected) = &theirs {
+        assert_eq!(expected.len(), cases.len(), "oracle answer count");
+    }
+    for (index, answer) in ours.iter().enumerate() {
+        let actual = json::to_string(answer);
+        let expected = theirs
+            .as_ref()
+            .map(|answers| json::to_string(&answers[index]));
+        batch.check(
+            index,
+            actual.as_bytes(),
+            expected.as_deref().map(str::as_bytes),
+        );
+    }
+    batch.finish();
     eprintln!("{label}: {} cases compared", cases.len());
-    assert!(mismatches.is_empty(), "{} of {} {label} cases differ:\n{}", mismatches.len(), cases.len(), mismatches[..mismatches.len().min(30)].join("\n"));
+}
+
+// Require the immutable fixture selected by the test environment, never a mutable data database.
+fn fixture_database() -> PathBuf {
+    let path = PathBuf::from(
+        std::env::var_os("MYMIND_TEST_DB")
+            .expect("MYMIND_TEST_DB must name the frozen library fixture"),
+    );
+    assert!(path.is_file(), "MYMIND_TEST_DB fixture is missing");
+    let canonical = path
+        .canonicalize()
+        .expect("MYMIND_TEST_DB fixture path resolves");
+    let data = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../data");
+    if let Ok(data) = data.canonicalize() {
+        assert!(
+            !canonical.starts_with(data),
+            "MYMIND_TEST_DB must be an immutable fixture outside data/"
+        );
+    }
+    canonical
+}
+
+// Read the original oracle's JSON cells in SQLite table, row and column order without exposing their contents.
+fn database_json(path: &Path) -> Vec<String> {
+    let database = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .expect("library fixture opens read-only");
+    let tables: Vec<String> = database
+        .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'search_fts%'",
+        )
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let mut texts = Vec::new();
+    for table in tables {
+        let mut statement = database
+            .prepare(&format!("SELECT * FROM \"{}\"", table.replace('"', "\"\"")))
+            .unwrap();
+        let count = statement.column_count();
+        let mut rows = statement.query([]).unwrap();
+        while let Some(row) = rows.next().unwrap() {
+            for column in 0..count {
+                let ValueRef::Text(bytes) = row.get_ref(column).unwrap() else {
+                    continue;
+                };
+                if !matches!(bytes.first(), Some(b'[' | b'{')) {
+                    continue;
+                }
+                let text = std::str::from_utf8(bytes).expect("fixture text is UTF-8");
+                if json::parse(text).is_ok_and(|value| !matches!(value, Value::Null)) {
+                    texts.push(text.to_owned());
+                }
+            }
+        }
+    }
+    texts
 }

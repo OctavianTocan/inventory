@@ -368,7 +368,7 @@ async fn summary(admin: &Admin) -> Result<(), String> {
 }
 
 async fn work(root: &Path, args: &[String]) -> Result<u8, String> {
-    let file = match env_file::load(&root.join(".env")) {
+    let file = match env_file::load(&env_file::path(root)) {
         Ok(Loaded::Vars(vars)) => vars,
         Ok(Loaded::Missing) => HashMap::new(),
         Err(_) => return Err("Could not load .env".to_owned()),
