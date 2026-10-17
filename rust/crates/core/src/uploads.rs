@@ -258,7 +258,8 @@ impl Uploads {
     ///
     /// # Arguments
     /// * `id` - Upload id from [`Uploads::authorize`].
-    /// * `request` - Headers (`authorization`, `content-range`, `content-type`, `x-file-name`, `x-upload-id`) and body.
+    /// * `request` - Headers (`x-upload-token`, or else `authorization`, for the upload token; `content-range`,
+    ///   `content-type`, `x-file-name`, `x-upload-id`) and body.
     ///
     /// # Returns
     /// `{ id, blob: { id }, received, done }`.
@@ -269,7 +270,10 @@ impl Uploads {
         self.sweep().await?;
         let row = self.find(id)?;
         let header = |name: &str| request.headers.get(name).map(str::to_owned);
-        let token = BEARER.captures(&header("authorization").unwrap_or_default()).map(|found| found[1].to_owned());
+        let token = match header("x-upload-token").filter(|given| !given.is_empty()) {
+            Some(given) => Some(given),
+            None => BEARER.captures(&header("authorization").unwrap_or_default()).map(|found| found[1].to_owned()),
+        };
         let Some(token) = token else { return fail(401, "Invalid upload authorization") };
         let stored = base64::from_hex(row.text("token_hash").unwrap_or(""));
         let given = sha256(&token);

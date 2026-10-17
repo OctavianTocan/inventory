@@ -1,6 +1,7 @@
 //! Port of `lib/api.mjs`: the library API over a store. It answers the routes it owns and leaves every other request
 //! to the recordings.
 
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::LazyLock;
 
@@ -212,15 +213,10 @@ async fn request_body(request: &mut Request) -> Result<Value> {
 }
 
 // The current card model used by both object reads and change messages.
-fn object_model(store: &Store, row: &CardRow) -> Result<Value> {
+fn object_model(row: &CardRow, space_ids: &[String]) -> Result<Value> {
     let data = parse(&row.data)?;
     let extras = parse(&row.extras)?;
-    let spaces: Vec<Value> = store
-        .db()
-        .query("SELECT space_id AS id FROM space_cards WHERE card_id = ? AND excluded = 0 ORDER BY rank", &[row.id.as_str().into()])?
-        .iter()
-        .map(|found| Value::Object(found.to_object()))
-        .collect();
+    let spaces: Vec<Value> = space_ids.iter().map(|id| Value::Object(obj! { "id" => id.as_str() })).collect();
     let mut model = data.as_object().cloned().unwrap_or_default();
     model.insert("id", row.id.as_str());
     model.insert("entityType", data.get("type").clone());
@@ -488,14 +484,14 @@ impl Api {
     }
 
     // Encode a poll item with exact uint64 checkpoints and MessagePack timestamp dates, in the device's card HTML.
-    fn change_value(&self, change: &Change, variant: &str) -> Result<Value> {
+    fn change_value(&self, change: &Change, variant: &str, spaces: &HashMap<String, Vec<String>>) -> Result<Value> {
         let mut object = if change.object_type == 190 {
             match self.store.space(&change.object_id)? {
                 Some(space) => space.to_value(),
                 None => obj! { "id" => change.object_id.as_str() }.into(),
             }
         } else if let Some(card) = &change.card {
-            object_model(&self.store, card)?
+            object_model(card, spaces.get(&card.id).map_or(&[], Vec::as_slice))?
         } else {
             obj! { "id" => change.object_id.as_str() }.into()
         };
@@ -550,7 +546,7 @@ impl Api {
             () if post && path == "/spaces/reorder" => Mutation::ReorderSpaces,
             () if post && path == "/objects/reorder-pins" => Mutation::ReorderPins,
             () if post && path == "/convert" => Mutation::Convert,
-            () if post && path == "/jserrors" => Mutation::Acknowledge,
+            () if post && (path == "/jserrors" || path == "/browser-extension/activate") => Mutation::Acknowledge,
             () if post && path == "/serendipity/complete" => Mutation::Serendipity,
             () => {
                 if post && let Some(m) = found(&DISMISS) {
@@ -686,8 +682,11 @@ impl Api {
 
     async fn write(&self, request: &mut Request, method: &str, path: &str) -> Result<Option<Response>> {
         let Some(mutation) = self.mutation(method, path)? else { return Ok(None) };
-        let body = request_body(request).await?;
+        let mut body = request_body(request).await?;
         let creates = matches!(mutation, Mutation::Create);
+        if creates {
+            extension_body(&mut body);
+        }
         let upload = if creates && (member(&body, "uploadId")?.truthy() || body.get("type").as_str() == Some("Media")) {
             let key = upload_id(&self.uploads, body.get("uploadId")).await?;
             let prepared = self.uploads.prepare(&key).await?;
@@ -886,7 +885,11 @@ impl Api {
             self.reply_json(url, &space)?
         } else if get && path == "/tags/manual" {
             let tags: Vec<Value> = self.store.tags_manual(None)?.iter().map(|tag| tag.to_value()).collect();
-            self.reply(url, pack(&[Value::Array(tags)])?, 200, type_header(MSGPACK))?
+            if request.header("accept").is_some_and(|accept| accept.contains("application/json") && !accept.contains(MSGPACK)) {
+                self.reply_json(url, &Value::Array(tags))?
+            } else {
+                self.reply(url, pack(&[Value::Array(tags)])?, 200, type_header(MSGPACK))?
+            }
         } else if get && path == "/tags/recent" {
             let take = search_param(url, "take").map_or(10.0, |take| number::string_to_number(&take));
             let names = self.store.tags_recent(take as i64, None)?;
@@ -899,7 +902,9 @@ impl Api {
             // The checkpoint binds as text, so one past every stored nanosecond count matches nothing either way.
             let since = since.parse::<i128>().unwrap_or(i128::MAX);
             let changes = self.store.changes_since(since, &ChangesOptions { coalesce: true, ..ChangesOptions::default() })?;
-            let items = changes.iter().map(|change| self.change_value(change, variant)).collect::<Result<Vec<_>>>()?;
+            let card_ids: Vec<&str> = changes.iter().filter_map(|change| change.card.as_ref().map(|card| card.id.as_str())).collect();
+            let spaces = self.store.card_spaces(&card_ids)?;
+            let items = changes.iter().map(|change| self.change_value(change, variant, &spaces)).collect::<Result<Vec<_>>>()?;
             let mut headers = self.with_quota(type_header(MSGPACK))?;
             headers.set("x-count", changes.len().to_string());
             headers.set("access-control-expose-headers", "x-object-quota, x-count");
@@ -907,7 +912,8 @@ impl Api {
         } else if get && let Some(m) = captures(&OBJECT_READ, path) {
             let row = self.require_card(&m[1])?;
             let data = parse(&row.data)?;
-            let mut body = object_model(&self.store, &row)?;
+            let spaces = self.store.card_spaces(&[row.id.as_str()])?.remove(&row.id).unwrap_or_default();
+            let mut body = object_model(&row, &spaces)?;
             let mut headers = json_headers();
             match m[2].as_str() {
                 "tags" => body = Value::Array(self.store.card_tags(&row.id)?.iter().map(|tag| tag.to_value()).collect()),
@@ -1014,15 +1020,8 @@ impl LibraryApi for Api {
             || store.db().one("SELECT id FROM cards WHERE json_extract(extras, '$.local') = 1 AND (flags & 512) != 0 LIMIT 1", &[])?.is_some();
         let mut html = html.to_owned();
         if local_pin {
-            let pinned = store.db().query(
-                "SELECT c.id FROM cards c LEFT JOIN pins p ON p.card_id = c.id
-          WHERE c.user_id = ? AND c.deleted_ns IS NULL AND (c.flags & 512) != 0 AND (c.flags & 393224) = 0
-          ORDER BY COALESCE(p.position, 2147483647), c.bumped_ns DESC, c.id DESC",
-                &[store.default_user_id()?.into()],
-            )?;
             let mut contents = String::new();
-            for row in &pinned {
-                let card = store.card(row.text("id").unwrap_or(""), None)?.ok_or_else(|| Error::invalid("Cannot read properties of undefined (reading 'data')"))?;
+            for card in store.pinned_cards(None)? {
                 contents.push_str(&self.localize(&render_pinned(&card)));
             }
             html = pinned_list(&html, &contents);
@@ -1052,6 +1051,18 @@ impl LibraryApi for Api {
         let replaced = format!("{}{}{}", &found[1], stringify(&config)?.replace('<', "\\u003c"), &found[3]);
         let range = found.get(0).expect("whole match").range();
         Ok(format!("{}{replaced}{}", &html[..range.start], &html[range.end..]))
+    }
+}
+
+/// Maps the browser extension's `WebPage` and URL-only `Media` bodies onto a link card, which the capture jobs fill in.
+fn extension_body(body: &mut Value) {
+    let kind = body.get("type").as_str().map(str::to_owned);
+    let link = body.get("url").as_str().map(str::to_owned);
+    let (Some(kind), Some(link)) = (kind, link) else { return };
+    let plain_media = kind == "Media" && !body.get("uploadId").truthy();
+    if (kind == "WebPage" || plain_media) && body.is_object() {
+        body.set("content", link);
+        body.set("type", "Link");
     }
 }
 

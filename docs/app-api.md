@@ -7,7 +7,7 @@ a bearer token, reads cards as typed JSON from `/app/v1/*`, and writes through t
 
 Status (2026-10-16): contract written; server read and sign-in endpoints implemented and proved by `tools/check-app-api.mjs`; app being built on branch `android-app`.
 
-Implementation notes: `note` is the note's plain text. Read errors are `400` with `bad-limit`, `bad-cursor`, `missing-query` or `bad-request`; non-GET reads get `405`; unknown cards and spaces get `404 {"error":"not-found"}`. A space's cards omit trashed and grid-hidden cards. Search cursors are offset-based. Sign-out needs a valid bearer token (`204`, otherwise `401`). `GET /app/v1/me` exists only with sign-in on. `APP_NONCE_MS` overrides the nonce lifetime for tests.
+Implementation notes: `note` is the note's plain text. Read errors are `400` with `bad-limit`, `bad-cursor`, `missing-query` or `bad-request`; non-GET reads get `405`; unknown cards and spaces get `404 {"error":"not-found"}`. A space's cards omit trashed and grid-hidden cards. Search cursors are offset-based. Sign-out needs a valid bearer token (`204`, otherwise `401`). `GET /app/v1/me` exists only with sign-in on. It sends no `name` or `plan`: the stored `api_metadata` has no `/account.json` row, the recorded config script carries `account` with only `uid`, and the user settings hold neither. `colorScheme` and `features` come from the config script of `GET /everything`, which the server fills from the user's settings, the same source the web page reads. `APP_NONCE_MS` overrides the nonce lifetime for tests.
 
 ## Sign-in
 
@@ -51,6 +51,24 @@ bearer token.
 | `GET /app/v1/spaces/<id>/cards?limit&cursor` | Same list shape, the space's cards in its order. |
 | `GET /app/v1/tags` | `{"tags": [{"name": "...", "count": 12}]}`, the same order as the web's tag list. |
 | `GET /app/v1/search?q=<query>&limit&cursor` | Same list shape, mymind's query syntax (`docs/search.md`). |
+| `GET /app/v1/top-of-mind?limit&cursor` | Same list shape, the pinned cards in pin order (`pinPosition`, then newest bumped first for pins without a position). Trashed and grid-hidden cards are left out. Paged by offset, like a space. |
+
+### Uploads from the app
+
+The app runs the web flow (`docs/write-api.md` 4.2) with its app token as the normal `Authorization: Bearer` header on
+every request:
+
+1. `POST /uploads/authorize` gives `{"url": "/uploads/<id>", "token": "<upload token>"}`.
+2. `PUT <url>` with the chunk headers of the web flow. Send the upload token in `x-upload-token`; `Authorization`
+   stays the app token. Without a correct `x-upload-token` the answer is `401 Invalid upload authorization`, so the app
+   token alone cannot write an upload.
+3. `POST /objects {"type": "Media", "uploadId": "<id from the last chunk>"}` creates the card.
+
+### Serendipity
+
+The server has no JSON route for the Serendipity deck. The web page `GET /serendipity` is a recorded document that
+carries the deck's cards inside the HTML (18 elements with `data-id` in the recorded page), and its script only calls
+`POST /serendipity/complete` when the deck is finished. The app can read the deck's card ids from that page.
 
 ### Card
 
