@@ -205,6 +205,12 @@ then U10 and U11; then U12 to U15.
   test user: `tools/check-hosted.mjs --browser` passes; `/app/v1/me` answers `{email, kind}`; `/top-of-mind` lists 4
   pinned cards; an authorized upload refuses a chunk with the app token alone and with a wrong `x-upload-token` (401
   both), and nothing was uploaded. `wrangler rollback e83ecfcf-669d-42fd-9099-9289755f6107` reverts the Worker.
+- Backend gaps and Android downloads since 2026-10-17 (Worker version `ca97f888`, media image `sha256:736b7065`):
+  `GET /cards/<id>/markdown`, screenshot attachments as covers, `Content` cards keeping their source,
+  `/download/android.json` and Android packages for app tokens. Checked on production as the test user:
+  `tools/check-hosted.mjs --browser` and `evidence/app-api/probe-prod.mjs` pass; a card's Markdown answers 200
+  `text/markdown`; `/download/android.json` answers 404 until a package is published.
+  `wrangler rollback f3c367b5-4829-4089-b79e-22fea29ae52c` reverts the Worker.
 - R11: `docs/rust-benchmarks.md`, production numbers included.
 
 Decisions made while building:

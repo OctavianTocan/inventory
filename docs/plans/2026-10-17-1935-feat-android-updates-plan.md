@@ -120,6 +120,9 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
   and to 0.2.2 (background notification action), silently both times. `publish-android.sh` without `--local` was never
   run. Changes from the plan: an extra `UpToDate` state, and the release build picks its network security config
   (`network_strict`, or `network_loopback` when pointed at an `http://` server).
+- 2026-10-17: the server side is live (Worker version `ca97f888`). The release key's Android OAuth client ("mymind
+  Android (release)", package `com.octaviantocan.mymind`, SHA-1 `EE:DC:47:…:C1:15`) exists next to the debug one, so
+  Google sign-in works in release builds. The first production publish has not run yet.
 
 ## Order
 
