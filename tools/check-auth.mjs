@@ -8,7 +8,7 @@ import http from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openAuthStore, removeUser, setPassword } from '../lib/auth-store.mjs';
+import { authFixture } from './lib/auth-fixture.mjs';
 import { testServer } from './http-check.mjs';
 
 const OWNER = 'owner@example.com';
@@ -112,7 +112,7 @@ const rejected = async (res, error = 'SignInFailed') => {
 };
 
 let session;
-const users = openAuthStore(join(authDir, 'auth.db'));
+const users = await authFixture(join(authDir, 'auth.db'));
 const PASSWORD = 'correct horse battery staple';
 try {
   await check('password sign-in is off until a password user exists', async () => strictEqual((await get('/signin/password')).status, 404));
@@ -176,7 +176,16 @@ try {
     strictEqual((await get('/cards', { accept: 'application/msgpack', cookie: session })).status, 200);
   });
   await check('signed-in owner skips the sign-in page', async () => strictEqual((await get('/signin', { cookie: session })).headers.get('location'), '/everything'));
-  await check('signed-in hub upgrade connects', async () => strictEqual(await hubOpens(session), true));
+  await check('signed-in hub upgrade connects only from this server or without an origin', async () => {
+    strictEqual(await hubOpens(session), true);
+    strictEqual(await hubOpens(session, server.base, { origin: server.base }), true);
+    strictEqual(await hubOpens(session, server.base, { origin: 'https://evil.test' }), false);
+  });
+  await check('an extension can send the session cookie value as a bearer token', async () => {
+    const authorization = `Bearer ${session.slice('mm_session='.length)}`;
+    strictEqual((await get('/cards', { accept: 'application/msgpack', authorization })).status, 200);
+    strictEqual(await hubOpens(null, server.base, { authorization, origin: 'chrome-extension://synthetic-test' }), true);
+  });
   await check('cross-origin write is refused', async () => {
     const res = await fetch(`${server.base}/cards/x/tags`, { method: 'POST', headers: { cookie: session, origin: 'https://evil.test' }, body: '{}' });
     strictEqual(res.status, 403);
@@ -186,7 +195,7 @@ try {
     strictEqual(res.headers.get('location'), '/signin');
     strictEqual((await get('/cards', { accept: 'application/msgpack', cookie: session })).status, 401);
   });
-  await setPassword(users, 'Tester', PASSWORD);
+  await users.setPassword('Tester', PASSWORD);
   await check('password page is served once a password user exists', async () => {
     const res = await get('/signin/password', { accept: 'text/html' });
     strictEqual(res.status, 200);
@@ -218,12 +227,12 @@ try {
   });
   await check('signed-in password user skips the password page', async () => strictEqual((await get('/signin/password', { cookie: passwordSession })).headers.get('location'), '/everything'));
   await check('repeated failures lock the username', async () => {
-    await setPassword(users, 'locked', PASSWORD);
+    await users.setPassword('locked', PASSWORD);
     for (let i = 0; i < 10; i++) refused(await post('/signin/password', { username: 'locked', password: `wrong guess number ${i}` }));
     refused(await post('/signin/password', { username: 'locked', password: PASSWORD }), 'locked');
   });
   await check('removing a password user ends their sessions', async () => {
-    ok(removeUser(users, 'tester'));
+    ok(await users.removeUser('tester'));
     strictEqual((await get('/cards', { accept: 'application/msgpack', cookie: passwordSession })).status, 401);
     refused(await post('/signin/password', { username: 'tester', password: PASSWORD }));
   });

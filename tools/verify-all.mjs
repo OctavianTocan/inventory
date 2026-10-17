@@ -1,6 +1,7 @@
 // Runs every profile x suite through tools/drive.mjs (several at once, each with its own verifier browser)
 // and prints one table of how many screenshots REA found pixel-identical.
-// Usage: node tools/verify-all.mjs [--parallel 2] [--port-base 9333] [--reseed | --replica-only] [run ...]
+// Usage: node tools/verify-all.mjs [--parallel 2] [--port-base 9333] [--reseed | --replica-only]
+//        [--server rust|hosted-rust|hosted-worker] [run ...]
 // Runs are `profile-suite` names (default: the whole matrix); patch runs such as `iphone-cards@media` work too.
 // The replica it starts reads data/verify.db, a database seeded from the recordings (created on first use), never
 // the working library in data/mymind.db.
@@ -15,6 +16,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { serverCommand, toolCommand } from './server-command.mjs';
+import { assertReplicaServer } from './server-identity.mjs';
+import { verificationMode } from './digests.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DRIVE = path.join(ROOT, 'evidence', 'drive');
@@ -36,8 +39,11 @@ const { values: opts, positionals } = parseArgs({
     'port-base': { type: 'string', default: '9333' },
     reseed: { type: 'boolean', default: false },
     'replica-only': { type: 'boolean', default: false },
+    server: { type: 'string', default: 'rust' },
   },
 });
+const mode = verificationMode(opts.server);
+if (opts.reseed && mode !== 'rust') throw new Error('--reseed requires --server rust; hosted verification uses an already running signed-in proxy');
 const PROFILES = [...new Set(MATRIX.map(([profile]) => profile))];
 const parseRun = (run) => {
   const profile = PROFILES.find((p) => run.startsWith(`${p}-`));
@@ -47,8 +53,8 @@ const parseRun = (run) => {
 const jobs = positionals.length ? positionals.map(parseRun) : [...MATRIX];
 
 const up = () => fetch('http://localhost:4321/__replay/reload', { method: 'POST' }).then((r) => (r.ok ? r.json() : null), () => null);
-const run = (args) => new Promise((resolve) => spawn('node', args, { cwd: ROOT, stdio: 'inherit' }).on('exit', resolve));
 let server = null;
+// Seed and start only the direct native backend; hosted modes require an existing identified proxy.
 async function startServer() {
   const seed = toolCommand('seed-db', ['--db', VERIFY_DB]);
   const seeded = existsSync(VERIFY_DB) || await new Promise((done) => spawn(seed.command, seed.args, { cwd: ROOT, stdio: 'inherit' }).on('exit', (code) => done(code === 0)));
@@ -56,16 +62,20 @@ async function startServer() {
   const { command, args } = serverCommand();
   server = spawn(command, args, { cwd: ROOT, env: { ...process.env, OFFLINE: '1', STORE_READONLY: '1', STORE_DB: VERIFY_DB }, stdio: 'ignore' });
   while (!(await up())) await new Promise((r) => setTimeout(r, 200));
+  await assertReplicaServer(4321, mode);
 }
-const running = await up();
+const proxy = mode === 'rust' ? null : await assertReplicaServer(4321, mode);
+const running = mode === 'hosted-worker' ? { offline: false, store: null, proxyTarget: proxy.target } : await up();
 if (running) {
+  await assertReplicaServer(4321, mode);
   if (opts.reseed) {
     console.error('--reseed restarts the replica after seeding: stop the server on :4321 first.');
     process.exit(2);
   }
   if (!running.offline) console.error('warning: the server on :4321 is not OFFLINE=1, so coverage cannot prove offline rendering.');
   if (running.store !== VERIFY_DB) console.error('warning: the server on :4321 does not read data/verify.db (STORE_DB), so it compares your working library.');
-} else await startServer();
+} else if (mode === 'rust') await startServer();
+else throw new Error('The selected hosted proxy did not answer replica readiness; start it and its backend before verifying');
 await mkdir(DRIVE, { recursive: true });
 
 const rows = [];
@@ -77,7 +87,7 @@ async function pool(queue, sides) {
       const [profile, suite] = job;
       const log = path.join(DRIVE, `${profile}-${suite}${sides ? `.${sides}` : ''}.log`);
       console.log(`start ${profile}-${suite}${sides ? ` (${sides})` : ''} (log: ${path.relative(ROOT, log)})`);
-      const child = spawn('node', ['tools/drive.mjs', '--profile', profile, '--suite', suite, ...(sides ? ['--sides', sides] : [])], {
+      const child = spawn('node', ['tools/drive.mjs', '--profile', profile, '--suite', suite, '--server', mode, ...(sides ? ['--sides', sides] : [])], {
         cwd: ROOT,
         env: { ...process.env, VERIFIER_PORT: String(Number(opts['port-base']) + slot) },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -114,7 +124,13 @@ try {
     await pool([...jobs], 'live');
     server.kill();
     await new Promise((r) => server.once('exit', r));
-    if ((await run(['tools/seed-db.mjs', '--db', VERIFY_DB])) !== 0) throw new Error('seed-db failed');
+    const seed = toolCommand('seed-db', ['--db', VERIFY_DB]);
+    const seeded = await new Promise((resolve) => {
+      const child = spawn(seed.command, seed.args, { cwd: ROOT, stdio: 'inherit' });
+      child.once('error', () => resolve(false));
+      child.once('exit', code => resolve(code === 0));
+    });
+    if (!seeded) throw new Error('seed-db failed');
     await startServer();
     await pool([...jobs], 'replica');
   } else await pool([...jobs], opts['replica-only'] ? 'replica' : undefined);

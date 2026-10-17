@@ -43,6 +43,9 @@ android/.idea/
 # Cloudflare Worker: local secrets and wrangler's local state.
 worker/.dev.vars
 worker/.wrangler/
+rust/crates/worker/.dev.vars
+rust/crates/worker/.wrangler/
+rust/crates/worker/build/
 
 # Rust build output
 rust/target/

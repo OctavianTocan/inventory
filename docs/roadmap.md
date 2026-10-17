@@ -5,7 +5,7 @@ search and AI, in a desktop app, without changing a pixel of what already matche
 
 | # | Phase | Proof it works |
 |---|---|---|
-| 1 | **Store and renderer.** SQLite (`data/mymind.db`, `lib/store.mjs`) seeded from the recordings; `lib/render-card.mjs` renders a card's HTML from its JSON the way mymind's server does. | `tools/check-render.mjs`: every recorded card re-rendered byte for byte. |
+| 1 | **Store and renderer.** SQLite (`data/mymind.db`, `lib/store.mjs`) seeded from the recordings; `lib/render-card.mjs` renders a card's HTML from its JSON the way mymind's server does. | `rust/crates/core/tests/check_render.rs`: every recorded card re-rendered byte for byte. |
 | 2 | **Reads from the store.** `GET /cards`, `/cards/:id`, trash, spaces, tags, `/changes` come from SQLite instead of replay/. | Narrow REA patch suites still pixel-identical. |
 | 3 | **Writes.** Notes, titles, card notes, tags, highlights, spaces, pins, trash/restore, settings (`docs/write-api.md`), with the `/changes` log and `/hub` pushes so the grid updates live. | Scripted save/edit/delete flows in the browser; screenshots of each new state. |
 | 4 | **Link capture and uploads.** Fetch page metadata, screenshot the page, detect the card type; image/PDF uploads into `data/media/`. | Saved links render like recorded ones of the same type. |

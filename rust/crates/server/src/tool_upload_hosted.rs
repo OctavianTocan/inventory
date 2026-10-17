@@ -32,7 +32,7 @@ struct Admin {
 enum Payload {
     None,
     Json(Value),
-    Bytes(Vec<u8>),
+    File(PathBuf),
 }
 
 struct Table {
@@ -68,15 +68,16 @@ impl Admin {
         for (name, value) in headers {
             request.headers.set(name.as_str(), value.as_str());
         }
-        match body {
-            Payload::None => {}
+        let response = match body {
             Payload::Json(value) => {
                 request.headers.set("content-type", "application/json");
                 request.body = Body::from(json::stringify(&value).ok().flatten().unwrap_or_default());
+                self.fetch.fetch(request).await
             }
-            Payload::Bytes(bytes) => request.body = Body::from(bytes),
+            Payload::File(path) => self.fetch.fetch_file(request, &path).await,
+            Payload::None => self.fetch.fetch(request).await,
         }
-        let response = self.fetch.fetch(request).await.map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string())?;
         if !(200..300).contains(&response.status) && !(method == "HEAD" && response.status == 404) {
             let status = response.status;
             let body = response.body.bytes().await.map_err(|error| error.to_string())?;
@@ -147,8 +148,7 @@ async fn upload_bucket(admin: &Admin, cwd: &Path, bucket: &str, prefix: &str, fo
                 }
                 _ => Vec::new(),
             };
-            let body = std::fs::read(&file).map_err(|error| error.to_string())?;
-            admin.call(&route, "PUT", Payload::Bytes(body), &headers).await?;
+            admin.call(&route, "PUT", Payload::File(file), &headers).await?;
             uploaded.set(uploaded.get() + 1);
             bytes.set(bytes.get() + size);
             if uploaded.get() % 250 == 0 {
@@ -230,29 +230,40 @@ fn tables_of(db: &dyn Sql) -> Result<Vec<Table>, String> {
     Ok(ordered.into_iter().filter_map(|at| slots[at].take()).collect())
 }
 
-fn batches_of(db: &dyn Sql, table: &Table) -> Result<Vec<Vec<Value>>, String> {
-    let list = table.columns.iter().map(|column| format!("\"{column}\"")).collect::<Vec<_>>().join(", ");
-    let order = if table.rowid { " ORDER BY rowid" } else { "" };
-    let (mut batches, mut batch, mut bytes) = (Vec::new(), Vec::new(), 0usize);
-    db.query_each(&format!("SELECT {list} FROM \"{}\"{order}", table.table), &[], &mut |row| {
-        let encoded = row.values().iter().map(encode_value).collect::<mm_core::Result<Vec<Value>>>()?;
-        let encoded = Value::Array(encoded);
-        let size = text::len(&json::stringify(&encoded).ok().flatten().unwrap_or_default());
-        if bytes + size > BATCH_BYTES {
-            if !batch.is_empty() {
-                batches.push(std::mem::take(&mut batch));
-            }
-            bytes = 0;
+// Pull only one upload batch and its next row, measuring JSON in the original UTF-16 units.
+fn batches_of(mut rows: impl Iterator<Item = Result<Value, String>>) -> impl Iterator<Item = Result<Vec<Value>, String>> {
+    let (mut pending, mut done) = (None, false);
+    std::iter::from_fn(move || {
+        if done {
+            return None;
         }
-        batch.push(encoded);
-        bytes += size;
-        Ok(true)
+        let (mut batch, mut bytes) = (Vec::new(), 0usize);
+        loop {
+            let (row, size) = match pending.take() {
+                Some(row) => row,
+                None => match rows.next() {
+                    Some(Ok(row)) => {
+                        let size = text::len(&json::stringify(&row).ok().flatten().unwrap_or_default());
+                        (row, size)
+                    }
+                    Some(Err(error)) => {
+                        done = true;
+                        return Some(Err(error));
+                    }
+                    None => {
+                        done = true;
+                        return (!batch.is_empty()).then_some(Ok(batch));
+                    }
+                },
+            };
+            if bytes + size > BATCH_BYTES && !batch.is_empty() {
+                pending = Some((row, size));
+                return Some(Ok(batch));
+            }
+            batch.push(row);
+            bytes += size;
+        }
     })
-    .map_err(|error| error.to_string())?;
-    if !batch.is_empty() {
-        batches.push(batch);
-    }
-    Ok(batches)
 }
 
 async fn upload_library(admin: &Admin, cwd: &Path, root: &Path, name: Option<&str>, db_option: Option<&str>) -> Result<u8, String> {
@@ -280,8 +291,34 @@ async fn upload_library(admin: &Admin, cwd: &Path, root: &Path, name: Option<&st
     for table in &tables {
         let columns = Value::Array(table.columns.iter().map(|column| Value::from(column.as_str())).collect());
         let mut sent = 0.0;
-        for batch in batches_of(&db, table)? {
-            let body = obj! { "table" => table.table.as_str(), "columns" => columns.clone(), "rows" => Value::Array(batch) };
+        let list = table.columns.iter().map(|column| format!("\"{column}\"")).collect::<Vec<_>>().join(", ");
+        let order = if table.rowid { " ORDER BY rowid" } else { "" };
+        let mut statement = db.connection().prepare(&format!("SELECT {list} FROM \"{}\"{order}", table.table)).map_err(|error| error.to_string())?;
+        let mut rows = statement.query([]).map_err(|error| error.to_string())?;
+        let encoded = std::iter::from_fn(|| {
+            let row = match rows.next() {
+                Ok(Some(row)) => row,
+                Ok(None) => return None,
+                Err(error) => return Some(Err(error.to_string())),
+            };
+            Some((0..table.columns.len()).map(|index| {
+                let cell = row.get_ref(index).map_err(|error| error.to_string())?;
+                let value = if let Ok(number) = cell.as_i64() {
+                    SqlValue::Integer(number)
+                } else if let Ok(number) = cell.as_f64() {
+                    SqlValue::Real(number)
+                } else if let Ok(bytes) = cell.as_blob() {
+                    SqlValue::Blob(bytes.to_vec())
+                } else if let Ok(bytes) = cell.as_bytes() {
+                    SqlValue::Text(String::from_utf8_lossy(bytes).into_owned())
+                } else {
+                    SqlValue::Null
+                };
+                encode_value(&value).map_err(|error| error.to_string())
+            }).collect::<Result<Vec<Value>, String>>().map(Value::Array))
+        });
+        for batch in batches_of(encoded) {
+            let body = obj! { "table" => table.table.as_str(), "columns" => columns.clone(), "rows" => Value::Array(batch?) };
             let answer = admin.json(&format!("library/{name}/rows"), "POST", Payload::Json(body.into())).await?;
             if matches!(answer, Value::Null) {
                 return Err("Cannot read properties of null (reading 'inserted')".to_owned());
@@ -438,5 +475,63 @@ pub async fn run(root: &Path, args: &[String]) -> u8 {
             eprintln!("Error: {message}");
             1
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A synthetic single-column row with an exactly measurable JSON size.
+    fn row(text: String) -> Value {
+        Value::Array(vec![Value::String(text)])
+    }
+
+    // Measure the batch as the JavaScript uploader does, excluding the enclosing request.
+    fn size(rows: &[Value]) -> usize {
+        rows.iter().map(|row| text::len(&json::stringify(row).unwrap().unwrap())).sum()
+    }
+
+    #[test]
+    fn batches_are_lazy_and_keep_only_one_lookahead_row() {
+        let read = Cell::new(0);
+        let rows = (0..1000).map(|_| {
+            read.set(read.get() + 1);
+            Ok(row("a".repeat(BATCH_BYTES / 4 - 4)))
+        });
+        let mut batches = batches_of(rows);
+        assert_eq!(read.get(), 0);
+        let first = batches.next().unwrap().unwrap();
+        assert_eq!(first.len(), 4);
+        assert_eq!(size(&first), BATCH_BYTES);
+        assert_eq!(read.get(), 5);
+        drop(first);
+        let second = batches.next().unwrap().unwrap();
+        assert_eq!(second.len(), 4);
+        assert_eq!(size(&second), BATCH_BYTES);
+        assert_eq!(read.get(), 9);
+    }
+
+    #[test]
+    fn batches_measure_utf16_and_keep_oversized_rows_as_singletons() {
+        let half = || row("\u{1f600}".repeat(BATCH_BYTES / 4 - 2));
+        let oversized = row("x".repeat(BATCH_BYTES));
+        let rows = [half(), half(), oversized, row("last".to_owned())];
+        let batches = batches_of(rows.into_iter().map(Ok)).collect::<Result<Vec<_>, _>>().unwrap();
+        assert_eq!(batches.iter().map(Vec::len).collect::<Vec<_>>(), [2, 1, 1]);
+        assert_eq!(size(&batches[0]), BATCH_BYTES);
+        assert!(json::stringify(&batches[0][0]).unwrap().unwrap().len() > BATCH_BYTES / 2);
+        assert_eq!(size(&batches[1]), BATCH_BYTES + 4);
+        assert_eq!(batches[2][0], row("last".to_owned()));
+        assert!(batches_of(std::iter::empty()).next().is_none());
+    }
+
+    #[test]
+    fn later_row_errors_do_not_prevent_an_earlier_batch_upload() {
+        let rows = [Ok(row("a".repeat(BATCH_BYTES - 4))), Ok(row("next".to_owned())), Err("late encoding failure".to_owned())];
+        let mut batches = batches_of(rows.into_iter());
+        assert_eq!(size(&batches.next().unwrap().unwrap()), BATCH_BYTES);
+        assert_eq!(batches.next().unwrap(), Err("late encoding failure".to_owned()));
+        assert!(batches.next().is_none());
     }
 }

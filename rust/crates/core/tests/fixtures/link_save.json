@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "changes": [
+    {
+      "object": {
+        "id": "000000000010O000000001"
+      },
+      "cardHtml": "<mymind-card class=\"placeholder processing\" data-id=\"000000000010O000000001\">\n  <div class=\"hover\" on-click=\"card:open\"><a class=\"link-bubble\" href=\"http://127.0.0.1/failed.apk\" on-click=\"card:link\" target=\"_blank\"><span>Placeholder</span></a></div>\n  \n<div class=\"processing-guts\">\n  <img class=\"icon\" src=\"https://static.accelerator.net/134/0.109.0/icons/head_spin.png\" width=\"30\" height=\"30\"/>\n\n  <span class=\"big\">One moment.</span>\n  <span class=\"big\">I'm saving this for you.</span>\n</div>\n\n\n\n\n  \n</mymind-card>",
+      "cardData": "{\"type\":\"Placeholder\",\"siteName\":\"127.0.0.1\",\"domain\":\"127.0.0.1\",\"source\":{\"name\":\"clipboard\",\"url\":\"http://127.0.0.1/failed.apk\"},\"flags\":0,\"modified\":\"2026-10-15T19:46:16.136969Z\",\"bumped\":\"2026-10-15T19:46:16Z\",\"created\":\"2026-10-15T19:46:16Z\"}"
+    },
+    {
+      "object": {
+        "id": "000000000010O000000001"
+      },
+      "cardHtml": "<mymind-card class=\"web-page processing\" data-id=\"000000000010O000000001\">\n  <div class=\"hover\" on-click=\"card:open\"><a class=\"link-bubble\" href=\"http://127.0.0.1/failed.apk\" on-click=\"card:link\" target=\"_blank\"><span>127.0.0.1</span></a></div>\n  \n\n\n\n\n  \n  <div class=\"processing-guts\">\n   <div class=\"spinner\"></div>\n   <span class=\"text\">Taking screenshot…</span>\n  </div>\n  \n\n  \n\n\n\n\n\n\n  \n  <p class=\"title\"><a href=\"http://127.0.0.1/failed.apk\" target=\"_blank\">http://127.0.0.1/failed.apk</a></p>\n  \n</mymind-card>",
+      "cardData": "{\"type\":\"WebPage\",\"siteName\":\"127.0.0.1\",\"domain\":\"127.0.0.1\",\"source\":{\"name\":\"clipboard\",\"url\":\"http://127.0.0.1/failed.apk\"},\"flags\":2097153,\"modified\":\"2026-10-15T19:46:22.856078Z\",\"bumped\":\"2026-10-15T19:46:16Z\",\"created\":\"2026-10-15T19:46:16Z\"}"
+    },
+    {
+      "object": {
+        "id": "000000000010O000000001"
+      },
+      "cardHtml": "<mymind-card class=\"web-page processing\" data-id=\"000000000010O000000001\">\n  <div class=\"hover\" on-click=\"card:open\"><a class=\"link-bubble\" href=\"http://127.0.0.1/failed.apk\" on-click=\"card:link\" target=\"_blank\"><span>127.0.0.1</span></a></div>\n  \n\n\n\n\n  \n  <div class=\"processing-guts\">\n   <div class=\"spinner\"></div>\n   <span class=\"text\">Taking screenshot…</span>\n  </div>\n  \n\n  \n\n\n\n\n\n\n  \n  <p class=\"title\"><a href=\"http://127.0.0.1/failed.apk\" target=\"_blank\">http://127.0.0.1/failed.apk</a></p>\n  \n</mymind-card>",
+      "cardData": "{\"type\":\"WebPage\",\"siteName\":\"127.0.0.1\",\"domain\":\"127.0.0.1\",\"source\":{\"name\":\"clipboard\",\"url\":\"http://127.0.0.1/failed.apk\"},\"flags\":6291457,\"modified\":\"2026-10-15T19:46:34.921291Z\",\"bumped\":\"2026-10-15T19:46:16Z\",\"created\":\"2026-10-15T19:46:16Z\"}"
+    }
+  ],
+  "events": [
+    {
+      "type": 1,
+      "target": "object:created",
+      "arguments": [
+        {
+          "id": "000000000010O000000001"
+        }
+      ]
+    },
+    {
+      "type": 1,
+      "target": "object:updated",
+      "arguments": [
+        {
+          "id": "000000000010O000000001",
+          "type": "WebPage",
+          "flags": 2097152,
+          "bumped": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "type": 1,
+      "target": "ai:failed",
+      "arguments": [
+        {
+          "objectId": "000000000010O000000001"
+        }
+      ]
+    },
+    {
+      "type": 1,
+      "target": "exception",
+      "arguments": [
+        {
+          "id": "000000000010O000000001",
+          "type": "InvalidObjectException",
+          "message": "no resource text"
+        }
+      ]
+    },
+    {
+      "type": 1,
+      "target": "screenshot:failed",
+      "arguments": [
+        {
+          "objectId": "000000000010O000000001"
+        }
+      ]
+    }
+  ]
+}

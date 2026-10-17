@@ -142,18 +142,18 @@ Under wrangler 4.128.0, `wrangler dev` exited with an empty error in 4 of 6 full
 serving media from its local R2, and workerd left no core dump. Through those runs the Worker's own JavaScript heap
 stayed between 20 and 43 MB in use (89 MB allocated; a Durable Object may use 128 MB), while the two workerd
 processes grew to 500 to 900 MB. Under wrangler 4.151.1 all three runs finished, in about 2 minutes instead of 7 to
-9, so `worker/package.json` pins 4.151.1. The same 17,616 requests against `HOSTED=1` in Node left the heap at
+9, so `rust/crates/worker/package.json` pins 4.151.1. The same 17,616 requests against `HOSTED=1` in Node left the heap at
 5.3 MB, the size it started at.
 
 ## Running it locally
 
 ```bash
-npm ci --prefix worker               # wrangler 4.151.1, pinned; kept out of the root package and the container image
-npm --prefix worker run dev          # http://127.0.0.1:8787, local state in data/hosted/wrangler-state
-npm --prefix worker run sidecars     # beside dev, only when the media container has to start (below)
+npm ci --prefix rust/crates/worker               # wrangler 4.151.1, pinned; kept out of the root package and the container image
+npm --prefix rust/crates/worker run dev          # http://127.0.0.1:8787, local state in data/hosted/wrangler-state
+npm --prefix rust/crates/worker run sidecars     # beside dev, only when the media container has to start (below)
 ```
 
-`worker/.dev.vars` sets `STORE_READONLY=1` and `OFFLINE=1`; `--var STORE_READONLY:0 --var OFFLINE:0` on the dev
+`rust/crates/worker/.dev.vars` sets `STORE_READONLY=1` and `OFFLINE=1`; `--var STORE_READONLY:0 --var OFFLINE:0` on the dev
 command turns writes and online capture on for one run.
 
 The container needs two things on this computer, both found while testing it:
@@ -162,7 +162,7 @@ The container needs two things on this computer, both found while testing it:
    incoming traffic, so this rule was added on 2026-10-16:
    `sudo ufw allow in on docker0 from 172.17.0.0/16 to 172.17.0.1 proto tcp comment wrangler-dev-containers`
    (`sudo ufw delete allow in on docker0 from 172.17.0.0/16 to 172.17.0.1 proto tcp` removes it).
-2. `npm --prefix worker run sidecars` (`worker/dev-sidecars.sh`). wrangler's networking sidecar inherits the host's
+2. `npm --prefix rust/crates/worker run sidecars` (`deploy/worker-dev-sidecars.sh`). wrangler's networking sidecar inherits the host's
    `net.ipv4.conf.all.src_valid_mark=1`, which makes the kernel drop the host's packets to the sidecar, so workerd
    never reaches it and the container never starts. The script turns that setting off inside each sidecar as it
    starts and leaves the host's own value alone, since something on the host set it at runtime and may rely on it.

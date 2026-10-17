@@ -1,0 +1,268 @@
+{
+  "provenance": {
+    "revision": "cd3f3cec9220d75070f8a284aabcb9d5b4b8c7c8",
+    "node": "v24.12.0",
+    "sources": {
+      "lib/render-card.mjs": "d4fb081636097509a4c523975cdd16cc5a82edc30df922afef286cec1f98bd25",
+      "lib/search-document.mjs": "421949b69352f5a08d0675b5783219f520f6ea21027252eede0f526cfa726375",
+      "lib/ai.mjs": "6868f61be0d2b90a1d6435bc6e36125548dd219ff54d7ddaedb1add9ba2a2ef6"
+    },
+    "source": "Retained JS renderCard, Date.parse, analysisItem/documentText; synthetic check_writes inputs collected before replacing expectations. No backend-derived Rust expectations.",
+    "normalization": "Generated id values replaced in encounter order; ISO wall-clock strings replaced with __ISO__ in input and complete rendered HTML. Timestamp expectations remain exact."
+  },
+  "cards": [
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"First paragraph\"}]}]},\"title\":\"HTTP note\"},\"extras\":{\"id\":\"__id0__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id0__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>First paragraph</p>\n</div>\n\n  \n  <p class=\"title\">HTTP note</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Line one\"}]},{\"type\":\"paragraph\"},{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"<script>local text</script>\"}]}]}},\"extras\":{\"id\":\"__id0__\",\"local\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id0__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Line one</p><p></p><p>&lt;script&gt;local text&lt;/script&gt;</p>\n</div>\n\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Placeholder\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"domain\":\"example.invalid\",\"siteName\":\"example.invalid\",\"source\":{\"name\":\"clipboard\",\"url\":\"https://example.invalid/local\"},\"title\":\"example.invalid\"},\"extras\":{\"id\":\"__id0__\",\"local\":true,\"linkUrl\":\"https://example.invalid/local\",\"captureFailed\":true}}",
+      "html": "<mymind-card class=\"placeholder unavailable\" data-id=\"__id0__\">\n  <div class=\"hover\" on-click=\"card:open\"><a class=\"link-bubble\" href=\"https://example.invalid/local\" on-click=\"card:link\" target=\"_blank\"><span>Placeholder</span></a></div>\n  \n\n\n<div class=\"inaccessible-guts\">\n  <img src=\"https://static.accelerator.net/134/0.109.0/icons/sadness.svg\" width=\"30\" height=\"30\"/>\n  <span class=\"big\">Oh my mind</span>\n  \n  \n\n  \n  <span class=\"tiny\">It looks like example.invalid is blocking us from displaying information.</span>\n  \n</div>\n\n\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"First paragraph\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"}},\"extras\":{\"id\":\"__id0__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id0__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>First paragraph</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"First paragraph\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"}},\"extras\":{\"id\":\"__id1__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id1__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>First paragraph</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Patched prose\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"}},\"extras\":{\"id\":\"__id1__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id1__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Patched prose</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Reader edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"}},\"extras\":{\"id\":\"__id1__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id1__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Reader edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Native model edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"}},\"extras\":{\"id\":\"__id1__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id1__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Native model edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Committed note\"}]}]}},\"extras\":{\"id\":\"__id0__\",\"local\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id0__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Committed note</p>\n</div>\n\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Written wiki note\"}]}]},\"title\":\"Wiki idea\"},\"extras\":{\"id\":\"__id0__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id0__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Written wiki note</p>\n</div>\n\n  \n  <p class=\"title\">Wiki idea</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Native model edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"},\"tags\":[{\"id\":\"__id1__\",\"name\":\"local-http-tag\",\"flags\":8}]},\"extras\":{\"id\":\"__id2__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id2__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Native model edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Native model edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"},\"tags\":[{\"id\":\"__id1__\",\"name\":\"local-http-tag\",\"flags\":8},{\"id\":\"__id2__\",\"name\":\"highlight\"}]},\"extras\":{\"id\":\"__id3__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content highlighted\" data-id=\"__id3__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Native model edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":8,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Native model edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"},\"tags\":[{\"id\":\"__id1__\",\"name\":\"private\",\"flags\":8},{\"id\":\"__id2__\",\"name\":\"hidden\",\"flags\":8}]},\"extras\":{\"id\":\"__id3__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id3__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Native model edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":8,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Native model edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"},\"tags\":[{\"id\":\"__id1__\",\"name\":\"hidden\",\"flags\":8}]},\"extras\":{\"id\":\"__id2__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id2__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Native model edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":512,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Native model edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"}},\"extras\":{\"id\":\"__id1__\",\"local\":true,\"titleEdited\":true,\"pinPosition\":0}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id1__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Native model edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":65536,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Native model edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"}},\"extras\":{\"id\":\"__id1__\",\"local\":true,\"titleEdited\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id1__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Native model edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":512,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Native model edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"},\"tags\":[{\"id\":\"__id1__\",\"name\":\"http-bulk\",\"flags\":8}],\"deleted\":\"__ISO__\"},\"extras\":{\"id\":\"__id2__\",\"local\":true,\"titleEdited\":true,\"pinPosition\":1}}",
+      "html": "<mymind-card class=\"note content deleted\" data-id=\"__id2__\">\n  <div class=\"hover\" on-click=\"card:restore\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Native model edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":512,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Native model edit\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"},\"tags\":[{\"id\":\"__id1__\",\"name\":\"http-bulk\",\"flags\":8}]},\"extras\":{\"id\":\"__id2__\",\"local\":true,\"titleEdited\":true,\"pinPosition\":1}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id2__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Native model edit</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":512,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Line one\"}]},{\"type\":\"paragraph\"},{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"<script>local text</script>\"}]}]},\"tags\":[{\"id\":\"__id0__\",\"name\":\"http-bulk\",\"flags\":8}],\"deleted\":\"__ISO__\"},\"extras\":{\"id\":\"__id1__\",\"local\":true,\"pinPosition\":0}}",
+      "html": "<mymind-card class=\"note content deleted\" data-id=\"__id1__\">\n  <div class=\"hover\" on-click=\"card:restore\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Line one</p><p></p><p>&lt;script&gt;local text&lt;/script&gt;</p>\n</div>\n\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":0,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Committed again\"}]}]},\"deleted\":\"__ISO__\"},\"extras\":{\"id\":\"__id0__\",\"local\":true}}",
+      "html": "<mymind-card class=\"note content deleted\" data-id=\"__id0__\">\n  <div class=\"hover\" on-click=\"card:restore\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Committed again</p>\n</div>\n\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":512,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"First paragraph\"}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"},\"tags\":[{\"id\":\"__id1__\",\"name\":\"http-bulk\",\"flags\":8}]},\"extras\":{\"id\":\"__id2__\",\"local\":true,\"titleEdited\":true,\"pinPosition\":1}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id2__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>First paragraph</p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":512,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"heading\",\"attrs\":{\"level\":1},\"content\":[{\"type\":\"text\",\"text\":\"Heading\"}]},{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"bold\",\"marks\":[{\"type\":\"bold\"}]}]},{\"type\":\"bulletList\",\"content\":[{\"type\":\"listItem\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"item\"}]}]}]},{\"type\":\"blockquote\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"quote\"}]}]},{\"type\":\"codeBlock\",\"content\":[{\"type\":\"text\",\"text\":\"code\"}]},{\"type\":\"taskList\",\"content\":[{\"type\":\"taskItem\",\"attrs\":{\"checked\":true},\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"task\"}]}]}]},{\"type\":\"table\",\"content\":[{\"type\":\"tableRow\",\"content\":[{\"type\":\"tableCell\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"cell\"}]}]}]}]},{\"type\":\"paragraph\",\"content\":[{\"type\":\"wikiLink\",\"attrs\":{\"target\":\"Local idea\",\"text\":\"Local idea\",\"targetId\":\"00000002UnE0O4zunrVB9X\"}},{\"type\":\"text\",\"text\":\"marked\",\"marks\":[{\"type\":\"highlight\"},{\"type\":\"subscript\"},{\"type\":\"superscript\"}]}]}]},\"title\":\"Changed & escaped\",\"description\":\"Local description\",\"author\":{\"name\":\"Local author\"},\"note\":{\"id\":\"__id0__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Edited attached note\"}]}]},\"modified\":\"__ISO__\"},\"tags\":[{\"id\":\"__id1__\",\"name\":\"http-bulk\",\"flags\":8}]},\"extras\":{\"id\":\"__id2__\",\"local\":true,\"titleEdited\":true,\"pinPosition\":1}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id2__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <h1>Heading</h1><p><strong>bold</strong></p><ul><li><p>item</p></li></ul><blockquote><p>quote</p></blockquote><pre>code</pre><ul data-type=\"taskList\"><li data-type=\"taskItem\" data-checked=\"true\"><label><input type=\"checkbox\" checked disabled /><span></span></label><div><p>task</p></div></li></ul><table><tbody><tr><td colspan=\"1\" rowspan=\"1\"><p>cell</p></td></tr></tbody></table><p><wiki-link data-target=\"Local idea\" data-target-id=\"00000002UnE0O4zunrVB9X\" data-text=\"Local idea\"><span>Local idea</span></wiki-link><mark><sub><sup>marked</sup></sub></mark></p>\n</div>\n\n  \n  <p class=\"title\">Changed &amp; escaped</p>\n  \n</mymind-card>"
+    },
+    {
+      "input": "{\"data\":{\"type\":\"Note\",\"flags\":131072,\"modified\":\"__ISO__\",\"bumped\":\"__ISO__\",\"created\":\"__ISO__\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Other tab draft\"}]}]}},\"extras\":{\"id\":\"__id0__\",\"local\":true}}",
+      "html": "<mymind-card class=\"note content\" data-id=\"__id0__\">\n  <div class=\"hover\" on-click=\"card:open\"></div>\n  \n\n<div class=\"inner body prose \">\n  <p>Other tab draft</p>\n</div>\n\n  \n</mymind-card>"
+    }
+  ],
+  "timestamps": [
+    {
+      "iso": "2026-10-17T21:19:52.148000Z",
+      "ms": 1792271992148
+    },
+    {
+      "iso": "2026-10-17T21:19:52Z",
+      "ms": 1792271992000
+    },
+    {
+      "iso": "2026-10-17T21:19:52.289000Z",
+      "ms": 1792271992289
+    },
+    {
+      "iso": "2026-10-17T21:19:52.339000Z",
+      "ms": 1792271992339
+    },
+    {
+      "iso": "2026-10-17T21:19:52.470000Z",
+      "ms": 1792271992470
+    },
+    {
+      "iso": "2026-10-17T21:19:52.601000Z",
+      "ms": 1792271992601
+    },
+    {
+      "iso": "2026-10-17T21:19:52.752000Z",
+      "ms": 1792271992752
+    },
+    {
+      "iso": "2026-10-17T21:19:52.879000Z",
+      "ms": 1792271992879
+    },
+    {
+      "iso": "2026-10-17T21:19:52.889000Z",
+      "ms": 1792271992889
+    },
+    {
+      "iso": "2026-10-17T21:19:52.905000Z",
+      "ms": 1792271992905
+    },
+    {
+      "iso": "2026-10-17T21:19:53.277000Z",
+      "ms": 1792271993277
+    },
+    {
+      "iso": "2026-10-17T21:19:53Z",
+      "ms": 1792271993000
+    },
+    {
+      "iso": "2026-10-17T21:19:53.415000Z",
+      "ms": 1792271993415
+    },
+    {
+      "iso": "2026-10-17T21:19:53.547000Z",
+      "ms": 1792271993547
+    },
+    {
+      "iso": "2026-10-17T21:19:53.674000Z",
+      "ms": 1792271993674
+    },
+    {
+      "iso": "2026-10-17T21:19:53.683000Z",
+      "ms": 1792271993683
+    },
+    {
+      "iso": "2026-10-17T21:19:53.795000Z",
+      "ms": 1792271993795
+    },
+    {
+      "iso": "2026-10-17T21:19:53.894000Z",
+      "ms": 1792271993894
+    },
+    {
+      "iso": "2026-10-17T21:19:54.034000Z",
+      "ms": 1792271994034
+    },
+    {
+      "iso": "2026-10-17T21:19:54.043000Z",
+      "ms": 1792271994043
+    },
+    {
+      "iso": "2026-10-17T21:19:54.283000Z",
+      "ms": 1792271994283
+    },
+    {
+      "iso": "2026-10-17T21:19:54.545000Z",
+      "ms": 1792271994545
+    },
+    {
+      "iso": "2026-10-17T21:19:54.554000Z",
+      "ms": 1792271994554
+    },
+    {
+      "iso": "2026-10-17T21:19:54.562000Z",
+      "ms": 1792271994562
+    },
+    {
+      "iso": "2026-10-17T21:19:54.570000Z",
+      "ms": 1792271994570
+    },
+    {
+      "iso": "2026-10-17T21:19:54.772000Z",
+      "ms": 1792271994772
+    },
+    {
+      "iso": "2026-10-17T21:19:54.904000Z",
+      "ms": 1792271994904
+    },
+    {
+      "iso": "2026-10-17T21:19:54.936000Z",
+      "ms": 1792271994936
+    },
+    {
+      "iso": "2026-10-17T21:19:54.938000Z",
+      "ms": 1792271994938
+    },
+    {
+      "iso": "2026-10-17T21:19:54.947000Z",
+      "ms": 1792271994947
+    },
+    {
+      "iso": "2026-10-17T21:19:55.107000Z",
+      "ms": 1792271995107
+    },
+    {
+      "iso": "2026-10-17T21:19:54Z",
+      "ms": 1792271994000
+    },
+    {
+      "iso": "2026-10-17T21:19:55.135000Z",
+      "ms": 1792271995135
+    },
+    {
+      "iso": "2026-10-17T21:19:55.501000Z",
+      "ms": 1792271995501
+    },
+    {
+      "iso": "2026-10-17T21:19:55Z",
+      "ms": 1792271995000
+    },
+    {
+      "iso": "1970-01-01T00:00:00.000000Z",
+      "ms": 0
+    },
+    {
+      "iso": "2000-02-29T12:34:56.987654Z",
+      "ms": 951827696987
+    },
+    {
+      "iso": "2026-10-17T23:59:59.999999Z",
+      "ms": 1792281599999
+    }
+  ],
+  "backfill": {
+    "input": {
+      "data": "{\"type\":\"Note\",\"title\":\"Backfill 0\",\"prose\":{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"synthetic body\"}]}]}}",
+      "extras": "{}"
+    },
+    "prompt": "title: Backfill 0 | text: synthetic body"
+  }
+}

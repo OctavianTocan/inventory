@@ -36,7 +36,7 @@ have matching counts; 43 match every recorded field, with remaining differences 
 ## Recorded comparison
 
 Measured on the seeded library (2,271 visible cards) on 2026-10-15. These are informational comparisons, not a
-claim of live ranking parity. `tools/check-search.mjs` checks that overlap never falls below these baselines.
+claim of live ranking parity. `rust/crates/server/tests/check_search.rs` checks that overlap never falls below these baselines.
 
 | Query, wildcard=true | Live | SQLite | Overlap | Live only | SQLite only |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -99,12 +99,18 @@ from [Google's Gemini Embedding 2 pricing](https://ai.google.dev/gemini-api/docs
 checked 2026-10-15. Synchronous `batchEmbedContents` groups requests; this tool does not use the discounted
 asynchronous Batch API. Actual usage is printed when Gemini returns token metadata.
 
-Run `node tools/check-search.mjs --in-process` in a socket-restricted environment. It copies the seed and also
-uses synthetic fixtures, exercises real request callbacks and capture/AI mutations, tests Gemini locally,
-and prints recording/field comparisons. On the host run `node tools/check-search.mjs` and
-`node tools/check-capture.mjs` for real HTTP and the previously skipped Chromium checks. They use temporary
-databases and OS-assigned ports, never port 4321. Browser/REA verification remains a separate host operation.
+Run the native search regression target from `rust/`:
 
-If reads/store checks differ only on recordings while a live verification run rewrites replay, rerun first.
-For stable tests against the new recordings, seed a fresh temporary database and use `TEST_SOURCE_DB` for HTTP
-checks plus `--db` for `check-store`; do not replace the shared seed or its local edits.
+```bash
+nice -n 19 cargo test --offline -j 2 -p mymind --test check_search -- --test-threads=2
+```
+
+It builds an isolated seed from committed recordings, exercises real Rust HTTP and capture/AI mutations with
+local provider fixtures, and prints recording/field comparisons. It requires loopback sockets and never uses
+port 4321. The separate `check_capture` and `capture_browser` Rust targets retain strict Chromium assertions;
+run them on a host that allows Chromium's Unix socket IPC. Browser/REA verification remains a separate host
+operation. Retained JS suite retirement gaps are listed in `evidence/r13/stage-b-report.md`.
+
+For stable read checks against updated recordings, seed a fresh temporary database with the Rust `seed-db`
+command and set `TEST_SOURCE_DB` for the HTTP checks. Native store/search tests seed their own isolated databases;
+do not replace the shared seed or its local edits.

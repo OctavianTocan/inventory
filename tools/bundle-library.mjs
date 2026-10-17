@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bundle = path.join(ROOT, 'library');
 const source = path.join(ROOT, 'data', 'mymind.db');
-if (!existsSync(source)) throw new Error('No data/mymind.db to bundle; run node tools/seed-db.mjs first.');
+if (!existsSync(source)) throw new Error('No data/mymind.db to bundle; run rust/target/release/mymind seed-db first.');
 
 mkdirSync(bundle, { recursive: true });
 const target = path.join(bundle, 'mymind.db');

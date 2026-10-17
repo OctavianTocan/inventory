@@ -8,7 +8,7 @@
   "scripts": {
     "capture": "node tools/capture.mjs",
     "mirror": "node tools/mirror-static.mjs",
-    "serve": "node server.mjs",
+    "serve": "node tools/serve.mjs",
     "verify": "node tools/verify-all.mjs",
     "drive": "node tools/drive.mjs",
     "coverage": "node tools/coverage.mjs",

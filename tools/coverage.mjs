@@ -2,7 +2,7 @@
 // asks REA whether the replica is complete. Each screenshot is a surface with one claim ("pixel-identical to
 // live"), proven by the REA screenshot-diff Evidence recorded in that run. REA answers `ready` only if every
 // claim passed against the current replica code and normalization, recently, with the replica offline.
-// Usage: node tools/coverage.mjs [--max-age-days 7]
+// Usage: node tools/coverage.mjs [--max-age-days 7] [--server rust|hosted-rust|hosted-worker]
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync } from 'node:fs';
@@ -10,23 +10,25 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
-import { normalizationDigest, replicaDigest } from './digests.mjs';
-import { serverKind } from './server-command.mjs';
+import { normalizationDigest, verificationDigest, verificationMode } from './digests.mjs';
 import { reaRoot } from './rea-root.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DRIVE = path.join(ROOT, 'evidence', 'drive');
 const run = promisify(execFile);
-const { values: opts } = parseArgs({ options: { 'max-age-days': { type: 'string', default: '7' } } });
+const { values: opts } = parseArgs({ options: {
+  'max-age-days': { type: 'string', default: '7' }, server: { type: 'string', default: 'rust' },
+} });
+const mode = verificationMode(opts.server);
 
 const REA = reaRoot();
 const { createEvidenceBundle } = await import(pathToFileURL(path.join(REA, 'dist', 'domain', 'evidenceBundle.js')).href);
 const { createReconstructionVerifierContract } = await import(pathToFileURL(path.join(REA, 'dist', 'domain', 'reconstructionCoverage.js')).href);
 
 const sha = (text) => createHash('sha256').update(text).digest('hex');
-const replica = await replicaDigest();
+const replica = await verificationDigest(mode);
 const normalization = await normalizationDigest();
-const ownerPath = serverKind() === 'rust' ? 'rust/crates/server/src/main.rs' : 'server.mjs';
+const ownerPath = mode === 'hosted-worker' ? 'rust/crates/worker/src/lib.rs' : 'rust/crates/server/src/main.rs';
 const ownerDigest = sha(await readFile(path.join(ROOT, ownerPath)));
 
 const records = new Map();

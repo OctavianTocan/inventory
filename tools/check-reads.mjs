@@ -103,5 +103,5 @@ try {
 } finally {
   await server.close();
 }
-console.log(`\n${passed}/${passed + failed} read checks passed${process.argv.includes('--in-process') ? ' (in-process transport)' : ''}`);
+console.log(`\n${passed}/${passed + failed} read checks passed (Rust loopback transport)`);
 process.exitCode = failed ? 1 : 0;

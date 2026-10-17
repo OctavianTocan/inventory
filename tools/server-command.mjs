@@ -1,35 +1,37 @@
-// The backend the Node tools start: `node server.mjs`, or the Rust `mymind` binary that `MYMIND_SERVER` names.
+// Resolve the Rust backend used by developer tools.
+import { accessSync, constants } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SCRIPTS = { serve: 'server.mjs', 'download-server': 'deploy/download-server.mjs' };
 
 /**
- * Which backend the tools start and verify.
- * @returns {'node' | 'rust'} `rust` when `MYMIND_SERVER` is set.
+ * Name the backend selected by developer tools.
+ * @returns {'rust'} The Rust backend.
  */
 export function serverKind() {
-  return process.env.MYMIND_SERVER ? 'rust' : 'node';
+  return 'rust';
 }
 
 /**
- * The command that starts the replica server, run from the repository root.
- * @returns {{ command: string, args: string[] }} The Rust binary (`MYMIND_SERVER`, a relative path read from the
- *   repository root) with `serve`, or Node with `server.mjs`.
+ * Resolve the executable that serves the replica.
+ * @returns {{ command: string, args: string[] }} Absolute executable and its serve subcommand.
+ * @throws {Error} If the configured executable is missing or cannot be executed.
  */
 export function serverCommand() {
   return toolCommand('serve', []);
 }
 
 /**
- * The command that runs one of the programs the Rust binary took over (`download-server`, `seed-db`, …).
- * @param {string} name - The subcommand in Rust; in Node `tools/<name>.mjs`, or `server.mjs` for `serve` and
- *   `deploy/download-server.mjs` for `download-server`.
- * @param {string[]} args - The tool's arguments.
- * @returns {{ command: string, args: string[] }} The command to spawn from the repository root.
+ * Resolve a Rust operational command, preserving its arguments.
+ * @param {string} name Rust subcommand.
+ * @param {string[]} args Arguments passed unchanged to the subcommand.
+ * @returns {{ command: string, args: string[] }} Absolute executable and subcommand arguments.
+ * @throws {Error} If the configured executable is missing or cannot be executed.
  */
 export function toolCommand(name, args) {
-  if (serverKind() === 'rust') return { command: path.resolve(ROOT, process.env.MYMIND_SERVER), args: [name, ...args] };
-  return { command: process.execPath, args: [SCRIPTS[name] ?? `tools/${name}.mjs`, ...args] };
+  const command = path.resolve(ROOT, process.env.MYMIND_SERVER ?? 'rust/target/release/mymind');
+  try { accessSync(command, constants.X_OK); }
+  catch { throw new Error(`Rust executable is missing or not executable: ${command}. Build it with: cd rust && cargo build --offline --release -p mymind; or set MYMIND_SERVER to a built binary.`); }
+  return { command, args: [name, ...args] };
 }

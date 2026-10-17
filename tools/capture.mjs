@@ -1,5 +1,5 @@
 // Records the logged-in mymind app (shell, card stream, side endpoints, card details, media)
-// from an open Chrome tab, so server.mjs can replay it offline.
+// from an open Chrome tab, so the Rust replica can replay it offline.
 // --gets-only records just the side endpoints missing from an existing capture and leaves everything else as is.
 // --media-only records the media of every captured card that neither capture/ nor replay/ has yet.
 // --details-only records the detail view, article reader and detail media of every stored card that has none yet.

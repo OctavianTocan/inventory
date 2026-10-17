@@ -1,0 +1,15 @@
+{
+  "name": "mymind-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --config wrangler.jsonc --port 8787 --ip 127.0.0.1 --persist-to ../../../data/hosted/wrangler-state",
+    "sidecars": "../../../deploy/worker-dev-sidecars.sh",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
+    "check": "node ../../../tools/check-worker.mjs",
+    "check:container": "node ../../../tools/check-worker.mjs --container-smoke"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.1"
+  }
+}

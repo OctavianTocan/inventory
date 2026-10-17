@@ -1,4 +1,4 @@
-// Records mymind's signed-out sign-in page (and the error variants server.mjs shows) from a cookie-less context of
+// Records mymind's signed-out sign-in page (and the error variants the Rust replica shows) from a cookie-less context of
 // the agent Chromium, plus every static asset those pages load, so the replica can serve them when accounts are on.
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';

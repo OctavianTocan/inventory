@@ -1,3 +1,4 @@
+// Retained synthetic JS fixture exports for checks blocked on native Chromium verification.
 import http from 'node:http';
 import { once } from 'node:events';
 import { execFile } from 'node:child_process';
@@ -140,4 +141,10 @@ export async function startFixtures(media, inProcess) {
     return response;
   };
   return { base, requests, control, allowOrigin: origin => origins.add(origin), close: async () => { restoreHttp(); globalThis.fetch = originalFetch; if (server) { server.close(); await once(server, 'close'); } } };
+}
+
+
+if (process.argv[1] && import.meta.url === (await import('node:url')).pathToFileURL(process.argv[1]).href) {
+  const { runTool } = await import('./run-tool.mjs');
+  await runTool('capture-fixtures');
 }

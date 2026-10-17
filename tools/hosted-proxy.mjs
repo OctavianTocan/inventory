@@ -1,6 +1,7 @@
-// A signed-in front for a server with sign-in (the Worker under `wrangler dev`, or server.mjs with AUTH=google), so
+// A signed-in front for a server with sign-in (the Worker under `wrangler dev`, or mymind serve with AUTH=google), so
 // tools written for the open replica (tools/drive.mjs, tools/compare-hosted.mjs) run against it unchanged:
-//   node tools/hosted-proxy.mjs <target url> [--port 4321]
+//   node tools/hosted-proxy.mjs <target url> [--port 4321] [--backend rust|worker]
+// Pass --server hosted-rust or --server hosted-worker to drive/verify-all to identify this proxy explicitly.
 // Signs in once as TEST_USER_NAME / TEST_USER_PASSWORD from .env and adds that session cookie to every request and
 // /hub WebSocket that has none of its own. Listens on 127.0.0.1 only.
 import http from 'node:http';
@@ -10,16 +11,23 @@ import path from 'node:path';
 import tls from 'node:tls';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { verificationDigest, verificationMode } from './digests.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-try { process.loadEnvFile(path.join(ROOT, '.env')); } catch (error) { if (error.code !== 'ENOENT') throw new Error('Could not load .env'); }
-const { values, positionals: [target] } = parseArgs({ allowPositionals: true, options: { port: { type: 'string', default: '4321' } } });
+if (process.env.STORE_LOAD_ENV !== '0') {
+  try { process.loadEnvFile(path.join(ROOT, '.env')); } catch (error) { if (error.code !== 'ENOENT') throw new Error('Could not load .env'); }
+}
+const { values, positionals: [target] } = parseArgs({ allowPositionals: true, options: {
+  port: { type: 'string', default: '4321' }, backend: { type: 'string', default: 'rust' },
+} });
 if (!target) {
-  console.error('Usage: node tools/hosted-proxy.mjs <target url> [--port 4321]');
+  console.error('Usage: node tools/hosted-proxy.mjs <target url> [--port 4321] [--backend rust|worker]');
   process.exit(2);
 }
 if (!process.env.TEST_USER_NAME || !process.env.TEST_USER_PASSWORD) throw new Error('TEST_USER_NAME and TEST_USER_PASSWORD must be set');
 const upstream = new URL(target);
+const mode = verificationMode(`hosted-${values.backend}`);
+const identity = { proxy: 'mymind-hosted-proxy', server: mode, digest: await verificationDigest(mode), target: upstream.origin };
 const secure = upstream.protocol === 'https:';
 const SESSION = 'mm_session';
 const HOP = new Set(['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'upgrade', 'te', 'trailer']);
@@ -36,6 +44,7 @@ async function signIn() {
   if (!session) throw new Error(`Test user sign-in failed: ${response.status} ${response.headers.get('location') ?? ''}`);
   cookie = session;
 }
+// Coalesce concurrent sign-ins while keeping credentials and the resulting cookie private to this process.
 const ensureSession = () => (cookie ? Promise.resolve() : (signingIn ??= signIn().finally(() => { signingIn = null; })));
 
 // The request headers to send upstream: the client's, addressed to the target, with the test session added when it
@@ -65,6 +74,11 @@ function forward(req, body) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    if (req.method === 'GET' && req.url === '/__mymind/verification') {
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(identity));
+      return;
+    }
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const body = Buffer.concat(chunks);
