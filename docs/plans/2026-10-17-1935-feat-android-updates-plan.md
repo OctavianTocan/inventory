@@ -122,7 +122,11 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
   (`network_strict`, or `network_loopback` when pointed at an `http://` server).
 - 2026-10-17: the server side is live (Worker version `ca97f888`). The release key's Android OAuth client ("mymind
   Android (release)", package `com.octaviantocan.mymind`, SHA-1 `EE:DC:47:…:C1:15`) exists next to the debug one, for
-  Google sign-in in release builds; not yet tried on a device. The first production publish has not run yet.
+  Google sign-in in release builds; not yet tried on a device.
+- 2026-10-17: the first production publish ran: `mymind-0.2.0.apk` (0.2.0 (2), 36,757,588 bytes, sha256 `68cf82b5…`),
+  read back as the test user. Uploads go through `deploy/upload-downloads.sh`, which sets the Worker's `ADMIN_TOKEN`
+  secret only for the upload. Not yet installed on the phone. Debug builds share the package name but not the key, so a debug build has to be
+  uninstalled first.
 
 ## Order
 

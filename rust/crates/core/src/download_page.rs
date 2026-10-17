@@ -132,7 +132,7 @@ fn extension_section(manifest: &Value) -> String {
     <span>Version {} · {} · built {}</span><code>sha256 {}</code></li></ul>
 <p>Unzip it, open <code>chrome://extensions</code>, turn on Developer mode, choose Load unpacked and pick the \
 <code>mymind-extension</code> folder. To update, unzip the new version over that folder and press Reload on the \
-extension. It saves to the library you are signed in to in the same browser.</p>
+extension. Sign in to this site in the same browser; the extension saves to that library.</p>
 ",
         encode_uri_component(&file.get("name").to_js_string()),
         escape(&file.get("label").to_js_string()),

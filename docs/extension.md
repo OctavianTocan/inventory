@@ -3,7 +3,20 @@
 `extension/` is our own Manifest V3 rebuild of mymind's Chrome extension 3.3.0. Plain JavaScript ES modules, no build
 step. It talks to the replica backend, never to `access.mymind.com`.
 
-## Setup
+## Install from the hosted site
+
+`/download` on the hosted site lists the newest extension as `mymind-extension-<version>.zip`, with mymind's assets
+included. Unzip it, open `chrome://extensions`, turn on developer mode, "Load unpacked" and choose the
+`mymind-extension` folder; to update, unzip the new version over it and press Reload. Sign in to the site in the same
+browser profile.
+
+`deploy/publish-extension.sh` makes and publishes that zip: it reads the version from `extension/manifest.json`, which
+must be higher than the published one, zips `extension/` without `tests/`, `tools/` and dot files, uploads it with
+`deploy/upload-downloads.sh`, and checks as the test user that `/download` lists it and the zip matches its checksum.
+`--local <dir>` publishes into a local downloads folder instead. First published 2026-10-17: version 1.0.0, 379,803
+bytes.
+
+## Setup for development
 
 1. `node extension/tools/copy-mymind-assets.mjs [path/to/mymind-extension-3.3.0]` copies mymind's images, icons, gifs,
    the Nunito font and `vendor/tiptap.min.js` into `extension/mymind/`, which is git-ignored. The default source is
