@@ -74,7 +74,7 @@ impl Listener {
     /// * `gated` - Whether requests pass the server's sign-in first; the `LOCAL_PORT` listener has none.
     pub fn new(server: Rc<Server>, gated: bool) -> Self {
         let allows: Allows = match server.auth.clone().filter(|_| gated) {
-            Some(auth) => Rc::new(move |request: &Request| auth.allows(request)),
+            Some(auth) => Rc::new(move |request: &Request| auth.allows_upgrade(request)),
             None => Rc::new(|request: &Request| Ok(!tunnelled(request))),
         };
         Self { server, gated, hub: Hub::new(allows) }

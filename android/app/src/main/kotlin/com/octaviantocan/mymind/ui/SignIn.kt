@@ -1,34 +1,6 @@
 package com.octaviantocan.mymind.ui
 
 import android.content.Context
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -36,7 +8,6 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -61,6 +32,9 @@ class SignInViewModel(private val repository: Repository) : ViewModel() {
     fun signInWithPassword(username: String, password: String) = run {
         repository.signInWithPassword(username.trim(), password)
     }
+
+    /** Clears the failure message once the user has seen it. */
+    fun dismissMessage() = mutableState.update { it.copy(message = null) }
 
     private fun run(call: suspend () -> SignInOutcome) {
         if (mutableState.value.busy) return
@@ -101,62 +75,6 @@ class SignInViewModel(private val repository: Repository) : ViewModel() {
             }
         } catch (_: GetCredentialCancellationException) {
             null
-        }
-    }
-}
-
-@Composable
-fun SignInScreen(viewModel: SignInViewModel) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    var username by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    val canSubmit = !state.busy && username.isNotBlank() && password.isNotEmpty()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("mymind", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = { viewModel.signInWithGoogle(context) },
-            enabled = !state.busy,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Continue with Google") }
-        Spacer(Modifier.height(24.dp))
-        OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
-            label = { Text("Username") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { if (canSubmit) viewModel.signInWithPassword(username, password) }),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = { viewModel.signInWithPassword(username, password) },
-            enabled = canSubmit,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Sign in") }
-        state.message?.let {
-            Spacer(Modifier.height(16.dp))
-            Text(it, color = MaterialTheme.colorScheme.error)
         }
     }
 }

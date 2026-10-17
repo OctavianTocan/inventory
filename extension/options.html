@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>My Mind Replica</title>
+<style>
+  body { font: 16px/1.4 system-ui, sans-serif; max-width: 480px; margin: 48px auto; padding: 0 16px; }
+  input { width: 100%; box-sizing: border-box; padding: 8px; margin: 8px 0; font: inherit; }
+  button { padding: 8px 16px; font: inherit; }
+  #status { margin-top: 12px; min-height: 1.4em; }
+</style>
+<h1>Replica address</h1>
+<label for="host">Where your replica runs</label>
+<input id="host" type="url" placeholder="https://mymind.octaviantocan.com" autocomplete="off">
+<button id="save">Save</button>
+<p id="status" role="status"></p>
+<script type="module" src="options.js"></script>

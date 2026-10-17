@@ -167,8 +167,40 @@ then U10 and U11; then U12 to U15.
 - R5 holds for what the Rust tests cover: writes, uploads and media preparation through `tests/library.rs` and the
   core tests, every image rendition byte for byte with sharp's, and link screenshots and resources through the
   capture transport.
-- R7 hasn't run against Rust yet.
-- R11: `docs/rust-benchmarks.md`.
+- R6 holds. Durable Objects, under `wrangler dev` on one state directory: the JS Worker filled it with
+  `upload-hosted`; the Rust Worker opened it read-only, accepted the JS session cookie and app token, and differed from
+  the replica in the same 56 requests as JS; it then ran writable and signed in, and the JS Worker, started again on
+  that state, accepted the Rust cookie and token and still showed the same 56 differences. mini-002: copies of its
+  `data/mymind.db` and `data/auth.db` opened by `mymind serve` and by the JS server answered 17,872 requests with no
+  difference, and the Rust server signed the test user in from the `auth.db` the JS server wrote.
+- R7 holds against the native server: the 8-run matrix against `mymind serve` (read-only, offline, `data/verify.db`)
+  matched 918 of 918 screenshots on 2026-10-17, and `npm run coverage` with `MYMIND_SERVER` answers `ready`
+  (`evidence/drive-rust-native-20261017/`). Coverage now lets the newer of a run and its patch runs win, since a
+  patch run made against the JS server was replacing screenshots of the newer Rust run.
+- Switched: mini-002 runs `mymind serve` and `mymind download-server` since 2026-10-17 11:02 (its checkout on branch
+  `cloudflare`, the binary and `libvips-cpp.so.8.17.3` in `rust/target/release/`), checked as the test user on the
+  real databases: sign-in, the page, cards, search, the app API, sign-out and the download server. The desktop app's
+  local mode starts `mymind serve` (`MYMIND_SERVER` or the checkout's release build); the packaged app opens the
+  hosted library, so it doesn't change.
+- R7 holds for the Worker: the 8-run matrix against the Rust Worker under `wrangler dev`, on state loaded from the
+  recordings, matched 916 of 918 screenshots (`evidence/drive-rust-worker-20261017/`); the 2 left are the PDF the
+  bucket holds in another version, which the JS Worker shows the same way.
+- Deployed: production runs the Rust Worker (version `dd42f3fa`) and the Rust media container image since
+  2026-10-17 11:44 CEST. The first deploy, at 11:38, uploaded the Worker but timed out pushing the image, so for six
+  minutes the Rust Worker ran with the JS container; the second deploy pushed the image. Checked as the test user:
+  `tools/check-hosted.mjs --browser` passes, and a saved link card got its screenshot from the container, served as
+  WebP. Rollback while the JS is still in the tree: `npm --prefix worker run deploy` (the JS Worker and its
+  container); `wrangler rollback cfede62c-28a5-4198-b40e-1ff4edae2ea7` reverts only the Worker.
+- `/changes` batches its queries since 2026-10-17 (Worker version `8126d81e`): 2,004 queries become 44 for the whole
+  library, natively 344 ms become 59 ms and in production 566 ms of CPU become 105 ms, with the same answers.
+- Browser extension support and a `/hub` origin check since 2026-10-17 (Worker version `e83ecfcf`, media image
+  `sha256:c53b41c2`): a valid session works as a bearer, a bearer alone skips the cross-origin checks, and a cookie
+  session's `/hub` upgrade needs the server's own origin (`docs/extension.md`). Reviewed twice by Codex (read-only).
+  Checked on production as the test user: `tools/check-hosted.mjs --browser` passes; `/hub` with the cookie answers
+  101 from the own origin and 403 from a sibling subdomain or another site (101 for all three before); the session as
+  a bearer from an extension origin reads (200) and pings (200), the cookie from that origin is refused (403).
+  `wrangler rollback 8126d81e-d811-4e40-ab0d-41f3fa1c8e4a` reverts the Worker.
+- R11: `docs/rust-benchmarks.md`, production numbers included.
 
 Decisions made while building:
 

@@ -231,6 +231,10 @@ fn cookie(name: &str, value: &str, max_age: f64, secure: bool, path: &str) -> St
     )
 }
 
+fn is_websocket(req: &Request) -> bool {
+    req.header("upgrade").is_some_and(|value| value.eq_ignore_ascii_case("websocket"))
+}
+
 fn bearer(req: &Request) -> Option<String> {
     let header = req.header("authorization").unwrap_or("");
     header.get(..6).filter(|prefix| prefix.eq_ignore_ascii_case("bearer"))?;
@@ -412,7 +416,17 @@ impl Inner {
 
     fn cookie_session(&self, req: &Request) -> Result<Option<SessionRow>> {
         let Some(id) = cookie_value(req, SESSION_COOKIE).filter(|id| !id.is_empty()) else { return Ok(None) };
-        let Some(row) = self.db.one("SELECT hash, sub, email, expires_ms, used_ms FROM sessions WHERE hash = ?", params![sha256_hex(&id)])? else { return Ok(None) };
+        self.stored_session(&id)
+    }
+
+    /// A browser extension cannot send the `HttpOnly` cookie on cross-origin requests, so it sends the cookie's value as a bearer token.
+    fn bearer_session(&self, req: &Request) -> Result<Option<SessionRow>> {
+        let Some(id) = bearer(req) else { return Ok(None) };
+        self.stored_session(&id)
+    }
+
+    fn stored_session(&self, id: &str) -> Result<Option<SessionRow>> {
+        let Some(row) = self.db.one("SELECT hash, sub, email, expires_ms, used_ms FROM sessions WHERE hash = ?", params![sha256_hex(id)])? else { return Ok(None) };
         if row.number("expires_ms").unwrap_or(f64::NAN) < self.now() {
             return Ok(None);
         }
@@ -436,10 +450,20 @@ impl Inner {
         Ok(Some(session_row(&row, hash)))
     }
 
+    fn foreign_origin(&self, req: &Request) -> Result<bool> {
+        let Some(origin) = req.header("origin").filter(|origin| !origin.is_empty()) else { return Ok(false) };
+        let own = mm_js::url::parse(&self.cfg.public_url, None).map(|url| mm_js::url::origin(&url)).ok_or_else(|| Error::invalid("Invalid URL"))?;
+        let local = format!("http://{}", req.header("host").unwrap_or("undefined"));
+        Ok(origin != own && origin != local)
+    }
+
     fn session(&self, req: &Request) -> Result<Option<SessionRow>> {
-        match self.cookie_session(req)? {
+        if let Some(row) = self.cookie_session(req)? {
+            return Ok(Some(row));
+        }
+        match self.app_session(req)? {
             Some(row) => Ok(Some(row)),
-            None => self.app_session(req),
+            None => self.bearer_session(req),
         }
     }
 
@@ -799,14 +823,12 @@ impl Auth {
         let signed_in = me.session(req)?;
         let document = req.method == "GET" && (req.header("sec-fetch-dest") == Some("document") || req.header("accept").is_some_and(|accept| accept.contains("text/html")));
         let tunnelled = req.header("cf-connecting-ip").is_some_and(|ip| !ip.is_empty());
-        if req.method != "GET"
-            && let Some(origin) = req.header("origin").filter(|origin| !origin.is_empty())
-        {
-            let own = mm_js::url::parse(&me.cfg.public_url, None).map(|url| mm_js::url::origin(&url)).ok_or_else(|| Error::invalid("Invalid URL"))?;
-            let local = format!("http://{}", req.header("host").unwrap_or("undefined"));
-            if origin != own && origin != local {
-                return Ok(Some(Response::new(403, Headers::new(), "cross-origin write refused")));
-            }
+        // Browsers never attach a bearer token on their own, so a write signed in by one alone cannot be a cross-site forgery.
+        let bearer_only = signed_in.is_some() && cookie_value(req, SESSION_COOKIE).is_none();
+        let write = req.method != "GET";
+        if (write || is_websocket(req)) && !bearer_only && me.foreign_origin(req)? {
+            let refusal = if write { "cross-origin write refused" } else { "cross-origin connection refused" };
+            return Ok(Some(Response::new(403, Headers::new(), refusal)));
         }
         if let Some(step) = is_app_signin(&pathname) {
             return me.app_sign_in(req, step).await.map(Some);
@@ -926,6 +948,21 @@ impl Auth {
     /// The database's error.
     pub fn allows(&self, req: &Request) -> Result<bool> {
         Ok(self.0.session(req)?.is_some())
+    }
+
+    /// Whether a WebSocket upgrade may connect: a valid session, and for a cookie session an `Origin` that is this
+    /// server's own or absent.
+    ///
+    /// # Arguments
+    /// * `req` - The upgrade request.
+    ///
+    /// # Errors
+    /// The database's error, or invalid data when the server's public URL does not parse.
+    pub fn allows_upgrade(&self, req: &Request) -> Result<bool> {
+        if self.0.session(req)?.is_none() {
+            return Ok(false);
+        }
+        Ok(cookie_value(req, SESSION_COOKIE).is_none() || !self.0.foreign_origin(req)?)
     }
 
     /// Who a request is signed in as (`identity`).

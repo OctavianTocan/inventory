@@ -1,0 +1,208 @@
+package com.octaviantocan.mymind.ui
+
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.dp
+import com.github.takahirom.roborazzi.captureRoboImage
+import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.ui.card.CardHeaderState
+import com.octaviantocan.mymind.ui.card.CardSheet
+import com.octaviantocan.mymind.ui.library.FeedState
+import com.octaviantocan.mymind.ui.library.SearchType
+import com.octaviantocan.mymind.ui.library.SerendipityContent
+import com.octaviantocan.mymind.ui.library.SerendipityState
+import com.octaviantocan.mymind.ui.library.SpaceContent
+import com.octaviantocan.mymind.ui.library.SpaceListContent
+import com.octaviantocan.mymind.ui.library.SpacesState
+import com.octaviantocan.mymind.ui.library.testCard
+import com.octaviantocan.mymind.ui.menu.CardMenuContent
+import com.octaviantocan.mymind.ui.menu.CardMenuIcons
+import com.octaviantocan.mymind.ui.menu.DarkMenuColors
+import com.octaviantocan.mymind.ui.menu.cardMenuItems
+import com.octaviantocan.mymind.ui.menu.defaultCardMenuIcons
+import com.octaviantocan.mymind.ui.shell.ShellFrame
+import com.octaviantocan.mymind.ui.shell.Tab
+import com.octaviantocan.mymind.ui.theme.PageScheme
+import com.octaviantocan.mymind.ui.theme.PageTheme
+import kotlinx.coroutines.runBlocking
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+/** The library screens at the reference phone's size, in the system mode of the parameter, with the account dark. */
+@RunWith(ParameterizedRobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [36], qualifiers = PHONE_QUALIFIERS, fontScale = PHONE_FONT_SCALE)
+class LibraryScreenshotTest(private val dark: Boolean) {
+    @get:Rule
+    val compose = createComposeRule()
+
+    private val mode = if (dark) "dark" else "light"
+
+    private fun render(content: @Composable () -> Unit) {
+        compose.setPhoneContent(dark, content)
+        compose.mainClock.advanceTimeBy(SETTLE_MS)
+    }
+
+    private fun capture(name: String) = compose.onRoot().captureRoboImage("screenshots/${name}_$mode.png")
+
+    private fun shell(tab: Tab = Tab.Everything, underStatusBar: Boolean = false, overlay: @Composable () -> Unit = {}, page: @Composable () -> Unit) =
+        render {
+            ShellFrame(tab, onSelectTab = {}, scheme = PageScheme.Dark, underStatusBar = underStatusBar, overlay = { overlay() }, page = page)
+        }
+
+    @Test
+    fun everythingTop() {
+        shell { SampleEverything() }
+        capture("S06_everything_top")
+    }
+
+    @Test
+    fun everythingScrolled() {
+        val grid = LazyStaggeredGridState()
+        shell { SampleEverything(grid = grid) }
+        compose.change { runBlocking { grid.scrollToItem(3, 120) } }
+        compose.mainClock.advanceTimeBy(SETTLE_MS)
+        capture("S06_everything_scrolled")
+    }
+
+    @Test
+    fun everythingSystemScheme() {
+        render { ShellFrame(Tab.Everything, onSelectTab = {}, scheme = PageScheme.System) { SampleEverything() } }
+        capture("S06_everything_account_system")
+    }
+
+    @Test
+    fun everythingLoading() {
+        shell { SampleEverything(feed = FeedState(loading = true)) }
+        capture("S05_spinner_everything")
+    }
+
+    @Test
+    fun searchFocused() {
+        shell { SampleEverything(searching = true) }
+        capture("S09_search_focused")
+    }
+
+    @Test
+    fun searchResults() {
+        shell {
+            SampleEverything(searching = true, query = "lorem", type = SearchType.XPost, results = FeedState(LibrarySamples.grid.take(5), endReached = true))
+        }
+        capture("S09_search_results")
+    }
+
+    @Test
+    fun spacesTop() {
+        shell(Tab.Spaces) { SpaceListContent(LibrarySamples.spaces, onOpenSpace = {}, onRetry = {}, onAdd = {}) }
+        capture("S07_spaces_top")
+    }
+
+    @Test
+    fun spacesLoading() {
+        shell(Tab.Spaces) { SpaceListContent(SpacesState(loading = true), onOpenSpace = {}, onRetry = {}, onAdd = {}) }
+        capture("S05_spinner_spaces")
+    }
+
+    @Test
+    fun spaceOpen() {
+        val space = LibrarySamples.spaces.spaces.first()
+        shell(Tab.Spaces) {
+            SpaceContent(space, FeedState(LibrarySamples.grid, endReached = true), onBack = {}, onLoadMore = {}, onOpenCard = {}, onAdd = {})
+        }
+        capture("S07_space_open")
+    }
+
+    @Test
+    fun serendipity() {
+        val deck = listOf(LibrarySamples.grid[1]) + (2..18).map { testCard("d$it") }
+        shell(Tab.Serendipity, underStatusBar = true) {
+            SerendipityContent(SerendipityState(deck = deck), onOpenCard = {}, onKeep = {}, onForget = {}, onDeal = {})
+        }
+        capture("S08_serendipity")
+    }
+
+    @Test
+    fun serendipityLoading() {
+        shell(Tab.Serendipity, underStatusBar = true) {
+            SerendipityContent(SerendipityState(loading = true), onOpenCard = {}, onKeep = {}, onForget = {}, onDeal = {})
+        }
+        capture("S05_spinner_serendipity")
+    }
+
+    @Test
+    fun cardHeaderStates() {
+        val header = CardHeaderState()
+        val scroll = ScrollState(0)
+        shell(overlay = {
+            PageTheme(PageScheme.Dark) {
+                CardSheet(LibrarySamples.article, onClose = {}, onMenu = {}, headerState = header, scrollState = scroll, headerIcons = flatSizedCardHeaderIcons())
+            }
+        }) { SampleEverything() }
+        capture("S10_card_rest")
+        compose.change { runBlocking { scroll.scrollTo(SCROLL_DOWN_PX) } }
+        compose.mainClock.advanceTimeBy(SETTLE_MS)
+        capture("S10_card_hidden")
+        compose.change { runBlocking { scroll.scrollTo(SCROLL_UP_PX) } }
+        compose.mainClock.advanceTimeBy(SETTLE_MS)
+        capture("S10_card_shown")
+    }
+
+    private fun menu(card: Card, name: String, icons: @Composable () -> CardMenuIcons = { flatCardMenuIcons() }) {
+        val header = CardHeaderState()
+        render {
+            Box(Modifier.fillMaxSize()) {
+                ShellFrame(
+                    Tab.Everything,
+                    onSelectTab = {},
+                    scheme = PageScheme.Dark,
+                    modifier = Modifier.blur(8.dp),
+                    overlay = {
+                        PageTheme(PageScheme.Dark) {
+                            CardSheet(card, onClose = {}, onMenu = {}, headerState = header, headerIcons = flatSizedCardHeaderIcons())
+                        }
+                        Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim))
+                    },
+                ) { SampleEverything() }
+                CardMenuContent(cardMenuItems(card, null), onSelect = {}, modifier = Modifier.align(Alignment.BottomCenter), icons = icons())
+            }
+        }
+        capture(name)
+    }
+
+    @Test
+    fun cardMenuArticle() = menu(LibrarySamples.article, "S11_card_menu_article")
+
+    @Test
+    fun cardMenuNote() = menu(LibrarySamples.note, "S11_card_menu_note")
+
+    @Test
+    fun cardMenuVideo() = menu(LibrarySamples.video, "S11_card_menu_video")
+
+    /** Renders the shipped icons; the files are written for the machine's owner and are never looked at by the agent. */
+    @Test
+    fun cardMenuShipped() = menu(LibrarySamples.article, "S11_card_menu_real") { defaultCardMenuIcons() }
+
+    companion object {
+        private const val SETTLE_MS = 1_500L
+        private const val SCROLL_DOWN_PX = 1_200
+        private const val SCROLL_UP_PX = 900
+
+        /** System light and system dark. */
+        @JvmStatic
+        @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0}")
+        fun modes() = listOf(arrayOf<Any>(false), arrayOf<Any>(true))
+    }
+}

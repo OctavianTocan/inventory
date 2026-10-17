@@ -1,0 +1,71 @@
+{
+  "manifest_version": 3,
+  "name": "My Mind Replica",
+  "short_name": "mymind replica",
+  "version": "1.0.0",
+  "description": "Save pages, images, selections and notes to your replica of mymind.",
+  "icons": {
+    "16": "mymind/images/icon_16.png",
+    "48": "mymind/images/icon_48.png",
+    "128": "mymind/images/icon_128.png",
+    "256": "mymind/images/icon_256.png"
+  },
+  "action": {
+    "default_title": "Save to my mind",
+    "default_icon": {
+      "256": "mymind/images/icon_256.png"
+    }
+  },
+  "background": {
+    "service_worker": "worker.js",
+    "type": "module"
+  },
+  "commands": {
+    "save-page": {
+      "description": "Save current page to my mind",
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      }
+    }
+  },
+  "omnibox": {
+    "keyword": "mm"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "cookies",
+    "storage",
+    "scripting",
+    "contextMenus",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://mymind.octaviantocan.com/*"
+  ],
+  "optional_host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://*/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "*://*/*"
+      ],
+      "resources": [
+        "drawer.html",
+        "components/notification.css",
+        "mymind/icons/logo.svg",
+        "mymind/icons/loading-start.gif",
+        "mymind/icons/loading-finish.gif",
+        "mymind/images/full-mind-bg.png",
+        "mymind/images/become-a-mastermind.svg",
+        "mymind/fonts/nunito.woff2"
+      ]
+    }
+  ]
+}

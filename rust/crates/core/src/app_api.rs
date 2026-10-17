@@ -237,8 +237,9 @@ impl AppApi {
     /// * `url` - Absolute request URL.
     ///
     /// # Returns
-    /// `Some(response)` for `GET /app/v1/cards`, `/cards/<id>`, `/trash`, `/spaces`, `/spaces/<id>/cards`, `/tags` and
-    /// `/search`, a 405 for other methods on those, and `None` for any other request.
+    /// `Some(response)` for `GET /app/v1/cards`, `/cards/<id>`, `/trash`, `/spaces`, `/spaces/<id>/cards`, `/tags`,
+    /// `/search` and `/top-of-mind` (pinned cards in pin order, paged like a space), a 405 for other methods on those,
+    /// and `None` for any other request.
     ///
     /// # Errors
     /// Any failure other than a 400, which is answered as a problem body.
@@ -256,7 +257,7 @@ impl AppApi {
 
     async fn route(&self, method: &str, url: &Url, path: &str) -> Result<Option<Response>> {
         let head = path[1..].split('/').next().unwrap_or("");
-        if !["cards", "trash", "spaces", "tags", "search"].contains(&head) {
+        if !["cards", "trash", "spaces", "tags", "search", "top-of-mind"].contains(&head) {
             return Ok(None);
         }
         if method != "GET" {
@@ -266,6 +267,7 @@ impl AppApi {
         let response = match parts.as_slice() {
             ["cards"] => self.keyset_page(url, false)?,
             ["trash"] => self.keyset_page(url, true)?,
+            ["top-of-mind"] => self.offset_page(url, &self.store.pinned_cards(None)?)?,
             ["cards", id] if !id.is_empty() => match self.store.card(&uri::decode_uri_component(id)?, None)? {
                 Some(row) => self.json(200, &self.card_json(&row)?)?,
                 None => self.problem(404, "not-found")?,

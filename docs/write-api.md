@@ -209,6 +209,7 @@ Three steps, then the card is created from the upload id.
    |---|---|
    | `Content-Type` | file mime |
    | `Authorization` | `Bearer <authorization.token>` |
+   | `x-upload-token` | Optional. `<authorization.token>` without `Bearer`. The server reads it first and ignores `Authorization` for the upload check, so a client whose `Authorization` carries an app token (`docs/app-api.md`) can still upload. A wrong value is refused even if `Authorization` is right. |
    | `x-file-name` | `encodeURI(file name)` |
    | `Content-Range` | `bytes <start>-<end>/<total>` |
    | `x-upload-id` | id from the first chunk's response, on later chunks |

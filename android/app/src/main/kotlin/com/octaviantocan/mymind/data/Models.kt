@@ -103,13 +103,89 @@ data class Space(
 data class SpaceList(val spaces: List<Space> = emptyList())
 
 @Serializable
-data class TagCount(val name: String, val count: Int? = null)
+data class TagCount(val name: String, val count: Double? = null)
 
 @Serializable
 data class TagList(val tags: List<TagCount> = emptyList())
 
+/**
+ * The signed-in account.
+ *
+ * @property email Email address.
+ * @property kind How the account signs in: `google` or `password`.
+ * @property colorScheme Appearance the account picked for library pages: `light`, `dark` or `system`; `/app/v1/me`
+ *   does not send it, so the app reads it from [PageConfig].
+ */
 @Serializable
-data class User(val email: String? = null, val kind: String? = null)
+data class User(val email: String? = null, val kind: String? = null, val colorScheme: String? = null)
+
+/**
+ * Account settings and feature switches from the config script of a web page.
+ *
+ * @property colorScheme Appearance the account picked: `light`, `dark` or `system`, or null when the page has none.
+ * @property features Features the plan unlocks, such as `reader` or `sameVibe`.
+ * @property isGuest True for a guest session.
+ */
+@Serializable
+data class PageConfig(
+    val colorScheme: String? = null,
+    val features: Set<String> = emptySet(),
+    val isGuest: Boolean = false,
+)
+
+private val CONFIG_SCRIPT = Regex("""<script id="config" type="application/json">(.*?)</script>""", RegexOption.DOT_MATCHES_ALL)
+
+/**
+ * Reads the config script out of a web page.
+ *
+ * @param html The page.
+ * @return The config, or an empty one when the page has no config script.
+ */
+fun pageConfigOf(html: String): PageConfig =
+    CONFIG_SCRIPT.find(html)?.let { AppJson.decodeFromString(PageConfig.serializer(), it.groupValues[1]) } ?: PageConfig()
+
+/**
+ * A search suggestion.
+ *
+ * @property type `type` for a card type or `tag` for a tag.
+ * @property text What the suggestion shows.
+ * @property queryText The filter it stands for, such as `type:article` or `tag:recipes`.
+ */
+@Serializable
+data class Suggestion(val type: String, val text: String, val queryText: String)
+
+/**
+ * A tag as `/tags/suggest` and `/tags/recent` send it.
+ *
+ * @property name Tag name.
+ */
+@Serializable
+data class TagName(val name: String)
+
+/**
+ * Body of a tag write.
+ *
+ * @property name Tag name.
+ */
+@Serializable
+data class NameBody(val name: String)
+
+/**
+ * Body of a space creation.
+ *
+ * @property name Space name.
+ * @property color Space colour as a CSS hex colour.
+ */
+@Serializable
+data class NewSpaceBody(val name: String, val color: String)
+
+/**
+ * An answer that names what it created.
+ *
+ * @property id Id of the new object.
+ */
+@Serializable
+data class IdAnswer(val id: String)
 
 @Serializable
 data class TokenAnswer(val token: String, val expiresAt: String? = null, val user: User? = null)

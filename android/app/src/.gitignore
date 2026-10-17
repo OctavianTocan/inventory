@@ -1,0 +1,2 @@
+# The root rule `library/` is for the local library folder; the app's ui/library sources belong in Git.
+!library/

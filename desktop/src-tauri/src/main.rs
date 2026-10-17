@@ -1,13 +1,12 @@
-// Desktop app: a Tauri window around the web UI that server.mjs serves, starting the server when none is running,
-// or around a hosted library when MYMIND_URL is set (at run time, or at build time for the downloadable app).
-// Env: PORT (default 4331), MYMIND_URL, MYMIND_ROOT (repo checkout), MYMIND_NODE (node binary); STORE_* pass through
-// to the server.
+// Desktop app: a Tauri window around the web UI that the Rust server (`mymind serve`) serves, starting the server when
+// none is running, or around a hosted library when MYMIND_URL is set (at run time, or at build time for the
+// downloadable app). Env: PORT (default 4331), MYMIND_URL, MYMIND_ROOT (repo checkout), MYMIND_SERVER (the server
+// binary); STORE_* pass through to the server.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(target_os = "linux")]
 mod file_drop;
 
-use std::ffi::{OsStr, OsString};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
@@ -25,7 +24,7 @@ fn listening(port: u16) -> bool {
     TcpStream::connect_timeout(&SocketAddr::from(([127, 0, 0, 1], port)), Duration::from_millis(200)).is_ok()
 }
 
-/// The checkout whose `server.mjs` the app runs.
+/// The checkout whose library the app serves.
 fn checkout() -> PathBuf {
     let root = std::env::var_os("MYMIND_ROOT")
         .map(PathBuf::from)
@@ -33,7 +32,7 @@ fn checkout() -> PathBuf {
     root.canonicalize().unwrap_or(root)
 }
 
-/// Names the library files `server.mjs` cannot start without that are missing from `root`.
+/// Names the library files the server cannot start without that are missing from `root`.
 fn missing_library(root: &Path) -> Vec<&'static str> {
     const REQUIRED: [&str; 6] = [
         "capture/meta.json",
@@ -61,40 +60,45 @@ fn check_library(root: &Path) -> Result<(), String> {
     ))
 }
 
-/// PATH with the directory of `node` first, so npm's `#!/usr/bin/env node` runs the same node.
-fn path_with(node: &OsStr) -> OsString {
-    let mut dirs: Vec<PathBuf> = Path::new(node).parent().filter(|dir| !dir.as_os_str().is_empty()).map(Path::to_path_buf).into_iter().collect();
-    dirs.extend(std::env::var_os("PATH").map(|path| std::env::split_paths(&path).collect::<Vec<_>>()).unwrap_or_default());
-    std::env::join_paths(dirs).unwrap_or_default()
+/// The server binary: `MYMIND_SERVER`, else the checkout's release build.
+fn server_binary(root: &Path) -> PathBuf {
+    std::env::var_os("MYMIND_SERVER").map(PathBuf::from).unwrap_or_else(|| root.join("rust/target/release/mymind"))
 }
 
-/// Installs npm dependencies on a fresh checkout and restores `data/` from a local `library/` snapshot when it has none.
-fn prepare(root: &Path, node: &OsStr) -> Result<(), String> {
-    let (program, args): (&OsStr, &[&str]) = if root.join("node_modules").exists() {
-        (node, &["tools/install-library.mjs"])
-    } else {
-        // postinstall runs tools/install-library.mjs.
-        (OsStr::new("npm"), &["ci", "--no-audit", "--no-fund"])
-    };
-    let shown = format!("{} {}", program.to_string_lossy(), args.join(" "));
-    let status = Command::new(program)
-        .args(args)
-        .current_dir(root)
-        .env("PATH", path_with(node))
-        // With a system libvips installed, sharp would otherwise try to compile itself against it and fail.
-        .env("SHARP_IGNORE_GLOBAL_LIBVIPS", "1")
-        .status()
-        .map_err(|err| format!("Could not run {shown} in {}: {err}. Set MYMIND_NODE to the full path of node.", root.display()))?;
-    if !status.success() {
-        return Err(format!("{shown} failed ({status}) in {}. Run it there to see why.", root.display()));
+/// Restores `data/` from the local `library/` snapshot (written by `npm run bundle`) when it has no database.
+fn prepare(root: &Path) -> Result<(), String> {
+    let (bundle, data) = (root.join("library"), root.join("data"));
+    if data.join("mymind.db").exists() || !bundle.join("mymind.db").exists() {
+        return Ok(());
+    }
+    let failed = |err: std::io::Error| format!("Could not install the bundled library into {}: {err}", data.display());
+    std::fs::create_dir_all(&data).map_err(failed)?;
+    std::fs::copy(bundle.join("mymind.db"), data.join("mymind.db")).map_err(failed)?;
+    if bundle.join("media").is_dir() {
+        copy_dir(&bundle.join("media"), &data.join("media")).map_err(failed)?;
     }
     Ok(())
 }
 
-/// Starts `node server.mjs` in `root` and waits until it listens.
-fn start_server(root: &Path, node: &OsStr, port: u16) -> Result<Child, String> {
-    let mut command = Command::new(node);
-    command.arg("server.mjs").current_dir(root).env("PORT", port.to_string());
+/// Copies the directory `from` into `to`, recursively.
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Starts `mymind serve` in `root` and waits until it listens.
+fn start_server(root: &Path, server: &Path, port: u16) -> Result<Child, String> {
+    let mut command = Command::new(server);
+    command.arg("serve").current_dir(root).env("PORT", port.to_string());
     // The server must not outlive the app, however the app ends.
     #[cfg(target_os = "linux")]
     unsafe {
@@ -105,26 +109,32 @@ fn start_server(root: &Path, node: &OsStr, port: u16) -> Result<Child, String> {
         });
     }
     let mut child = command.spawn().map_err(|err| {
-        format!("Could not run {} server.mjs in {}: {err}. Set MYMIND_NODE or MYMIND_ROOT.", node.to_string_lossy(), root.display())
+        format!(
+            "Could not run {} in {}: {err}. Build it with rust/fetch-libvips.sh and `cargo build --release` in rust/, or set \
+             MYMIND_SERVER or MYMIND_ROOT.",
+            server.display(),
+            root.display()
+        )
     })?;
     let started = Instant::now();
     while !listening(port) {
         if let Ok(Some(status)) = child.try_wait() {
             return Err(format!(
-                "server.mjs exited ({status}) before listening on port {port}. Run `node server.mjs` in {} to see why.",
+                "The server exited ({status}) before listening on port {port}. Run `{} serve` in {} to see why.",
+                server.display(),
                 root.display()
             ));
         }
         if started.elapsed() > Duration::from_secs(60) {
             let _ = child.kill();
-            return Err(format!("server.mjs did not listen on port {port} within 60 s."));
+            return Err(format!("The server did not listen on port {port} within 60 s."));
         }
         std::thread::sleep(Duration::from_millis(100));
     }
     Ok(child)
 }
 
-/// Stops the server with SIGTERM so it can close its browsers, then waits for it.
+/// Stops the server with SIGTERM, then waits for it.
 fn stop_server(mut child: Child) {
     #[cfg(unix)]
     unsafe {
@@ -202,12 +212,12 @@ fn open_in_browser(url: &Url) {
 fn start_in_background(handle: AppHandle, port: u16) {
     std::thread::spawn(move || {
         let root = checkout();
-        let node = std::env::var_os("MYMIND_NODE").unwrap_or_else(|| "node".into());
-        let prepared = check_library(&root).and_then(|()| prepare(&root, &node));
+        let server = server_binary(&root);
+        let prepared = check_library(&root).and_then(|()| prepare(&root));
         let main = handle.clone();
         // The server is spawned on the main thread: PR_SET_PDEATHSIG fires when the spawning thread exits.
         let _ = handle.run_on_main_thread(move || {
-            let url = match prepared.and_then(|()| start_server(&root, &node, port)) {
+            let url = match prepared.and_then(|()| start_server(&root, &server, port)) {
                 Ok(child) => {
                     *main.state::<Server>().0.lock().unwrap() = Some(child);
                     replica_url(port)
@@ -245,7 +255,7 @@ fn main() {
                 (_, true) => replica_url(port),
                 (Some(hosted), false) => hosted.join("/everything")?,
                 (None, false) => {
-                    page("Starting mymind", "The first start on a new machine installs dependencies, which takes about a minute.")
+                    page("Starting mymind", "Starting the library on this computer.")
                 }
             };
             let (navigating, opening) = (hosted.clone(), hosted.clone());
@@ -327,6 +337,21 @@ mod tests {
         assert!(!is_library(&url("http://mymind.example.com/everything"), 4331, Some(&hosted)));
         assert!(!is_library(&url("https://mymind.example.com.evil.test/"), 4331, Some(&hosted)));
         assert!(!is_library(&url("https://mymind.example.com/everything"), 4331, None));
+    }
+
+    #[test]
+    fn prepare_installs_the_bundled_library_once() {
+        let root = std::env::temp_dir().join(format!("mymind-desktop-prepare-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("library/media/ab")).unwrap();
+        std::fs::write(root.join("library/mymind.db"), "bundled").unwrap();
+        std::fs::write(root.join("library/media/ab/cover.webp"), "image").unwrap();
+        prepare(&root).unwrap();
+        assert_eq!(std::fs::read_to_string(root.join("data/mymind.db")).unwrap(), "bundled");
+        assert_eq!(std::fs::read_to_string(root.join("data/media/ab/cover.webp")).unwrap(), "image");
+        std::fs::write(root.join("data/mymind.db"), "edited").unwrap();
+        prepare(&root).unwrap();
+        assert_eq!(std::fs::read_to_string(root.join("data/mymind.db")).unwrap(), "edited");
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

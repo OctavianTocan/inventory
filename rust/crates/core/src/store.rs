@@ -3,7 +3,7 @@
 //! `openStore` and `close` belong to the host; [`Store::new`] is `createStore`.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::LazyLock;
 
@@ -25,6 +25,8 @@ const MANUAL_TAG_FLAG: i64 = 8;
 const NS_PER_SECOND: i128 = 1_000_000_000;
 const BASE62: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const COUNTER_WIDTH: u32 = 9;
+// Ids per batched lookup; Durable Object SQLite caps a statement at 100 bound parameters.
+const LOOKUP_CHUNK: usize = 50;
 
 static ISO: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})(?:\.([0-9]{1,9}))?Z$").expect("pattern"));
 
@@ -34,6 +36,10 @@ fn visible() -> String {
 
 fn ns_column(column: &str, alias: &str) -> String {
     format!("CAST({column} AS TEXT) AS {alias}")
+}
+
+fn placeholders(count: usize) -> String {
+    vec!["?"; count].join(",")
 }
 
 fn card_columns(prefix: &str) -> String {
@@ -668,6 +674,29 @@ impl Store {
         Ok(found)
     }
 
+    /// Top of Mind: pinned cards that are not deleted or hidden from the grid, in pin order.
+    ///
+    /// # Arguments
+    /// * `user_id` - User id; the first user when `None`.
+    ///
+    /// # Returns
+    /// The cards in pin order; cards without a stored position follow, most recently bumped first.
+    ///
+    /// # Errors
+    /// The database's error.
+    pub fn pinned_cards(&self, user_id: Option<&str>) -> Result<Vec<CardRow>> {
+        let user = self.resolve_user(user_id)?;
+        self.cards(
+            &format!(
+                "SELECT {} FROM cards c LEFT JOIN pins p ON p.card_id = c.id
+          WHERE c.user_id = ? AND c.deleted_ns IS NULL AND (c.flags & 512) != 0 AND (c.flags & 393224) = 0
+          ORDER BY COALESCE(p.position, 2147483647), c.bumped_ns DESC, c.id DESC",
+                card_columns("c.")
+            ),
+            &[user.into()],
+        )
+    }
+
     /// Trashed cards, most recently deleted first (`trashCards`).
     ///
     /// # Arguments
@@ -884,28 +913,73 @@ impl Store {
     /// The database's error.
     pub fn changes_since(&self, since: i128, options: &ChangesOptions<'_>) -> Result<Vec<Change>> {
         let user = self.resolve_user(options.user_id)?;
+        let mut params: Vec<SqlValue> = vec![user.clone().into(), SqlValue::big(since)];
         let latest = if options.coalesce {
-            " AND seq = (SELECT MAX(newer.seq) FROM changes newer WHERE newer.user_id = changes.user_id
-        AND newer.object_type = changes.object_type AND newer.object_id = changes.object_id)"
+            params.push(user.clone().into());
+            " AND seq IN (SELECT MAX(newer.seq) FROM changes newer WHERE newer.user_id = ?
+        GROUP BY newer.object_type, newer.object_id)"
         } else {
             ""
         };
+        params.push(options.limit.into());
         let rows = self.db.query(
             &format!(
                 "SELECT seq, {}, type, object_type, object_id FROM changes
         WHERE user_id = ? AND ts_ns > ?{latest} ORDER BY changes.ts_ns, seq LIMIT ?",
                 ns_column("ts_ns", "ts_ns")
             ),
-            &[user.clone().into(), SqlValue::big(since), options.limit.into()],
+            &params,
         )?;
+        let objects: Vec<(i64, String)> = rows.iter().map(|row| (number(row, "object_type"), string(row, "object_id"))).collect();
+        let card_ids: Vec<&str> = objects.iter().filter(|(kind, _)| *kind == 9).map(|(_, id)| id.as_str()).collect();
+        let cards = self.cards_in(&card_ids, &user)?;
         let mut changes = Vec::with_capacity(rows.len());
-        for row in &rows {
-            let object_type = number(row, "object_type");
-            let object_id = string(row, "object_id");
-            let card = if object_type == 9 { self.card(&object_id, Some(&user))? } else { None };
+        for (row, (object_type, object_id)) in rows.iter().zip(objects) {
+            let card = if object_type == 9 { cards.get(&object_id).cloned() } else { None };
             changes.push(Change { seq: number(row, "seq"), ts: big(row, "ts_ns")?, kind: number(row, "type"), object_type, object_id, card });
         }
         Ok(changes)
+    }
+
+    /// Spaces that hold each card, in rank order.
+    ///
+    /// # Arguments
+    /// * `card_ids` - Cards to look up; repeated ids are allowed.
+    ///
+    /// # Returns
+    /// For every card in at least one space, the ids of the spaces that include it, lowest rank first.
+    ///
+    /// # Errors
+    /// The database's error.
+    pub fn card_spaces(&self, card_ids: &[&str]) -> Result<HashMap<String, Vec<String>>> {
+        let mut seen = HashSet::new();
+        let unique: Vec<&str> = card_ids.iter().copied().filter(|id| seen.insert(*id)).collect();
+        let mut found: HashMap<String, Vec<String>> = HashMap::new();
+        for chunk in unique.chunks(LOOKUP_CHUNK) {
+            let params: Vec<SqlValue> = chunk.iter().map(|id| SqlValue::from(*id)).collect();
+            let rows = self.db.query(
+                &format!("SELECT card_id, space_id FROM space_cards WHERE card_id IN ({}) AND excluded = 0 ORDER BY rank, rowid", placeholders(chunk.len())),
+                &params,
+            )?;
+            for row in &rows {
+                found.entry(string(row, "card_id")).or_default().push(string(row, "space_id"));
+            }
+        }
+        Ok(found)
+    }
+
+    /// The user's cards among `ids`, keyed by id, in as few statements as the parameter limit allows.
+    fn cards_in(&self, ids: &[&str], user: &str) -> Result<HashMap<String, CardRow>> {
+        let mut found = HashMap::with_capacity(ids.len());
+        for chunk in ids.chunks(LOOKUP_CHUNK) {
+            let mut params = vec![SqlValue::from(user)];
+            params.extend(chunk.iter().map(|id| SqlValue::from(*id)));
+            let sql = format!("SELECT {} FROM cards WHERE user_id = ? AND id IN ({})", card_columns(""), placeholders(chunk.len()));
+            for card in self.cards(&sql, &params)? {
+                found.insert(card.id.clone(), card);
+            }
+        }
+        Ok(found)
     }
 
     /// Generate the next unused id of a kind: account prefix, 2-character kind code, 9 base62 characters (`newId`).

@@ -22,7 +22,9 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
 3. **Secrets live in `.env` only** (`TYPESAFE_API_KEY`, LLM keys, OAuth client secrets), read through
    `process.env` on the server, never shipped to the browser.
 4. **No bot-detection workarounds.** No user-agent spoofing or stealth tricks against mymind.
-5. **Git:** work on a branch, never force-push `main`. Commit only when the user asks.
+5. **Git:** work on a branch, never force-push `main`. Commit each finished, verified step and push the branch to
+   `origin` (the user, 2026-10-17: commit and push more often). Subagents and Codex runs leave their work
+   uncommitted; the main session reviews it, then commits.
 6. **No local models.** Never run or download models locally (no Ollama, llama.cpp, transformers.js). Every AI
    feature calls a hosted API (see External services).
 7. **Nothing public without sign-in.** A server reachable from outside the machine (tunnel, port forward) runs

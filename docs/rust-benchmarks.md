@@ -16,9 +16,10 @@ process's user plus system time per request.
   66 MiB, and preparing a 12-megapixel JPEG takes a third of the time. `image()` costs the same; every other
   operation is 3 to 20% faster.
 - **Worker:** under `wrangler dev` the Rust Worker answers as fast as the JS one, within run-to-run noise, with
-  `/changes` about 8% slower. Production CPU milliseconds need the Rust Worker deployed (U15).
+  `/changes` about 8% slower. In production the client waits 1 to 14 ms longer per route than with JS, but
+  `/changes`, rewritten to batch its queries, now costs a fifth of the JS CPU and answers in a third of the time.
 - **Where Rust is slower or bigger:** the Worker bundle is 16 times larger (1.43 MB against 90 KB compressed),
-  and `/changes` on the Worker is about 8% slower. In the container, `image()` costs the same.
+  and in production the Rust Worker answers the small routes 1 to 14 ms later than the JS one did. In the container, `image()` costs the same.
 
 ## Native server
 
@@ -126,8 +127,44 @@ the same state:
   compressed), of which the WebAssembly is 3,914,269 bytes.
 - workerd's memory after the comparison run was 1,569 MB (JS) and 1,610 MB (Rust), for every object of the test
   library in one dev process; it isn't the 128 MB isolate limit production applies, which wasn't measured.
-- Production CPU milliseconds per request weren't measured: that needs the Rust Worker deployed to
-  `mymind.octaviantocan.com`, which is the switch (U15).
+
+### Production
+
+The deployed Worker on `mymind.octaviantocan.com`, tailed with `wrangler tail` while 20 requests per route went
+through `tools/hosted-proxy.mjs` as the test user. CPU per request is the Worker invocation's CPU plus the CPU of
+the Durable Object invocations it makes (`Auth` and `Library`), as Cloudflare reports them. JS was measured on
+2026-10-17 before the switch, Rust twice the same day after it; client time is from this machine.
+
+| Route | CPU, JS | CPU, Rust (two runs) | Client median, JS | Client median, Rust |
+|---|---|---|---|---|
+| `GET /cards` (JSON) | 281.8 ms | 234.8 / 170.4 ms | 280 ms | 291 / 286 ms |
+| `GET /changes?since=0` | 505.6 ms | 565.9 / 580.0 ms | 690 ms | 782 / 825 ms |
+| `GET /search?q=design` | 15.5 ms | 19.9 / 18.4 ms | 73 ms | 86 / 87 ms |
+| `GET /spaces` | 7.7 ms | 9.3 / 7.5 ms | 52 ms | 59 / 60 ms |
+| `GET /everything` (page) | 11.4 ms | 11.8 / 13.3 ms | 67 ms | 75 / 77 ms |
+| `GET /_static/…` (script from R2) | 0.5 ms | 1.5 / 2.4 ms | 190 ms | 191 / 198 ms |
+| `GET /robots.txt` | 0.0 ms | 0.2 / 0.9 ms | 22 ms | 31 / 32 ms |
+
+- In production the Rust Worker isn't faster. `/cards` takes 17 to 40% less CPU, `/changes` and `/search` take 12 to
+  28% more. The client waits 1 to 14 ms longer on every route but `/changes`, which takes 92 to 135 ms longer.
+- Each Rust Worker invocation costs about 1 ms of CPU where the JS one costs 0.1 to 0.5 ms. Starting the WebAssembly
+  and copying requests and answers between JavaScript and Rust would explain it; it wasn't profiled.
+- At this traffic the cost difference is nothing: Workers Paid includes 30 million CPU milliseconds a month.
+
+### `/changes` after batching
+
+`/changes` asked SQLite for the newest change of each object with a correlated subquery that rescanned the user's
+whole change log for every row, then read each card and its spaces with two queries per card (2,004 queries for
+`since=0`). Since 2026-10-17 the Rust store finds the newest changes with one `GROUP BY` and reads cards and spaces 50
+ids at a time (44 queries); the JS backend keeps the old queries. The answers are unchanged: JS and Rust matched on 824
+requests per database (every 25th checkpoint on desktop and iPhone, and every card in a space) on `data/verify.db` and
+`data/mymind.db`, and production's answers kept the same SHA-256 across the deploy.
+
+| | Before | After |
+|---|---|---|
+| Native `mymind`, median of 20 | 344.4 ms | 59.3 ms |
+| Production CPU per request | 566 to 580 ms (JS: 506) | 104.5 ms |
+| Production, client median | 782 to 825 ms (JS: 690) | 247 ms |
 
 ## What the port had to match
 

@@ -32,6 +32,8 @@ android/jadx/
 android/.gradle/
 android/build/
 android/app/build/
+android/app/generated/
+android/app/screenshots/
 android/.kotlin/
 android/local.properties
 android/.idea/
@@ -48,3 +50,6 @@ rust/libvips/
 
 # Frozen private inputs for the Rust oracle goldens.
 rust/test-fixtures/
+
+# mymind extension assets copied at setup
+extension/mymind/

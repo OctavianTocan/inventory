@@ -195,14 +195,12 @@ Workers Paid, $5 a month. At today's size the rest fits in what Paid includes:
 Done on 2026-10-17: the R2 bucket, the secrets, the deploy, both uploads, the route, and removing the `ADMIN_TOKEN`
 secret once the imports were done (`.env` still holds the old value, which nothing accepts now).
 
-1. The drive matrix against the Worker finished on 2026-10-17 and is not yet at parity: iphone-ui 119 of 121,
-   android-ui 119 of 121, desktop-dark-ui 258 of 284, desktop-light-ui 129 of 284, and the cards suites 0 of 18
-   (desktop light), 16 of 18 (desktop dark), 18 of 36 (Android) and 25 of 36 (iPhone). The causes, most screenshots
-   first: colour-scheme state kept only in the light runs, script errors on the hosted pages, media that loads
-   slowly or not at all in the cards runs, spaces whose data drifted from the recordings, and `WebAssembly is not
-   defined` with detail screenshots 64 to 70% different. The Rust Worker answers every request as the JS Worker
-   does (the same 56 differences from the replica), so these causes stay until each is fixed; the matrix then runs
-   again against the deployed Rust Worker.
+1. The Worker's parity is proven under `wrangler dev`, on a library loaded from the recordings: 916 of 918
+   screenshots match (`evidence/drive-rust-worker-20261017/`). The 2 left are `detail_document` on desktop, where
+   the bucket holds another version of one PDF (1,177,706 bytes, against 2,114,873 in the recording); the JS Worker
+   shows the same. The matrix against production on 2026-10-17 (`evidence/drive-worker-production-20261017/`) fell
+   short because the drive runs write to the production test library, so its data drifts from the recordings
+   between runs. `WebAssembly is not defined` also shows in the local runs, so it wasn't a cause.
 2. The owner signs in with Google on the Worker once.
 3. Keep mini-002 and the tunnel until 2026-10-24, then remove them.
 4. Domain accounts: an empty library at the first sign-in of a verified `@octaviantocan.com` address, a page shell
