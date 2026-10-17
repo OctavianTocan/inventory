@@ -211,6 +211,10 @@ then U10 and U11; then U12 to U15.
   `tools/check-hosted.mjs --browser` and `evidence/app-api/probe-prod.mjs` pass; a card's Markdown answers 200
   `text/markdown`; `/download/android.json` answers 404 until a package is published.
   `wrangler rollback f3c367b5-4829-4089-b79e-22fea29ae52c` reverts the Worker.
+- The Chrome extension on `/download` since 2026-10-17 (Worker version `70a7222d`): its own section and
+  `application/zip` for `/download/<name>.zip`. `deploy/publish-extension.sh` published `mymind-extension-1.0.0.zip`;
+  `evidence/extension/check-download.mjs` downloaded it as the test user, matched its checksum, and loaded the
+  unzipped folder in a headless Chromium. `wrangler rollback 9d442edf-6b22-4bee-95a2-58a625c65cab` reverts the Worker.
 - R11: `docs/rust-benchmarks.md`, production numbers included.
 
 Decisions made while building:
