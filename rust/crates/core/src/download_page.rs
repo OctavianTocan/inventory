@@ -1,5 +1,5 @@
-//! Port of `lib/download-page.mjs`: the download page for the packaged apps, and what `/download` serves for the
-//! Android app's updater.
+//! Port of `lib/download-page.mjs`: the download page for the packaged apps and the Chrome extension, and what
+//! `/download` serves for the Android app's updater.
 
 use mm_js::{Value, number::to_fixed, obj, text::slice, uri::encode_uri_component};
 
@@ -26,8 +26,15 @@ pub const APK_TYPE: &str = "application/vnd.android.package-archive";
 /// Name under `/download/` of the newest Android release's description, [`android_release`].
 pub const ANDROID_RELEASE: &str = "android.json";
 
+/// Media type of the zipped Chrome extension.
+pub const EXTENSION_TYPE: &str = "application/zip";
+
 fn is_android(file: &Value) -> bool {
     file.get("platform").as_str() == Some("android")
+}
+
+fn is_extension(file: &Value) -> bool {
+    file.get("platform").as_str() == Some("chrome-extension")
 }
 
 /// The media type `/download/<name>` sends a packaged file with.
@@ -36,9 +43,16 @@ fn is_android(file: &Value) -> bool {
 /// * `file` - The file's manifest entry.
 ///
 /// # Returns
-/// [`APK_TYPE`] for an entry with `platform: "android"`, `application/gzip` for any other.
+/// [`APK_TYPE`] for an entry with `platform: "android"`, [`EXTENSION_TYPE`] for `platform: "chrome-extension"`,
+/// `application/gzip` for any other.
 pub fn content_type(file: &Value) -> &'static str {
-    if is_android(file) { APK_TYPE } else { "application/gzip" }
+    if is_android(file) {
+        APK_TYPE
+    } else if is_extension(file) {
+        EXTENSION_TYPE
+    } else {
+        "application/gzip"
+    }
 }
 
 // The Android entry with the highest `versionCode`; the publish script keeps only one. A package named like the
@@ -76,7 +90,20 @@ pub fn android_release(manifest: &Value) -> Option<Value> {
     )
 }
 
-// The page's Android section; empty when the manifest lists no Android package, so the page stays as it was.
+// The newest extension entry by `built`; the publish script keeps only one.
+fn newest_extension(manifest: &Value) -> Option<&Value> {
+    let files = manifest.get("files").as_array()?;
+    files.iter().filter(|file| is_extension(file)).max_by(|a, b| a.get("built").to_js_string().cmp(&b.get("built").to_js_string()))
+}
+
+// The Android and Chrome extension sections and the Linux heading after them; empty when the manifest lists neither,
+// so the page stays as it was.
+fn app_sections(manifest: &Value) -> String {
+    let (android, extension) = (android_section(manifest), extension_section(manifest));
+    if android.is_empty() && extension.is_empty() { String::new() } else { format!("{android}{extension}<h2>Linux</h2>\n") }
+}
+
+// The page's Android section; empty without an Android package.
 fn android_section(manifest: &Value) -> String {
     let Some(file) = newest_android(manifest) else { return String::new() };
     let notes: String = file.get("notes").as_array().into_iter().flatten().map(|note| format!("<span>- {}</span>", escape(&note.to_js_string()))).collect();
@@ -85,12 +112,31 @@ fn android_section(manifest: &Value) -> String {
 <ul><li><a href=\"/download/{}\">{}</a>
     <span>Version {} ({}) · {} · built {}</span><code>sha256 {}</code>{notes}</li></ul>
 <p>The first time, Android asks you to allow installs from this browser. After that, the app updates itself.</p>
-<h2>Linux</h2>
 ",
         encode_uri_component(&file.get("name").to_js_string()),
         escape(&file.get("label").to_js_string()),
         escape(&file.get("versionName").to_js_string()),
         escape(&file.get("versionCode").to_js_string()),
+        size(file.get("bytes")),
+        escape(&file.get("built").as_str().map(|text| slice(text, 0, Some(10))).unwrap_or_default()),
+        escape(&file.get("sha256").to_js_string()),
+    )
+}
+
+// The page's Chrome extension section; empty without an extension.
+fn extension_section(manifest: &Value) -> String {
+    let Some(file) = newest_extension(manifest) else { return String::new() };
+    format!(
+        "<h2>Chrome extension</h2>
+<ul><li><a href=\"/download/{}\">{}</a>
+    <span>Version {} · {} · built {}</span><code>sha256 {}</code></li></ul>
+<p>Unzip it, open <code>chrome://extensions</code>, turn on Developer mode, choose Load unpacked and pick the \
+<code>mymind-extension</code> folder. To update, unzip the new version over that folder and press Reload on the \
+extension. It saves to the library you are signed in to in the same browser.</p>
+",
+        encode_uri_component(&file.get("name").to_js_string()),
+        escape(&file.get("label").to_js_string()),
+        escape(&file.get("version").to_js_string()),
         size(file.get("bytes")),
         escape(&file.get("built").as_str().map(|text| slice(text, 0, Some(10))).unwrap_or_default()),
         escape(&file.get("sha256").to_js_string()),
@@ -109,12 +155,14 @@ fn built(file: &Value) -> Result<String> {
     }
 }
 
-/// The download page for the packaged apps: the newest Android package with its version and changelog when there is
-/// one, then every desktop package with its size and checksum, and how to install each.
+/// The download page for the packaged apps: the newest Android package with its version and changelog and the newest
+/// Chrome extension when there are ones, then every desktop package with its size and checksum, and how to install
+/// each.
 ///
 /// # Arguments
 /// * `manifest` - The `manifest.json` that `deploy/package-app.sh` writes: optional `library` and a `files` array of
-///   `name`, `label`, `bytes`, `built` and `sha256`, plus the Android entries [`android_release`] describes.
+///   `name`, `label`, `bytes`, `built` and `sha256`, plus the Android entries [`android_release`] describes and
+///   Chrome extension entries (`platform: "chrome-extension"` with a `version`).
 /// * `user` - Email or username of the signed-in visitor.
 ///
 /// # Returns
@@ -128,7 +176,7 @@ pub fn download_page(manifest: &Value, user: &str) -> Result<String> {
     };
     let mut rows = String::new();
     for file in files {
-        if is_android(file) {
+        if is_android(file) || is_extension(file) {
             continue;
         }
         let name = member(file, "name")?.to_js_string();
@@ -143,7 +191,7 @@ pub fn download_page(manifest: &Value, user: &str) -> Result<String> {
     }
     let library = manifest.get("library");
     let library = if library.is_nullish() { "the hosted address".to_string() } else { library.to_js_string() };
-    let rows = match (rows.is_empty(), newest_android(manifest).is_some()) {
+    let rows = match (rows.is_empty(), newest_android(manifest).is_some() || newest_extension(manifest).is_some()) {
         (false, _) => rows,
         (true, false) => "<li>No app has been packaged yet. Run <code>deploy/package-app.sh</code> on the host.</li>".into(),
         (true, true) => "<li>No Linux app has been packaged yet. Run <code>deploy/package-app.sh</code> on the host.</li>".into(),
@@ -167,7 +215,7 @@ mymind/install.sh        # ~/.local/bin/mymind and a launcher entry</pre>
 <p>Signed in as {} · <a href=\"/signout\">Sign out</a></p>
 </main></body></html>",
         escape(&library),
-        android_section(manifest),
+        app_sections(manifest),
         escape(user)
     ))
 }
