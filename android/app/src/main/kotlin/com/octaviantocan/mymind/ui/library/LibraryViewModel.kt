@@ -12,6 +12,7 @@ import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.data.map
+import com.octaviantocan.mymind.update.UploadActivity
 import com.octaviantocan.mymind.ui.describe
 import com.octaviantocan.mymind.ui.menu.CardActions
 import com.octaviantocan.mymind.ui.menu.CardMenuItem
@@ -69,6 +70,7 @@ class LibraryViewModel(
     private val library: Library,
     saver: FileSaver = FileSaver { _, _, _ -> ApiResult.Failed(ApiFailure.Server(0)) },
     io: CoroutineDispatcher = Dispatchers.IO,
+    uploadActivity: UploadActivity? = null,
 ) : ViewModel() {
     private val mutableScheme = MutableStateFlow(PageScheme.System)
     private val mutableFeatures = MutableStateFlow(emptySet<String>())
@@ -84,7 +86,7 @@ class LibraryViewModel(
     val topOfMind = CardFeed(viewModelScope) { library.topOfMind(it) }
 
     /** Files being uploaded from the + button. */
-    val uploads = UploadQueue(viewModelScope, library, onUploaded = ::showUploaded, io = io)
+    val uploads = UploadQueue(viewModelScope, library, onUploaded = ::showUploaded, io = io, activity = uploadActivity)
 
     /** Appearance of the library pages, from the account's setting. */
     val scheme: StateFlow<PageScheme> = mutableScheme

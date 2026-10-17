@@ -6,6 +6,8 @@ import com.octaviantocan.mymind.data.Library
 import com.octaviantocan.mymind.data.UploadAuthorization
 import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.ui.describe
+import com.octaviantocan.mymind.update.UploadActivity
+import com.octaviantocan.mymind.update.UploadWork
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +58,7 @@ data class UploadQueueState(val items: List<QueuedUpload> = emptyList(), val det
  * @param clock Current time in milliseconds since the epoch.
  * @param chunkSize Largest piece sent in one request.
  * @param io Dispatcher the files are opened and read on.
+ * @param activity Registry that learns whether this queue is busy, or null.
  */
 class UploadQueue(
     private val scope: CoroutineScope,
@@ -64,13 +67,20 @@ class UploadQueue(
     private val clock: () -> Long = System::currentTimeMillis,
     private val chunkSize: Long = CHUNK_SIZE,
     private val io: CoroutineDispatcher = Dispatchers.IO,
-) {
+    activity: UploadActivity? = null,
+) : UploadWork {
     private val mutableState = MutableStateFlow(UploadQueueState())
     private val turn = Mutex()
     private var nextId = 0L
 
     /** The items and whether the list is open. */
     val state: StateFlow<UploadQueueState> = mutableState
+
+    override val busy: Boolean get() = mutableState.value.items.any { it.error == null }
+
+    init {
+        activity?.register(this)
+    }
 
     /**
      * Queues files and uploads them after the ones already queued.

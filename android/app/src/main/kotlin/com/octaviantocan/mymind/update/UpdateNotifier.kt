@@ -21,25 +21,23 @@ class UpdateNotifier(private val context: Context) {
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
 
     /**
-     * Tells the user that [release] is downloaded, with its notes and an Install action.
+     * Asks the user to let the app install updates, once, so [release] and later versions install by themselves.
      *
-     * @param release The downloaded release.
+     * @param release The downloaded release that waits.
      */
-    fun ready(release: ReleaseInfo) {
-        val install = PendingIntent.getBroadcast(
+    fun allowNeeded(release: ReleaseInfo) {
+        val open = PendingIntent.getActivity(
             context,
-            REQUEST_INSTALL,
-            Intent(context, InstallActionReceiver::class.java).setPackage(context.packageName),
+            REQUEST_ALLOW,
+            allowInstallsIntent(context),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         post(
             NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                .setContentTitle("mymind ${release.versionName} is ready to install")
-                .setContentText(release.notes.firstOrNull().orEmpty())
-                .setStyle(NotificationCompat.BigTextStyle().bigText(release.notes.joinToString("\n") { "- $it" }))
-                .setContentIntent(install)
-                .addAction(0, "Install", install)
+                .setContentTitle("Allow mymind to install updates")
+                .setContentText("mymind ${release.versionName} is ready. Allow it once and updates install by themselves.")
+                .setContentIntent(open)
                 .setAutoCancel(true),
         )
     }
@@ -80,7 +78,7 @@ class UpdateNotifier(private val context: Context) {
     private companion object {
         const val CHANNEL = "updates"
         const val NOTIFICATION_ID = 1
-        const val REQUEST_INSTALL = 1
+        const val REQUEST_ALLOW = 1
         const val REQUEST_PROMPT = 2
     }
 }

@@ -69,13 +69,17 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
      - The app declares `REQUEST_INSTALL_PACKAGES` and `UPDATE_PACKAGES_WITHOUT_USER_ACTION`, and asks for
        `USER_ACTION_NOT_REQUIRED`, so Android can install without a prompt where it allows (the app updating itself,
        Android 12 and later).
-     - Where Android still asks, the system prompt opens in the foreground. In the background, a notification
-       carries the version, the notes and an Install action.
+     - Where Android still asks (`STATUS_PENDING_USER_ACTION`), the system prompt opens in the foreground. In the
+       background, a notification carries a tap to confirm.
      - The first install from the browser always needs the user's tap, plus allowing installs from that browser once.
-   - **Notes in the app:**
-     - in the foreground, a sheet "What's new in 0.3.0" shows the notes before installing, with Install and Later;
-     - after an update, the new version's notes show once;
-     - Later lasts until the next launch, because the user wants every version quickly.
+   - **When it installs (changed 2026-10-17, no tap):** a verified release installs by itself when the app is off
+     screen, no upload is in flight and the app may install packages. The background worker tries it when it finds a
+     release; leaving the app with a release downloaded schedules one more try 15 seconds later; an upload in flight
+     postpones it and it is tried again a minute later. "On screen" is any activity of the app started, the share
+     sheet included (`ProcessLifecycleOwner`). The one-time "Allow mymind to install updates" request shows as a sheet
+     when the app is on screen and as a notification when it is not.
+   - **Notes in the app:** after an update, the new version's notes show once ("What's new in X"); that is the only
+     place the notes show. There is no sheet or notification before installing.
    - **Settings:** shows "Version 0.2.0 (2)", "Check for updates" and the full changelog from the bundled asset.
    - **Look:** these screens are ours, not mymind's, so they use the app's existing theme and components, plainly.
 6. **Publishing: `deploy/publish-android.sh`.**
@@ -127,6 +131,8 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
   read back as the test user. Uploads go through `deploy/upload-downloads.sh`, which sets the Worker's `ADMIN_TOKEN`
   secret only for the upload. Not yet installed on the phone. Debug builds share the package name but not the key, so a debug build has to be
   uninstalled first.
+- 2026-10-17: updates install with no tap (decision 5 changed): `update/AutoInstaller.kt`, `UpdateInstallWorker.kt`,
+  `ForegroundTracker.kt` and `UploadActivity.kt`; the pre-install sheet and the Install notification are gone.
 
 ## Order
 

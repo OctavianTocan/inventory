@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import androidx.core.content.IntentCompat
 import com.octaviantocan.mymind.MymindApp
-import kotlinx.coroutines.launch
 
 /** What to do with the outcome Android reported for a commit. */
 sealed interface StatusAction {
@@ -40,14 +39,5 @@ class InstallStatusReceiver : BroadcastReceiver() {
             is StatusAction.NotifyPrompt -> container.updateNotifier.promptNeeded(container.updater.currentRelease(), action.intent)
             StatusAction.None -> Unit
         }
-    }
-}
-
-/** Starts the install when the user taps Install in the update notification. */
-class InstallActionReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val container = (context.applicationContext as MymindApp).container
-        val pending = goAsync()
-        container.updateScope.launch { container.updater.install() }.invokeOnCompletion { pending.finish() }
     }
 }

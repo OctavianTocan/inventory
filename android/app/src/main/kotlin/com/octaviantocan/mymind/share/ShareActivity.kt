@@ -60,7 +60,7 @@ class ShareActivity : ComponentActivity() {
     private fun SavingSheet(ready: ShareState.Ready, container: com.octaviantocan.mymind.AppContainer) {
         val scope = container.shareScope
         val controller = remember {
-            ShareController(scope, container.repository) { uri ->
+            ShareController(scope, container.repository, activity = container.uploadActivity) { uri ->
                 withContext(Dispatchers.IO) { copiedUploadOf(contentResolver, Uri.parse(uri), sharedDirectory()) }
             }.also { it.start(ready.items) }
         }

@@ -8,7 +8,9 @@ import com.octaviantocan.mymind.data.MymindApi
 import com.octaviantocan.mymind.data.Repository
 import com.octaviantocan.mymind.data.Session
 import com.octaviantocan.mymind.ui.menu.DownloadsSaver
+import com.octaviantocan.mymind.update.AutoInstaller
 import com.octaviantocan.mymind.update.SessionApkInstaller
+import com.octaviantocan.mymind.update.UploadActivity
 import com.octaviantocan.mymind.update.UpdateNotifier
 import com.octaviantocan.mymind.update.UpdatePrefs
 import com.octaviantocan.mymind.update.Updater
@@ -39,6 +41,13 @@ class AppContainer(context: Context) {
         directory = File(context.cacheDir, "updates"),
         installer = SessionApkInstaller(context.applicationContext),
         prefs = updatePrefs,
+    )
+    val uploadActivity = UploadActivity()
+    val autoInstaller = AutoInstaller(
+        updater,
+        canInstall = { context.packageManager.canRequestPackageInstalls() },
+        uploads = uploadActivity,
+        askToAllow = updateNotifier::allowNeeded,
     )
     val whatsNew = WhatsNew(
         updatePrefs,

@@ -65,4 +65,24 @@ class ShareControllerTest {
         assertEquals(ApiResult.Ok(Unit), controller.finish(ShareDetails()))
         assertEquals(1, controller.cards.value.size)
     }
+
+    @Test
+    fun theControllerIsBusyUntilEverythingIsSaved() = runTest(dispatcher) {
+        val controller = ShareController(this, FakeLibrary(), dispatcher) { uri -> file(uri) }
+        assertEquals(false, controller.busy)
+        controller.start(listOf(ShareItem.Stream("a.jpg")))
+        assertEquals(true, controller.busy)
+        advanceUntilIdle()
+        assertEquals(false, controller.busy)
+    }
+
+    @Test
+    fun theActivityRegistrySeesABusyController() = runTest(dispatcher) {
+        val activity = com.octaviantocan.mymind.update.UploadActivity()
+        val controller = ShareController(this, FakeLibrary(), dispatcher, activity) { uri -> file(uri) }
+        controller.start(listOf(ShareItem.Text("https://example.com")))
+        assertEquals(true, activity.busy())
+        advanceUntilIdle()
+        assertEquals(false, activity.busy())
+    }
 }

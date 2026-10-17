@@ -56,6 +56,12 @@ and 127.0.0.1 is allowed in debug builds, and in a release build only when `mymi
 installed 0.2.0 from the download page, then updated to 0.2.1 from the sheet and to 0.2.2 from the background
 notification, both without a system prompt; evidence in `evidence/android-updates/`.
 
+Status (2026-10-17, automatic updates): a verified release installs with no tap once the user allowed installs one time:
+the worker installs it when the app is off screen, and leaving the app with a release downloaded installs it 15 seconds
+later. Never while any activity (the share sheet too) is on screen or an upload is in flight (the main queue or a share).
+The "What's new" sheet shows only after an update; the Install notification is gone; an allow request (sheet on screen,
+notification off screen) shows when installs are not allowed. Details in the updates plan, decision 5.
+
 Status (2026-10-17, share target): the app is a share target (0.3.0). A link or text is saved with `POST /objects`;
 pictures, videos and PDFs go through the upload flow with an upload strip; the sheet (Tags, Notes, Spaces, Save) applies
 its details to every saved card, and the five error states (S22) are drawn. An emulator run shared a link twice (one

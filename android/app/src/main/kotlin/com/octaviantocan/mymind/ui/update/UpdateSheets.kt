@@ -3,7 +3,6 @@ package com.octaviantocan.mymind.ui.update
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -79,47 +77,24 @@ private fun PillButton(label: String, primary: Boolean, modifier: Modifier = Mod
 }
 
 /**
- * The content of the "What's new" sheet for an available update.
+ * The content of the request to let the app install updates.
  *
- * @param model What to announce and how far the update is.
- * @param onInstall Called when Install is tapped.
- * @param onLater Called when Later is tapped.
+ * @param model The release that waits for the permission.
  * @param onAllow Called when "Allow mymind to install updates" is tapped.
- * @param onRetry Called when Try again is tapped after a failure.
  */
 @Composable
-fun UpdateSheetContent(model: UpdateSheetModel, onInstall: () -> Unit, onLater: () -> Unit, onAllow: () -> Unit, onRetry: () -> Unit) {
+fun AllowRequestContent(model: AllowRequestModel, onAllow: () -> Unit) {
     val colors = colors()
     MenuCard {
         Column(Modifier.padding(24.dp)) {
-            Notes("What's new in ${model.release.versionName}", model.release.notes)
-            Spacer(Modifier.height(8.dp))
-            when (model.phase) {
-                UpdatePhase.Downloading -> {
-                    LinearProgressIndicator(progress = { model.progress }, Modifier.fillMaxWidth(), color = Accent, trackColor = colors.row)
-                    Spacer(Modifier.height(16.dp))
-                    PillButton("Later", primary = false, Modifier.fillMaxWidth(), onLater)
-                }
-                UpdatePhase.Installing -> Text("Installing", style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.nunito))
-                UpdatePhase.Failed -> {
-                    Text(model.failure.orEmpty(), style = TextStyle(color = colors.dangerText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.nunito))
-                    Spacer(Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PillButton("Later", primary = false, Modifier.weight(1f), onLater)
-                        PillButton("Try again", primary = true, Modifier.weight(1f), onRetry)
-                    }
-                }
-                UpdatePhase.Ready -> {
-                    if (!model.installAllowed) {
-                        InstallPermissionRow(onAllow)
-                        Spacer(Modifier.height(12.dp))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PillButton("Later", primary = false, Modifier.weight(1f), onLater)
-                        PillButton("Install", primary = model.installAllowed, Modifier.weight(1f), onInstall)
-                    }
-                }
-            }
+            Text("mymind ${model.release.versionName} is ready", style = TextStyle(color = colors.rowText, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.nunito))
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Allow installs once, and updates install by themselves when you leave the app.",
+                style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.nunito),
+            )
+            Spacer(Modifier.height(16.dp))
+            InstallPermissionRow(onAllow)
         }
     }
 }
@@ -147,17 +122,15 @@ fun InstallPermissionRow(onClick: () -> Unit) {
 }
 
 /**
- * The update sheet over the app.
+ * The request to allow installs, over the app.
  *
- * @param model What to announce.
- * @param onInstall Called when Install is tapped.
- * @param onLater Called when Later is tapped or the sheet is swiped away.
+ * @param model The release that waits for the permission.
+ * @param onLater Called when the sheet is swiped away.
  * @param onAllow Called when the install permission row is tapped.
- * @param onRetry Called when Try again is tapped.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UpdateSheet(model: UpdateSheetModel, onInstall: () -> Unit, onLater: () -> Unit, onAllow: () -> Unit, onRetry: () -> Unit) {
+fun AllowRequestSheet(model: AllowRequestModel, onLater: () -> Unit, onAllow: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onLater,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -165,7 +138,7 @@ fun UpdateSheet(model: UpdateSheetModel, onInstall: () -> Unit, onLater: () -> U
         tonalElevation = 0.dp,
         dragHandle = null,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-    ) { UpdateSheetContent(model, onInstall, onLater, onAllow, onRetry) }
+    ) { AllowRequestContent(model, onAllow) }
 }
 
 /**
@@ -235,7 +208,7 @@ fun ChangelogScreen(entries: List<ChangelogEntry>, onClose: () -> Unit) {
 }
 
 /**
- * Everything the update feature draws over the signed-in app: the update sheet, the after-update sheet and the
+ * Everything the update feature draws over the signed-in app: the allow request, the after-update sheet and the
  * changelog screen.
  *
  * @param viewModel State and actions of the update screens.
@@ -247,6 +220,6 @@ fun UpdateOverlays(viewModel: UpdateViewModel, onAllow: () -> Unit) {
     val after = viewModel.afterUpdate.collectAsStateWithLifecycle()
     val changelog = viewModel.changelogOpen.collectAsStateWithLifecycle()
     if (changelog.value) ChangelogScreen(viewModel.entries, viewModel::closeChangelog)
-    sheet.value?.let { UpdateSheet(it, viewModel::install, viewModel::later, onAllow, viewModel::retry) }
+    sheet.value?.let { AllowRequestSheet(it, viewModel::later, onAllow) }
     if (sheet.value == null) after.value?.let { AfterUpdateSheet(it, viewModel::dismissAfterUpdate) }
 }

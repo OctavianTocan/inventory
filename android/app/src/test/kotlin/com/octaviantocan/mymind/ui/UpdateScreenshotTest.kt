@@ -20,9 +20,11 @@ import com.octaviantocan.mymind.ui.settings.SettingsSheet
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import com.octaviantocan.mymind.ui.update.AfterUpdateContent
 import com.octaviantocan.mymind.ui.update.ChangelogScreen
-import com.octaviantocan.mymind.ui.update.UpdatePhase
-import com.octaviantocan.mymind.ui.update.UpdateSheetContent
-import com.octaviantocan.mymind.ui.update.UpdateSheetModel
+import com.octaviantocan.mymind.ui.update.AllowRequestContent
+import com.octaviantocan.mymind.ui.update.AllowRequestModel
+import com.octaviantocan.mymind.update.UpdateState
+import com.octaviantocan.mymind.update.updateStatusText
+import java.io.File
 import com.octaviantocan.mymind.update.ReleaseInfo
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -54,16 +56,10 @@ class UpdateScreenshotTest {
 
 
     @Test
-    fun updateSheetLight() = shot("update_sheet_light", false) { UpdateSheetContent(UpdateSheetModel(release, UpdatePhase.Ready), {}, {}, {}, {}) }
+    fun allowRequestLight() = shot("update_allow_light", false) { AllowRequestContent(AllowRequestModel(release)) {} }
 
     @Test
-    fun updateSheetDark() = shot("update_sheet_dark", true) { UpdateSheetContent(UpdateSheetModel(release, UpdatePhase.Ready), {}, {}, {}, {}) }
-
-    @Test
-    fun permissionRowLight() = shot("update_permission_light", false) { UpdateSheetContent(UpdateSheetModel(release, UpdatePhase.Ready, installAllowed = false), {}, {}, {}, {}) }
-
-    @Test
-    fun permissionRowDark() = shot("update_permission_dark", true) { UpdateSheetContent(UpdateSheetModel(release, UpdatePhase.Ready, installAllowed = false), {}, {}, {}, {}) }
+    fun allowRequestDark() = shot("update_allow_dark", true) { AllowRequestContent(AllowRequestModel(release)) {} }
 
     @Test
     fun afterUpdateLight() = shot("update_after_light", false) { AfterUpdateContent(entries[0]) {} }
@@ -84,14 +80,45 @@ class UpdateScreenshotTest {
     fun settingsRowsDark() = settingsRows(true)
 
     @Test
-    fun laterCallbackFires() {
-        var later = 0
-        compose.setPhoneContent(false) { UpdateSheetContent(UpdateSheetModel(release, UpdatePhase.Ready), {}, { later++ }, {}, {}) }
-        compose.onNodeWithText("Later").performClick()
-        assertEquals(1, later)
+    fun settingsReadyAllowedLight() = settingsRows(false, UpdateState.Ready(release, File("a")), allowed = true, name = "ready_allowed")
+
+    @Test
+    fun settingsReadyAllowedDark() = settingsRows(true, UpdateState.Ready(release, File("a")), allowed = true, name = "ready_allowed")
+
+    @Test
+    fun settingsReadyNotAllowedLight() = settingsRows(false, UpdateState.Ready(release, File("a")), allowed = false, name = "ready_not_allowed")
+
+    @Test
+    fun settingsReadyNotAllowedDark() = settingsRows(true, UpdateState.Ready(release, File("a")), allowed = false, name = "ready_not_allowed")
+
+    @Test
+    fun settingsInstallingLight() = settingsRows(false, UpdateState.Installing(release), allowed = true, name = "installing")
+
+    @Test
+    fun settingsInstallingDark() = settingsRows(true, UpdateState.Installing(release), allowed = true, name = "installing")
+
+    @Test
+    fun settingsFailedLight() = settingsRows(false, UpdateState.Failed("The install was cancelled", release), allowed = true, name = "failed")
+
+    @Test
+    fun settingsFailedDark() = settingsRows(true, UpdateState.Failed("The install was cancelled", release), allowed = true, name = "failed")
+
+    @Test
+    fun allowRequestAllowCallbackFires() {
+        var allowed = 0
+        compose.setPhoneContent(false) { AllowRequestContent(AllowRequestModel(release)) { allowed++ } }
+        compose.onNodeWithText("Allow mymind to install updates").performClick()
+        assertEquals(1, allowed)
     }
 
-    private fun settingsRows(dark: Boolean) {
+    @Test
+    fun readyStatusSaysWhenItInstalls() {
+        val ready = UpdateState.Ready(release, File("a"))
+        assertEquals("Installs when you leave. Tap to install now", updateStatusText(ready, true))
+        assertEquals("0.3.0 is ready, allow installs below", updateStatusText(ready, false))
+    }
+
+    private fun settingsRows(dark: Boolean, state: UpdateState = UpdateState.UpToDate, allowed: Boolean = true, name: String = "") {
         compose.setPhoneContent(dark) {
             Box(Modifier.fillMaxSize().background(MymindTheme.colors.page)) {
                 SettingsSheet(
@@ -99,12 +126,12 @@ class UpdateScreenshotTest {
                     version = "0.2.0 (2)",
                     onSignOut = {},
                     pictures = flatSettingsPictures(dark),
-                    updates = SettingsUpdates(true, "Version 0.2.0 (2)", "Up to date", showAllow = true),
+                    updates = SettingsUpdates(true, "Version 0.2.0 (2)", updateStatusText(state, allowed), showAllow = !allowed),
                     scrollState = androidx.compose.foundation.ScrollState(Int.MAX_VALUE),
                 )
             }
         }
         compose.mainClock.advanceTimeBy(1_500)
-        compose.onRoot().captureRoboImage("screenshots/update_settings_${if (dark) "dark" else "light"}.png")
+        compose.onRoot().captureRoboImage("screenshots/update_settings${if (name.isEmpty()) "" else "_$name"}_${if (dark) "dark" else "light"}.png")
     }
 }

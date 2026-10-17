@@ -11,14 +11,16 @@ import androidx.work.WorkerParameters
 import com.octaviantocan.mymind.MymindApp
 import java.util.concurrent.TimeUnit
 
-/** Background check that downloads a newer release and notifies the user when the app is not on screen. */
+/** Background check that downloads a newer release and installs it when the app is off screen and idle. */
 class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val container = (applicationContext as MymindApp).container
         container.session.restore()
         if (container.session.token == null) return Result.success()
         val state = container.updater.check()
-        if (state is UpdateState.Ready && !container.updater.foreground) container.updateNotifier.ready(state.release)
+        if (state is UpdateState.Ready && container.autoInstaller.installIfIdle() == AutoInstallResult.Uploading) {
+            UpdateInstallWorker.schedule(applicationContext, UpdateInstallWorker.RETRY_DELAY_SECONDS)
+        }
         return if (state is UpdateState.Failed) Result.retry() else Result.success()
     }
 

@@ -63,12 +63,13 @@ fun MymindRoot(container: AppContainer) {
 /** The signed-in shell with its view models. */
 @Composable
 private fun SignedIn(container: AppContainer) {
-    val library = viewModel { LibraryViewModel(container.repository, container.downloads) }
+    val library = viewModel { LibraryViewModel(container.repository, container.downloads, uploadActivity = container.uploadActivity) }
     val settings = viewModel { SettingsViewModel(container.repository) }
     val context = LocalContext.current
     val updates = viewModel {
         UpdateViewModel(
             container.updater,
+            container.autoInstaller,
             container.whatsNew,
             { context.packageManager.canRequestPackageInstalls() },
             "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
