@@ -277,7 +277,9 @@ await writeFile(path.join(OUT, 'cards.json'), JSON.stringify(cards));
 await writeFile(path.join(OUT, 'static-urls.json'), JSON.stringify([...new Set(loaded.staticUrls)], null, 2));
 console.log(`Cards: ${cards.length}, shell: ${loaded.shell.length} chars`);
 
-const responses = {};
+// A fresh pass adds to the existing indexes, so it keeps the detail views and readers --details-only recorded.
+const readIndex = (name) => readFile(path.join(OUT, name), 'utf8').then(JSON.parse, () => ({}));
+const responses = await readIndex('responses.json');
 await recordGets(page, GETS, responses);
 
 const detailIds = cards
@@ -289,7 +291,7 @@ const detailRequests = detailIds.map((id) => ({
   accept: 'text/html,image/webp',
   headers: { 'x-viewport-width': String(loaded.viewport.screen[0]), 'x-viewport-height': String(loaded.viewport.screen[1]), 'x-partial': '1' },
 }));
-const details = {};
+const details = await readIndex('details.json');
 let detailHtml = '';
 for (const res of await fetchInBatches(page, detailRequests, 'Card details')) {
   if (res.error || res.status !== 200) continue;
@@ -305,15 +307,15 @@ const mediaSource = [
   loaded.shell,
   detailHtml,
   ...cards.slice(0, Number(opts['media-cards'])).map((c) => c.html),
-  ...(await Promise.all(Object.values(responses).map((r) => readFile(path.join(OUT, r.file), 'utf8')))),
+  ...(await Promise.all(GETS.map((g) => responses[`GET ${g.path}`]).filter(Boolean).map((r) => readFile(path.join(OUT, r.file), 'utf8')))),
 ].join('\n');
-const mediaUrls = mediaUrlsIn(mediaSource, opts.videos);
+const mediaUrls = mediaUrlsIn(mediaSource, opts.videos).filter((url) => !existsSync(path.join(OUT, mediaFile(url))));
 const saved = await recordMedia(page, mediaUrls);
 
 await writeFile(
   path.join(OUT, 'meta.json'),
   JSON.stringify(
-    { capturedAt: new Date().toISOString(), origin: ORIGIN, checkpoint: loaded.checkpoint, viewport: loaded.viewport, cards: cards.length, details: Object.keys(details).length, media: saved },
+    { capturedAt: new Date().toISOString(), origin: ORIGIN, checkpoint: loaded.checkpoint, viewport: loaded.viewport, cards: cards.length, details: Object.keys(details).length, media: ((await readIndex('meta.json')).media ?? 0) + saved },
     null,
     2,
   ),

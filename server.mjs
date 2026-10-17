@@ -1,13 +1,18 @@
 // Serves mymind's captured front end with a local SQLite API and recording fallbacks.
 import http from 'node:http';
-import { watchFile } from 'node:fs';
+import { existsSync, watchFile } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { deviceVariant } from './tools/replay-store.mjs';
+import { deviceVariant } from './lib/device.mjs';
 import { createApi } from './lib/api.mjs';
 import { createAuth } from './lib/auth.mjs';
+import { directoryBucket } from './lib/bucket-fs.mjs';
+import { createHosted } from './lib/hosted.mjs';
 import { createHub } from './lib/hub.mjs';
+import { createProcessor } from './lib/media-processor.mjs';
+import { IMAGE_PLACEHOLDER, LOCAL_PREFIXES, TEXT_EXTENSIONS, TYPES, localize, localizeValue, replayKeyFor, send, sendRange } from './lib/site.mjs';
+import { openSql } from './lib/sql-node.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.STORE_LOAD_ENV !== '0') {
@@ -20,50 +25,18 @@ const REPLAY = path.join(ROOT, 'replay');
 const PORT = Number(process.env.PORT ?? 4321);
 const OFFLINE = process.env.OFFLINE === '1';
 
-const STATIC_ORIGIN = 'https://static.accelerator.net/';
-const MEDIA_HOST = 'https://media.mymind.host/';
-const CARBON_HOST = 'https://carbon-media.accelerator.net/';
-const APP_ORIGIN = 'https://access.mymind.com/';
-const LOCAL_PREFIXES = [
-  ['/_static/', STATIC_ORIGIN],
-  ['/_mediahost/', MEDIA_HOST],
-  ['/_carbon/', CARBON_HOST],
-];
+// HOSTED=1 serves a library imported by tools/import-hosted.mjs, as Cloudflare will, and never reads the recordings.
+const HOSTED = process.env.HOSTED === '1';
 
-const TYPES = {
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.html': 'text/html; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.avif': 'image/avif',
-  '.woff2': 'font/woff2',
-  '.woff': 'font/woff',
-  '.ttf': 'font/ttf',
-  '.mp4': 'video/mp4',
-  '.wasm': 'application/wasm',
-};
-const TEXT_EXTENSIONS = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg']);
-const IMAGE_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#e9e7e3"/></svg>`;
-
-const localize = (text) =>
-  LOCAL_PREFIXES.reduce((out, [local, origin]) => out.replaceAll(origin, local), text).replaceAll(APP_ORIGIN, '/');
-
-const meta = JSON.parse(await readFile(path.join(CAPTURE, 'meta.json'), 'utf8'));
-const shell = localize(await readFile(path.join(CAPTURE, 'shell.html'), 'utf8'));
-const cards = JSON.parse(await readFile(path.join(CAPTURE, 'cards.json'), 'utf8')).map((card) => ({
+const meta = HOSTED ? {} : JSON.parse(await readFile(path.join(CAPTURE, 'meta.json'), 'utf8'));
+const shell = HOSTED ? '' : localize(await readFile(path.join(CAPTURE, 'shell.html'), 'utf8'));
+const cards = HOSTED ? [] : JSON.parse(await readFile(path.join(CAPTURE, 'cards.json'), 'utf8')).map((card) => ({
   html: localize(card.html),
   json: localize(card.json),
 }));
 const cardsById = new Map(cards.map((card) => [card.html.match(/data-id="([^"]+)"/)?.[1], card]));
-const responses = JSON.parse(await readFile(path.join(CAPTURE, 'responses.json'), 'utf8'));
-const details = JSON.parse(await readFile(path.join(CAPTURE, 'details.json'), 'utf8'));
+const responses = HOSTED ? {} : JSON.parse(await readFile(path.join(CAPTURE, 'responses.json'), 'utf8'));
+const details = HOSTED ? {} : JSON.parse(await readFile(path.join(CAPTURE, 'details.json'), 'utf8'));
 let replayIndex = {};
 const msgpack = await import(pathToFileURL(path.join(MIRROR, '134/0.109.0/scripts/vendor/msgpack.min.js')).href);
 const replayBodies = new Map();
@@ -72,8 +45,10 @@ async function reloadReplay() {
   replayBodies.clear();
   return Object.keys(replayIndex).length;
 }
-await reloadReplay();
-watchFile(path.join(REPLAY, 'index.json'), { interval: 1000 }, async () => console.log(`replay/ reloaded: ${await reloadReplay()} responses`));
+if (!HOSTED) {
+  await reloadReplay();
+  watchFile(path.join(REPLAY, 'index.json'), { interval: 1000 }, async () => console.log(`replay/ reloaded: ${await reloadReplay()} responses`));
+}
 
 function encodeMsgpack(value, parts = []) {
   const header = (fix, b16, b32, n, fixMax) => {
@@ -128,24 +103,6 @@ async function readBody(req) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-function send(res, status, body, headers = {}) {
-  res.writeHead(status, { 'cache-control': 'no-store', ...headers });
-  res.end(body);
-}
-
-// Video and audio elements stream with Range requests and stall on a plain 200.
-function sendRange(req, res, status, body, headers) {
-  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
-  if (!range || status !== 200) return send(res, status, body, headers);
-  const start = range[1] ? Number(range[1]) : Math.max(0, body.length - Number(range[2]));
-  const end = range[1] && range[2] ? Math.min(Number(range[2]), body.length - 1) : body.length - 1;
-  send(res, 206, body.subarray(start, end + 1), {
-    ...headers,
-    'accept-ranges': 'bytes',
-    'content-range': `bytes ${start}-${end}/${body.length}`,
-  });
-}
-
 async function serveFile(res, file, { localizeText = false, req = null } = {}) {
   const ext = path.extname(file).toLowerCase();
   let body = await readFile(file);
@@ -162,7 +119,7 @@ async function serveStatic(res, relative, search) {
   } catch {
     if (OFFLINE) return send(res, 404, 'not mirrored');
   }
-  const upstream = await fetch(STATIC_ORIGIN + relative + search);
+  const upstream = await fetch(LOCAL_PREFIXES[0][1] + relative + search);
   if (!upstream.ok) return send(res, upstream.status, `upstream ${upstream.status}`);
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, Buffer.from(await upstream.arrayBuffer()));
@@ -198,15 +155,6 @@ async function serveRecorded(res, key) {
   send(res, entry.status, body, entry.headers);
 }
 
-// Same key shape as tools/replay-store.mjs, from the replica-side URL.
-function replayKeyFor(req, url) {
-  const [local, origin] = LOCAL_PREFIXES.find(([prefix]) => url.pathname.startsWith(prefix)) ?? [];
-  const live = local ? origin + url.pathname.slice(local.length) : APP_ORIGIN + url.pathname.slice(1);
-  const pathOnly = (local && local !== '/_static/') || url.pathname.startsWith('/media/');
-  const kind = req.method === 'GET' && req.headers['sec-fetch-dest'] === 'document' ? 'DOC' : req.method;
-  return `${kind} ${live}${pathOnly ? '' : url.search}`;
-}
-
 // mymind renders different HTML per device, so phone recordings take precedence for phone requests.
 function replayedFor(req, url) {
   let key = replayKeyFor(req, url);
@@ -216,15 +164,6 @@ function replayedFor(req, url) {
   const run = req.headers['x-replay-run'];
   return (run && replayIndex[`run:${run}|${key}`]) || replayIndex[key];
 }
-
-const localizeValue = (value) =>
-  typeof value === 'string'
-    ? localize(value)
-    : Array.isArray(value)
-      ? value.map(localizeValue)
-      : value && typeof value === 'object' && !(value instanceof Uint8Array)
-        ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, localizeValue(v)]))
-        : value;
 
 async function replayBody(entry) {
   if (replayBodies.has(entry.file)) return replayBodies.get(entry.file);
@@ -253,9 +192,23 @@ async function serveDetail(res, id) {
   });
 }
 
+// The library HOSTED_LIBRARY (default owner) in HOSTED_DIR (default data/hosted), as tools/import-hosted.mjs left it.
+async function openHosted() {
+  const directory = path.resolve(ROOT, process.env.HOSTED_DIR ?? 'data/hosted');
+  const library = process.env.HOSTED_LIBRARY ?? 'owner';
+  const file = path.join(directory, `${library}.db`);
+  if (!existsSync(file)) throw new Error(`No hosted library at ${file}; run tools/import-hosted.mjs first`);
+  const db = openSql(file);
+  const site = await createHosted({ db, bucket: directoryBucket(path.join(directory, 'bucket')), library,
+    processor: createProcessor(), msgpack, push: (target, payload) => push(target, payload),
+    readonly: process.env.STORE_READONLY === '1', offline: OFFLINE });
+  return { ...site, library, close: () => { site.close(); db.close(); } };
+}
+
 const auth = createAuth({ root: ROOT, localize, port: PORT });
 let push = () => {};
-const api = await createApi({ root: ROOT, dbPath: process.env.STORE_DB, readonly: process.env.STORE_READONLY === '1',
+const hostedSite = HOSTED ? await openHosted() : null;
+const api = hostedSite?.api ?? await createApi({ root: ROOT, dbPath: process.env.STORE_DB, readonly: process.env.STORE_READONLY === '1',
   msgpack, localize, send, push: (target, payload) => push(target, payload),
   hasReplay: (req, url) => Boolean(replayedFor(req, url)) || Object.hasOwn(details, /^\/cards\/([^/]+)\/detail$/.exec(url.pathname)?.[1] ?? '') });
 
@@ -280,6 +233,7 @@ async function handle(req, res, gate) {
     if (req.method === 'GET' && pathname.startsWith('/media/') && (dest === 'iframe' || dest === 'frame') && req.headers.host?.startsWith('localhost')) {
       return send(res, 302, '', { location: `http://127.0.0.1:${req.socket.localPort}/_mediahost/${pathname.slice('/media/'.length)}${search}` });
     }
+    if (hostedSite) return await hostedSite.handle(req, res, url);
     if (req.method === 'POST' && pathname === '/__replay/reload') {
       return send(res, 200, JSON.stringify({ responses: await reloadReplay(), offline: OFFLINE, store: process.env.STORE_DB ? path.resolve(process.env.STORE_DB) : null }), { 'content-type': 'application/json' });
     }
@@ -339,11 +293,14 @@ async function handle(req, res, gate) {
 const hubs = [createHub(server, auth ? (req) => auth.allows(req) : (req) => !req.headers['cf-connecting-ip'])];
 if (local) hubs.push(createHub(local, (req) => !req.headers['cf-connecting-ip']));
 push = (target, payload) => { for (const broadcast of hubs) broadcast(target, payload); };
-server.on('close', () => { local?.close(); api?.close(); auth?.close(); });
+server.on('close', () => { local?.close(); (hostedSite ?? api)?.close(); auth?.close(); });
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`mymind replica on http://localhost:${server.address().port}/everything`);
-  console.log(`${cards.length} cards, ${Object.keys(details).length} detail views, captured ${meta.capturedAt}${OFFLINE ? ', offline' : ''}`);
-  console.log(`${Object.keys(replayIndex).length} replayed responses from REA scenarios`);
+  if (hostedSite) console.log(`hosted library ${hostedSite.library}${OFFLINE ? ', offline' : ''}`);
+  else {
+    console.log(`${cards.length} cards, ${Object.keys(details).length} detail views, captured ${meta.capturedAt}${OFFLINE ? ', offline' : ''}`);
+    console.log(`${Object.keys(replayIndex).length} replayed responses from REA scenarios`);
+  }
 });
 local?.listen(LOCAL_PORT, '127.0.0.1', () => console.log(`without sign-in for this computer on http://127.0.0.1:${local.address().port}`));

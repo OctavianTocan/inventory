@@ -37,3 +37,11 @@ android/local.properties
 android/.idea/
 # The app's Kotlin package called data is source code, not a library database.
 !android/app/src/main/kotlin/com/octaviantocan/mymind/data/
+
+# Cloudflare Worker: local secrets and wrangler's local state.
+worker/.dev.vars
+worker/.wrangler/
+
+# Rust build output
+rust/target/
+rust/libvips/

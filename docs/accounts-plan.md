@@ -49,7 +49,7 @@ login.
 ## Plan: a library per person (not built)
 
 The user (2026-10-16): one database per person is fine if it runs on Cloudflare, with D1 and a Worker in place of the
-tunnel; how to set that up is still being discussed. The local plan below is the starting point.
+tunnel; how to set that up is being discussed in `docs/cloudflare-plan.md`. The local plan below is the starting point.
 
 ### Where each library lives
 
