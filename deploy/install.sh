@@ -9,12 +9,13 @@ usage='usage: deploy/install.sh <hostname> <tunnel-id>'
 host=${1:?$usage}
 tunnel=${2:?$usage}
 root=$(cd "$(dirname "$0")/.." && pwd)
-node=$(node -p process.execPath)
+server="$root/rust/target/release/mymind"
 cloudflared=$(command -v cloudflared)
 credentials="$HOME/.cloudflared/$tunnel.json"
 config="$HOME/.cloudflared/mymind.yml"
 units="$HOME/.config/systemd/user"
 
+[[ -x $server ]] || { echo "No $server: build it with rust/fetch-libvips.sh, then cargo build --release in rust/ (README)." >&2; exit 1; }
 [[ -f $credentials ]] || { echo "No $credentials: create the tunnel with cloudflared tunnel create." >&2; exit 1; }
 for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET OWNER_EMAIL; do
   grep -q "^$name=." "$root/.env" 2>/dev/null || { echo "$root/.env has no $name (README, Hosting)." >&2; exit 1; }
@@ -42,8 +43,8 @@ Wants=network-online.target
 
 [Service]
 WorkingDirectory=$root
-Environment=PORT=4330 LOCAL_PORT=4331 AUTH=google PUBLIC_URL=https://$host SHARP_IGNORE_GLOBAL_LIBVIPS=1
-ExecStart=$node server.mjs
+Environment=PORT=4330 LOCAL_PORT=4331 AUTH=google PUBLIC_URL=https://$host
+ExecStart=$server serve
 Restart=always
 RestartSec=5
 
@@ -77,7 +78,7 @@ PartOf=mymind-replica.service
 [Service]
 WorkingDirectory=$root
 Environment=DOWNLOAD_PORT=4332
-ExecStart=$node deploy/download-server.mjs
+ExecStart=$server download-server
 Restart=always
 RestartSec=5
 

@@ -40,7 +40,7 @@ let allOffline = true;
 
 // The `npm run verify` matrix (quick debugging suites are not part of the claim).
 const runs = ['desktop-light', 'desktop-dark', 'iphone', 'android'].flatMap((profile) => [`${profile}-ui`, `${profile}-cards`]);
-// A patch run (`<run>@<part>`) re-verifies part of a run; its screenshots replace the same-named ones.
+// A patch run (`<run>@<part>`) re-verifies part of a run; the newer run's screenshots replace the same-named ones.
 const load = async (dir) => ({
   report: JSON.parse(await readFile(path.join(DRIVE, dir, 'report.json'), 'utf8')),
   evidence: JSON.parse(await readFile(path.join(DRIVE, dir, 'rea-evidence.json'), 'utf8')),
@@ -49,7 +49,8 @@ for (const run of runs.filter((r) => existsSync(path.join(DRIVE, r, 'rea-evidenc
   const parts = [await load(run)];
   for (const dir of readdirSync(DRIVE).filter((d) => d.startsWith(`${run}@`) && existsSync(path.join(DRIVE, d, 'rea-evidence.json')))) parts.push(await load(dir));
   const latest = new Map();
-  for (const { report, evidence } of parts) {
+  const at = ({ report }) => Date.parse(report.replica?.at ?? report.startedAt ?? 0) || 0;
+  for (const { report, evidence } of parts.sort((a, b) => at(a) - at(b))) {
     for (const record of evidence) records.set(record.evidence_id, record);
     allOffline &&= report.replica?.offline === true;
     for (const result of report.results ?? []) latest.set(result.name, { result, report });

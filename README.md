@@ -168,9 +168,14 @@ node tools/auth-user.mjs remove tester                     # also signs that use
 
 ### Hosting
 
-Since 2026-10-17 `https://mymind.octaviantocan.com` is served by the Cloudflare Worker in `worker/`: each library
-lives in its own Durable Object with its media in R2, behind the library's own sign-in (`docs/cloudflare-plan.md`
-has the setup, the import and what was checked). Deploy a change with `npm --prefix worker run deploy`.
+Since 2026-10-17 `https://mymind.octaviantocan.com` is served by the Cloudflare Worker, written in Rust in
+`rust/crates/worker/`: each library lives in its own Durable Object with its media in R2, behind the library's own
+sign-in (`docs/cloudflare-plan.md` has the setup, the import and what was checked). Deploy a change, the Worker and
+the media container image together, from that directory:
+
+```bash
+cd rust/crates/worker && node ../../../worker/node_modules/wrangler/bin/wrangler.js deploy
+```
 
 Until 2026-10-24, **mini-002** (`mini-002-netcup` on Tailscale, a Debian server) keeps running the previous host from
 the checkout `~/apps/mymind-reconstruction`, behind the Cloudflare tunnel `mymind`, as the fallback: the Worker's
@@ -180,13 +185,17 @@ tunnel. Reach the machine over Tailscale (`ssh mini-002-netcup`). That checkout 
 Worker was imported from its backup at 00:58 on 2026-10-17, and nothing written on mini-002 since then reaches the
 Worker.
 
-To deploy a change to mini-002, push to that checkout (`receive.denyCurrentBranch=updateInstead` updates its files on push) and
-restart the service:
+Since 2026-10-17 11:02 mini-002 runs the Rust server (`mymind serve` and `mymind download-server`), and its checkout
+is on branch `cloudflare`. To deploy a change, push that branch (`receive.denyCurrentBranch=updateInstead` updates
+the checked-out files on push), copy the server and the libvips it links (both built here; Git leaves them out), and
+restart the services:
 
 ```bash
 git remote add mini-002 mini-002-netcup:apps/mymind-reconstruction   # once
-git push mini-002 main
-ssh mini-002-netcup 'cd ~/apps/mymind-reconstruction && SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci && systemctl --user restart mymind-replica'
+git push mini-002 cloudflare
+scp rust/target/release/mymind rust/libvips/linux-x64/libvips-cpp.so.8.17.3 \
+  mini-002-netcup:apps/mymind-reconstruction/rust/target/release/
+ssh mini-002-netcup 'systemctl --user restart mymind-replica mymind-download'
 # after a re-capture, also copy the videos Git leaves out:
 rsync -a -m --include='*/' --include='*.mp4' --include='*.webm' --include='*.mov' --exclude='*' \
   capture/ mini-002-netcup:apps/mymind-reconstruction/capture/
@@ -245,14 +254,13 @@ node tools/check-hosted.mjs --browser   # also signs in with headless Chromium; 
 ## Desktop app
 
 `desktop/` wraps the replica in a native window (Tauri 2). The app uses the server already listening on `PORT`
-(default 4331, which the hosted service serves on its host), or starts `node server.mjs` from this checkout
-and stops it when the window closes; with `MYMIND_URL` it opens that hosted library instead of starting a server.
+(default 4331, which the hosted service serves on its host), or starts the Rust server (`mymind serve`) from this
+checkout and stops it when the window closes; with `MYMIND_URL` it opens that hosted library instead of starting a server.
 It stays off `:4321`, which belongs to verification.
 
 ### Install
 
-1. Install Node 22 or newer. The app runs `npm ci` itself on its first start.
-2. Install Rust (`curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh`) and the system libraries from
+1. Install Rust (`curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSf | sh`) and the system libraries from
    [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/). On Linux, also install GStreamer's good
    plugins; without them WebKitGTK cannot create an audio sink, leaves the grid blank and aborts within a minute:
 
@@ -261,24 +269,25 @@ It stays off `:4321`, which belongs to verification.
    sudo apt install libwebkit2gtk-4.1-dev build-essential gstreamer1.0-plugins-good   # Debian/Ubuntu
    ```
 
-3. Build (about 5 min the first time, about 1 min after a change):
+2. Build the server and the app (about 5 min each the first time, about 1 min after a change):
 
    ```bash
-   cd desktop/src-tauri && cargo build --release
+   rust/fetch-libvips.sh                             # once: the libvips build the server links
+   (cd rust && cargo build --release)                # the server, rust/target/release/mymind
+   (cd desktop/src-tauri && cargo build --release)   # the app
    ```
 
-4. Run `desktop/src-tauri/target/release/mymind-desktop`. The binary remembers this checkout's path, so it runs
+3. Run `desktop/src-tauri/target/release/mymind-desktop`. The binary remembers this checkout's path, so it runs
    from any directory as long as the checkout stays where it was built (or `MYMIND_ROOT` points to it).
 
-To start it from your app launcher on Linux, add a desktop entry. Launchers do not load shell setup such as mise or
-nvm, so the entry carries the full path to `node`. Run this from `desktop/src-tauri`:
+To start it from your app launcher on Linux, add a desktop entry. Run this from `desktop/src-tauri`:
 
 ```bash
 cat > ~/.local/share/applications/mymind.desktop <<EOF
 [Desktop Entry]
 Type=Application
 Name=mymind
-Exec=env MYMIND_NODE=$(command -v node) $PWD/target/release/mymind-desktop
+Exec=$PWD/target/release/mymind-desktop
 Icon=$PWD/icons/icon.png
 Categories=Utility;
 EOF
@@ -299,7 +308,7 @@ The app signs in with Google inside its window the first time and keeps the sess
 checkout opens the hosted library the same way with `MYMIND_URL=https://<hostname>`.
 
 A clone elsewhere still runs: build the app as above and start it. Without a database it shows the recorded library
-and ignores edits; `node tools/seed-db.mjs` gives it a writable copy seeded from the recordings, which lacks what
+and ignores edits; `rust/target/release/mymind seed-db` gives it a writable copy seeded from the recordings, which lacks what
 changed on the host since. A clone that kept `data/mymind.db` from when the database was committed keeps that copy,
 but its edits never reach the host.
 
@@ -309,11 +318,11 @@ but its edits never reach the host.
 |---|---|---|
 | `PORT` | `4331` | Port of the replica the window opens, and of the server the app starts. |
 | `MYMIND_URL` | none; the build's value | A hosted library to open when nothing listens on `PORT`, instead of starting a server. Set at build time, it becomes the default (`deploy/package-app.sh`). |
-| `MYMIND_ROOT` | the checkout it was built in | Where `server.mjs` lives. |
-| `MYMIND_NODE` | `node` on `PATH` | Node binary that runs the server. |
-| `STORE_DB`, `STORE_MEDIA`, … | as for `npm run serve` | Passed through to the server it starts. |
+| `MYMIND_ROOT` | the checkout it was built in | The checkout the server runs in (recordings, `data/`, `.env`). |
+| `MYMIND_SERVER` | `rust/target/release/mymind` in the checkout | The server binary it starts. |
+| `STORE_DB`, `STORE_MEDIA`, … | as for `mymind serve` | Passed through to the server it starts. |
 
-The server reads `.env` in the checkout, so AI features work in the app when they work in `npm run serve`.
+The server reads `.env` in the checkout, so AI features work in the app when they work in `mymind serve`.
 
 ### How it behaves
 
@@ -329,10 +338,8 @@ The server reads `.env` in the checkout, so AI features work in the app when the
 - **Grid stays blank, log says `GStreamer element autoaudiosink not found`:** install `gst-plugins-good` (step 2).
 - **Window says the checkout "has no copy of your library":** run `git pull` in it; clones made before the library
   was committed lack it. Or point `MYMIND_ROOT` at a complete checkout.
-- **`npm ci` fails with "Please add node-addon-api to your dependencies":** a system libvips is installed; run
-  `SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci` (the app sets this itself).
-- **Window says it "could not run" node or that `server.mjs` exited:** set `MYMIND_NODE` to the full path of `node`,
-  or run `node server.mjs` in the checkout to see the server's error.
+- **Window says it "could not run" the server, or that the server exited:** build it (Install, step 2) or set
+  `MYMIND_SERVER` to its path, and run `rust/target/release/mymind serve` in the checkout to see the server's error.
 - **Testing drops without a file manager** (e.g. on Xvfb): `cargo run --release --example drag_source -- <file>`
   opens a small window whose button drags that file.
 
