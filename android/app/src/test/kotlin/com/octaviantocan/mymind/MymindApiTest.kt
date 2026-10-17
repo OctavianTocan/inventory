@@ -14,6 +14,8 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import java.time.Duration
+import java.util.concurrent.TimeUnit
 
 class MymindApiTest {
     private val server = MockWebServer()
@@ -197,5 +199,16 @@ class MymindApiTest {
             ApiResult.Failed(ApiFailure.Network),
             api.uploadChunk(authorization, null, "a.png", "image/png", 10, 0, 10, "abc".byteInputStream()),
         )
+    }
+
+    @Test
+    fun aPieceWaitsLongerForItsAnswerThanOtherCalls() = runBlocking {
+        val impatient = MymindApi(OkHttpClient.Builder().readTimeout(Duration.ofSeconds(1)).build(), server.url("/").toString())
+        server.enqueue(MockResponse().setBody("""{"id":"u1","done":true}""").setHeadersDelay(2, TimeUnit.SECONDS))
+        server.enqueue(MockResponse().setBody("""{"id":"c1"}""").setHeadersDelay(2, TimeUnit.SECONDS))
+        val authorization = UploadAuthorization("/uploads/u1", "up-1")
+        val piece = impatient.uploadChunk(authorization, null, "a.png", "image/png", 3, 0, 3, "abc".byteInputStream())
+        assertEquals("u1", (piece as ApiResult.Ok).value.id)
+        assertEquals(ApiResult.Failed(ApiFailure.Network), impatient.createMedia("u1", null))
     }
 }

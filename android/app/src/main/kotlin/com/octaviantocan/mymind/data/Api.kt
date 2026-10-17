@@ -22,6 +22,7 @@ import okhttp3.Response
 import okio.BufferedSink
 import java.io.IOException
 import java.io.InputStream
+import java.time.Duration
 
 /**
  * Adds the bearer token and signs the session out when the server rejects a token-bearing request with 401. An upload
@@ -68,6 +69,9 @@ inline fun <T, R> ApiResult<T>.map(transform: (T) -> R): ApiResult<R> = when (th
 
 /** Client for the `/app/v1` server contract. */
 class MymindApi(private val client: OkHttpClient, private val server: String) {
+    // On a slow uplink the socket buffers still hold many seconds of a piece when the last write returns, and the
+    // server answers only after the last byte, so the default 10 s wait for the answer drops slow uploads.
+    private val uploadClient = client.newBuilder().readTimeout(UPLOAD_ANSWER_TIMEOUT).build()
 
     suspend fun nonce(): ApiResult<NonceAnswer> =
         send(post("/app/v1/auth/nonce", null), NonceAnswer.serializer())
@@ -184,7 +188,7 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
             .apply { if (uploadId != null) header("x-upload-id", uploadId) }
             .put(StreamBody(mime.toMediaTypeOrNull() ?: OCTET_STREAM, source, length))
             .build()
-        return send(request, UploadChunkAnswer.serializer())
+        return send(request, UploadChunkAnswer.serializer(), uploadClient)
     }
 
     /**
@@ -396,13 +400,13 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
         .post((json ?: "").toRequestBody(JSON_TYPE))
         .build()
 
-    private suspend fun <T> send(request: Request, serializer: KSerializer<T>): ApiResult<T> =
+    private suspend fun <T> send(request: Request, serializer: KSerializer<T>, http: OkHttpClient = client): ApiResult<T> =
         withContext(Dispatchers.IO) {
-            execute(request) { body -> ApiResult.Ok(AppJson.decodeFromString(serializer, body)) }
+            execute(request, http) { body -> ApiResult.Ok(AppJson.decodeFromString(serializer, body)) }
         }
 
-    private fun <T> execute(request: Request, onOk: (String) -> ApiResult<T>): ApiResult<T> = try {
-        client.newCall(request).execute().use { response ->
+    private fun <T> execute(request: Request, http: OkHttpClient = client, onOk: (String) -> ApiResult<T>): ApiResult<T> = try {
+        http.newCall(request).execute().use { response ->
             val body = response.body.string()
             if (response.isSuccessful) onOk(body) else ApiResult.Failed(failureOf(response.code, body))
         }
@@ -415,6 +419,7 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
     private companion object {
         val JSON_TYPE = "application/json".toMediaType()
         val OCTET_STREAM = "application/octet-stream".toMediaType()
+        val UPLOAD_ANSWER_TIMEOUT: Duration = Duration.ofMinutes(5)
     }
 }
 
