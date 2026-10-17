@@ -32,6 +32,8 @@ android/jadx/
 android/.gradle/
 android/build/
 android/app/build/
+android/app/generated/
+android/app/screenshots/
 android/.kotlin/
 android/local.properties
 android/.idea/

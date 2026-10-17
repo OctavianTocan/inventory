@@ -7,6 +7,34 @@ on the emulator against a local server it signs in with a password, lists the li
 it in the server's order, keeps the session across restarts and signs out (the token is deleted on the server).
 Screens are plain placeholders until the reference screenshots exist.
 
+Status (2026-10-17): `docs/android-screens.md` lists every screen of the real app found in the decompiled code, with
+sizes, colours and sources, what is still unknown, and the ordered list of navigation-only screenshots to take on
+the phone. It also lists where this plan differs from the code (tab order, native card header, settings drawer).
+
+Status (2026-10-17, later): the screens whose layout the code settles are built in `android/app`: splash, sign-in
+(Google and the test user's password form), the card view's native header, the settings drawer (a Material 3 modal
+navigation drawer, not a bottom sheet), the web error screen, the offline screen and the API error dialog. Each has
+light and dark screenshot tests (`./gradlew :app:testDebugUnitTest -Proborazzi.test.record=true` writes them to
+`android/app/screenshots`, Git-ignored). What they leave out and why is in `docs/android-screens.md`: each screen's
+"Ours today" line and the last list under "Open questions".
+
+Status (2026-10-17, evening): the tests render at the phone's configuration (450 dpi, font scale 1.08, the capture's
+status and navigation bar heights) and are compared with the phone capture under the tolerance in "Screenshot
+match". The tab bar, spinner, card header, card menu and settings text pass; the library screens (Everything with
+search, Spaces with an opened space, Serendipity) are built natively from `/app/v1` and checked by geometry.
+Results, remaining differences, missing API fields and the real app's bugs are in `docs/android-screens.md`. An
+emulator smoke run against a local `mymind serve` with a scratch library and a scratch password user signed in and
+showed Everything, Spaces, an opened space, Serendipity, a card, its menu and search results from `/app/v1`.
+
+Status (2026-10-17, night): the two near misses pass (the Spaces + button and the settings "YOUR ACCOUNT" label), the
+sign-in form sits on the keyboard, and the app reads what the web routes already carry: the theme and plan features
+from the `/everything` page config, search suggestions, tags, the space membership routes and the original files
+under `/media/`. S12 (Add tags, Select a space) is built and writes through `POST /objects/{id}/tags`,
+`DELETE /annotations/{id}` and `PUT`/`DELETE /spaces/{space}/objects/{id}`; the Spaces + creates a space, the space
+menu deletes one, and Same Vibe, Download and Copy work. Routes, the inert controls and the fields no route carries
+are listed in `docs/android-screens.md` (S11, S12 and "Library screens: API gaps"). An emulator smoke run against a
+scratch library exercised each of these.
+
 ## Decisions (the user, 2026-10-16)
 
 - **A working app that matches the real app 1:1.** Both at once: it has to work, and every screen has to look
@@ -87,6 +115,14 @@ screen can look identical to a person and still differ in edge pixels. Per the l
 layout, colours and sizes are identical and only text and edge anti-aliasing differ. Pick the compare tolerance that
 encodes this (a channel threshold and a ratio of differing pixels, or a check that differences lie only along glyph
 and shape edges), prove it on a known-good pair, and record it here.
+
+**Tolerance (2026-10-17):** per region, a pixel differs when any channel is off by more than 24, and the region
+matches when at most 1% of its pixels differ. Our screenshot is converted from sRGB to Display P3 first, because the
+phone capture is P3 encoded (`docs/android-screens.md`, "Matching the phone capture"). Proof, kept in
+`evidence/android-compare/results.jsonl`: the known-good pair (the tab bar of two capture shots of the same state)
+gives 0 differing pixels; our tab bar against the capture gives 0.04% to 0.08%; the same tab bar moved by 1 px fails
+at 1.52%, by 1 dp at 3.13%. Content made of the user's own cards is compared by geometry (ink boxes, line boxes,
+baselines) instead, because our sample cards cannot show the same text and pictures.
 
 ## What the app is
 

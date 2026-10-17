@@ -1,0 +1,509 @@
+package com.octaviantocan.mymind.ui.library
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.octaviantocan.mymind.data.ApiFailure
+import com.octaviantocan.mymind.data.ApiResult
+import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.data.CardPage
+import com.octaviantocan.mymind.data.Library
+import com.octaviantocan.mymind.data.Space
+import com.octaviantocan.mymind.data.Suggestion
+import com.octaviantocan.mymind.data.Tag
+import com.octaviantocan.mymind.data.map
+import com.octaviantocan.mymind.ui.describe
+import com.octaviantocan.mymind.ui.menu.CardActions
+import com.octaviantocan.mymind.ui.menu.CardMenuItem
+import com.octaviantocan.mymind.ui.menu.CardMenuOutcome
+import com.octaviantocan.mymind.ui.menu.CardSubmenu
+import com.octaviantocan.mymind.ui.menu.FileSaver
+import com.octaviantocan.mymind.ui.theme.PageScheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlin.random.Random
+
+/**
+ * What the Spaces tab shows.
+ *
+ * @property spaces Spaces in the user's order.
+ * @property covers First card of each space by space id, once read.
+ * @property loading True while the list is being fetched.
+ * @property error Text for the last failed fetch, or null.
+ * @property loaded True once the list was read, even when it is empty.
+ */
+data class SpacesState(
+    val spaces: List<Space> = emptyList(),
+    val covers: Map<String, Card> = emptyMap(),
+    val loading: Boolean = false,
+    val error: String? = null,
+    val loaded: Boolean = false,
+)
+
+/**
+ * Tags the Add tags page offers.
+ *
+ * @property all Every tag of the library.
+ * @property recent Tags added last.
+ */
+data class TagChoices(val all: List<String> = emptyList(), val recent: List<String> = emptyList())
+
+/**
+ * The library behind the three tabs, search and the card menu.
+ *
+ * @param library Reads and writes of the account's library.
+ * @param saver Where Download puts a card's file.
+ * @param random Source of the Serendipity deck's order.
+ */
+class LibraryViewModel(
+    private val library: Library,
+    saver: FileSaver = FileSaver { _, _, _ -> ApiResult.Failed(ApiFailure.Server(0)) },
+    random: Random = Random.Default,
+) : ViewModel() {
+    private val mutableScheme = MutableStateFlow(PageScheme.System)
+    private val mutableFeatures = MutableStateFlow(emptySet<String>())
+    private val mutableSpaces = MutableStateFlow(SpacesState())
+    private val mutableTagChoices = MutableStateFlow(TagChoices())
+    private val spaceFeeds = mutableMapOf<String, CardFeed>()
+    private val actions = CardActions(library, saver)
+
+    /** The Everything tab's cards, newest first. */
+    val everything = CardFeed(viewModelScope) { library.cards(it) }
+
+    /** Appearance of the library pages, from the account's setting. */
+    val scheme: StateFlow<PageScheme> = mutableScheme
+
+    /** Features the account's plan unlocks, from the web page config; empty until read. */
+    val features: StateFlow<Set<String>> = mutableFeatures
+
+    /** The Spaces tab. */
+    val spaces: StateFlow<SpacesState> = mutableSpaces
+
+    /** Tags the Add tags page offers; read by [loadTagChoices]. */
+    val tagChoices: StateFlow<TagChoices> = mutableTagChoices
+
+    /** Search text, filter, suggestions and results. */
+    val search = SearchModel(viewModelScope, library)
+
+    /** The Serendipity deck. */
+    val serendipity = SerendipityModel(viewModelScope, library, random)
+
+    init {
+        everything.loadMore()
+        viewModelScope.launch {
+            when (val config = library.pageConfig()) {
+                is ApiResult.Ok -> {
+                    mutableScheme.value = PageScheme.of(config.value.colorScheme)
+                    mutableFeatures.value = config.value.features
+                }
+                is ApiResult.Failed -> (library.me() as? ApiResult.Ok)?.let { mutableScheme.value = PageScheme.of(it.value.colorScheme) }
+            }
+        }
+    }
+
+    /** Reads the spaces and the first card of each; does nothing while a read runs. */
+    fun loadSpaces() {
+        if (mutableSpaces.value.loading) return
+        mutableSpaces.update { it.copy(loading = true, error = null) }
+        viewModelScope.launch {
+            when (val answer = library.spaces()) {
+                is ApiResult.Ok -> {
+                    mutableSpaces.update { it.copy(spaces = answer.value.spaces, loading = false, loaded = true) }
+                    answer.value.spaces.forEach { space -> launch { readCover(space.id) } }
+                }
+                is ApiResult.Failed -> mutableSpaces.update { it.copy(loading = false, error = describe(answer.failure)) }
+            }
+        }
+    }
+
+    /**
+     * @param spaceId Space to list.
+     * @return The space's cards, read on first use and kept while this view model lives.
+     */
+    fun spaceFeed(spaceId: String): CardFeed = spaceFeeds.getOrPut(spaceId) {
+        CardFeed(viewModelScope) { library.spaceCards(spaceId, it) }.also { it.loadMore() }
+    }
+
+    /**
+     * Carries out a card menu row and updates every list holding the card.
+     *
+     * @param item Row the user tapped.
+     * @param card Card the menu is for.
+     * @param spaceId Space the card was opened from, or null.
+     * @return What happened, for the caller to finish (clipboard, browser, closing the card).
+     */
+    suspend fun perform(item: CardMenuItem, card: Card, spaceId: String?): CardMenuOutcome {
+        val outcome = actions.perform(item, card, spaceId)
+        when (outcome) {
+            is CardMenuOutcome.Deleted -> feeds().forEach { it.remove(outcome.cardId) }
+            is CardMenuOutcome.RemovedFromSpace -> {
+                spaceFeeds[outcome.spaceId]?.remove(outcome.cardId)
+                replaceEverywhere(card.copy(spaces = card.spaces.orEmpty() - outcome.spaceId))
+                refreshSpace(outcome.spaceId)
+            }
+            is CardMenuOutcome.PinChanged -> replaceEverywhere(outcome.card)
+            is CardMenuOutcome.ShowSimilar -> search.similarTo(outcome.card)
+            is CardMenuOutcome.OpenSubmenu -> when (outcome.submenu) {
+                CardSubmenu.Tags -> loadTagChoices()
+                CardSubmenu.Spaces -> if (!mutableSpaces.value.loaded) loadSpaces()
+            }
+            else -> Unit
+        }
+        return outcome
+    }
+
+    /** Reads every tag and the recent ones for the Add tags page. */
+    fun loadTagChoices() {
+        viewModelScope.launch {
+            val all = (library.tags() as? ApiResult.Ok)?.value
+            val recent = (library.recentTags() as? ApiResult.Ok)?.value
+            mutableTagChoices.update { TagChoices(all ?: it.all, recent ?: it.recent) }
+        }
+    }
+
+    /**
+     * Adds tags to a card, one request each, and updates every list holding it.
+     *
+     * @param card Card to tag.
+     * @param names Tags to add.
+     * @return The card with its tags as the server answered, or the first failure; tags added before it stay.
+     */
+    suspend fun addTags(card: Card, names: List<String>): ApiResult<Card> {
+        var tags = card.tags.orEmpty()
+        var failure: ApiResult.Failed? = null
+        for (name in names) {
+            when (val answer = library.addTag(card.id, name)) {
+                is ApiResult.Ok -> if (tags.none { it.id != null && it.id == answer.value.id }) tags = tags + answer.value
+                is ApiResult.Failed -> {
+                    failure = answer
+                    break
+                }
+            }
+        }
+        val updated = card.copy(tags = tags)
+        if (tags != card.tags.orEmpty()) replaceEverywhere(updated)
+        return failure ?: ApiResult.Ok(updated)
+    }
+
+    /**
+     * Takes a tag off a card and updates every list holding it.
+     *
+     * @param card Card the tag is on.
+     * @param tag Tag to take off.
+     * @return The card without the tag, or the failure.
+     */
+    suspend fun removeTag(card: Card, tag: Tag): ApiResult<Card> {
+        val id = tag.id ?: return ApiResult.Failed(ApiFailure.Server(0))
+        return library.removeTag(id).map {
+            card.copy(tags = card.tags.orEmpty().filterNot { it.id == id }).also(::replaceEverywhere)
+        }
+    }
+
+    /**
+     * Puts a card into a space, or takes it out when it is in already.
+     *
+     * @param card Card to move.
+     * @param space Space to change.
+     * @return The card with its new spaces, or the failure.
+     */
+    suspend fun toggleSpace(card: Card, space: Space): ApiResult<Card> {
+        val member = space.id in card.spaces.orEmpty()
+        val answer = if (member) library.removeFromSpace(space.id, card.id) else library.addToSpace(space.id, card.id)
+        return answer.map {
+            val updated = card.copy(spaces = if (member) card.spaces.orEmpty() - space.id else card.spaces.orEmpty() + space.id)
+            replaceEverywhere(updated)
+            if (member) spaceFeeds[space.id]?.remove(card.id) else spaceFeeds.remove(space.id)
+            refreshSpace(space.id)
+            updated
+        }
+    }
+
+    /**
+     * Creates a space and reads the list again.
+     *
+     * @param name Space name.
+     * @param color Space colour as a CSS hex colour, such as `#f96` or `#75ffc0`.
+     * @return The new space's id, or the failure.
+     */
+    suspend fun createSpace(name: String, color: String): ApiResult<String> =
+        library.createSpace(name, color).also { if (it is ApiResult.Ok) reloadSpaces() }
+
+    /**
+     * Deletes a space; its cards stay in the library.
+     *
+     * @param space Space to delete.
+     * @return Success, or the failure.
+     */
+    suspend fun deleteSpace(space: Space): ApiResult<Unit> = library.deleteSpace(space.id).also { answer ->
+        if (answer is ApiResult.Ok) {
+            spaceFeeds.remove(space.id)
+            mutableSpaces.update { state -> state.copy(spaces = state.spaces.filterNot { it.id == space.id }, covers = state.covers - space.id) }
+            val all = listOf(everything, search.results.value) + spaceFeeds.values
+            all.forEach { feed ->
+                feed.state.value.cards.filter { space.id in it.spaces.orEmpty() }.forEach { feed.replace(it.copy(spaces = it.spaces.orEmpty() - space.id)) }
+            }
+        }
+    }
+
+    /** Moves the Serendipity card on show to the trash, takes it out of every list and moves the deck on. */
+    fun forgetSerendipityCard() {
+        viewModelScope.launch { serendipity.forget()?.let { id -> feeds().forEach { it.remove(id) } } }
+    }
+
+    private fun reloadSpaces() {
+        mutableSpaces.update { it.copy(loading = false) }
+        loadSpaces()
+    }
+
+    private suspend fun readCover(spaceId: String) {
+        val first = (library.spaceCards(spaceId, null) as? ApiResult.Ok)?.value?.cards?.firstOrNull()
+        mutableSpaces.update { if (first != null) it.copy(covers = it.covers + (spaceId to first)) else it.copy(covers = it.covers - spaceId) }
+    }
+
+    private fun refreshSpace(spaceId: String) {
+        viewModelScope.launch {
+            readCover(spaceId)
+            (library.spaces() as? ApiResult.Ok)?.value?.spaces?.let { fresh -> mutableSpaces.update { it.copy(spaces = fresh) } }
+        }
+    }
+
+    private fun replaceEverywhere(card: Card) = feeds().forEach { it.replace(card) }
+
+    private fun feeds() = listOf(everything, search.results.value) + spaceFeeds.values
+}
+
+/**
+ * A filter the search is limited to, shown as a chip.
+ *
+ * @property label Chip text.
+ * @property queryText The filter in mymind's query syntax, such as `type:article`, `tag:"road trip"` or
+ *   `similar:<card id>`.
+ */
+data class SearchFilter(val label: String, val queryText: String) {
+    /** True for Same Vibe, which the server answers on its own and never together with text. */
+    val similar: Boolean get() = queryText.startsWith("similar:")
+}
+
+/** Label of the Same Vibe filter, as on the web. */
+const val SAME_VIBE_LABEL = "Same Vibe"
+
+/**
+ * Search text, an optional filter, the suggestion chips and the matching cards.
+ *
+ * @param scope Scope the searches run in.
+ * @param library Source of the results and suggestions.
+ */
+class SearchModel(private val scope: CoroutineScope, private val library: Library) {
+    private val mutableQuery = MutableStateFlow("")
+    private val mutableFilter = MutableStateFlow<SearchFilter?>(null)
+    private val mutableTypes = MutableStateFlow<List<Suggestion>>(emptyList())
+    private val mutableSuggestions = MutableStateFlow<List<Suggestion>>(emptyList())
+    private val mutableResults = MutableStateFlow(CardFeed(scope) { ApiResult.Ok(CardPage()) })
+    private var pending: Job? = null
+    private var suggesting: Job? = null
+
+    /** Text in the search field. */
+    val query: StateFlow<String> = mutableQuery
+
+    /** Filter the search is limited to, or null. */
+    val filter: StateFlow<SearchFilter?> = mutableFilter
+
+    /** The library's card types, most used first, once [loadTypes] read them. */
+    val types: StateFlow<List<Suggestion>> = mutableTypes
+
+    /** Tags that match the typed text; empty while the field is empty. */
+    val suggestions: StateFlow<List<Suggestion>> = mutableSuggestions
+
+    /** Cards matching the current text and filter; empty while both are blank. */
+    val results: StateFlow<CardFeed> = mutableResults
+
+    /** True when there is something to search for. */
+    val active: Boolean get() = mutableQuery.value.isNotBlank() || mutableFilter.value != null
+
+    /** Reads the type suggestions once; later calls keep the first answer. */
+    fun loadTypes() {
+        if (mutableTypes.value.isNotEmpty()) return
+        scope.launch {
+            (library.searchSuggestions("") as? ApiResult.Ok)?.value?.filter { it.type == "type" }?.let { mutableTypes.value = it }
+        }
+    }
+
+    /**
+     * Changes the search text, suggests tags after a short pause and searches again after a longer one.
+     *
+     * @param text New text of the field.
+     */
+    fun setQuery(text: String) {
+        mutableQuery.value = text
+        suggest(text)
+        restart(DEBOUNCE_MS)
+    }
+
+    /**
+     * Limits the search to a filter and empties the field, as the web does when a chip is tapped.
+     *
+     * @param filter Filter to apply, or null to lift it.
+     */
+    fun setFilter(filter: SearchFilter?) {
+        mutableFilter.value = filter
+        mutableQuery.value = ""
+        suggest("")
+        restart(0)
+    }
+
+    /**
+     * Applies a tapped suggestion: a type limits the search to that type, a tag to cards with that tag.
+     *
+     * @param suggestion The suggestion.
+     */
+    fun choose(suggestion: Suggestion) {
+        val filter = if (suggestion.type == "type") {
+            SearchFilter(suggestion.text, suggestion.queryText)
+        } else {
+            val name = suggestion.queryText.removePrefix("#").removePrefix("tag:").trim('"')
+            SearchFilter(name.lowercase(), "tag:${quoted(name)}")
+        }
+        setFilter(if (filter == mutableFilter.value) null else filter)
+    }
+
+    /**
+     * Shows the cards that look like [card], under the Same Vibe filter.
+     *
+     * @param card Card whose look is searched for.
+     */
+    fun similarTo(card: Card) = setFilter(SearchFilter(SAME_VIBE_LABEL, "similar:${card.id}"))
+
+    /** Empties the field and the filter. */
+    fun clear() {
+        mutableQuery.value = ""
+        mutableFilter.value = null
+        suggest("")
+        restart(0)
+    }
+
+    private fun suggest(text: String) {
+        suggesting?.cancel()
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) {
+            mutableSuggestions.value = emptyList()
+            return
+        }
+        suggesting = scope.launch {
+            delay(SUGGEST_DELAY_MS)
+            val found = if (trimmed.startsWith("#")) {
+                (library.tagSuggestions(trimmed.removePrefix("#")) as? ApiResult.Ok)?.value?.map { Suggestion("tag", it, "#$it") }
+            } else {
+                (library.searchSuggestions(trimmed) as? ApiResult.Ok)?.value
+            }
+            mutableSuggestions.value = found.orEmpty().distinctBy { it.queryText }.take(SUGGESTION_LIMIT)
+        }
+    }
+
+    private fun restart(wait: Long) {
+        pending?.cancel()
+        val filter = mutableFilter.value
+        val text = if (filter?.similar == true) {
+            filter.queryText
+        } else {
+            listOfNotNull(filter?.queryText, mutableQuery.value.trim().ifEmpty { null }).joinToString(" ")
+        }
+        pending = scope.launch {
+            if (wait > 0) delay(wait)
+            val feed = CardFeed(scope) { cursor ->
+                if (text.isEmpty()) ApiResult.Ok(CardPage()) else library.search(text, cursor)
+            }
+            mutableResults.value = feed
+            feed.loadMore()
+        }
+    }
+
+    private companion object {
+        const val DEBOUNCE_MS = 300L
+        const val SUGGEST_DELAY_MS = 120L
+        const val SUGGESTION_LIMIT = 20
+    }
+}
+
+/** A tag name as a query value, in quotes when it holds a space or a quote. */
+private fun quoted(name: String): String =
+    if (name.any { it.isWhitespace() || it == '"' }) "\"" + name.replace("\"", "") + "\"" else name
+
+/**
+ * State of the Serendipity deck.
+ *
+ * @property deck Cards of the current round.
+ * @property index Position of the card on show; equal to the deck size once the round is over.
+ * @property loading True while the deck is being drawn.
+ * @property error Text for the last failure, or null.
+ */
+data class SerendipityState(
+    val deck: List<Card> = emptyList(),
+    val index: Int = 0,
+    val loading: Boolean = false,
+    val error: String? = null,
+) {
+    /** The card on show, or null before the deck is drawn and after the round. */
+    val current: Card? get() = deck.getOrNull(index)
+
+    /** True once every card of a drawn deck was kept or forgotten. */
+    val finished: Boolean get() = deck.isNotEmpty() && index >= deck.size
+}
+
+/**
+ * The Serendipity round: a random deck of cards to keep or forget one by one.
+ *
+ * @param scope Scope the reads and writes run in.
+ * @param library Source of the cards and target of the writes.
+ * @param random Order of the deck.
+ */
+class SerendipityModel(private val scope: CoroutineScope, private val library: Library, private val random: Random) {
+    private val mutableState = MutableStateFlow(SerendipityState())
+
+    /** The deck and position. */
+    val state: StateFlow<SerendipityState> = mutableState
+
+    /** Draws a new deck of [DECK_SIZE] cards from the first page of the library. */
+    fun deal() {
+        if (mutableState.value.loading) return
+        mutableState.value = SerendipityState(loading = true)
+        scope.launch {
+            mutableState.value = when (val answer = library.cards(null)) {
+                is ApiResult.Ok -> SerendipityState(deck = answer.value.cards.shuffled(random).take(DECK_SIZE))
+                is ApiResult.Failed -> SerendipityState(error = describe(answer.failure))
+            }
+        }
+    }
+
+    /** Keeps the card on show and moves on; nothing is sent to the server. */
+    fun keep() = advance()
+
+    /**
+     * Moves the card on show to the trash and moves on.
+     *
+     * @return The forgotten card's id, or null when nothing was on show or the server refused.
+     */
+    suspend fun forget(): String? {
+        val card = mutableState.value.current ?: return null
+        return when (library.trash(card.id)) {
+            is ApiResult.Ok -> card.id.also { advance() }
+            is ApiResult.Failed -> null
+        }
+    }
+
+    private fun advance() {
+        val state = mutableState.value
+        if (state.current == null) return
+        mutableState.value = state.copy(index = state.index + 1)
+        if (mutableState.value.finished) scope.launch { library.completeSerendipity() }
+    }
+
+    /** Size of a Serendipity deck, as on the web. */
+    companion object {
+        /** Cards in one round. */
+        const val DECK_SIZE = 18
+    }
+}
