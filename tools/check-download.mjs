@@ -8,6 +8,7 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openAuthStore } from '../lib/auth-store.mjs';
+import { toolCommand } from './server-command.mjs';
 
 const spare = http.createServer().listen(0, '127.0.0.1');
 await new Promise((ready) => spare.once('listening', ready));
@@ -28,7 +29,8 @@ await writeFile(join(dir, 'mymind-linux-x86_64.tar.gz'), app);
 await writeFile(join(dir, 'manifest.json'), JSON.stringify({ library: 'https://mymind.example.com', files: [
   { name: 'mymind-linux-x86_64.tar.gz', label: 'Linux (x86_64)', bytes: app.length, sha256: 'abc', built: new Date().toISOString() },
 ] }));
-const server = spawn(process.execPath, ['deploy/download-server.mjs'], {
+const command = toolCommand('download-server', []);
+const server = spawn(command.command, command.args, {
   env: { PATH: process.env.PATH, DOWNLOAD_PORT: String(port), DOWNLOAD_DIR: dir, AUTH_DB: join(dir, 'auth.db') },
   stdio: ['ignore', 'pipe', 'inherit'],
 });

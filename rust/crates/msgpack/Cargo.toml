@@ -1,0 +1,12 @@
+[package]
+name = "mm-msgpack"
+description = "The MessagePack codec mymind's front-end ships (@msgpack/msgpack 3.1.1), byte for byte"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+mm-js.workspace = true
+
+[dev-dependencies]
+sha2.workspace = true

@@ -168,14 +168,19 @@ node tools/auth-user.mjs remove tester                     # also signs that use
 
 ### Hosting
 
-The library is hosted on **mini-002** (`mini-002-netcup` on Tailscale, a Debian server) from the checkout
-`~/apps/mymind-reconstruction`, which serves `https://mymind.octaviantocan.com` through the Cloudflare tunnel
-`mymind`, with the library's own sign-in as the only gate (see Setting up a host). Reach the machine itself over Tailscale
-(`ssh mini-002-netcup`). That checkout holds the only writable `data/mymind.db` and `data/auth.db`, plus `.env`, the
-capture videos and `downloads/`, none of which are in Git. Every other machine, the development one included, uses
-the hosted URL.
+Since 2026-10-17 `https://mymind.octaviantocan.com` is served by the Cloudflare Worker in `worker/`: each library
+lives in its own Durable Object with its media in R2, behind the library's own sign-in (`docs/cloudflare-plan.md`
+has the setup, the import and what was checked). Deploy a change with `npm --prefix worker run deploy`.
 
-To deploy a change, push to that checkout (`receive.denyCurrentBranch=updateInstead` updates its files on push) and
+Until 2026-10-24, **mini-002** (`mini-002-netcup` on Tailscale, a Debian server) keeps running the previous host from
+the checkout `~/apps/mymind-reconstruction`, behind the Cloudflare tunnel `mymind`, as the fallback: the Worker's
+route on `mymind.octaviantocan.com/*` takes every request first, and deleting the route sends traffic back to the
+tunnel. Reach the machine over Tailscale (`ssh mini-002-netcup`). That checkout holds its `data/mymind.db` and
+`data/auth.db`, plus `.env`, the capture videos and `downloads/`, none of which are in Git; the owner library on the
+Worker was imported from its backup at 00:58 on 2026-10-17, and nothing written on mini-002 since then reaches the
+Worker.
+
+To deploy a change to mini-002, push to that checkout (`receive.denyCurrentBranch=updateInstead` updates its files on push) and
 restart the service:
 
 ```bash
@@ -343,7 +348,9 @@ npm run mirror                                             # static JS/CSS/fonts
 node tools/capture-signin.mjs                              # the signed-out sign-in page, from a cookie-less context
 ```
 
-Every pass only sends GETs. `--details-only` reads the card list from `data/mymind.db` (`--db` picks another).
+Every pass only sends GETs. A full pass replaces the card list and shell, and adds to the recorded detail views,
+readers and media instead of replacing them. `--details-only` reads the card list from `data/mymind.db` (`--db`
+picks another).
 
 ## Verify against live, 1:1
 
@@ -368,6 +375,12 @@ Every verification server must use `STORE_DB=data/verify.db`, `STORE_READONLY=1`
 intercepted and sent to the replica as well, and `OFFLINE=1`, because `npm run coverage` only accepts runs that
 prove the replica renders without mymind's servers. `tools/verify-all.mjs` sets all three when starting a server. If a server is already running, restart it yourself in
 that mode before verifying; the verifier does not change the environment of an existing process.
+
+The Rust backend (`rust/`) builds with `rust/fetch-libvips.sh` once (it downloads the libvips build sharp ships), then
+`cargo build --release` in `rust/`. It is verified the same way: set `MYMIND_SERVER=rust/target/release/mymind` and
+every tool that starts a server (`drive`, `verify`, the HTTP checks, `check-download`) starts the Rust binary instead
+of `node server.mjs`, and `npm run coverage` judges the runs against the Rust sources. An already running server is
+taken as the one `MYMIND_SERVER` names.
 
 How a run makes live and replica comparable pixel for pixel (`tools/drive.mjs`, `tools/side.mjs`,
 `tools/page-determinism.js`, `tools/verifier-browser.mjs`):

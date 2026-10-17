@@ -1,0 +1,38 @@
+[package]
+name = "mymind"
+description = "The native server: the replay replica, hosted libraries and the operational subcommands"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "mymind"
+path = "src/main.rs"
+
+[dependencies]
+mm-js.workspace = true
+mm-core.workspace = true
+mm-sqlite.workspace = true
+mm-msgpack.workspace = true
+async-trait.workspace = true
+futures-util.workspace = true
+tokio.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+http-body-util.workspace = true
+http.workspace = true
+bytes.workspace = true
+url.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+tokio-rustls.workspace = true
+webpki-roots.workspace = true
+flate2.workspace = true
+brotli-decompressor.workspace = true
+sha2.workspace = true
+regex.workspace = true
+indexmap.workspace = true
+libc = "0.2"
+
+[dev-dependencies]
+memchr = "2.8"

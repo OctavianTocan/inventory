@@ -9,6 +9,7 @@ import { join, resolve } from 'node:path';
 import { DatabaseSync, backup } from 'node:sqlite';
 import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { serverCommand, serverKind } from './server-command.mjs';
 
 export const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 /** Database seeded from the recordings that verification servers and checks read; never the working library. */
@@ -107,9 +108,11 @@ export async function testServer({ readonly = false, source = process.env.TEST_S
     const db = new DatabaseSync(source, { readOnly: true });
     try { await backup(db, dbPath); } finally { db.close(); }
     const serverDb = noStore ? join(dir, 'missing.db') : dbPath;
-    if (process.argv.includes('--in-process')) memory = await memoryTransport(serverDb, readonly);
+    // The in-process transport imports server.mjs, so it exists only for the Node backend.
+    if (process.argv.includes('--in-process') && serverKind() === 'node') memory = await memoryTransport(serverDb, readonly);
     if (!memory) {
-      child = spawn(process.execPath, ['server.mjs'], { cwd: ROOT,
+      const { command, args } = serverCommand();
+      child = spawn(command, args, { cwd: ROOT,
         env: { ...process.env, PORT: '0', OFFLINE: '1', STORE_DB: serverDb, STORE_READONLY: readonly ? '1' : '0', STORE_LOAD_ENV: '0', ...env },
         stdio: ['ignore', 'pipe', 'pipe'] });
       child.stderr.on('data', chunk => { startupError += chunk; });

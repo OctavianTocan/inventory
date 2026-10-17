@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
 import { chromium, devices } from 'playwright-core';
 import { normalizationDigest, replicaDigest } from './digests.mjs';
+import { serverCommand, serverKind } from './server-command.mjs';
 import { reaRoot } from './rea-root.mjs';
 import { openStore } from './replay-store.mjs';
 import { Side } from './side.mjs';
@@ -69,7 +70,8 @@ const sides = opts.sides.split(',');
 async function ensureReplica() {
   const up = await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.ok, () => false);
   if (up) return null;
-  const child = spawn('node', ['server.mjs'], { cwd: ROOT, stdio: ['ignore', 'inherit', 'inherit'] });
+  const { command, args } = serverCommand();
+  const child = spawn(command, args, { cwd: ROOT, stdio: ['ignore', 'inherit', 'inherit'] });
   for (let i = 0; i < 50; i++) {
     await new Promise((r) => setTimeout(r, 200));
     if (await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.ok, () => false)) return child;
@@ -307,7 +309,7 @@ try {
     }
     if (name === 'replica') {
       report.replica = await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.json());
-      Object.assign(report.replica, { digest: await replicaDigest(), at: new Date().toISOString() });
+      Object.assign(report.replica, { digest: await replicaDigest(), server: serverKind(), at: new Date().toISOString() });
     }
     report.sides[name] = { errors, writesAnsweredLocally: side.writes, notes: side.log, mediaRecorded: media };
     console.log(`${name}: ${errors.length} step errors, ${side.writes.length} writes kept off the account, ${side.log.length} notes`);

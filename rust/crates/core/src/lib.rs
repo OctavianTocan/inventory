@@ -1,0 +1,46 @@
+//! The library backend: everything `lib/` did, behind interfaces that the native server (`mymind`) and the Cloudflare
+//! Worker (`mm-worker`) each implement.
+
+pub mod ai;
+pub mod ai_tags;
+pub mod api;
+pub mod app_api;
+pub mod auth;
+pub mod auth_store;
+pub mod capture_entities;
+pub mod capture_html;
+pub mod capture_http;
+pub mod capture_link;
+pub mod device;
+pub mod download_page;
+pub mod enrichment;
+mod error;
+pub mod form_data;
+pub mod host;
+pub mod hosted;
+pub mod hosted_media;
+pub mod http;
+pub mod hub;
+pub mod library_rows;
+pub mod media_files;
+pub mod media_writes;
+pub mod recorded;
+pub mod render;
+pub mod render_card;
+pub mod runtime;
+pub mod search;
+pub mod search_document;
+pub mod search_index;
+pub mod search_query;
+pub mod search_semantic;
+pub mod site;
+pub mod sql;
+pub mod store;
+pub mod store_enrich;
+pub mod store_query;
+pub mod store_schema;
+pub mod store_write;
+pub mod uploads;
+
+pub use error::{Error, Result};
+pub use mm_js::{Object, Value, arr, obj};

@@ -1,0 +1,5 @@
+*
+!rust/Cargo.toml
+!rust/Cargo.lock
+!rust/crates/
+!rust/fetch-libvips.sh

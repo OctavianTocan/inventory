@@ -1,0 +1,37 @@
+// The hosted libraries on Cloudflare, Rust build (crates/worker, worker-build output), served only at mymind.octaviantocan.com (approved by the user
+// on 2026-10-17); workers.dev and preview URLs stay off. A route rather than a custom domain: the hostname's DNS record
+// belongs to the tunnel, which Cloudflare will not replace, and the route takes every request before it reaches it.
+{
+  "name": "mymind",
+  "main": "build/index.js",
+  "build": { "command": "worker-build --release" },
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "mymind.octaviantocan.com/*", "zone_name": "octaviantocan.com" }],
+  "vars": {
+    "AUTH": "google",
+    "PUBLIC_URL": "https://mymind.octaviantocan.com"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "AUTH_OBJECT", "class_name": "Auth" },
+      { "name": "LIBRARY", "class_name": "Library" },
+      { "name": "MEDIA", "class_name": "Media" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Auth", "Library", "Media"] }],
+  "containers": [
+    {
+      "class_name": "Media",
+      "image": "../../container/Dockerfile",
+      "image_build_context": "../../..",
+      "instance_type": "standard-1",
+      "max_instances": 1
+    }
+  ],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "mymind" }],
+  "limits": { "cpu_ms": 300000 },
+  "observability": { "enabled": true }
+}

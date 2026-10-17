@@ -1,0 +1,72 @@
+[workspace]
+resolver = "3"
+members = ["crates/js", "crates/msgpack", "crates/core", "crates/sqlite", "crates/server", "crates/worker"]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+publish = false
+
+[workspace.dependencies]
+mm-js = { path = "crates/js" }
+mm-msgpack = { path = "crates/msgpack" }
+mm-core = { path = "crates/core" }
+mm-sqlite = { path = "crates/sqlite" }
+mymind = { path = "crates/server" }
+async-trait = "0.1.92"
+futures-core = "0.3.34"
+futures-util = "0.3.34"
+futures-executor = "0.3.34"
+getrandom = "0.4.3"
+url = "2.5.8"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+indexmap = "2.14"
+ryu-js = "1.0"
+icu_collator = "2.3"
+js-sys = "0.3"
+sha2 = "0.10"
+tokio = { version = "1.53.3", features = ["rt", "net", "time", "fs", "io-util", "macros", "sync", "signal", "process"] }
+hyper = { version = "1.12.0", features = ["http1", "server", "client"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+http-body-util = "0.1.5"
+http = "1.5.0"
+bytes = "1.12.1"
+regex = { version = "1.13.1", default-features = false, features = ["std", "unicode"] }
+sha1 = "0.10.6"
+scrypt = { version = "0.11.0", default-features = false }
+rsa = { version = "0.9.8", default-features = false, features = ["std", "sha2"] }
+subtle = "2.6.1"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "http2", "gzip", "brotli", "deflate", "zstd", "stream"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = "1.0.9"
+flate2 = "1.1.10"
+brotli-decompressor = "6.1.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[profile.dev.package.scrypt]
+opt-level = 3
+
+[profile.dev.package.pbkdf2]
+opt-level = 3
+
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.hmac]
+opt-level = 3
+
+[profile.dev.package.num-bigint-dig]
+opt-level = 3
+
+[profile.dev.package.rsa]
+opt-level = 3
+
+[profile.dev.package.memchr]
+opt-level = 3
+
+[profile.dev.package.regex-automata]
+opt-level = 3

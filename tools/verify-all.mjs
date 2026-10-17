@@ -14,6 +14,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { serverCommand, toolCommand } from './server-command.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DRIVE = path.join(ROOT, 'evidence', 'drive');
@@ -49,8 +50,11 @@ const up = () => fetch('http://localhost:4321/__replay/reload', { method: 'POST'
 const run = (args) => new Promise((resolve) => spawn('node', args, { cwd: ROOT, stdio: 'inherit' }).on('exit', resolve));
 let server = null;
 async function startServer() {
-  if (!existsSync(VERIFY_DB) && (await run(['tools/seed-db.mjs', '--db', VERIFY_DB])) !== 0) throw new Error('seed-db failed');
-  server = spawn('node', ['server.mjs'], { cwd: ROOT, env: { ...process.env, OFFLINE: '1', STORE_READONLY: '1', STORE_DB: VERIFY_DB }, stdio: 'ignore' });
+  const seed = toolCommand('seed-db', ['--db', VERIFY_DB]);
+  const seeded = existsSync(VERIFY_DB) || await new Promise((done) => spawn(seed.command, seed.args, { cwd: ROOT, stdio: 'inherit' }).on('exit', (code) => done(code === 0)));
+  if (!seeded) throw new Error('seed-db failed');
+  const { command, args } = serverCommand();
+  server = spawn(command, args, { cwd: ROOT, env: { ...process.env, OFFLINE: '1', STORE_READONLY: '1', STORE_DB: VERIFY_DB }, stdio: 'ignore' });
   while (!(await up())) await new Promise((r) => setTimeout(r, 200));
 }
 const running = await up();

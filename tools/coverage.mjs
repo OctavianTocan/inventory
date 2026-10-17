@@ -11,6 +11,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
 import { normalizationDigest, replicaDigest } from './digests.mjs';
+import { serverKind } from './server-command.mjs';
 import { reaRoot } from './rea-root.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -25,7 +26,8 @@ const { createReconstructionVerifierContract } = await import(pathToFileURL(path
 const sha = (text) => createHash('sha256').update(text).digest('hex');
 const replica = await replicaDigest();
 const normalization = await normalizationDigest();
-const ownerDigest = sha(await readFile(path.join(ROOT, 'server.mjs')));
+const ownerPath = serverKind() === 'rust' ? 'rust/crates/server/src/main.rs' : 'server.mjs';
+const ownerDigest = sha(await readFile(path.join(ROOT, ownerPath)));
 
 const records = new Map();
 const surfaces = [];
@@ -67,7 +69,7 @@ for (const run of runs.filter((r) => existsSync(path.join(DRIVE, r, 'rea-evidenc
     });
     owners.push({
       surface_id: id,
-      ownership: { disposition: 'implemented', owner_path: 'server.mjs', owner_export: null, owner_sha256: ownerDigest, path_state: 'present', package_state: 'distributed', authority_route: report.replica?.offline ? 'none' : 'unknown' },
+      ownership: { disposition: 'implemented', owner_path: ownerPath, owner_export: null, owner_sha256: ownerDigest, path_state: 'present', package_state: 'distributed', authority_route: report.replica?.offline ? 'none' : 'unknown' },
     });
     claims.push({ claim_id: `parity:${id}`, title: `Pixel-identical to live: ${id}`, kind: 'visual-parity', surface_ids: [id], required_dimensions: ['pixels'], required_authority: 'live-observation' });
     const contract = createReconstructionVerifierContract({

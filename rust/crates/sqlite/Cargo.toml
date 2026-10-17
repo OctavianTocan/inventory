@@ -1,0 +1,10 @@
+[package]
+name = "mm-sqlite"
+description = "SQLite files behind mm-core's Sql interface, opened as node:sqlite opened them"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+mm-core.workspace = true
+rusqlite.workspace = true
