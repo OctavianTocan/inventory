@@ -200,6 +200,11 @@ then U10 and U11; then U12 to U15.
   101 from the own origin and 403 from a sibling subdomain or another site (101 for all three before); the session as
   a bearer from an extension origin reads (200) and pings (200), the cookie from that origin is refused (403).
   `wrangler rollback 8126d81e-d811-4e40-ab0d-41f3fa1c8e4a` reverts the Worker.
+- App API additions since 2026-10-17 (Worker version `f3c367b5`, media image `sha256:b410dd23`): `GET
+  /app/v1/top-of-mind` and the `x-upload-token` header for uploads (`docs/app-api.md`). Checked on production as the
+  test user: `tools/check-hosted.mjs --browser` passes; `/app/v1/me` answers `{email, kind}`; `/top-of-mind` lists 4
+  pinned cards; an authorized upload refuses a chunk with the app token alone and with a wrong `x-upload-token` (401
+  both), and nothing was uploaded. `wrangler rollback e83ecfcf-669d-42fd-9099-9289755f6107` reverts the Worker.
 - R11: `docs/rust-benchmarks.md`, production numbers included.
 
 Decisions made while building:
