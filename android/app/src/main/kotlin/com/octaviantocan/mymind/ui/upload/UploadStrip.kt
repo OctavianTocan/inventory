@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -71,6 +72,7 @@ private val STRIP_SHADOW = Shadow(radius = 24.dp, color = Color.Black, offset = 
  * @param onDismiss Called with the id of a failed file whose delete button was tapped.
  * @param modifier Modifier that places the strip.
  * @param hidden True fades the strip out whatever the queue holds, as on the Serendipity tab.
+ * @param bottom Distance from the strip to the bottom of its parent.
  */
 @Composable
 fun UploadQueueStrip(
@@ -79,6 +81,7 @@ fun UploadQueueStrip(
     onDismiss: (Long) -> Unit,
     modifier: Modifier = Modifier,
     hidden: Boolean = false,
+    bottom: Dp = UPLOAD_STRIP_BOTTOM,
 ) {
     AnimatedVisibility(state.items.isNotEmpty() && !hidden, modifier, enter = fadeIn(), exit = fadeOut()) {
         val colors = MymindTheme.colors
@@ -87,7 +90,7 @@ fun UploadQueueStrip(
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = 8.dp, bottom = UPLOAD_STRIP_BOTTOM)
+                .padding(start = 8.dp, end = 8.dp, bottom = bottom)
                 .dropShadow(STRIP_SHAPE, STRIP_SHADOW)
                 .clip(STRIP_SHAPE)
                 .background(colors.raised)

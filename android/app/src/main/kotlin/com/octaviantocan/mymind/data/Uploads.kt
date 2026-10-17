@@ -5,6 +5,8 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import java.io.File
 import java.io.FileNotFoundException
+import java.io.FilterInputStream
+import java.io.IOException
 import java.io.InputStream
 
 /**
@@ -39,6 +41,38 @@ fun uploadFileOf(resolver: ContentResolver, uri: Uri): UploadFile? {
     val mime = resolver.getType(uri) ?: "application/octet-stream"
     return UploadFile(name ?: uri.lastPathSegment ?: "upload", mime, length) {
         resolver.openInputStream(uri) ?: throw FileNotFoundException(uri.toString())
+    }
+}
+
+/**
+ * Copies a shared file into [directory], so it can still be read after the share sheet closes and the sharing app's
+ * permission ends.
+ *
+ * @param resolver Resolver that reads the shared file.
+ * @param uri The shared file.
+ * @param directory Where the copy goes; closing a stream of the copy deletes it.
+ * @return The copy as an upload, or null when the shared file cannot be read.
+ */
+fun copiedUploadOf(resolver: ContentResolver, uri: Uri, directory: File): UploadFile? {
+    val shared = uploadFileOf(resolver, uri) ?: return null
+    directory.mkdirs()
+    val copy = File.createTempFile("share", null, directory)
+    val length = try {
+        shared.open().use { input -> copy.outputStream().use { input.copyTo(it) } }
+    } catch (_: IOException) {
+        copy.delete()
+        return null
+    } catch (_: SecurityException) {
+        copy.delete()
+        return null
+    }
+    return UploadFile(shared.name, shared.mime, length) {
+        object : FilterInputStream(copy.inputStream()) {
+            override fun close() {
+                super.close()
+                copy.delete()
+            }
+        }
     }
 }
 

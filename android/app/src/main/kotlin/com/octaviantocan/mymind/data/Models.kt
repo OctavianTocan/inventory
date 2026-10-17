@@ -251,3 +251,13 @@ data class UploadBlob(val id: String)
  */
 @Serializable
 data class MediaBody(val type: String, val uploadId: String, val spaceId: String? = null)
+
+/**
+ * Body of a card created from a link or text.
+ *
+ * @property content The link or the text.
+ * @property source Where the card came from.
+ * @property spaceId Space the new card joins, or null.
+ */
+@Serializable
+data class ContentBody(val content: String, val source: String, val spaceId: String? = null)

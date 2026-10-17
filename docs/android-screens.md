@@ -55,7 +55,7 @@ bar, card header, settings drawer, card menus, dialogs and error screens.
 | S19 | Offline screen | native | built (`ui/errors`) |
 | S20 | API error dialog | native | built (`ui/errors`) |
 | S21 | Photo source popup | native | built (`ui/upload/AddMediaPopup.kt`), opened by the + buttons, not compared (no capture) |
-| S22 | Share sheet (share target) | native, own activity | none |
+| S22 | Share sheet (share target) | native, own activity | `share/`, `ui/share/ShareSheet.kt` |
 | S23 | Video player | native, own activity | none |
 | S24 | Permission dialog, biometric prompt, quick-note notification | system + native | none |
 | S25 | Note editor and note composer | WebView | none |
@@ -828,7 +828,12 @@ in round 3: the user wanted haptics, and the code settles where the real app has
 
 - **Reached:** from another app's share menu (not from launch).
 - **Kind:** own activity `feature.share.NewShareSheetActivity` (`decoded/AndroidManifest.xml`; layout in
-  `jadx/jg/n.java`, `jg/*`). **Ours today:** none.
+  `jadx/jg/n.java`, `jg/*`). **Ours today:** `share/ShareActivity.kt` (same filters, task and flags as mymind's),
+  `ShareIntent.kt` (parsing, 25 MB and 20 item limits, the error states), `ShareController.kt` (saves on open,
+  applies tags, note and spaces to every card on Save) and `ui/share/ShareSheet.kt` (the sheet and the error cards).
+  Shared files are copied into the app's cache when the sheet opens and saving runs outside the sheet, so leaving
+  the sheet early still saves everything (the tags, note and spaces need Save).
+  Not wired: the email and help actions of the error cards (they only close), and mymind's http and https VIEW filter.
 - **Facts:**
   - Background picture `share_background.png` (1290 x 1934, `drawable-xxxhdpi`). Title Louize 38 sp.
   - Three tabs with icon and label: Tags, Notes, Spaces. Label Nunito 20 sp, line height 28 sp, letter spacing 0.02

@@ -29,6 +29,9 @@ class AppContainer(context: Context) {
     val updatePrefs = UpdatePrefs(context)
     val updateNotifier = UpdateNotifier(context.applicationContext)
     val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // Shares are saved here, not in the sheet, so leaving the sheet does not cancel an upload.
+    val shareScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val updater = Updater(
         client = httpClient,
         downloadsUrl = BuildConfig.DOWNLOADS_URL,

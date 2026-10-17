@@ -3,6 +3,10 @@ package com.octaviantocan.mymind.data
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -196,6 +200,34 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
                 .post(AppJson.encodeToString(MediaBody("Media", uploadId, spaceId)).toRequestBody(JSON_TYPE)).build(),
             IdAnswer.serializer(),
         ).map { it.id }
+
+    /**
+     * Saves a link or a piece of text as a card; a link already in the library is bumped instead of duplicated.
+     *
+     * @param content The link or the text.
+     * @param source Where the card came from.
+     * @param spaceId Space the new card joins, or null.
+     * @return The card's id, whether the card is new (201) or was there already (200).
+     */
+    suspend fun createFromContent(content: String, source: String, spaceId: String?): ApiResult<String> =
+        send(
+            Request.Builder().url(url("objects"))
+                .post(AppJson.encodeToString(ContentBody(content, source, spaceId)).toRequestBody(JSON_TYPE)).build(),
+            IdAnswer.serializer(),
+        ).map { it.id }
+
+    /**
+     * Sets a card's note.
+     *
+     * @param cardId Card id.
+     * @param text Note text; each line becomes a paragraph.
+     * @return Success, or the failure.
+     */
+    suspend fun setNote(cardId: String, text: String): ApiResult<Unit> =
+        send(
+            Request.Builder().url(url("objects/$cardId/note")).put(proseOf(text).toRequestBody(JSON_TYPE)).build(),
+            IdAnswer.serializer(),
+        ).map { }
 
     /**
      * @param query Search text in mymind's query syntax.
@@ -430,3 +462,16 @@ fun failureOf(code: Int, body: String): ApiFailure {
         else -> ApiFailure.Server(code)
     }
 }
+
+/** Prose document with one paragraph per line of [text]. */
+internal fun proseOf(text: String): String = buildJsonObject {
+    put("type", "doc")
+    putJsonArray("content") {
+        text.lines().forEach { line ->
+            addJsonObject {
+                put("type", "paragraph")
+                if (line.isNotEmpty()) putJsonArray("content") { addJsonObject { put("type", "text"); put("text", line) } }
+            }
+        }
+    }
+}.toString()
