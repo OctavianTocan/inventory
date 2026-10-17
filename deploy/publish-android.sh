@@ -20,7 +20,7 @@ signed by that key, and writes mymind-<versionName>.apk and manifest.json.
 --local <dir>   Publishes into a local downloads directory. No upload and no network. The versionCode must be higher
                 than the Android entry already in <dir>/manifest.json, if any.
 (no option)     Publishes to production: builds into a scratch directory under android/build, uploads it with
-                `mymind upload-hosted`, then reads /download/android.json back as the test user and compares the
+                deploy/upload-downloads.sh, then reads /download/android.json back as the test user and compares the
                 versionCode and the checksum of the downloaded APK. The versionCode must be higher than the
                 published one.
 
@@ -154,8 +154,7 @@ production_publish() {
   mkdir -p "$stage/downloads"
   if [ -d "$root/downloads" ]; then cp "$root/downloads/manifest.json" "$stage/downloads/" 2>/dev/null || true; fi
   build_and_stage "$stage/downloads" "$name" "$code"
-  "$root/rust/target/release/mymind" upload-hosted "$site" bucket --bucket "$stage" --prefix downloads/ --force \
-    || die "upload-hosted failed"
+  "$root/deploy/upload-downloads.sh" "$stage" || die "the upload failed"
   local live
   live=$(authed "$token" -f "$site/download/android.json") || die "could not read android.json back"
   [ "$(printf '%s' "$live" | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["versionCode"])')" = "$code" ] \
@@ -179,13 +178,11 @@ authed() {
   curl -sS -H @<(printf 'Authorization: Bearer %s\n' "$token") "$@"
 }
 
+# curl rather than urllib: Cloudflare's browser integrity check refuses urllib's requests (error 1010).
 app_token() {
-  python3 -I - "$site" <<'EOF'
-import json, os, sys, urllib.request
-body = json.dumps({"username": os.environ["TEST_USER_NAME"], "password": os.environ["TEST_USER_PASSWORD"], "device": "publish-android"}).encode()
-request = urllib.request.Request(sys.argv[1] + "/app/v1/auth/password", body, {"Content-Type": "application/json"})
-print(json.load(urllib.request.urlopen(request))["token"])
-EOF
+  python3 -I -c 'import json, os; print(json.dumps({"username": os.environ["TEST_USER_NAME"], "password": os.environ["TEST_USER_PASSWORD"], "device": "publish-android"}))' \
+    | curl -fsS -X POST -H 'Content-Type: application/json' --data-binary @- "$site/app/v1/auth/password" \
+    | python3 -I -c 'import json, sys; print(json.load(sys.stdin)["token"])'
 }
 
 published_code() {
