@@ -45,3 +45,6 @@ worker/.wrangler/
 # Rust build output
 rust/target/
 rust/libvips/
+
+# mymind extension assets copied at setup
+extension/mymind/

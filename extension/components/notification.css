@@ -1,0 +1,176 @@
+mymind-notification {
+  --time-to-close: 3s;
+  --radius: 4px;
+  position: fixed;
+  top: 30px;
+  right: 30px;
+  z-index: 2147483647;
+  box-sizing: border-box;
+  width: 350px;
+  border-radius: var(--radius);
+  box-shadow: 11px 11px 22px rgba(0, 0, 0, 0.25);
+  font-family: 'Nunito', sans-serif;
+  line-height: 1.1;
+  text-transform: none;
+  user-select: none;
+  opacity: 0;
+  transition: border-radius 100ms ease-in;
+  animation: slide-in 300ms ease-out 300ms forwards;
+  will-change: opacity, transform, border-radius;
+}
+
+mymind-notification::before {
+  content: '';
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  width: 0;
+  height: 2px;
+  background: #ff5924;
+}
+
+mymind-notification.success::before { display: block; }
+mymind-notification.closing::before { display: none; }
+mymind-notification.scheduled-to-close::before { animation: countdown var(--time-to-close) linear forwards; }
+
+mymind-notification.closing {
+  pointer-events: none;
+  opacity: 1;
+  animation: slide-out 500ms ease-out forwards;
+}
+
+mymind-notification.error .mymind-notification-inner { border: 2px solid #f94f4f; }
+mymind-notification.error .mymind-notification-inner img { margin: 0 20px 0 0; }
+
+.mymind-notification-wrap {
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+
+.mymind-notification-inner {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  min-height: 90px;
+  padding: 20px;
+  border: 1px solid #efefef;
+  border-radius: var(--radius);
+  background: #fff;
+  color: #000;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+
+.mymind-notification-inner img {
+  width: 30px;
+  margin: 0 20px;
+}
+
+.mymind-notification-inner span {
+  color: inherit;
+  font: 20px/22px 'Nunito', sans-serif;
+  letter-spacing: 0;
+}
+
+mymind-notification:not(.suggesting):hover,
+mymind-notification.editing-note { border-radius: 4px 4px 0 0; }
+
+mymind-notification:not(.suggesting):hover .mymind-notification-wrap,
+mymind-notification.editing-note .mymind-notification-wrap {
+  border-radius: 4px 4px 0 0;
+  transition: border-radius 100ms ease-out;
+}
+
+.mymind-drawer {
+  display: flex;
+  flex-direction: column;
+}
+
+.mymind-drawer-slot {
+  flex: none;
+  box-sizing: border-box;
+  margin-top: -10px;
+  height: 64px;
+}
+
+.mymind-drawer-frame {
+  position: absolute;
+  z-index: 2;
+  display: block;
+  width: 396px;
+  height: 64px;
+  margin: -10px 0 0 -12px;
+  border: 0;
+  background: transparent;
+  color-scheme: normal;
+  clip-path: inset(0 34px 0 12px);
+}
+
+mymind-notification:hover .mymind-drawer-frame,
+mymind-notification.editing-note .mymind-drawer-frame { clip-path: none; }
+
+@keyframes slide-in {
+  0% { opacity: 0; transform: translateY(30px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-out {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-30px); }
+}
+
+@keyframes countdown {
+  0% { width: 100%; }
+  100% { width: 0; }
+}
+
+mymind-notification.upgrade-notification .mymind-notification-inner {
+  border: none;
+  background: #f94f4f;
+  color: #fff;
+}
+
+mymind-notification.upgrade-notification .mymind-notification-image {
+  width: 30px;
+  height: 39px;
+  margin: 0 20px;
+  background-size: cover;
+  filter: invert(1);
+}
+
+.mymind-notification-full {
+  margin-top: -5px;
+  padding: 70px 0;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  color: #fff;
+  font-family: 'Louize', serif;
+  letter-spacing: -0.1em;
+  text-align: center;
+}
+
+.mymind-notification-full a {
+  display: block;
+  width: 190px;
+  margin: 0 auto;
+  padding: 12px 0;
+  border-radius: 50px;
+  background: #fff;
+  color: #000;
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  transition: all 0.4s ease-in-out;
+}
+
+.mymind-notification-full a:hover {
+  background: #ff5924;
+  color: #fff;
+}
