@@ -1,6 +1,7 @@
-//! Port of `lib/download-page.mjs`: the packaged desktop app's download page.
+//! Port of `lib/download-page.mjs`: the download page for the packaged apps, and what `/download` serves for the
+//! Android app's updater.
 
-use mm_js::{Value, number::to_fixed, text::slice, uri::encode_uri_component};
+use mm_js::{Value, number::to_fixed, obj, text::slice, uri::encode_uri_component};
 
 use crate::render::access::member;
 use crate::{Error, Result};
@@ -19,6 +20,83 @@ fn escape(text: &str) -> String {
     out
 }
 
+/// Media type of the Android package (`.apk`).
+pub const APK_TYPE: &str = "application/vnd.android.package-archive";
+
+/// Name under `/download/` of the newest Android release's description, [`android_release`].
+pub const ANDROID_RELEASE: &str = "android.json";
+
+fn is_android(file: &Value) -> bool {
+    file.get("platform").as_str() == Some("android")
+}
+
+/// The media type `/download/<name>` sends a packaged file with.
+///
+/// # Arguments
+/// * `file` - The file's manifest entry.
+///
+/// # Returns
+/// [`APK_TYPE`] for an entry with `platform: "android"`, `application/gzip` for any other.
+pub fn content_type(file: &Value) -> &'static str {
+    if is_android(file) { APK_TYPE } else { "application/gzip" }
+}
+
+// The Android entry with the highest `versionCode`; the publish script keeps only one. A package named like the
+// release description could never be downloaded, so it does not count.
+fn newest_android(manifest: &Value) -> Option<&Value> {
+    let files = manifest.get("files").as_array()?;
+    files.iter().filter(|file| is_android(file) && file.get("name").as_str() != Some(ANDROID_RELEASE)).max_by(|a, b| a.get("versionCode").to_number().total_cmp(&b.get("versionCode").to_number()))
+}
+
+/// The newest Android package in a manifest, as the app's updater reads it at `/download/android.json`.
+///
+/// # Arguments
+/// * `manifest` - The downloads `manifest.json`. An Android entry has `platform: "android"`, `name`, `bytes`,
+///   `sha256`, `built`, `versionName`, `versionCode`, `notes` (that version's changelog lines) and `history`
+///   (`versionName`, `versionCode`, `date` and `notes` of every version, newest first).
+///
+/// # Returns
+/// `{versionName, versionCode, url, bytes, sha256, built, notes, history}`, with `url` the package's path on this
+/// server; `None` when the manifest lists no Android package.
+pub fn android_release(manifest: &Value) -> Option<Value> {
+    let file = newest_android(manifest)?;
+    let list = |key: &str| if file.get(key).as_array().is_some() { file.get(key).clone() } else { Value::Array(Vec::new()) };
+    Some(
+        obj! {
+            "versionName" => file.get("versionName").clone(),
+            "versionCode" => file.get("versionCode").clone(),
+            "url" => format!("/download/{}", encode_uri_component(&file.get("name").to_js_string())),
+            "bytes" => file.get("bytes").clone(),
+            "sha256" => file.get("sha256").clone(),
+            "built" => file.get("built").clone(),
+            "notes" => list("notes"),
+            "history" => list("history"),
+        }
+        .into(),
+    )
+}
+
+// The page's Android section; empty when the manifest lists no Android package, so the page stays as it was.
+fn android_section(manifest: &Value) -> String {
+    let Some(file) = newest_android(manifest) else { return String::new() };
+    let notes: String = file.get("notes").as_array().into_iter().flatten().map(|note| format!("<span>- {}</span>", escape(&note.to_js_string()))).collect();
+    format!(
+        "<h2>Android</h2>
+<ul><li><a href=\"/download/{}\">{}</a>
+    <span>Version {} ({}) · {} · built {}</span><code>sha256 {}</code>{notes}</li></ul>
+<p>The first time, Android asks you to allow installs from this browser. After that, the app updates itself.</p>
+<h2>Linux</h2>
+",
+        encode_uri_component(&file.get("name").to_js_string()),
+        escape(&file.get("label").to_js_string()),
+        escape(&file.get("versionName").to_js_string()),
+        escape(&file.get("versionCode").to_js_string()),
+        size(file.get("bytes")),
+        escape(&file.get("built").as_str().map(|text| slice(text, 0, Some(10))).unwrap_or_default()),
+        escape(&file.get("sha256").to_js_string()),
+    )
+}
+
 fn size(bytes: &Value) -> String {
     format!("{} MB", to_fixed(bytes.to_number() / 1_048_576.0, 1))
 }
@@ -31,12 +109,12 @@ fn built(file: &Value) -> Result<String> {
     }
 }
 
-/// The download page for the packaged desktop app: every packaged file with its size and checksum, and how to
-/// install it.
+/// The download page for the packaged apps: the newest Android package with its version and changelog when there is
+/// one, then every desktop package with its size and checksum, and how to install each.
 ///
 /// # Arguments
 /// * `manifest` - The `manifest.json` that `deploy/package-app.sh` writes: optional `library` and a `files` array of
-///   `name`, `label`, `bytes`, `built` and `sha256`.
+///   `name`, `label`, `bytes`, `built` and `sha256`, plus the Android entries [`android_release`] describes.
 /// * `user` - Email or username of the signed-in visitor.
 ///
 /// # Returns
@@ -50,6 +128,9 @@ pub fn download_page(manifest: &Value, user: &str) -> Result<String> {
     };
     let mut rows = String::new();
     for file in files {
+        if is_android(file) {
+            continue;
+        }
         let name = member(file, "name")?.to_js_string();
         rows.push_str(&format!(
             "<li><a href=\"/download/{}\">{}</a>\n    <span>{} · built {}</span><code>sha256 {}</code></li>",
@@ -62,7 +143,11 @@ pub fn download_page(manifest: &Value, user: &str) -> Result<String> {
     }
     let library = manifest.get("library");
     let library = if library.is_nullish() { "the hosted address".to_string() } else { library.to_js_string() };
-    let rows = if rows.is_empty() { "<li>No app has been packaged yet. Run <code>deploy/package-app.sh</code> on the host.</li>".into() } else { rows };
+    let rows = match (rows.is_empty(), newest_android(manifest).is_some()) {
+        (false, _) => rows,
+        (true, false) => "<li>No app has been packaged yet. Run <code>deploy/package-app.sh</code> on the host.</li>".into(),
+        (true, true) => "<li>No Linux app has been packaged yet. Run <code>deploy/package-app.sh</code> on the host.</li>".into(),
+    };
     Ok(format!(
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
 <title>mymind app</title><style>
@@ -75,13 +160,14 @@ a{{color:var(--accent);font-weight:600}}li span,li code{{display:block;font-size
 pre{{background:var(--card);border-radius:14px;padding:16px;overflow-x:auto;font-size:.85rem}}
 </style></head><body><main><h1>mymind app</h1>
 <p>Opens your library at {}; sign in with Google the first time.</p>
-<ul>{rows}</ul>
+{}<ul>{rows}</ul>
 <pre>tar -xzf mymind-linux-x86_64.tar.gz
 mymind/install.sh        # ~/.local/bin/mymind and a launcher entry</pre>
 <p>Needs WebKitGTK 4.1 and GStreamer's good plugins (Arch: <code>webkit2gtk-4.1 gst-plugins-good</code>).</p>
 <p>Signed in as {} · <a href=\"/signout\">Sign out</a></p>
 </main></body></html>",
         escape(&library),
+        android_section(manifest),
         escape(user)
     ))
 }

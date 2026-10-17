@@ -22,8 +22,10 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
 
 ## Decisions
 
-1. **One release key.** Generate `~/.config/mymind/android-release.jks` outside the repository, with random
-   passwords saved in `.env` (`ANDROID_RELEASE_STORE_PASSWORD`, `ANDROID_RELEASE_KEY_PASSWORD`).
+1. **One release key.** Generate `~/.config/mymind/android-release.jks` outside the repository, with a random
+   password saved in `.env` (`ANDROID_RELEASE_PASSWORD`; a PKCS12 keystore uses one password for the store and the
+   key). Made 2026-10-17: alias `mymind`, RSA 4096, valid until 2126, certificate SHA-1
+   `EE:DC:47:AA:A2:AE:1C:B8:AB:A2:01:B5:65:02:71:E0:7D:18:C1:15`.
    - Android installs an update only when it is signed with the same key, so every published build uses this key.
    - Losing the key means the next version needs an uninstall. The user should keep a copy somewhere safe.
    - Add a second Android OAuth client for its SHA-1, the same way the debug client was made (the user authorized
@@ -41,18 +43,21 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
    - So there is no way to raise the version without writing its changelog. The file also goes into the APK as an
      asset for the app's own changelog screen.
 3. **The server knows about the Android package.**
-   - Manifest entries gain `platform` (`linux` or `android`), `contentType`, `versionName`, `versionCode` and
-     `notes` (that version's changelog bullets). An entry without them stays a Linux tarball.
-   - `/download/<name>` sends the entry's `contentType`, `application/vnd.android.package-archive` for the APK.
+   - Manifest entries gain `platform` (`android`), `versionName`, `versionCode`, `notes` (that version's changelog
+     bullets) and `history` (every version's `versionName`, `versionCode`, `date` and `notes`, newest first, from
+     the changelog). An entry without `platform: "android"` stays a Linux tarball.
+   - `/download/<name>` sends an Android entry as `application/vnd.android.package-archive`, any other as
+     `application/gzip`. The type follows from `platform`, so the manifest carries no content type.
    - The page lists the Android app with its version, size, sha256 and the latest notes, plus one line on allowing
      installs from the browser the first time. The Linux section stays as it is.
-   - `GET /download/android.json` answers `{versionName, versionCode, url, bytes, sha256, notes, history: [{versionName,
-     versionCode, date, notes}]}`.
+   - `GET /download/android.json` answers `{versionName, versionCode, url, bytes, sha256, built, notes, history:
+     [{versionName, versionCode, date, notes}]}`, with `url` the package's path on the same server.
    - Only the newest APK is kept, because Android cannot downgrade without an uninstall. The history keeps every
      version's notes.
 4. **The app's token works on `/download`.** The updater calls `/download/android.json` and the APK with
    `Authorization: Bearer <app token>`.
-   - In the Worker, check that the Auth gate already accepts it; add it if not.
+   - In the Worker, check that the Auth gate already accepts it; add it if not. (Checked: `Auth::handle` already
+     lets an app token through on every path, `/download` included.)
    - In `download.rs`, accept an unexpired app token (`app_tokens`, hashed like sessions) alongside the cookie.
    - This changes sign-in code, so it gets a Codex read-only review before it ships (AGENTS.md rule 7).
 5. **The updater.**
@@ -93,7 +98,9 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
   - Robolectric tests for changelog parsing and the build check, version comparison, a sha256 mismatch, and the
     updater's states (none, downloading, ready, installing, failed);
   - Roborazzi shots of the update sheet, the notes after an update, and the Settings rows, in light and dark.
-- **Emulator, end to end, against a local server:**
+- **Emulator, end to end, against a local server.** Locally `/download` is the separate `mymind download-server`
+  (its own port, the same `AUTH_DB`), not `mymind serve`, so the test build gets a `mymindDownloads` Gradle property
+  for the updater's server; it defaults to `mymindServer`, which in production serves both.
   1. install 0.2.0 from the local `/download` page;
   2. publish 0.2.1 locally;
   3. the app downloads it, shows its notes and installs it, and reopens on 0.2.1 with the notes shown once.
@@ -101,6 +108,13 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
   - publish the first release;
   - `check-hosted` sees the Android entry, and the APK downloads as `TEST_USER` with a matching sha256;
   - Google sign-in works in the release build.
+
+## Status
+
+- 2026-10-17: step 1 is built. `mm_core::download_page` has `android_release`, `content_type` and the page's Android
+  section; `mymind download-server` and the Worker serve `/download/android.json` and the APK type, and the
+  download server accepts app tokens. Tests: `rust/crates/core/tests/download_android.rs` (page, JSON, type, the
+  gate) and `rust/crates/server/tests/download_android.rs` (the token, expired, revoked and unknown credentials).
 
 ## Order
 
