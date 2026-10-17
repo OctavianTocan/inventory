@@ -21,6 +21,11 @@ import { Side } from './side.mjs';
 import { SUITES } from './suites.mjs';
 import { launchVerifier } from './verifier-browser.mjs';
 
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run drive -- [--profile desktop-light|desktop-dark|iphone|android] [--suite NAME] [--sides live,replica] [--no-record] [--server rust|hosted-rust|hosted-worker]\nRequires the signed-in browser on CDP :9222.');
+  process.exit(0);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CDP = 'http://127.0.0.1:9222';
 const LIVE = 'https://access.mymind.com';

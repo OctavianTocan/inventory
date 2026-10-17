@@ -1,4 +1,4 @@
-//! `mm_core::form_data` against `Response.prototype.formData()` in Node 24.12: well-formed forms, hand-written edge
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! cases and many random mutations of them, under many content types.
 
 mod common;
@@ -6,7 +6,8 @@ mod common;
 use mm_core::form_data::{self, FormValue};
 use mm_core::{Value, obj};
 
-const DRIVER: &str = "rust/crates/core/tests/drivers/form-data.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:form-data";
 
 fn parsed(content_type: &str, body: &[u8]) -> Result<Value, form_data::FormError> {
     let form = form_data::parse(content_type, body)?;

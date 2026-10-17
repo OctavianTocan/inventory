@@ -1,11 +1,9 @@
 //! Compare Rust with frozen pre-switch golden expectations, preserving JSON order and error classes.
-//! Other crates include this file with `#[path]`; Node runs only in explicit recording mode.
+//! Other crates include this file with `#[path]`; no JavaScript backend is executed.
 #![allow(dead_code)]
 
 use std::cell::RefCell;
-use std::io::Write;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use std::rc::Rc;
 
 use mm_core::{Error, Object, Value, obj};
@@ -111,20 +109,24 @@ impl Answer {
     }
 }
 
-/// Report whether the explicit legacy recording flag is enabled.
+/// Reject legacy recording after the switch.
 ///
 /// # Returns
-/// True only when `MYMIND_RECORD_GOLDEN` is exactly `1`.
+/// False; panics when recording is requested in this checkout.
 pub fn recording() -> bool {
     mm_test_support::golden::recording()
 }
 
-// Use a checkout-relative driver identity; Batch supplies test names and occurrence indexes.
+// Translate logical identities to historical golden keys without filesystem operations.
 fn batch_namespace(module: &str) -> String {
-    let path = PathBuf::from(module);
-    let root = root().canonicalize().expect("repository root exists");
-    path.strip_prefix(&root)
-        .map_or_else(|_| module.to_owned(), |relative| relative.to_string_lossy().replace('\\', "/"))
+    if let Some(name) = module.strip_prefix("module:") {
+        return format!("lib/{name}.mjs");
+    }
+    if let Some(driver) = module.strip_prefix("driver:") {
+        let (crate_name, name) = driver.split_once(':').expect("logical driver crate and name");
+        return format!("rust/crates/{crate_name}/tests/drivers/{name}.mjs");
+    }
+    panic!("unknown frozen comparison identity");
 }
 
 /// Identify this integration-test target.
@@ -185,10 +187,10 @@ pub fn untag(value: Value) -> Value {
     }
 }
 
-/// Prepare one comparison per export call, running Node only when explicitly recording.
+/// Prepare one frozen comparison per historical export call.
 ///
 /// # Arguments
-/// * `module` - Checkout-relative module path or absolute legacy driver path.
+/// * `module` - Logical identity translated to its frozen pre-switch namespace.
 /// * `calls` - Complete ordered function-name and argument pairs.
 ///
 /// # Returns
@@ -226,34 +228,10 @@ pub fn calls(module: &str, calls: &[(&str, Vec<Value>)]) -> Vec<Answer> {
         .collect()
 }
 
-// Invoke the pre-switch oracle in an environment containing no inherited credentials.
+// Reject the retired recording adapter without starting another process.
 fn legacy_calls(module: &str, calls: &[(&str, Vec<Value>)]) -> Vec<Result<Value, JsError>> {
-    assert!(recording(), "legacy oracle requires MYMIND_RECORD_GOLDEN=1");
-    let request = obj! {
-        "module" => module,
-        "calls" => calls.iter().map(|(name, args)| Value::from(obj! { "fn" => *name, "args" => Value::Array(args.iter().map(tag).collect()) })).collect::<Vec<_>>(),
-    };
-    let mut child = Command::new("node")
-        .arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../core/tests/oracle.mjs"))
-        .env_clear()
-        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
-        .env("TZ", "UTC")
-        .env("MYMIND_ROOT", root())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("node runs in recording mode");
-    let mut stdin = child.stdin.take().unwrap();
-    let payload = json::to_string(&request.into());
-    let writer = std::thread::spawn(move || stdin.write_all(payload.as_bytes()).unwrap());
-    let output = child.wait_with_output().unwrap();
-    writer.join().unwrap();
-    assert!(output.status.success(), "oracle failed for {module}");
-    let Value::Array(answers) = json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap() else {
-        panic!("oracle answered no array")
-    };
-    answers.into_iter().map(decode_answer).collect()
+    let _ = (module, calls);
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 // Decode one tagged legacy success or error without changing property order.
@@ -284,7 +262,7 @@ fn decode_answer(answer: Value) -> Result<Value, JsError> {
 /// On another factory, a missing inline expectation, or an incompatible golden.
 pub fn synthetic_call(module: &str, name: &str, args: Vec<Value>) -> (Value, Answer) {
     assert!(
-        module.ends_with("/tests/drivers/auth_store.mjs") && name == "hashes",
+        module == "driver:core:auth_store" && name == "hashes",
         "inline fixtures are restricted to synthetic scrypt outputs"
     );
     let requests = vec![text(&obj! { "module" => batch_namespace(module), "fn" => name, "args" => args.clone() }.into()).into_bytes()];
@@ -304,7 +282,7 @@ pub fn synthetic_call(module: &str, name: &str, args: Vec<Value>) -> (Value, Ans
 /// Prepare one deferred export comparison.
 ///
 /// # Arguments
-/// * `module` - Checkout-relative module path or absolute legacy driver path.
+/// * `module` - Logical identity translated to its frozen pre-switch namespace.
 /// * `name` - Export name.
 /// * `args` - Complete arguments, including stateful scenario inputs.
 ///

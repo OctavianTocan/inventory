@@ -14,7 +14,7 @@ use mm_sqlite::Sqlite;
 
 use crate::parse_args::{Kind, Opt, parse};
 
-const USAGE: &str = "usage: node tools/auth-user.mjs add <username> [--save-env PREFIX] | remove <username> | list";
+const USAGE: &str = "usage: mymind auth-user add <username> [--save-env PREFIX] | remove <username> | list";
 
 // Set `entries` in the root's .env, replacing earlier values and keeping the file private (`saveEnv`).
 fn save_env(root: &Path, entries: &[(String, String)]) -> std::io::Result<()> {

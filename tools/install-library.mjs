@@ -4,6 +4,11 @@ import { copyFileSync, cpSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run postinstall\nRestores the local library snapshot only when data/mymind.db is absent.');
+  process.exit(0);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bundle = path.join(ROOT, 'library');
 const data = path.join(ROOT, 'data');

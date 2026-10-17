@@ -10,6 +10,11 @@ import { parseArgs } from 'node:util';
 import { connectToPage, loadThroughDevTools } from './cdp.mjs';
 import { replayKey, STORE } from './replay-store.mjs';
 
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run capture -- [--cdp URL] [--out capture] [--gets-only|--media-only|--details-only] [--videos]\nRequires the signed-in browser; captures live GETs with writes intercepted.');
+  process.exit(0);
+}
+
 const { values: opts } = parseArgs({
   options: {
     cdp: { type: 'string', default: 'http://127.0.0.1:9222' },

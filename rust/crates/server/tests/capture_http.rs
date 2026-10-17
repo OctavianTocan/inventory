@@ -1,11 +1,9 @@
 //! The native capture transport against frozen pre-switch expectations: real loopback fetches preserve bytes,
-//! headers, redirects, shared budgets and failure classes. The legacy oracle runs only when explicitly recording.
+//! headers, redirects, shared budgets and failure classes without executing an oracle.
 
 use std::cell::Cell;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::Path;
-use std::process::{Command, Stdio};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -18,7 +16,6 @@ use mm_test_support::golden::{Batch, TestGuard, recording, recording_mismatch, r
 use mymind::capture_http::CaptureTransport;
 use sha2::{Digest, Sha256};
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/capture-http.mjs");
 const KNOWN: [&str; 6] = [
     "Page unavailable",
     "Too many capture redirects",
@@ -31,36 +28,10 @@ const KNOWN: [&str; 6] = [
 // Node's brotliCompressSync(page()) default options, frozen from the original synthetic fixture.
 const BROTLI: &str = "G7cL+I3URnnrgNQ8bXB50udFISXZ5LUcgQ9xIj+8vQYAOAE=";
 
-// Invoke one original transport oracle export only during explicit recording.
+// Reject the retired transport recording adapter.
 fn legacy_call(name: &str, args: Vec<Value>) -> Value {
-    assert!(recording(), "the JS transport oracle is recording-only");
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
-    let request: Value = obj! { "module" => DRIVER, "calls" => vec![Value::from(obj! { "fn" => name, "args" => args })] }.into();
-    let mut command = Command::new("node");
-    command
-        .arg(root.join("rust/crates/core/tests/oracle.mjs"))
-        .env_clear()
-        .env("MYMIND_ROOT", &root)
-        .env("TZ", "UTC")
-        .env("STORE_LOAD_ENV", "0")
-        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"));
-    if let Some(path) = std::env::var_os("PATH") {
-        command.env("PATH", path);
-    }
-    let mut child = command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("recording requires Node");
-    child.stdin.take().unwrap().write_all(json::to_string(&request).as_bytes()).unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(output.status.success(), "capture oracle failed: {}", String::from_utf8_lossy(&output.stderr));
-    let answers = json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap();
-    let answers = answers.as_array().expect("oracle answers an array");
-    assert_eq!(answers.len(), 1, "oracle answer count");
-    assert!(answers[0].get("error").is_undefined(), "capture oracle threw");
-    answers[0].get("ok").clone()
+    let _ = (name, args);
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 // Replace the assigned loopback port in otherwise exact serialized fetch outcomes.

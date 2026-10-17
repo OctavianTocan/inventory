@@ -5,7 +5,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use common::{Batch, Client, Sent, Server, TestGuard, answer_bytes, digest, log_bytes, recording, repo, request_cases, server_root};
+use common::{Batch, Client, Sent, Server, TestGuard, answer_bytes, digest, log_bytes, recording, request_cases, server_root};
 use mm_core::sql::Sql;
 use mm_core::{auth_store::install_auth_schema, params};
 use mm_js::{Value, json, obj};
@@ -98,62 +98,11 @@ fn fixture() -> Fixture {
 
 // Recording also proves the Rust fixture retains the legacy synthetic bytes, session identities and TTLs.
 fn check_legacy_fixture(fixture: &Fixture) {
-    let legacy = fixture.dir.join("legacy");
-    std::fs::create_dir_all(&legacy).unwrap();
-    let root = repo();
-    let output = Command::new("node")
-        .arg(root.join("rust/crates/server/tests/drivers/download-fixture.mjs"))
-        .arg(&legacy)
-        .current_dir(server_root())
-        .env_clear()
-        .env("MYMIND_ROOT", &root)
-        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-        .output()
-        .unwrap();
-    assert!(output.status.success(), "the legacy synthetic download fixture failed");
-    assert_eq!(
-        json::to_string(&fixture.sessions),
-        json::to_string(&json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap())
-    );
-    for name in [
-        "manifest.json",
-        "mymind-linux-x86_64.tar.gz",
-        "my app.tar.gz",
-        "a+b&c=d.tar.gz",
-        "sub/inner.tar.gz",
-        "notlisted.tar.gz",
-    ] {
-        assert_eq!(
-            digest(&std::fs::read(legacy.join("downloads").join(name)).unwrap()),
-            digest(&std::fs::read(fixture.dir.join("downloads").join(name)).unwrap()),
-            "synthetic package fixture {name}"
-        );
-    }
-    let state = |file: PathBuf| {
-        let db = Sqlite::open(&file, true).unwrap();
-        let rows = db
-            .query(
-                "SELECT hash, sub, email, expires_ms - created_ms AS ttl, used_ms - created_ms AS used FROM sessions ORDER BY hash",
-                &[],
-            )
-            .unwrap();
-        assert_eq!(rows.len(), 5);
-        rows.iter()
-            .map(|row| {
-                json::to_string(
-                    &obj! {
-                        "hash" => row.text("hash").unwrap(), "sub" => row.text("sub").unwrap(), "email" => row.text("email").unwrap(),
-                        "ttl" => row.number("ttl").unwrap(), "used" => row.number("used").unwrap(),
-                    }
-                    .into(),
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(state(legacy.join("auth.db")), state(fixture.dir.join("auth.db")));
+    let _ = fixture;
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
-// A port nothing listens on now; download-server.mjs prints the port it was given, so port 0 cannot be read back.
+// Allocate an unused loopback port before starting signed-in downloads.
 fn free_port() -> u16 {
     let port = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port();
     mm_test_support::golden::register_loopback_port(port);
@@ -176,9 +125,8 @@ fn start(mut command: Command, fixture: &Fixture, downloads: &str) -> Server {
 }
 
 fn node(fixture: &Fixture, downloads: &str) -> Server {
-    let mut command = Command::new("node");
-    command.arg("--no-warnings").arg(repo().join("deploy/download-server.mjs"));
-    start(command, fixture, downloads)
+    let _ = (fixture, downloads);
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 fn rust(fixture: &Fixture, downloads: &str) -> Server {

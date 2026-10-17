@@ -5,9 +5,9 @@ directly). `README.md` explains how to run and verify the replica; `docs/` holds
 
 ## What this is
 
-A localhost replica of mymind (`access.mymind.com`). `server.mjs` serves mymind's own front-end (`mirror/`) and
-answers its API from recordings of the user's library (`replay/`, `capture/`). Parity with live mymind is proven
-screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
+A localhost replica of mymind (`access.mymind.com`). The Rust binary (`mymind serve`, `rust/`) serves mymind's own
+front-end (`mirror/`) and answers its API from recordings of the user's library (`replay/`, `capture/`). Parity with
+live mymind is proven screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
 
 ## Hard rules
 
@@ -20,7 +20,7 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
    `npm run bundle` before committing library changes, and never put cookies, JWTs or API keys into commits,
    reports, logs or prompts (Codex prompts leave the machine too).
 3. **Secrets live in `.env` only** (`TYPESAFE_API_KEY`, LLM keys, OAuth client secrets), read through
-   `process.env` on the server, never shipped to the browser.
+   the server process environment, never shipped to the browser.
 4. **No bot-detection workarounds.** No user-agent spoofing or stealth tricks against mymind.
 5. **Git:** work on a branch, never force-push `main`. Commit each finished, verified step and push the branch to
    `origin` (the user, 2026-10-17: commit and push more often). Subagents and Codex runs leave their work
@@ -29,11 +29,11 @@ screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
    feature calls a hosted API (see External services).
 7. **Nothing public without sign-in.** A server reachable from outside the machine (tunnel, port forward) runs
    with `AUTH=google` and `OWNER_EMAIL` (README, Sign-in); a server without sign-in refuses tunnel requests
-   (`server.mjs`). The server's own sign-in is the only gate the user wants: Google for `OWNER_EMAIL` and verified
-   `@octaviantocan.com` addresses, passwords only for users made with `tools/auth-user.mjs` (generated passwords in
-   `.env` via `--save-env`), and no sign-up. Use the `TEST_USER_*` account to test a signed-in site, never the
-   owner's Google login. Never weaken `lib/auth.mjs`, the tunnel refusal, or the session check in
-   `deploy/download-server.mjs`, and ask the user before publishing any hostname.
+   (`rust/crates/server/src/serve.rs`). The server's own sign-in is the only gate the user wants: Google for
+   `OWNER_EMAIL` and verified `@octaviantocan.com` addresses, passwords only for users made with `mymind auth-user`
+   (generated passwords in `.env` via `--save-env`), and no sign-up. Use the `TEST_USER_*` account to test a
+   signed-in site, never the owner's Google login. Never weaken `rust/crates/core/src/auth.rs`, the tunnel refusal,
+   or the session check in `rust/crates/server/src/download.rs`, and ask the user before publishing any hostname.
 
    Cloudflare (the user, 2026-10-16): no Cloudflare Access, only the tunnel; Access was removed the same day. The
    hostname is public, so signed-out tunnel visitors get the replica's own plain sign-in page (no mymind name, logo
@@ -48,17 +48,18 @@ Verification is slow: a desktop `ui` suite takes 40–60 min, a phone `ui` suite
 
 1. Run the narrowest check that proves the change: a patch suite `--suite <suite>@<part>` or a debug suite
    (`smoke`, `core`) for the one profile you are fixing. Add a patch suite in `tools/suites.mjs` if none fits.
-2. Re-run a whole suite only when the change can affect all of it (`server.mjs`, `tools/side.mjs`,
-   `tools/page-determinism.js`, verifier flags). Run the full matrix once, at the end, before claiming parity.
+2. Re-run a whole suite only when the change can affect all of it (the Rust sources that serve requests,
+   `tools/side.mjs`, `tools/page-determinism.js`, verifier flags). Run the full matrix once, at the end, before
+   claiming parity.
 3. `npm run coverage` lists exactly which runs are stale (`verifier-result-incompatible`); re-run only those.
 4. Before starting anything over 5 minutes, say how long it will take, run it in the background and wait for the
    completion notification instead of polling. Start runs over 30 minutes with `systemd-run --user --unit <name>` so
    they outlive the agent session (a session restart killed one), and wait on the unit. At most 2 drive runs in
    parallel (3 got the agent Chromium OOM-killed); check `free -g` first.
 5. Delete `evidence/drive/claims/` before a fresh matrix, or every run is skipped as already claimed.
-6. Never edit replica code (`server.mjs`, `tools/replay-store.mjs`, `lib/**/*.mjs`) while drive runs are going.
-   Coverage hashes those files when it reports, so every run that finished before the edit becomes
-   `verifier-result-incompatible` and has to be re-run.
+6. Never edit replica code (`rust/crates/{js,msgpack,core,sqlite,server,worker}/src/`, their `Cargo.toml`, build
+   and config files, `tools/replay-store.mjs`) while drive runs are going. Coverage hashes those files when it
+   reports, so every run that finished before the edit becomes `verifier-result-incompatible` and has to be re-run.
 
 Claude Code sandbox notes: `drive`/`verify` need the agent Chromium on CDP `:9222`, which the Bash sandbox cannot
 reach, and `git` cannot read `~/.gitconfig` inside it; run both unsandboxed. Never `pkill -f` a pattern that also
@@ -104,7 +105,8 @@ output format and a length cap.
 
 ## Code conventions
 
-- Plain Node ES modules, no framework or build step; `node:sqlite` for storage. Match the surrounding code.
+- The backend is Rust; public rustdoc states the caller contract. Retained Node tooling uses plain ES modules,
+  no framework or build step. Match the surrounding code.
 - JSDoc on exported functions states the caller contract (summary, every `@param`, `@returns`); private helpers get
   a one-line summary; inline comments only for a non-obvious why. No section-divider comments.
 

@@ -19,6 +19,11 @@ import { serverCommand, toolCommand } from './server-command.mjs';
 import { assertReplicaServer } from './server-identity.mjs';
 import { verificationMode } from './digests.mjs';
 
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run verify -- [--parallel 2] [--reseed|--replica-only] [--server rust|hosted-rust|hosted-worker] [profile-suite ...]\nRequires the signed-in browser on CDP :9222; replica-only reuses compatible live evidence.');
+  process.exit(0);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DRIVE = path.join(ROOT, 'evidence', 'drive');
 const VERIFY_DB = path.join(ROOT, 'data', 'verify.db');

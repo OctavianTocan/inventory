@@ -223,8 +223,8 @@ impl Row {
     }
 }
 
-/// A SQL database the store runs synchronous statements on, as `openSql` (`lib/sql-node.mjs`) and the Durable Object
-/// adapter (`worker/sql-do.mjs`) provide it.
+/// A SQL database the store runs synchronous statements on, as `openSql` (`rust/crates/sqlite/src/lib.rs`) and the Durable Object
+/// adapter (`rust/crates/worker/src/sql_do.rs`) provide it.
 pub trait Sql {
     /// Run one statement and collect its rows.
     ///

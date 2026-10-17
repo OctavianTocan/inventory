@@ -94,7 +94,7 @@ fn entry_status(entry: &Value) -> u16 {
     entry.get("status").as_f64().map_or(200, |status| status as u16)
 }
 
-// `encodeMsgpack` of `server.mjs` for a string.
+// Encode a string with the historical recorded MessagePack contract.
 fn pack_string(out: &mut Vec<u8>, text: &str) {
     let length = text.len();
     if (32..0x100).contains(&length) {
@@ -110,7 +110,7 @@ fn pack_string(out: &mut Vec<u8>, text: &str) {
     out.extend_from_slice(text.as_bytes());
 }
 
-// `msgpackStream(cards)` of `server.mjs`: one `{html, json}` map per card.
+// Encode one `{html, json}` MessagePack map per card.
 fn pack_cards<'a>(cards: impl IntoIterator<Item = &'a Card>) -> Vec<u8> {
     let mut out = Vec::new();
     for card in cards {
@@ -169,7 +169,7 @@ pub struct Options {
 }
 
 impl Replica {
-    /// Read the recordings, as `server.mjs` reads them at startup.
+    /// Read the immutable recordings at server startup.
     ///
     /// # Arguments
     /// * `options` - Root and flags.
@@ -464,7 +464,7 @@ impl Replica {
     }
 
     /// Answer a request from the recordings, after the sign-in gate and the library API passed it on: the part of
-    /// `server.mjs`'s `handle` from the replayed responses to the final miss.
+    /// Serve replayed responses through the final fallback miss.
     ///
     /// # Arguments
     /// * `request` - The request.

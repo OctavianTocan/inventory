@@ -15,7 +15,7 @@ const PORT: u16 = 8080;
 const START_TIMEOUT_MS: f64 = 60_000.0;
 const IDLE_MS: f64 = 3.0 * 60_000.0;
 
-/// The media container (`worker/container/`): image and video renditions, PDF previews, page screenshots and validated
+/// The Rust media container (`rust/container/`): image and video renditions, PDF previews, page screenshots and validated
 /// fetches. One instance serves every library.
 #[durable_object]
 pub struct Media {

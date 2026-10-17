@@ -1,4 +1,4 @@
-//! `mymind capture-fixtures` against `tools/capture-fixtures.mjs`: every route in every control state, the
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! recorded requests, the synthetic media and the subcommand binary.
 
 #[path = "tools_common/mod.rs"]
@@ -57,27 +57,8 @@ struct Driver {
 
 impl Driver {
     fn start(root: &Path, media: &Path) -> Self {
-        assert!(tools_common::recording(), "legacy fixture driver requires recording mode");
-        let mut child = Command::new("node")
-            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/drivers/tool-capture-fixtures.mjs"))
-            .arg(root)
-            .arg(media)
-            .current_dir(root)
-            .env_clear()
-            .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
-            .env("PATH", std::env::var_os("PATH").unwrap())
-            .env("HOME", std::env::var_os("HOME").unwrap())
-            .env("NODE_NO_WARNINGS", "1")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let input = child.stdin.take().unwrap();
-        let mut output = BufReader::new(child.stdout.take().unwrap());
-        let mut line = String::new();
-        output.read_line(&mut line).unwrap();
-        let hello = json::parse(&line).unwrap_or_else(|_| panic!("driver said {line:?}"));
-        Self { child, input, output, hello }
+        let _ = (root, media);
+        panic!("Legacy recording requires the recorded pre-switch revision")
     }
 
     fn send(&mut self, command: &str) {

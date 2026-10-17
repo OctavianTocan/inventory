@@ -13,7 +13,8 @@ use mm_core::runtime::{self, Runtime, Task};
 use mm_core::{Error, Value, obj};
 use mm_js::base64;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/hub.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:hub";
 
 struct Idle;
 

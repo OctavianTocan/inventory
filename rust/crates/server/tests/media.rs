@@ -33,30 +33,14 @@ fn scratch() -> PathBuf {
     Path::new(env!("CARGO_TARGET_TMPDIR")).join("media-test")
 }
 
-// Locate the original media oracle retained for explicit recording.
-fn driver() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/drivers/media.mjs")
-}
-
 // Describe bytes by their exact length and SHA-256 without retaining their contents.
 fn digest(bytes: &[u8]) -> Value {
     obj! { "bytes" => bytes.len(), "sha256" => format!("{:x}", Sha256::digest(bytes)) }.into()
 }
 
-// Create a recording-only Node command with an isolated process environment.
+// Reject the retired media recording adapter before creating any process.
 fn legacy_command() -> Command {
-    assert!(recording(), "the media JS oracle is recording-only");
-    let mut command = Command::new("node");
-    command
-        .arg(driver())
-        .env_clear()
-        .env("MYMIND_ROOT", repo())
-        .env("STORE_LOAD_ENV", "0")
-        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"));
-    if let Some(path) = std::env::var_os("PATH") {
-        command.env("PATH", path);
-    }
-    command
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 // Collect regular files recursively in deterministic directory order.
@@ -941,13 +925,7 @@ fn container_normalization_preserves_wire_bytes() {
 fn container_matches() {
     let guard = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "media");
     let fixture = fixtures();
-    let root = repo();
-    let js = recording().then(|| {
-        spawn_container(container_command(
-            "node",
-            &[Path::new("--no-warnings"), &root.join("worker/container/server.mjs")],
-        ))
-    });
+    let js: Option<Server> = recording().then(|| { panic!("Legacy recording requires the recorded pre-switch revision") });
     let rust = spawn_container(container_command(env!("CARGO_BIN_EXE_mymind"), &[Path::new("container")]));
     let image_port = resource_server(std::fs::read(fixture.dir.join("alpha.png")).unwrap());
     let mut cases = Vec::new();

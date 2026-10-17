@@ -1,4 +1,4 @@
-//! The destination policy of `capture_http` against `lib/capture-http.mjs`: `publicAddress` over addresses around every
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! blocked-range boundary and `captureDestination` over generated URLs.
 
 mod common;
@@ -7,7 +7,8 @@ use common::{Random, assert_same, calls};
 use mm_core::capture_http::{capture_destination, public_address};
 use mm_core::{Error, Value, arr};
 
-const MODULE: &str = "lib/capture-http.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const MODULE: &str = "module:capture-http";
 
 const SUBNETS: [([u8; 4], u32); 14] = [
     ([0, 0, 0, 0], 8), ([10, 0, 0, 0], 8), ([100, 64, 0, 0], 10), ([127, 0, 0, 0], 8), ([169, 254, 0, 0], 16), ([172, 16, 0, 0], 12),

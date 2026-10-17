@@ -40,7 +40,7 @@ answered the open questions (same day); `git log -p` on this file shows the earl
    We are still using it as a tunnel thing." The server's sign-in is the only gate; AGENTS.md rule 7 says so.
 10. **A library per person** in a proper multi-user database, planned before the Kotlin app or in parallel. "The
     test user would actually just get the library that I have right now, just one-to-one", and the parity checks
-    run as the test user. Re-verifying after `lib/` changes can wait; it is no reason to hold a change.
+    run as the test user. Re-verifying after Rust core changes can wait; it is no reason to hold a change.
 11. **Google Cloud setup by the agent**, "the same way you did the other setup" (agent browser signed in as the
     owner): the Android OAuth client, and test users or publishing for domain accounts.
 8. **Card data:** asked why the app should get web markup at all; they want a format both apps render properly.
@@ -61,7 +61,7 @@ Roadmap row 9 (`docs/roadmap.md`) records 1–3; `docs/accounts-plan.md` records
   (plan "Screenshot match").
 
 The user also asked what the downloaded app talks to. Answer given: the desktop app is a window around the hosted
-site, whose JavaScript calls the server's existing HTTP API (`lib/`, `docs/write-api.md`); the Kotlin app uses the
+site, whose JavaScript calls the server's existing HTTP API (`rust/crates/core/src/`, `docs/write-api.md`); the Kotlin app uses the
 same server, with a bearer token instead of the session cookie.
 
 ## Current state
@@ -75,7 +75,7 @@ same server, with a bearer token instead of the session cookie.
 | Toolchain | Installed and version-checked (plan "Tools on this machine"). Java default is Temurin 27 (mise global plus `org.gradle.java.home` in `~/.gradle/gradle.properties`); a throwaway probe app with AGP 9.4.1 and built-in Kotlin built with it. REA's jadx JAR is hash-verified but unused so far. |
 | Hosted library | `https://mymind.octaviantocan.com` on mini-002, public through the tunnel with the server's sign-in as the only gate (owner-only Google, password users); signed-out visitors get the plain page. `node tools/check-hosted.mjs --browser` passed 11/11 at 9790df1. |
 | Accounts | One shared library; per-person libraries are planned in `docs/accounts-plan.md`, not built. Cloudflare Access is deleted. |
-| Verification | Coverage is stale since 9790df1 changed `lib/auth.mjs`; the user said re-running can wait. `npm run coverage` lists the runs to redo. |
+| Verification | Coverage is stale since 9790df1 changed the pre-switch JS `lib/auth.mjs`; the user said re-running can wait. `npm run coverage` lists the runs to redo. |
 | /download | Linux desktop build, for anyone with a mymind session on the hosted site (c7ac205). |
 
 ## How parity is proven today
@@ -91,9 +91,9 @@ our replica through mitmproxy) and the same compare, with the tolerance still to
   `mymind.native.*` bridge calls, `mymind://` image scheme), steps 0–5, tools, risks.
 - `desktop/src-tauri/src/main.rs:185-280`: how the desktop shell lets the Google sign-in pages load for the hosted
   library. Its Cloudflare Access handling (`is_access_login`) is now unused and harmless.
-- `lib/auth.mjs`: the sign-in gate the app's bearer-token endpoint will join, including the plain public page.
+- `rust/crates/core/src/auth.rs`: the sign-in gate the app's bearer-token endpoint will join, including the plain public page.
 - `tools/check-hosted.mjs`: signs in to the hosted site as the test user, no Cloudflare token.
-- `deploy/download-server.mjs`: the `mm_session` check.
+- `rust/crates/server/src/download.rs`: the `mm_session` check.
 - `AGENTS.md`: hard rules 1 (never change the mymind account), 4 (no bot-detection workarounds), 6 (no replica-code
   edits during drive runs), 7 (nothing public without sign-in); delegation table; long-running process rules.
 - `README.md`: "Sign-in (remote access)", "Hosting", "Testing the hosted library".

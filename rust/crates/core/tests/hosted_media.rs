@@ -425,13 +425,14 @@ fn run_rust(prefix: &str, objects: &[Stored], steps: &[Step]) -> Vec<Outcome> {
 }
 
 fn run_js(prefix: &str, objects: &[Stored], steps: &[Step]) -> common::Answer {
-    let driver = format!("{}/tests/drivers/hosted-media.mjs", env!("CARGO_MANIFEST_DIR"));
+    // Preserve the historical frozen namespace without opening a driver.
+    let driver = "driver:core:hosted-media";
     let spec = obj! {
         "prefix" => prefix,
         "objects" => Value::Array(objects.iter().map(Stored::spec).collect()),
         "steps" => Value::Array(steps.iter().map(Step::spec).collect()),
     };
-    common::call(&driver, "scenario", vec![spec.into()])
+    common::call(driver, "scenario", vec![spec.into()])
 }
 
 fn sorted(entries: &[Value]) -> Vec<String> {

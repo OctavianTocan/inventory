@@ -6,7 +6,8 @@ mod common;
 use mm_core::{Object, Value};
 use mymind::env_file;
 
-const DRIVER: &str = "rust/crates/server/tests/drivers/env.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:server:env";
 
 fn sorted(vars: std::collections::HashMap<String, String>) -> Value {
     let mut pairs: Vec<_> = vars.into_iter().collect();

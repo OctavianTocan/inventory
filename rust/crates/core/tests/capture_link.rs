@@ -1,4 +1,4 @@
-//! `capture_link` against `captureLink` of `lib/capture-link.mjs` with identical table-driven fakes: the events (every
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! resource, screenshot and media call and every committed update, in order) and the outcome must match.
 
 mod common;
@@ -12,7 +12,8 @@ use mm_core::host::{AnalysisImage, FetchedResource, Media, MediaInput, MediaResu
 use mm_core::http::{Headers, Response};
 use mm_core::{Error, Result, Value, obj};
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/capture-link.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:capture-link";
 
 const OEMBED: [&str; 6] = [
     "{\"html\":\"<blockquote class=\\\"twitter-tweet\\\"><p>hi &amp; bye <a href=\\\"https://t.co/x\\\">l</a></p></blockquote>\",\"author_name\":\"Ann\",\"title\":\"Embed T\",\"thumbnail_url\":\"https://img.example/t.png\",\"type\":\"video\",\"author_avatar_url\":\"https://img.example/a.png\"}",

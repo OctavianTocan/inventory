@@ -29,7 +29,7 @@ pub fn repo() -> PathBuf {
 /// A process-specific temporary directory, reused by this test binary.
 ///
 /// # Panics
-/// If a required asset cannot be linked or the legacy entry point cannot be copied while recording.
+/// If a required immutable asset cannot be linked.
 pub fn server_root() -> PathBuf {
     static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     ROOT.get_or_init(|| {
@@ -46,12 +46,6 @@ pub fn server_root() -> PathBuf {
         };
         for name in ["capture", "mirror", "replay"] {
             std::os::unix::fs::symlink(repo().join(name), root.join(name)).unwrap();
-        }
-        if recording() {
-            std::fs::copy(repo().join("server.mjs"), root.join("server.mjs")).unwrap();
-            for name in ["lib", "node_modules"] {
-                std::os::unix::fs::symlink(repo().join(name), root.join(name)).unwrap();
-            }
         }
         assert!(!root.join(".env").exists() && !root.join(".dev.vars").exists());
         root
@@ -430,41 +424,18 @@ fn read_answer(reader: &mut BufReader<TcpStream>, head: bool) -> Option<(Answer,
     Some((Answer { status, headers, body }, closes))
 }
 
-/// Load the immutable request inventory, recording it from the legacy enumerator only in recording mode.
+/// Load the immutable pre-switch request inventory without executing an enumerator.
 ///
 /// # Returns
 /// Every replayed and recorded request and the original route edge cases in their frozen order.
 ///
 /// # Panics
-/// If the inventory is missing, its enumeration inputs changed, or the legacy enumerator fails while recording.
+/// If the inventory is missing, its enumeration inputs changed, or legacy recording is requested.
 pub fn replica_requests() -> Vec<Sent> {
     let root = repo();
     let frozen = root.join("rust/test-fixtures/http/replica-requests.json");
     let inputs = enumeration_inputs();
-    let manifest = if recording() {
-        let output = Command::new("node")
-            .arg(root.join("rust/crates/server/tests/drivers/replica-requests.mjs"))
-            .current_dir(server_root())
-            .env_clear()
-            .env("MYMIND_ROOT", &root)
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-            .output()
-            .unwrap();
-        assert!(output.status.success(), "legacy request enumeration failed");
-        let requests = json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap();
-        let manifest: Value = obj! { "version" => 1, "inputs" => inputs.clone(), "requests" => requests }.into();
-        let bytes = json::to_string(&manifest).into_bytes();
-        if frozen.exists() {
-            assert!(
-                mm_test_support::golden::read_input(&frozen) == bytes,
-                "frozen HTTP request inventory changed; restore its exact recorded inputs instead of regenerating it"
-            );
-        } else {
-            std::fs::create_dir_all(frozen.parent().unwrap()).unwrap();
-            std::fs::write(&frozen, bytes).unwrap();
-        }
-        manifest
-    } else {
+    let manifest = if recording() { panic!("Legacy recording requires the recorded pre-switch revision") } else {
         let bytes = mm_test_support::golden::read_input(&frozen);
         json::parse(std::str::from_utf8(&bytes).unwrap()).unwrap()
     };

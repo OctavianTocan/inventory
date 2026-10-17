@@ -1,4 +1,4 @@
-//! `app_api` against `lib/app-api.mjs`: every read endpoint, paged to the end, on both fixture libraries.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -20,7 +20,8 @@ use mm_core::{Error, Result, Value, arr, obj};
 use mm_js::{json, url};
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/app-api.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:app-api";
 
 struct TestRuntime;
 

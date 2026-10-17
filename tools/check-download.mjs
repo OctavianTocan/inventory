@@ -106,7 +106,7 @@ try {
   });
   await check('only packaged files are served', async () => {
     strictEqual((await get('/download/manifest.json')).status, 404);
-    strictEqual((await get('/download/..%2Fdownload-server.mjs')).status, 404);
+    strictEqual((await get('/download/..%2FAGENTS.md')).status, 404);
   });
   await check('writes are refused', async () => strictEqual((await get('/download', SESSION, { method: 'POST' })).status, 405));
 } finally {

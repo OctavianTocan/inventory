@@ -1,7 +1,5 @@
-//! `mymind`: the replica server of `server.mjs`, configured by the same environment variables and `.env`;
-//! `mymind download-server`, the app downloads of `deploy/download-server.mjs`; `mymind container`, the media
-//! container of `worker/container/server.mjs`; and the operational tools of `tools/` (`seed-db`, `auth-user`,
-//! `import-hosted`, `upload-hosted`, `embed-library`, `search-recordings`, `try-ai`, `capture-fixtures`).
+//! Native replica server, signed-in app downloads, media container and operational subcommands.
+
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -105,7 +103,7 @@ async fn start(root: PathBuf) -> Result<(), String> {
         library = var("HOSTED_LIBRARY").unwrap_or("owner").to_owned();
         let file = directory.join(format!("{library}.db"));
         if !file.exists() {
-            return Err(format!("Error: No hosted library at {}; run tools/import-hosted.mjs first", file.display()));
+            return Err(format!("Error: No hosted library at {}; run mymind import-hosted first", file.display()));
         }
         let db = Rc::new(Sqlite::open(&file, false).map_err(|error| error.to_string())?);
         let options = HostedOptions {
@@ -192,7 +190,7 @@ async fn start(root: PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-// The download server, configured by the process environment alone as `download-server.mjs` was.
+// Configure signed-in downloads from the process environment.
 async fn download_server(root: PathBuf) -> Result<(), String> {
     let var = |name: &str| std::env::var_os(name).map(|value| value.to_string_lossy().into_owned());
     let port = port(&var("DOWNLOAD_PORT").unwrap_or_else(|| "4332".to_owned()))?;

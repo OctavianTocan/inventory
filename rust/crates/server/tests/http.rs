@@ -4,7 +4,6 @@ mod common;
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::process::Command;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -80,15 +79,7 @@ fn exchange(port: u16, raw: &[u8]) -> (u16, String) {
 #[test]
 fn requests_read_as_node_reads_them() {
     let inventory = TestGuard::new(env!("CARGO_MANIFEST_DIR"), "http");
-    let node = recording().then(|| {
-        let mut command = Command::new("node");
-        command
-            .arg(common::repo().join("rust/crates/server/tests/drivers/echo-server.mjs"))
-            .current_dir(common::server_root())
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default());
-        Server::start(command, "")
-    });
+    let node: Option<Server> = recording().then(|| { panic!("Legacy recording requires the recorded pre-switch revision") });
     let rust_port = rust_server();
 
     let close = "Connection: close\r\n";

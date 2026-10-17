@@ -27,7 +27,8 @@ use mm_sqlite::Sqlite;
 use mymind::uploads_fs::DirectoryUploads;
 use regex::Regex;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/api.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:server:api";
 const NOW: i64 = 1_787_000_000_000;
 const TABLES: [&str; 13] = ["cards", "changes", "annotations", "spaces", "space_cards", "pins", "shares", "revisions", "users", "tag_names", "card_content", "uploads", "embeddings"];
 const DESKTOP: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";

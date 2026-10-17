@@ -12,7 +12,7 @@ use crate::env_file::{self, Loaded};
 use crate::fetch::NativeFetch;
 use crate::parse_args::{Kind, Opt, parse};
 
-const USAGE: &str = "Usage: node tools/try-ai.mjs [--cards N] [--vocab N] [--query \"text\"]...";
+const USAGE: &str = "Usage: mymind try-ai [--cards N] [--vocab N] [--query \"text\"]...";
 
 struct Cover {
     mime: &'static str,

@@ -7,7 +7,7 @@ Evidence legend: **[R]** a response was recorded in `replay/` or `capture/`; **[
 request side is exact, the response side is what the client reads); **[?]** unknown, repeated under Open questions.
 
 The original write recording was `PATCH /users/<uid>` returning `{ "status": 200 }`. Other write contracts below are
-**[C]**; the read-side GETs in section 6 are mostly **[R]**. Today `server.mjs` answers every non-GET with `200 {}` and
+**[C]**; the read-side GETs in section 6 are mostly **[R]**. The original replay-only mode acknowledges unsupported writes with `200 {}` and
 logs `[write ignored]`. Examples are redacted: `<uid>` is the 22-char account id, `<id>` a card id.
 
 An additional real URL save on 2026-10-15 records the hub and rendered `/changes` lifecycle in
@@ -622,7 +622,7 @@ path of the same shape; the content type served for it is [?].
 
 ## 7. Implementation notes for the SQLite backend
 
-1. Replace the `server.mjs` non-GET stub with a router keyed by `(method, pattern)` from section 4; keep `200 {}` for
+1. Implemented mutations route through `rust/crates/core/src/api.rs` and `store_write.rs`, keyed by `(method, pattern)` from section 4; keep `200 {}` for
    unknown paths so the client never breaks.
 2. One transaction per write: mutate rows, bump `modified_ns` (strictly increasing, it is the `x-checkpoint`), insert a
    `changes` row, then push hub events if the hub is implemented.

@@ -1,5 +1,4 @@
-//! `mymind search-recordings` against `compareRecordings` of `tools/search-recordings.mjs` (which has no command
-//! line of its own, so `tests/drivers/tool-search-recordings.mjs` prints its rows), over the owner fixture.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
@@ -8,7 +7,8 @@ mod tools_common;
 
 use tools_common::{run_node, run_rust, tmproot};
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/tool-search-recordings.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:server:tool-search-recordings";
 
 #[test]
 fn compares_recordings_as_compare_recordings() {

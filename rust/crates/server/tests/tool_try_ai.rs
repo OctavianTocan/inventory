@@ -1,4 +1,4 @@
-//! `mymind try-ai` against `tools/try-ai.mjs`, with a fake Gemini, chat model and Jev on 127.0.0.1: the same printed
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! lines, status and requests over the repository's recorded cards.
 
 #[path = "tools_common/mod.rs"]

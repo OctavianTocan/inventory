@@ -1,8 +1,7 @@
 //! Frozen `uploads` and `DirectoryUploads` expectations: generated authorize, put, prepare, claim, cleanup, source
 //! and sweep programs retain all answers, rows and files.
 //!
-//! Ids, tokens and generated card ids are random, so both sides name them by position (`@u0`, `@t0`, `@new`) and
-//! replace the real values in every answer, row and file name before comparing. Time is fixed on both sides.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
@@ -22,7 +21,8 @@ use mm_js::{base64, json};
 use mm_sqlite::Sqlite;
 use mymind::uploads_fs::DirectoryUploads;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/uploads.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:server:uploads";
 const NOW: i64 = 1_800_000_000_000;
 
 struct FakeMedia {

@@ -1,4 +1,4 @@
-//! Frozen opaque-byte expectations. Recording adapters belong to the calling tests.
+//! Frozen opaque-byte expectations replayed without executable JavaScript oracles.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -21,12 +21,13 @@ static SEEN: OnceLock<Mutex<BTreeMap<String, BTreeSet<String>>>> = OnceLock::new
 static FIXTURES: OnceLock<Mutex<BTreeMap<PathBuf, FixtureSnapshot>>> = OnceLock::new();
 static PORTS: OnceLock<Mutex<BTreeSet<u16>>> = OnceLock::new();
 
-/// Whether the caller must invoke its legacy JS oracle.
+/// Refuse legacy recording in the Rust-only checkout.
 ///
-/// Returns `true` only when the environment variable `MYMIND_RECORD_GOLDEN` is exactly `1`.
-/// This function neither launches programs nor accesses files.
+/// Returns false without launching programs or accessing files. Panics when
+/// `MYMIND_RECORD_GOLDEN=1`; recording requires the recorded pre-switch revision.
 pub fn recording() -> bool {
-    std::env::var("MYMIND_RECORD_GOLDEN").as_deref() == Ok("1")
+    assert!(std::env::var("MYMIND_RECORD_GOLDEN").as_deref() != Ok("1"), "Legacy recording is unavailable after the Rust switch. Check out the recorded pre-switch revision to record JS expectations.");
+    false
 }
 
 /// Report unequal recording answers with the same case identity as a golden batch.
@@ -732,7 +733,24 @@ fn source_digest(crate_dir: &Path, target: &str) -> String {
             collect_files(&crate_dir.join("tests"), &directory, &mut sources);
         }
     }
-    digest(&encode(&sources))
+    source_identity(crate_dir.to_str().unwrap(), target, "source", &digest(&encode(&sources)))
+}
+
+/// Preserve a frozen source identity only for an explicitly reviewed exact source transition.
+///
+/// `crate_dir` is the caller's crate directory; `target` is its integration target;
+/// `kind` is `source` or `recipe`; `actual` is the current source SHA-256.
+/// Returns the frozen identity for an exact approved transition, otherwise `actual`.
+/// Later source edits still fail the existing golden source guard.
+pub fn source_identity(crate_dir: &str, target: &str, kind: &str, actual: &str) -> String {
+    let transitions: serde_json::Value = serde_json::from_str(include_str!("../source-transitions.json")).expect("reviewed source transition metadata");
+    let name = Path::new(crate_dir).file_name().unwrap().to_str().unwrap();
+    let transition = &transitions[format!("{name}/{target}")][kind];
+    if transition["after"].as_str() == Some(actual) {
+        transition["before"].as_str().expect("frozen source identity").to_owned()
+    } else {
+        actual.to_owned()
+    }
 }
 
 // Represent an answer without copying private content into the golden corpus.
@@ -1599,69 +1617,10 @@ fn revision(rust_dir: &Path) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
-// Fingerprint legacy implementation and oracle sources without storing their contents.
+// Synthetic support tests can record without legacy application provenance.
 fn oracle_sources(crate_dir: &Path, rust_dir: &Path) -> BTreeMap<String, FileDigest> {
-    fn visit(
-        base: &Path,
-        directory: &Path,
-        files: &mut BTreeMap<String, FileDigest>,
-        codec_only: bool,
-    ) {
-        for entry in fs::read_dir(directory).into_iter().flatten().flatten() {
-            let path = entry.path();
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if name.starts_with('.') || matches!(name.as_ref(), "node_modules" | "target" | "build")
-            {
-                continue;
-            }
-            let kind = entry.file_type().expect("oracle source type");
-            if kind.is_symlink() {
-                continue;
-            }
-            if kind.is_dir() {
-                visit(base, &path, files, codec_only);
-            } else if (codec_only && name == "msgpack.min.js")
-                || (!codec_only && path.extension().and_then(|ext| ext.to_str()) == Some("mjs"))
-            {
-                files.insert(
-                    path.strip_prefix(base)
-                        .unwrap()
-                        .to_string_lossy()
-                        .into_owned(),
-                    fingerprint(&path),
-                );
-            }
-        }
-    }
-    let base = rust_dir.parent().expect("Rust workspace below repository");
-    let mut files = BTreeMap::new();
-    for directory in [
-        base.join("lib"),
-        base.join("tools"),
-        base.join("worker"),
-        crate_dir.join("tests/drivers"),
-    ] {
-        visit(base, &directory, &mut files, false);
-    }
-    visit(base, &base.join("mirror"), &mut files, true);
-    for path in [
-        base.join("server.mjs"),
-        base.join("deploy/download-server.mjs"),
-        crate_dir.join("tests/oracle.mjs"),
-        rust_dir.join("crates/core/tests/oracle.mjs"),
-    ] {
-        if path.is_file() {
-            files.insert(
-                path.strip_prefix(base)
-                    .unwrap()
-                    .to_string_lossy()
-                    .into_owned(),
-                fingerprint(&path),
-            );
-        }
-    }
-    files
+    let _ = (crate_dir, rust_dir);
+    BTreeMap::new()
 }
 
 #[cfg(test)]

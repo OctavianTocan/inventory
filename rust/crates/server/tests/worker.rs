@@ -1007,32 +1007,12 @@ fn observation(entries: &mut Vec<Value>, identity: String, answer: &[u8]) {
 #[ignore = "requires isolated local Wrangler; run node tools/check-worker.mjs"]
 async fn worker_matches_frozen_js() {
     let mut client = Client::new("MYMIND_WORKER_URL");
-    let recording = std::env::var("MYMIND_RECORD_GOLDEN").as_deref() == Ok("1");
+    mm_test_support::golden::recording();
     let file = golden_file();
-    assert!(
-        !recording || std::env::var("MYMIND_WORKER_ORACLE").as_deref() == Ok("js"),
-        "record only against the retained local JS Worker"
-    );
-    assert!(
-        !recording || !file.exists(),
-        "refusing to overwrite an existing Worker golden"
-    );
-    let expected = if recording {
-        None
-    } else {
-        Some(
-            json::parse(
-                &std::fs::read_to_string(&file)
-                    .expect("Worker golden missing; record JS before retiring it"),
-            )
-            .unwrap(),
-        )
-    };
+    let expected = Some(json::parse(&std::fs::read_to_string(&file).expect("Worker golden missing; restore the frozen pre-switch expectations")).unwrap());
     let fixture_bytes = std::fs::read(fixture()).expect("frozen hosted fixture missing");
     let fixture_hash = digest(&fixture_bytes);
-    let source_hash = digest(
-        &std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/worker.rs")).unwrap(),
-    );
+    let source_hash = mm_test_support::golden::source_identity(env!("CARGO_MANIFEST_DIR"), "worker", "source", &digest(&std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/worker.rs")).unwrap()));
     if let Some(expected) = &expected {
         assert_eq!(expected.get("version").as_f64(), Some(1.0));
         assert_eq!(
@@ -1173,10 +1153,7 @@ async fn worker_matches_frozen_js() {
         }
         merged_behavior(&mut client, &db).await;
     } else {
-        let source: Vec<Value> = ["worker/index.mjs", "worker/auth-object.mjs", "worker/library-object.mjs", "rust/crates/worker/tests/differential.mjs"].iter().map(|name| Value::from(obj! { "file" => *name, "sha256" => digest(&std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").join(name)).unwrap()) })).collect();
-        let manifest: Value = obj! { "version" => 1, "normalization_version" => 1, "fixture_sha256" => fixture_hash, "source_sha256" => source_hash, "oracle_sources" => source, "count" => observations.len(), "cases" => observations }.into();
-        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-        std::fs::write(file, format!("{}\n", json::to_string(&manifest))).unwrap();
+        panic!("Legacy recording requires the recorded pre-switch revision");
     }
     println!("168 ordered Worker golden cases passed");
 }

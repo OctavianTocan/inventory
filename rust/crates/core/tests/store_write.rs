@@ -1,4 +1,4 @@
-//! `store_write` against `lib/store-write.mjs`: scripted mutation scenarios on copies of the fixture libraries,
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! comparing step results, broadcast events and the resulting rows.
 
 mod common;
@@ -16,7 +16,8 @@ use mm_core::{Error, Result, Value, arr, obj};
 use mm_js::date;
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/store-write.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:store-write";
 const TABLES: [&str; 13] = ["embeddings", "cards", "changes", "annotations", "spaces", "space_cards", "pins", "shares", "revisions", "users", "tag_names", "card_content", "api_metadata"];
 
 static CLOCK: Mutex<()> = Mutex::new(());

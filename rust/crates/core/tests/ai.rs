@@ -1,18 +1,15 @@
-//! `ai` against `lib/ai.mjs`: the same scripted fake of the hosted APIs answers both, and the requests they send, the
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! sleeps they ask for and their results or errors must agree.
 
 mod common;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::io::Write;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use std::sync::{Mutex, Once};
 use std::task::Poll;
 
 use async_trait::async_trait;
-use common::{hosted_db, root, test_db, text};
+use common::{hosted_db, test_db, text};
 use futures_executor::block_on;
 use mm_core::ai::{Ai, AiError, AiImage, AiItem, EmbedInput, EmbedKind, VocabularyEntry, cosine, document_text};
 use mm_core::host::Fetch;
@@ -309,28 +306,7 @@ fn compare(cases: Vec<Value>) {
     let requests: Vec<Vec<u8>> = cases.iter().map(|case| text(case).into_bytes()).collect();
     let name = std::thread::current().name().unwrap_or("ai").to_owned();
     let mut batch = Batch::new(env!("CARGO_MANIFEST_DIR"), "ai", &name, &requests);
-    let answers = if batch.recording() {
-        let request = Value::from(obj! { "cases" => cases.clone() });
-        let mut child = Command::new("node")
-            .arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/drivers/ai.mjs"))
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-            .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
-            .env("MYMIND_ROOT", root())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect("node runs in recording mode");
-        let mut stdin = child.stdin.take().unwrap();
-        let payload = json::to_string(&request);
-        let writer = std::thread::spawn(move || stdin.write_all(payload.as_bytes()).unwrap());
-        let output = child.wait_with_output().unwrap();
-        writer.join().unwrap();
-        assert!(output.status.success(), "driver failed");
-        let Value::Array(answers) = json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap() else { panic!("no array") };
-        assert_eq!(answers.len(), cases.len());
-        Some(answers)
-    } else { None };
+    let answers: Option<Vec<Value>> = if batch.recording() { panic!("Legacy recording requires the recorded pre-switch revision") } else { None };
     for (index, case) in cases.iter().enumerate() {
         let (rust, rust_log) = run(case);
         let concurrent = case.get("fn").as_str() == Some("analyze");

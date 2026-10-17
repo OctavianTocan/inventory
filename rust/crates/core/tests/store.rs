@@ -1,4 +1,4 @@
-//! `store`, `store_schema`, `search_index` and `search_document` against the JS store on both fixtures.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -11,7 +11,8 @@ use mm_core::store::{ChangesOptions, Cursor, IdKind, Store, ns_from_iso, iso_fro
 use mm_core::{Error, Result, Value, arr, obj};
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/store.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:store";
 
 fn open(file: &Path, drop_search: bool) -> Result<(Rc<Sqlite>, Store)> {
     let db = Rc::new(Sqlite::open(file, false)?);
@@ -269,7 +270,7 @@ fn nanosecond_helpers_match_node() {
         };
         isos.push(format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}{fraction}Z", random.below(10000), random.below(14), random.below(32), random.below(25), random.below(61), random.below(61)));
     }
-    let js = calls("lib/store.mjs", &isos.iter().map(|iso| ("nsFromIso", vec![Value::from(iso.as_str())])).collect::<Vec<_>>());
+    let js = calls("module:store", &isos.iter().map(|iso| ("nsFromIso", vec![Value::from(iso.as_str())])).collect::<Vec<_>>());
     let mut parsed = Vec::new();
     for (iso, answer) in isos.iter().zip(&js) {
         let result = ns_from_iso(iso);
@@ -287,7 +288,7 @@ fn nanosecond_helpers_match_node() {
             cases.push((*ns, digits));
         }
     }
-    let js = calls("lib/store.mjs", &cases.iter().map(|(ns, digits)| ("isoFromNs", vec![Value::BigInt(*ns), Value::from(*digits)])).collect::<Vec<_>>());
+    let js = calls("module:store", &cases.iter().map(|(ns, digits)| ("isoFromNs", vec![Value::BigInt(*ns), Value::from(*digits)])).collect::<Vec<_>>());
     for ((ns, digits), answer) in cases.iter().zip(&js) {
         assert_same(&iso_from_ns(*ns, *digits).map(Value::from), answer, &format!("isoFromNs({ns}, {digits})"));
     }

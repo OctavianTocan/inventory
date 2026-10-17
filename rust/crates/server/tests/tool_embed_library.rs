@@ -1,4 +1,4 @@
-//! `mymind embed-library` against `tools/embed-library.mjs`, with a fake Gemini on 127.0.0.1: the same printed lines,
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! status, requests and database contents, for the estimate, `--limit`, `--run`, the guards and the failures.
 
 #[path = "../../core/tests/common/mod.rs"]

@@ -111,12 +111,7 @@ struct Servers {
 
 // Each server gets its own copy, with the immutable initial database included in scenario identity.
 fn servers(mode: Mode) -> Servers {
-    let reference = recording().then(|| {
-        let (node_file, node_vars) = library(mode);
-        let mut node = Command::new("node");
-        node.arg("--no-warnings").arg("server.mjs");
-        (start(node, &node_vars), node_file.parent().unwrap().to_path_buf())
-    });
+    let reference: Option<(Server, PathBuf)> = recording().then(|| { panic!("Legacy recording requires the recorded pre-switch revision") });
     let (file, rust_vars) = library(mode);
     let fixture = fixture_identity(&file);
     let rust_copy = file.parent().unwrap().to_path_buf();

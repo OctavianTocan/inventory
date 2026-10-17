@@ -12,7 +12,8 @@ use mm_js::base64;
 use mm_test_support::golden::Batch;
 use mymind::bucket_fs::DirectoryBucket;
 
-const DRIVER: &str = "rust/crates/server/tests/drivers/bucket.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:server:bucket";
 
 // Represent bucket headers with the same object order as the reference snapshots.
 fn headers_value(headers: Option<&Headers>) -> Value {

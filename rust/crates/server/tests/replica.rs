@@ -37,9 +37,7 @@ fn start(mut command: Command) -> Server {
 const LOGGED: [&str; 4] = ["[miss]", "[write ignored]", "[placeholder]", "[error]"];
 
 fn node() -> Server {
-    let mut command = Command::new("node");
-    command.arg("--no-warnings").arg("server.mjs");
-    start(command)
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 fn rust() -> Server {

@@ -13,6 +13,11 @@ import { parseArgs, promisify } from 'node:util';
 import { normalizationDigest, verificationDigest, verificationMode } from './digests.mjs';
 import { reaRoot } from './rea-root.mjs';
 
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run coverage -- [--max-age-days 7] [--server rust|hosted-rust|hosted-worker]\nChecks saved drive evidence against current Rust sources and normalization.');
+  process.exit(0);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DRIVE = path.join(ROOT, 'evidence', 'drive');
 const run = promisify(execFile);

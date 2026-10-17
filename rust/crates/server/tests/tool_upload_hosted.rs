@@ -1,4 +1,4 @@
-//! `mymind upload-hosted` against `tools/upload-hosted.mjs`, with a fake Worker on 127.0.0.1 that keeps the rows it
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! receives in memory and answers the digest from them: the same printed lines, status, requests (sorted where the
 //! JS runs uploads side by side) and password-user payload for every command.
 

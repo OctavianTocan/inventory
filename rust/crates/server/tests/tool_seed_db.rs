@@ -1,4 +1,4 @@
-//! `mymind seed-db` against `tools/seed-db.mjs`: fresh seeds, reseeds that keep embeddings, argument forms and errors.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
@@ -30,18 +30,8 @@ fn js_root(directory: &Path) -> PathBuf {
 }
 
 fn run_js(root: &Path, cwd: &Path, args: &[&str]) -> Output {
-    assert!(tools_common::recording(), "legacy seed requires recording mode");
-    Command::new("node")
-        .arg(root.join("tools/seed-db.mjs"))
-        .args(args)
-        .env_clear()
-        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
-        .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("HOME", std::env::var_os("HOME").unwrap())
-        .env("NODE_NO_WARNINGS", "1")
-        .current_dir(cwd)
-        .output()
-        .unwrap()
+    let _ = (root, cwd, args);
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 fn run_rust(root: &Path, cwd: &Path, args: &[&str]) -> Output {
@@ -98,7 +88,7 @@ fn same_tables(js: &Path, rust: &Path) {
 }
 
 fn text(bytes: &[u8], path: &Path, label: &str) -> String {
-    String::from_utf8_lossy(bytes).replace(&path.to_string_lossy().into_owned(), label)
+    tools_common::legacy_help(&String::from_utf8_lossy(bytes)).replace(&path.to_string_lossy().into_owned(), label)
 }
 
 fn compare(root: &Path, cwd: &Path, rust_cwd: &Path, js_args: &[&str], rust_args: &[&str], js_db: &Path, rust_db: &Path) -> String {
@@ -157,7 +147,8 @@ fn relative_db_and_argument_errors() {
         let js = tools_common::recording().then(|| run_js(&root, &js_cwd, args));
         let rust = run_rust(&root, &rust_cwd, args);
         assert_eq!(rust.status.code(), Some(1), "{args:?}");
-        let actual = format!("status {:?} stdout {:?} stderr {:?}", rust.status.code(), rust.stdout, rust.stderr);
+        let stderr = tools_common::legacy_help(&String::from_utf8_lossy(&rust.stderr)).into_bytes();
+        let actual = format!("status {:?} stdout {:?} stderr {:?}", rust.status.code(), rust.stdout, stderr);
         let oracle = js.as_ref().map(|out| format!("status {:?} stdout {:?} stderr {:?}", out.status.code(), out.stdout, out.stderr));
         tools_common::check(&format!("argument error {args:?}"), actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
     }

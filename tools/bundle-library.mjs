@@ -6,6 +6,11 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run bundle\nSnapshots the local library and moves unreferenced replay bodies into the local backup directory.');
+  process.exit(0);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bundle = path.join(ROOT, 'library');
 const source = path.join(ROOT, 'data', 'mymind.db');

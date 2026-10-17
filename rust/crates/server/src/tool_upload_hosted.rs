@@ -21,7 +21,7 @@ use crate::node_path::resolve;
 use crate::parse_args::{Kind, Opt, parse};
 
 const BATCH_BYTES: usize = 4 * 1024 * 1024;
-const USAGE: &str = "Usage: node tools/upload-hosted.mjs <worker url> bucket|library <name>|user [<name>]|account <account> <library>|summary";
+const USAGE: &str = "Usage: mymind upload-hosted <worker url> bucket|library <name>|user [<name>]|account <account> <library>|summary";
 
 struct Admin {
     base: String,

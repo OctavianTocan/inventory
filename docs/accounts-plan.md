@@ -1,6 +1,6 @@
 # Accounts (roadmap phase 8)
 
-Status: owner-only Google sign-in is built (`lib/auth.mjs`, proven by `tools/check-auth.mjs`), and Cloudflare Access
+Status: owner-only Google sign-in is built (`rust/crates/core/src/auth.rs`, proven by `tools/check-auth.mjs`), and Cloudflare Access
 is gone (2026-10-16). A library per person is decided and planned below, not built.
 
 ## What is built
@@ -31,7 +31,7 @@ callback and the two localhost ones. The same process serves the host without si
 one process owns `data/mymind.db`; verification reads its own `data/verify.db`.
 
 The desktop app opens the hosted library when built with `MYMIND_URL` and signs in with Google inside its window.
-Password users (`tools/auth-user.mjs`, `/signin/password`) exist for testing the signed-in site without a Google
+Password users (`mymind auth-user`, `/signin/password`) exist for testing the signed-in site without a Google
 login.
 
 ## Decisions (the user, 2026-10-16)
@@ -59,7 +59,7 @@ tunnel; how to set that up is being discussed in `docs/cloudflare-plan.md`. The 
   recorded detail views and replays (keyed by those ids) stop lining up with it. In one shared file the owner's
   2,278 cards would collide with the test user's copy: either the owner's real library gets new ids (rewriting its
   rows and the media paths that embed them) or every key in every table becomes (user, id) and every query in
-  `lib/` changes. Separate files keep every id as it is and need no SQL changes.
+  `rust/crates/core/src/` changes. Separate files keep every id as it is and need no SQL changes.
 - Isolation comes from the file, not from remembering a `WHERE user_id = ?`. Today `store.space(id)`,
   `store.cardTags`, `spaceCards`, shares, pins and `api_metadata` read by id alone, and the search index has no
   user column; in a shared file each of those would leak another person's cards.
@@ -79,9 +79,9 @@ desktop app and verification use today.
 
 ### Stage 1: owner and test user
 
-1. `lib/auth.mjs` exports who a request is (`user(req)`: identity, email, kind) next to `allows(req)`.
+1. `rust/crates/core/src/auth.rs` exports who a request is (`user(req)`: identity, email, kind) next to `allows(req)`.
 2. A library registry opens a library's store, writer, search, uploads, media, enrichment and app API on its first
-   request and keeps them open; `server.mjs` routes each signed-in request to its library. `LOCAL_PORT` (loopback,
+   request and keeps them open; `rust/crates/server/src/serve.rs` routes each signed-in request to its library. `LOCAL_PORT` (loopback,
    no sign-in) keeps serving the owner's library.
 3. The hub ties each connection to its library and sends a library's events only to its own connections.
 4. The recordings are served only to libraries marked for them, so a library without them can never be answered
@@ -98,7 +98,7 @@ desktop app and verification use today.
 ### Stage 2: domain accounts
 
 - A verified `@octaviantocan.com` Google sign-in without a library gets a new empty one; the access rule in
-  `lib/auth.mjs` widens in its one place.
+  `rust/crates/core/src/auth.rs` widens in its one place.
 - A library without recordings gets a shell page generated from its own settings, pins and spaces, with nothing
   from the owner's recorded page in it.
 - Google Cloud: add the domain accounts as test users on the consent screen, or publish it (the agent does this in
@@ -112,7 +112,7 @@ desktop app and verification use today.
   @octaviantocan.com") and the "mymind-bypass" service token are deleted; the tunnel stays. No other Access
   application, policy or token was touched.
 - **Code:** the tunnel config no longer requires an Access token (`deploy/install.sh`), and `/download` checks only
-  the library session (`deploy/download-server.mjs`). `tools/check-hosted.mjs` needs no service token, and the
+  the library session (`rust/crates/server/src/download.rs`). `tools/check-hosted.mjs` needs no service token, and the
   `CF_ACCESS_*` variables are gone from both `.env` files.
 - **What a signed-out visitor sees (the user agreed):** an exact copy of a real company's sign-in page on another
   domain is what phishing filters flag, so requests arriving through the tunnel (`cf-connecting-ip`) get a plain
@@ -120,6 +120,6 @@ desktop app and verification use today.
   - no mymind name, logo, favicon or assets, and `noindex`, with `robots.txt` disallowing everything;
   - only `/signin` and the Google OAuth paths are open; mymind's assets and the API answer 401.
   Loopback visitors and verification still get mymind's recorded page, and everything after sign-in is unchanged
-  (`lib/auth.mjs`, `tools/check-auth.mjs`).
+  (`rust/crates/core/src/auth.rs`, `tools/check-auth.mjs`).
 - **Proof:** `tools/check-auth.mjs` 40/40, `tools/check-download.mjs` 7/7, `tools/check-hosted.mjs --browser` 11/11
   against `https://mymind.octaviantocan.com`.

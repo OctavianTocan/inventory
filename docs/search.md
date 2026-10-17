@@ -87,7 +87,7 @@ or OFFLINE without an explicit loopback `GEMINI_BASE_URL` degrade to text or emp
 
 ## Backfill and checks
 
-`node tools/embed-library.mjs [--db path] [--limit N]` only reads the database and prints an estimate. `--run`
+`rust/target/release/mymind embed-library [--db path] [--limit N]` only reads the database and prints an estimate. `--run`
 enables hosted embedding and transactions, unless `STORE_READONLY=1` or offline policy forbids the endpoint.
 The text builder and Gemini document formatting are shared with new-card analysis; existing vectors and cards
 edited during the API call are skipped. Text-only batches do not load images. Empty documents are skipped
@@ -109,7 +109,7 @@ It builds an isolated seed from committed recordings, exercises real Rust HTTP a
 local provider fixtures, and prints recording/field comparisons. It requires loopback sockets and never uses
 port 4321. The separate `check_capture` and `capture_browser` Rust targets retain strict Chromium assertions;
 run them on a host that allows Chromium's Unix socket IPC. Browser/REA verification remains a separate host
-operation. Retained JS suite retirement gaps are listed in `evidence/r13/stage-b-report.md`.
+operation. JS suite retirement dispositions are listed in `evidence/r13/stage-b-report.md`.
 
 For stable read checks against updated recordings, seed a fresh temporary database with the Rust `seed-db`
 command and set `TEST_SOURCE_DB` for the HTTP checks. Native store/search tests seed their own isolated databases;

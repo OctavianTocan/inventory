@@ -354,7 +354,7 @@ impl Response {
         Self { status, headers, body: body.into() }
     }
 
-    /// `send(res, status, body, headers)` (`lib/site.mjs`): a whole body that is never cached, with
+    /// `send(res, status, body, headers)` (`rust/crates/core/src/http.rs`): a whole body that is never cached, with
     /// `cache-control: no-store` first unless `headers` sets it.
     ///
     /// # Arguments

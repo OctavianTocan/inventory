@@ -1,4 +1,4 @@
-//! `mymind auth-user` against `tools/auth-user.mjs`: the same output, status, `.env` and user table for every
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! command, on a fresh root per side.
 
 #[path = "tools_common/mod.rs"]

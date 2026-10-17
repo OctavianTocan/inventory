@@ -12,8 +12,8 @@ if (args.includes('--help')) {
   console.log('node tools/check-worker.mjs [--container-smoke]\nRequires an existing Rust Worker build and pinned Wrangler. Runs only on isolated loopback.\n--container-smoke requires a prestarted local Worker with real containers at MYMIND_WORKER_CONTAINER_URL.');
   process.exit(0);
 }
-if (args.some((arg) => !['--container-smoke', '--isolated', '--record-js'].includes(arg))) throw new Error('Unknown Worker check argument');
-if (args.includes('--record-js') && process.env.MYMIND_RECORD_GOLDEN !== '1') throw new Error('--record-js requires MYMIND_RECORD_GOLDEN=1');
+if (process.env.MYMIND_RECORD_GOLDEN === '1' || args.includes('--record-js')) throw new Error('Legacy recording is unavailable after the Rust switch; use the recorded pre-switch revision.');
+if (args.some((arg) => !['--container-smoke', '--isolated'].includes(arg))) throw new Error('Unknown Worker check argument');
 const scratch = path.join(REPO, 'rust/target/worker-check');
 mkdirSync(scratch, { recursive: true });
 // A user/network namespace has no external interfaces; ioctl enables only its private loopback.
@@ -48,7 +48,6 @@ async function run(command, argv, options) {
 async function check() {
   const container = args.includes('--container-smoke');
   if (!container && process.env.MYMIND_WORKER_NETWORK_ISOLATED !== '1') throw new Error('The local runtime requires the loopback-only network namespace');
-  const record = args.includes('--record-js');
   if (container) {
     const url = process.env.MYMIND_WORKER_CONTAINER_URL;
     localUrl(url, 'MYMIND_WORKER_CONTAINER_URL');
@@ -57,10 +56,10 @@ async function check() {
   }
   const wrangler = process.env.MYMIND_WRANGLER ?? path.join(CRATE, 'node_modules/wrangler/bin/wrangler.js');
   if (!existsSync(wrangler)) throw new Error('Pinned Wrangler is missing; install the Worker package first or set MYMIND_WRANGLER to its local executable');
-  const configRoot = record ? path.join(REPO, 'worker') : CRATE;
+  const configRoot = CRATE;
   const config = JSON.parse(readFileSync(path.join(configRoot, 'wrangler.jsonc'), 'utf8').replace(/^\s*\/\/.*$/gm, ''));
   if (!existsSync(path.resolve(configRoot, config.main))) throw new Error('Rust Worker build is missing; run worker-build --release offline before this check');
-  const work = mkdtempSync(path.join(scratch, record ? 'js-' : 'rust-'));
+  const work = mkdtempSync(path.join(scratch, 'rust-'));
   const port = await freePort();
   const token = 'worker-oracle-local-admin-only';
   const { containers, routes, build, ...local } = config;
@@ -89,8 +88,8 @@ async function check() {
       if (child.exitCode !== null || Date.now() > until) throw new Error(`Local Wrangler could not start in the offline namespace:\n${log}`);
       try { await fetch(`${url}/robots.txt`, { redirect: 'manual', signal: AbortSignal.timeout(1500) }); break; } catch { await new Promise((resolve) => setTimeout(resolve, 200)); }
     }
-    process.exitCode = await cargo('worker_matches_frozen_js', { MYMIND_WORKER_URL: url, MYMIND_WORKER_ADMIN_TOKEN: token, ...(record ? { MYMIND_RECORD_GOLDEN: '1', MYMIND_WORKER_ORACLE: 'js' } : {}) });
-    if (!process.exitCode && !record) process.exitCode = await cargo('worker_credential_contracts', { MYMIND_WORKER_URL: url, MYMIND_WORKER_ADMIN_TOKEN: token }, 'worker_credentials');
+    process.exitCode = await cargo('worker_matches_frozen_js', { MYMIND_WORKER_URL: url, MYMIND_WORKER_ADMIN_TOKEN: token });
+    if (!process.exitCode) process.exitCode = await cargo('worker_credential_contracts', { MYMIND_WORKER_URL: url, MYMIND_WORKER_ADMIN_TOKEN: token }, 'worker_credentials');
     if (process.exitCode) console.error(errors);
   } finally {
     try { process.kill(-child.pid, 'SIGTERM'); } catch {}

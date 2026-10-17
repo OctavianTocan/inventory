@@ -43,7 +43,7 @@ pub struct Golden;
 pub fn golden(source: &str, recipe: &str) -> Golden {
     let target = Path::new(source).file_stem().unwrap().to_string_lossy().into_owned();
     let namespace = std::thread::current().name().expect("named integration test").to_owned();
-    let identity = format!("recipe={:x}\n{}", Sha256::digest(recipe.as_bytes()), fixture_identity());
+    let identity = format!("recipe={}\n{}", mm_test_support::golden::source_identity(env!("CARGO_MANIFEST_DIR"), &target, "recipe", &format!("{:x}", Sha256::digest(recipe.as_bytes()))), fixture_identity());
     SESSION.with(|slot| {
         assert!(slot.borrow().is_none(), "nested golden scenario");
         let inventory = mm_test_support::golden::TestGuard::new(env!("CARGO_MANIFEST_DIR"), &target);
@@ -83,12 +83,12 @@ impl Drop for Golden {
     }
 }
 
-/// Whether this explicit run may execute the pre-switch JavaScript oracle.
+/// Reject legacy recording after the switch.
 ///
 /// # Returns
-/// True only for `MYMIND_RECORD_GOLDEN=1`.
+/// False; panics when recording is requested in this checkout.
 pub fn recording() -> bool {
-    std::env::var("MYMIND_RECORD_GOLDEN").as_deref() == Ok("1")
+    mm_test_support::golden::recording()
 }
 
 /// Represent a potentially large output by its exact length and digest above 1024 bytes.
@@ -136,7 +136,9 @@ fn repo() -> PathBuf {
     std::env::var_os("MYMIND_ROOT").map_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().expect("repository root exists"), PathBuf::from)
 }
 
-/// Create a native-only scratch root; legacy modules are linked only in explicit recording mode.
+/// Create a native scratch root containing only immutable recording links.
+///
+/// `label` identifies the scenario. Returns a fresh target-local scratch directory.
 pub fn tmproot(label: &str) -> PathBuf {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("tools-{}-{}-{label}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
@@ -146,7 +148,7 @@ pub fn tmproot(label: &str) -> PathBuf {
     root
 }
 
-/// Link immutable recording inputs, adding a synthetic legacy tool tree only during recording.
+/// Link immutable recording inputs without adding backend or environment files.
 ///
 /// # Arguments
 /// * `root` - An existing empty temporary directory, never the repository root.
@@ -155,20 +157,6 @@ pub fn prepare_root(root: &Path) {
         let from = repo().join(name);
         assert!(from.is_dir(), "required immutable recording directory {name} is missing");
         std::os::unix::fs::symlink(from, root.join(name)).unwrap();
-    }
-    if recording() {
-        for name in ["lib", "node_modules", "package.json"] {
-            std::os::unix::fs::symlink(repo().join(name), root.join(name)).unwrap();
-        }
-        std::fs::create_dir_all(root.join("tools")).unwrap();
-        for entry in std::fs::read_dir(repo().join("tools")).unwrap() {
-            let entry = entry.unwrap();
-            if entry.path().extension().is_some_and(|extension| extension == "mjs") {
-                let text = std::fs::read_to_string(entry.path()).unwrap();
-                let text = text.replace("join(ROOT, '.env')", "join(ROOT, 'fixture-vars')");
-                std::fs::write(root.join("tools").join(entry.file_name()), text).unwrap();
-            }
-        }
     }
 }
 
@@ -187,22 +175,24 @@ fn collect(mut command: Command, env: &[(&str, &str)], stdin: Option<&str>) -> O
         child.stdin.take().unwrap().write_all(text.as_bytes()).unwrap();
     }
     let output = child.wait_with_output().unwrap();
-    Out { status: output.status.code().unwrap_or(-1), stdout: String::from_utf8_lossy(&output.stdout).into_owned(), stderr: String::from_utf8_lossy(&output.stderr).into_owned() }
+    Out { status: output.status.code().unwrap_or(-1), stdout: legacy_help(&String::from_utf8_lossy(&output.stdout)), stderr: legacy_help(&String::from_utf8_lossy(&output.stderr)) }
 }
 
-/// Run `node <root>/tools/<tool>.mjs` in `root` with only the given variables (plus PATH and HOME).
+/// Reject the retired operational oracle adapter.
+///
+/// `root`, `tool`, `args`, `env` and `stdin` retain the historical comparison signature.
+/// Never returns; legacy recording requires the recorded pre-switch revision.
 pub fn run_js(root: &Path, tool: &str, args: &[&str], env: &[(&str, &str)], stdin: Option<&str>) -> Out {
     run_js_flags(root, &[], tool, args, env, stdin)
 }
 
-/// `run_js` with extra flags for node itself, such as `--env-file-if-exists=.env`.
+/// Reject the retired operational oracle adapter with historical runtime flags.
+///
+/// `root`, `flags`, `tool`, `args`, `env` and `stdin` are unused historical inputs.
+/// Never returns; legacy recording requires the recorded pre-switch revision.
 pub fn run_js_flags(root: &Path, flags: &[&str], tool: &str, args: &[&str], env: &[(&str, &str)], stdin: Option<&str>) -> Out {
-    assert!(recording(), "Node oracle requires MYMIND_RECORD_GOLDEN=1");
-    let mut command = Command::new("node");
-    command.args(flags).arg(root.join("tools").join(format!("{tool}.mjs"))).args(args).current_dir(root);
-    // Node's "SQLite is experimental" notice is the runtime's, not the tool's.
-    let env: Vec<(&str, &str)> = env.iter().copied().chain([("NODE_NO_WARNINGS", "1")]).collect();
-    collect(command, &env, stdin)
+    let _ = (root, flags, tool, args, env, stdin);
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 /// Run the native subcommand `tool` with `MYMIND_ROOT=<root>` and the same variables.
@@ -389,13 +379,13 @@ fn write_response(stream: &mut TcpStream, request: &Req, response: &Resp) -> std
     stream.flush()
 }
 
-/// Run a driver script with node in `root`, with `MYMIND_ROOT=<root>` and the given variables.
+/// Reject the retired driver adapter without starting another process.
+///
+/// `root`, `script`, `args` and `env` are unused historical inputs. Never returns;
+/// legacy recording requires the recorded pre-switch revision.
 pub fn run_node(root: &Path, script: &str, args: &[&str], env: &[(&str, &str)]) -> Out {
-    assert!(recording(), "Node driver requires MYMIND_RECORD_GOLDEN=1");
-    let mut command = Command::new("node");
-    command.arg(script).args(args).current_dir(root);
-    let root = root.to_str().unwrap();
-    collect(command, &env.iter().copied().chain([("NODE_NO_WARNINGS", "1"), ("MYMIND_ROOT", root)]).collect::<Vec<_>>(), None)
+    let _ = (root, script, args, env);
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 fn seed_of(text: &str) -> usize {
@@ -527,4 +517,18 @@ pub fn closed_url() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     mm_test_support::golden::register_loopback_port(listener.local_addr().unwrap().port());
     format!("http://{}", listener.local_addr().unwrap())
+}
+
+/// Normalize the intentional executable prefix change in frozen CLI comparisons.
+///
+/// `text` is captured CLI output. Returns the same text with only usage prefixes
+/// mapped to the historical spelling stored in the pre-switch golden answers.
+pub fn legacy_help(text: &str) -> String {
+    let mut text = text.to_owned();
+    for tool in ["seed-db", "import-hosted", "auth-user", "upload-hosted", "embed-library", "try-ai"] {
+        for prefix in ["Usage: ", "usage: "] {
+            text = text.replace(&format!("{prefix}mymind {tool}"), &format!("{prefix}node tools/{tool}.mjs"));
+        }
+    }
+    text
 }

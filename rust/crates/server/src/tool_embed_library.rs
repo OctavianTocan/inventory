@@ -18,7 +18,7 @@ use crate::tools::embedding_item;
 
 const TEXT_USD_PER_MILLION: f64 = 0.20;
 const BATCH_SIZE: usize = 100;
-const USAGE: &str = "Usage: node tools/embed-library.mjs [--db path] [--limit N] [--run]";
+const USAGE: &str = "Usage: mymind embed-library [--db path] [--limit N] [--run]";
 const FAILED: &str = "Embedding backfill failed; completed batches are retained. Check flags, database and hosted API configuration.";
 
 struct Config {

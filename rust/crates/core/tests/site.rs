@@ -1,4 +1,4 @@
-//! `mm_core::site` against `lib/site.mjs`.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -6,7 +6,8 @@ use mm_core::http::Headers;
 use mm_core::site::{LOCAL_PREFIXES, localize, localize_value, replay_key_for, send_range};
 use mm_core::{Error, Object, Value, arr, obj};
 
-const DRIVER: &str = "rust/crates/core/tests/drivers/site.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:site";
 
 fn check(name: &str, cases: Vec<(Vec<Value>, Result<Value, Error>)>) {
     let calls: Vec<(&str, Vec<Value>)> = cases.iter().map(|(args, _)| (name, args.clone())).collect();

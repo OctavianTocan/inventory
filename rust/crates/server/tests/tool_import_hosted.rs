@@ -1,4 +1,4 @@
-//! `mymind import-hosted` against `tools/import-hosted.mjs`: stdout, the produced databases and the object stores.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
@@ -32,18 +32,8 @@ fn js_root(directory: &Path) -> PathBuf {
 }
 
 fn run_js(root: &Path, cwd: &Path, args: &[&str]) -> Output {
-    assert!(tools_common::recording(), "legacy import requires recording mode");
-    Command::new("node")
-        .arg(root.join("tools/import-hosted.mjs"))
-        .args(args)
-        .env_clear()
-        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
-        .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("HOME", std::env::var_os("HOME").unwrap())
-        .env("NODE_NO_WARNINGS", "1")
-        .current_dir(cwd)
-        .output()
-        .unwrap()
+    let _ = (root, cwd, args);
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 fn run_rust(root: &Path, cwd: &Path, args: &[&str]) -> Output {
@@ -133,7 +123,7 @@ fn same_tree(js: &Path, rust: &Path) -> usize {
 }
 
 fn text(bytes: &[u8], out: &Path) -> String {
-    String::from_utf8_lossy(bytes).replace(&out.to_string_lossy().into_owned(), "<out>")
+    tools_common::legacy_help(&String::from_utf8_lossy(bytes)).replace(&out.to_string_lossy().into_owned(), "<out>")
 }
 
 fn media_folder(directory: &Path) -> PathBuf {
@@ -292,11 +282,11 @@ fn usage_and_errors_match() {
     for args in cases {
         let js = tools_common::recording().then(|| run_js(&root, &js_cwd, &args));
         let rust = run_rust(&root, &rust_cwd, &args);
-        let rust_err = String::from_utf8_lossy(&rust.stderr).into_owned();
+        let rust_err = tools_common::legacy_help(&String::from_utf8_lossy(&rust.stderr));
         assert!(matches!(rust.status.code(), Some(1 | 2)), "{args:?}");
         let actual = format!("status {:?} stdout {:?} stderr {:?}", rust.status.code(), rust.stdout, rust_err);
         let oracle = js.as_ref().map(|out| {
-            let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+            let stderr = tools_common::legacy_help(&String::from_utf8_lossy(&out.stderr));
             let stderr = if out.status.code() == Some(1) { format!("Error: {}\n", js_message(&stderr)) } else { stderr };
             format!("status {:?} stdout {:?} stderr {:?}", out.status.code(), out.stdout, stderr)
         });

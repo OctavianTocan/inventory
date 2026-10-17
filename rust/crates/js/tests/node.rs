@@ -1,36 +1,16 @@
 //! Compare mm-js with frozen pre-switch golden expectations for every original oracle case.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 use mm_js::{Object, Value, arr, base64, date, inspect, json, number, text, uri};
 use mm_test_support::golden::{Batch, TestGuard};
 use rusqlite::{Connection, OpenFlags, types::ValueRef};
 use sha2::{Digest, Sha256};
 
-// Run the original oracle only during an explicitly requested recording pass.
+// Reject the retired recording adapter without starting another process.
 fn oracle(request: &Value) -> Vec<Value> {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut child = Command::new("node")
-        .arg(manifest.join("tests/oracle.mjs"))
-        .env("TZ", "UTC")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("node runs");
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(json::to_string(request).as_bytes())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(output.status.success(), "oracle failed");
-    match json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap() {
-        Value::Array(items) => items,
-        _ => panic!("oracle answer is not an array"),
-    }
+    let _ = request;
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 struct Random(u64);

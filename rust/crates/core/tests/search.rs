@@ -1,4 +1,4 @@
-//! `search` and `search_semantic` against `lib/search.mjs` with a deterministic fake of the hosted embedding API.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -19,7 +19,8 @@ use mm_core::{Error, Result, Value, arr, obj};
 use mm_js::json;
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/search.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:search";
 
 struct TestRuntime;
 

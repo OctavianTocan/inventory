@@ -1,7 +1,7 @@
 {
   "version": 1,
   "provenance": {
-    "source": "lib/render/media.mjs",
+    "source": "historical pre-switch JavaScript renderMedia",
     "sourceSha256": "536e5e436b424e519f7f1b580ba2fb6a2f3ca2be1f0fda877ea75470b5028840",
     "database": "rust/test-fixtures/mymind.db",
     "databaseSha256": "fc32c129284e929d5d33b5cce0b2ea7dd3fded7278fd89ac07fbad598cb048f3",

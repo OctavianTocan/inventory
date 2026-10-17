@@ -41,8 +41,6 @@ android/.idea/
 !android/app/src/main/kotlin/com/octaviantocan/mymind/data/
 
 # Cloudflare Worker: local secrets and wrangler's local state.
-worker/.dev.vars
-worker/.wrangler/
 rust/crates/worker/.dev.vars
 rust/crates/worker/.wrangler/
 rust/crates/worker/build/

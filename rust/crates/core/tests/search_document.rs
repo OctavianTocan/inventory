@@ -1,4 +1,4 @@
-//! `search_document` against `lib/search-document.mjs` on every card of both fixtures and generated documents.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -9,7 +9,8 @@ use mm_core::{Value, obj};
 use mm_js::json;
 use mm_sqlite::Sqlite;
 
-const MODULE: &str = "lib/search-document.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const MODULE: &str = "module:search-document";
 
 struct CardText {
     data: String,

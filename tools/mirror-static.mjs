@@ -3,6 +3,11 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run mirror\nDownloads captured static URLs into mirror/static; requires network access.');
+  process.exit(0);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIRROR = path.join(ROOT, 'mirror', 'static');
 const urls = JSON.parse(await readFile(path.join(ROOT, 'capture', 'static-urls.json'), 'utf8'));

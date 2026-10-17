@@ -14,7 +14,8 @@ use mm_js::json;
 use mm_sqlite::Sqlite;
 use mymind::read_metadata::import_read_metadata;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/read-metadata.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:server:read-metadata";
 
 // A fixture copy whose imported metadata and reader documents are gone, so the import runs again.
 fn fresh_copy() -> PathBuf {

@@ -1,4 +1,4 @@
-//! `render::views` against `lib/render/views.mjs` on every card of both fixture libraries.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -11,7 +11,8 @@ use mm_core::store::Store;
 use mm_core::{Error, Result, Value, obj};
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/views.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:views";
 
 fn attempt(work: impl FnOnce() -> Result<String>) -> Value {
     match work() {

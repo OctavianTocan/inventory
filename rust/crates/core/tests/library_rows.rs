@@ -1,4 +1,4 @@
-//! `library_rows` against `lib/library-rows.mjs`: value encoding, row insertion and table digests.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -10,7 +10,8 @@ use mm_core::sql::{Sql, SqlValue};
 use mm_core::{Error, Result, Value, arr, obj};
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/library-rows.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:library-rows";
 
 fn columns_of(db: &dyn Sql, table: &str) -> Vec<String> {
     db.query(&format!("PRAGMA table_info({table})"), &[]).unwrap().iter().map(|row| row.text("name").unwrap().to_owned()).collect()
@@ -84,7 +85,7 @@ fn encode_value_matches_node() {
     }
     cases.retain(|value| !matches!(value, SqlValue::Real(number) if !number.is_finite()));
     let js = calls(
-        "lib/library-rows.mjs",
+        "module:library-rows",
         &cases
             .iter()
             .map(|value| {

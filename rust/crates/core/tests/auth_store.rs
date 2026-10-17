@@ -9,7 +9,8 @@ use mm_core::{Error, Value, obj};
 use mm_js::{base64, date};
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/auth_store.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:auth_store";
 const NOW: i64 = 1_760_000_000_000;
 
 fn s(text: &str) -> Value {

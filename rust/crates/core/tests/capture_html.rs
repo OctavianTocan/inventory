@@ -1,4 +1,4 @@
-//! `capture_html` against `lib/capture-html.mjs` on recorded pages and generated markup.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -53,7 +53,8 @@ fn recorded_pages() -> Vec<String> {
     paths.iter().step_by(15).filter_map(|path| std::fs::read_to_string(path).ok()).collect()
 }
 
-const MODULE: &str = "lib/capture-html.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const MODULE: &str = "module:capture-html";
 
 #[test]
 fn source_url_matches_node() {

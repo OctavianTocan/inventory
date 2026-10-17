@@ -1,8 +1,6 @@
 //! Compare mm-msgpack with frozen pre-switch goldens on the recorded library and generated inputs.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 use mm_js::{Object, Value, arr, base64, json};
 use mm_msgpack::{DecodeOptions, EncodeOptions, decode_multi, encode, encode_recorded};
@@ -15,27 +13,10 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
-// Run the original oracle only during an explicitly requested recording pass.
+// Reject the retired recording adapter without starting another process.
 fn oracle(request: Value) -> Vec<Value> {
-    let mut child = Command::new("node")
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/oracle.mjs"))
-        .env("TZ", "UTC")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("node runs");
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(json::to_string(&request).as_bytes())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(output.status.success(), "oracle failed");
-    match json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap() {
-        Value::Array(items) => items,
-        _ => panic!("oracle answer is not an array"),
-    }
+    let _ = request;
+    panic!("Legacy recording requires the recorded pre-switch revision")
 }
 
 // Hash exact codec output bytes.

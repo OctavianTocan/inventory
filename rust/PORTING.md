@@ -1,16 +1,14 @@
-# Porting the backend to Rust
+# Rust backend maintenance
 
-How a JS module in `lib/` becomes a Rust module in `mm-core`. The plan is
-`docs/plans/2026-10-17-0110-refactor-rust-backend-plan.md`; the JS stays frozen as the reference until the switch.
+Rust is the backend. The pre-switch implementation and its executable oracle adapters were removed after
+Stages A and B froze expectations and ported the JS checks. The historical plan is
+`docs/plans/2026-10-17-0110-refactor-rust-backend-plan.md`.
 
 ## Where things go
 
-- `lib/<name>.mjs` becomes `crates/core/src/<name>.rs` with `-` replaced by `_` (`store-write` is
-  `store_write.rs`); `lib/render/<name>.mjs` becomes `crates/core/src/render/<name>.rs`.
-- Code that needs the file system, child processes, sockets or Chromium (`bucket-fs`, `local-media`,
-  `media-processor`, `capture-http`, `capture-link`, `read-metadata`, the directory half of `uploads`) goes in the
-  native host crate, behind a trait in `mm-core` that the Worker implements too.
-- `mm-core` must build for `wasm32-unknown-unknown`: no `std::fs`, `std::process`, `std::net` or threads in it.
+Shared behavior belongs in `crates/core/src/`. File-system, process, socket and Chromium work belongs in the native
+host `crates/server/src/`, behind core host traits also implemented by the Worker. `mm-core` must build for
+`wasm32-unknown-unknown`: no `std::fs`, `std::process`, `std::net` or threads in it.
 
 ## What `mm-core` gives every module
 
@@ -24,8 +22,7 @@ How a JS module in `lib/` becomes a Rust module in `mm-core`. The plan is
   a `Uint8Array` as BLOB, `null` as NULL. Read rows through `row.text()`, `row.number()`, `row.int()`,
   `row.blob()`, or `row.get(...).to_value()` for the value JS saw. Never rely on INTEGER versus REAL when reading:
   Durable Objects read both as numbers.
-- `mm_core::http`: `Request` (lower-case `Headers`, parsed `url`, `Body`), `Response`, `Response::send` (the
-  `send()` of `lib/site.mjs`), `search`, `search_param`. A JS handler that returned `false` for "not mine" returns
+- `mm_core::http`: `Request` (lower-case `Headers`, parsed `url`, `Body`), `Response`, `Response::send`, `search`, `search_param`. A JS handler that returned `false` for "not mine" returns
   `Ok(None)`.
 - `mm_core::host`: the async host traits (`#[async_trait(?Send)]`): `Bucket`, `Fetch` (`fetch` follows redirects
   as Node's `fetch` does; `fetch_unfollowed` is `redirect: 'manual'`), `Media`, `UploadStorage`, `Resource` (the
@@ -72,67 +69,40 @@ Answers must be byte-identical to the JS backend. What that takes:
 
 ## Testing
 
-Every ported module gets differential tests in `crates/core/tests/<area>.rs` that run the same inputs through Rust
-and through the JS module and compare the answers as JSON text (`tests/common/mod.rs`):
+Tests compare Rust with frozen pre-switch golden expectations, without a Node oracle. They rebuild immutable
+temporary fixtures from versioned manifests and logical rows; never replace them from mutable `data/`.
+`MYMIND_RECORD_GOLDEN=1` fails explicitly: legacy recording requires the recorded pre-switch revision.
+The test-support guard verifies source fingerprints, fixture hashes, ordered requests, case IDs, complete batch
+inventories and exact response length/SHA-256. Small synthetic scrypt expectations also contain inline values.
+No golden is re-recorded for help-prefix normalization or backend removal. An exact reviewed source transition
+maps only the post-removal source fingerprints to the frozen identities; later edits still fail closed.
 
-- `common::calls(module, &[(export, args)])` calls exported functions of any JS file below the repository root in
-  one Node process and returns `Ok(value)` or the error it threw. `common::assert_same(rust_result, js_answer,
-  context)` compares.
-- For stateful JS (a store over a database, a handler), write a small driver module in
-  `crates/core/tests/drivers/<name>.mjs` that imports `lib/` and exports plain functions taking JSON arguments,
-  and call it with `common::calls`.
-- Test on the real library: the fixtures are copies, never the files in `data/`:
-  `MYMIND_TEST_DB` (the owner library, about 1,400 cards) and `MYMIND_TEST_HOSTED_DB` (the hosted test library
-  with its recordings). Copy a fixture to a temporary directory before any test that writes.
-- Cover every exported function on recorded data (every card, every recorded body) plus generated edge cases.
-- Temporary files go under `env!("CARGO_TARGET_TMPDIR")`, never `/tmp` (a RAM-backed tmpfs here), and a test
-  never writes into the repository.
-- `runtime::set_fixed_now` is global to the process, so tests that fix the time run serialized; hub tests need an
-  idle runtime (no other task holding the `LocalSet`).
-- The workspace lists its members in `Cargo.toml`; a new crate is added there.
-- Agents porting in parallel work in copies under `rust/target/work/<name>/rust` (on disk, not tmpfs), with their
-  own target directories, and the main session merges them by hand.
-- `cargo clippy --all-targets` stays clean; run cargo with `nice -n 19` and `-j 3` (a long verification runs on
-  this machine).
+Core tests use `tests/common/mod.rs`; logical identifiers translate to historical golden lookup keys without
+filesystem operations or executable driver paths. Native HTTP tests use immutable request inventories, typed state and normalized HTTP,
+hub and application log expectations. Operational tests exercise `mymind` subcommands with scratch roots and
+loopback fake providers. CLI comparisons normalize only the legacy usage prefix to preserve existing goldens.
+Media tests compare frozen byte expectations and deterministic metadata, with ffprobe checks for generated video.
 
-## The native server
+All scratch belongs under `env!("CARGO_TARGET_TMPDIR")`; screenshot uses the short `TMPDIR=/tmp/mmt` when needed.
+Tests never write into the library. `runtime::set_fixed_now` is global, so fixed-clock tests run serialized;
+hub tests need an idle runtime. Run Cargo with `nice -n 19`, `--offline`, `-j 2` and at most `--test-threads=2`.
+`cargo clippy --all-targets -- -D warnings` stays clean.
 
-`crates/server` is the host for `server.mjs`: `http.rs` puts Node's `http` semantics on hyper (header merging,
-`req.headers`, `half_close` as Node's `allowHalfOpen`, no `content-length` on HEAD answers), `serve.rs` is
-`handle()`, `socket.rs` carries `/hub` upgrades, `fetch.rs` is Node's `fetch`. `tests/replica.rs` sends every
-replayed and recorded request plus the edge cases of each route to `node server.mjs` and to `mymind`, and compares
-status, headers (case-insensitive, without `date` and framing headers), bodies and request logs.
+The native `mymind serve`, `download-server` and `container` subcommands share the same backend.
+Operational commands include `seed-db`, `import-hosted`, `upload-hosted`, `auth-user`, `embed-library`, `try-ai`,
+`capture-fixtures` and `search-recordings`. Developer tools resolve only a Rust binary through
+`tools/server-command.mjs`; `MYMIND_SERVER` overrides its default `rust/target/release/mymind` path.
+`tools/digests.mjs` hashes request-serving Rust sources, manifests, build/config inputs and replay helpers for
+coverage. Backend or normalization edits make earlier drive evidence `verifier-result-incompatible`.
 
-`tests/library.rs` runs both servers on fixture copies with a library: the API over `STORE_DB` (writable, with
-reads only, and read-only with every request) and `HOSTED=1` over the hosted test library and a copy of its
-objects (`MYMIND_TEST_HOSTED_BUCKET`, which `fixtures.py` fills), and checks that a write reaches a `/hub` client
-alike. The two servers' clocks write into the answers whenever a request writes (a card's `modified`, a smart
-space's `checked`, the `x-checkpoint` header), so the comparison zeroes the digits of ISO times and of 13-digit or
-longer epoch numbers dated after the test started, keeping lengths and MessagePack prefixes, and compares every
-older time exactly. `tests/read_metadata.rs` covers the seed import, `tests/screenshot.rs` the Chromium screenshots
-(CDP over `--remote-debugging-pipe`, every request answered by the capture transport), `tests/media.rs` the
-renditions and media preparation against sharp's and the JS processor's bytes.
-
-The operational tools of `tools/` that imported `lib/` are subcommands of `mymind` (`crates/server/src/tool_*.rs`,
-`mymind seed-db`, `mymind import-hosted`, …), with the JS tool's arguments, output and exit statuses. Their tests run
-the JS tool from a temporary root (a copy of `tools/` with `lib/`, `mirror/`, `capture/`, `replay/` linked in and no
-`.env`), because the tools find the repository from their own path and some read or write its `.env`. Where a JS
-tool dies on an uncaught error, Node prints the source line and stack before `Error: …`; the subcommand prints only
-the `Error: …` line, with the same exit status 1.
-
-The Node tooling that stays (`drive`, `verify-all`, `coverage`, the HTTP checks, `check-download`) starts the backend
-through `tools/server-command.mjs`: `MYMIND_SERVER=rust/target/release/mymind` swaps `node server.mjs` for the
-binary, and `tools/digests.mjs` then hashes the Rust crates instead of `server.mjs` and `lib/`, so coverage judges
-each backend by its own runs.
-
-`rust/container/Dockerfile` builds the media container from the Rust binary (`mymind container`), with sharp's
-libvips, ffmpeg, poppler and Chromium and no Node; `crates/worker/wrangler.jsonc` builds its image from it.
+`rust/container/Dockerfile` builds the media container from `mymind container`, pinned libvips, ffmpeg, Poppler and
+Chromium. It needs no Node runtime; the Worker's `wrangler.jsonc` selects this image and its repository build context.
 
 ## Images
 
 `vips.rs` calls libvips through its C API. The crate links the build sharp 0.34.5 ships (sharp-libvips 1.2.4,
 libvips 8.17.3 with mozjpeg, libspng, libwebp, libheif and cgif), which `rust/fetch-libvips.sh` downloads into
-`rust/libvips/<platform>/` and checks against the sha512 in `package-lock.json`; run it once before the first
+`rust/libvips/<platform>/` and checks against the pinned sha512 values in that script; run it once before the first
 `cargo build`. `MYMIND_VIPS_DIR` names another directory with that library, or `system` for the system libvips. A
 system libvips (another version, libjpeg-turbo instead of mozjpeg) encodes other bytes, so only sharp's build gives
 the JS renditions byte for byte. Each sharp call is ported with every option sharp passes, not libvips' defaults:
@@ -140,7 +110,7 @@ the JS renditions byte for byte. Each sharp call is ported with every option sha
 quality 80, optimised Huffman coding, trellis quantisation off; for WebP, quality 80 and effort 4), one libvips
 thread on glibc Linux as sharp sets it, and libvips warnings kept out of the log (`g_log_set_handler`). Unlike
 sharp, the libvips operation cache is off; that changes memory use, not bytes. `tests/media.rs` compares every
-rendition with sharp's bytes.
+rendition with frozen pre-switch sharp byte expectations.
 
 ## Link screenshots
 
@@ -169,7 +139,12 @@ differ from each other (`docs/rust-benchmarks.md`).
 
 ## The Worker
 
-`crates/worker` is `worker/` on workers-rs, built to WebAssembly with `worker-build --release`. It keeps the class
+The pinned Wrangler package and sole production configuration live beside the Rust Worker. From the repository
+root run `npm --prefix rust/crates/worker run dev` or `npm --prefix rust/crates/worker run deploy`. Generated
+workers-rs glue in `crates/worker/build/index.js` is an ignored build artifact required by Wrangler.
+
+
+`crates/worker` uses workers-rs, built to WebAssembly with `worker-build --release`. It keeps the class
 names, bindings, Durable Object SQL schema and R2 keys of the JS Worker, so it opens the deployed data unchanged.
 
 - Durable Objects called each other with JS RPC; workers-rs objects answer only `fetch`, so a call is an internal

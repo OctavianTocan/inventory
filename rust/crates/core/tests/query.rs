@@ -1,4 +1,4 @@
-//! `media-files`, `download-page`, `ai-tags` and `search-query` against the JS backend on generated input.
+//! Compare media, downloads, tags and query behavior with frozen pre-switch expectations.
 
 mod common;
 
@@ -9,8 +9,9 @@ use mm_core::media_files::{MIME, byte_range, cover, mime, parse_rendition};
 use mm_core::search_query::{Scores, Term, evaluate, parse_query, type_slugs};
 use mm_core::{Value, arr, obj};
 
+// Return a historical frozen namespace, never a filesystem input.
 fn driver(name: &str) -> String {
-    format!("{}/tests/drivers/{name}", env!("CARGO_MANIFEST_DIR"))
+    format!("driver:core:{name}")
 }
 
 fn same<T: Into<Value>>(rust: mm_core::Result<T>, js: &common::Answer, context: &str) {
@@ -24,7 +25,7 @@ fn strings(values: &[String]) -> Value {
 #[test]
 fn mime_table_matches_node() {
     let _goldens = common::test_guard();
-    let js = common::call(&driver("render.mjs"), "mimeTable", vec![]);
+    let js = common::call(&driver("render"), "mimeTable", vec![]);
     let rust: Value = MIME.iter().map(|(key, value)| arr![*key, *value]).collect::<Vec<_>>().into();
     common::assert_value(&rust, &js, "MIME table");
     assert_eq!(mime("png"), Some("image/png"));
@@ -50,7 +51,7 @@ fn rendition_matches_node() {
         let length = random.below(6) as usize + 1;
         paths.push(random.text(&pieces, length));
     }
-    let js = calls("lib/media-files.mjs", &paths.iter().map(|path| ("parseRendition", vec![Value::from(path.as_str())])).collect::<Vec<_>>());
+    let js = calls("module:media-files", &paths.iter().map(|path| ("parseRendition", vec![Value::from(path.as_str())])).collect::<Vec<_>>());
     let mut ok = 0;
     for (path, js) in paths.iter().zip(&js) {
         let rust = parse_rendition(path).map(|rendition| rendition.to_value());
@@ -80,7 +81,7 @@ fn byte_range_matches_node() {
             requests.push(("byteRange", vec![range.as_deref().map_or(Value::Undefined, Value::from), size.into()]));
         }
     }
-    let js = calls("lib/media-files.mjs", &requests);
+    let js = calls("module:media-files", &requests);
     let mut at = 0;
     let mut partial = 0;
     for range in &ranges {
@@ -115,7 +116,7 @@ fn cover_matches_node() {
     cases.push((Value::Undefined, 800.0, 1000.0));
     let mut requests: Vec<_> = cases.iter().map(|(blob, w, h)| ("cover", vec![blob.clone(), (*w).into(), (*h).into()])).collect();
     requests.push(("cover", vec![obj! { "path" => "d", "width" => 4000, "height" => 3000 }.into()]));
-    let js = calls("lib/media-files.mjs", &requests);
+    let js = calls("module:media-files", &requests);
     for ((blob, w, h), js) in cases.iter().zip(&js) {
         same(cover(blob, *w, *h), js, &format!("cover({}, {w}, {h})", common::text(blob)));
     }
@@ -166,7 +167,7 @@ fn download_page_matches_node() {
             requests.push(("downloadPage", vec![manifest.clone(), user.into()]));
         }
     }
-    let js = calls("lib/download-page.mjs", &requests);
+    let js = calls("module:download-page", &requests);
     let mut at = 0;
     for manifest in &manifests {
         for user in users {
@@ -197,11 +198,11 @@ fn tag_keys_match_node() {
         let length = random.below(5) as usize;
         names.push(random.text(WORDS, length));
     }
-    let js = calls("lib/ai-tags.mjs", &names.iter().map(|name| ("tagKey", vec![Value::from(name.as_str())])).collect::<Vec<_>>());
+    let js = calls("module:ai-tags", &names.iter().map(|name| ("tagKey", vec![Value::from(name.as_str())])).collect::<Vec<_>>());
     for (name, js) in names.iter().zip(&js) {
         same(Ok(tag_key(name)), js, &format!("tagKey({name:?})"));
     }
-    let js = calls("lib/ai-tags.mjs", &[("tagKey", vec![Value::Null]), ("tagKey", vec![Value::Undefined]), ("tagKey", vec![5.into()])]);
+    let js = calls("module:ai-tags", &[("tagKey", vec![Value::Null]), ("tagKey", vec![Value::Undefined]), ("tagKey", vec![5.into()])]);
     assert_same(&Ok(tag_key("").into()), &js[0], "tagKey(null)");
     assert_same(&Ok(tag_key("").into()), &js[1], "tagKey(undefined)");
     assert_same(&Ok(tag_key("5").into()), &js[2], "tagKey(5)");
@@ -221,7 +222,7 @@ fn relevant_tags_match_node() {
         let length = random.below(3) as usize + 1;
         cases.push((random.text(WORDS, length), TYPES[random.below(TYPES.len() as u64) as usize]));
     }
-    let js = calls("lib/ai-tags.mjs", &cases.iter().map(|(name, kind)| ("relevantTag", vec![Value::from(name.as_str()), Value::from(*kind)])).collect::<Vec<_>>());
+    let js = calls("module:ai-tags", &cases.iter().map(|(name, kind)| ("relevantTag", vec![Value::from(name.as_str()), Value::from(*kind)])).collect::<Vec<_>>());
     for ((name, kind), js) in cases.iter().zip(&js) {
         same(relevant_tag(name, kind).map(Value::Bool), js, &format!("relevantTag({name:?}, {kind:?})"));
     }
@@ -252,7 +253,7 @@ fn curated_tags_match_node() {
     requests.push((vec![obj! {}.into(), obj! { "name" => 5 }.into(), "str".into(), obj! { "name" => "ok", "z" => 1, "a" => 2 }.into()], "Image", vec![], vec![]));
     requests.push((vec![obj! { "name" => "  padded name  " }.into(), obj! { "name" => "a b c d e" }.into(), obj! { "name" => "a b c d" }.into()], "Note", vec!["padded Name".into()], vec![]));
     requests.push(((0..14).map(|index| obj! { "name" => format!("tag{index}x") }.into()).collect(), "Note", vec![], vec![]));
-    let js = calls("lib/ai-tags.mjs", &requests.iter().map(|(tags, kind, vocabulary, existing)| ("curateTags", vec![Value::Array(tags.clone()), Value::from(*kind), strings(vocabulary), strings(existing)])).collect::<Vec<_>>());
+    let js = calls("module:ai-tags", &requests.iter().map(|(tags, kind, vocabulary, existing)| ("curateTags", vec![Value::Array(tags.clone()), Value::from(*kind), strings(vocabulary), strings(existing)])).collect::<Vec<_>>());
     let mut kept = 0;
     for ((tags, kind, vocabulary, existing), js) in requests.iter().zip(&js) {
         let rust = curate_tags(tags, kind, vocabulary, existing);
@@ -280,7 +281,7 @@ fn type_slugs_match_node() {
         let length = random.below(5) as usize + 1;
         kinds.push(random.text(&extra, length));
     }
-    let js = calls("lib/search-query.mjs", &kinds.iter().map(|kind| ("typeSlugs", vec![Value::from(kind.as_str())])).collect::<Vec<_>>());
+    let js = calls("module:search-query", &kinds.iter().map(|kind| ("typeSlugs", vec![Value::from(kind.as_str())])).collect::<Vec<_>>());
     for (kind, js) in kinds.iter().zip(&js) {
         same(type_slugs(kind).map(|slugs| strings(&slugs)), js, &format!("typeSlugs({kind:?})"));
     }
@@ -316,7 +317,7 @@ fn parse_query_matches_node() {
     }
     requests.push(("parseQuery", vec![Value::Null]));
     requests.push(("parseQuery", vec![Value::Undefined, Value::Bool(true)]));
-    let js = calls("lib/search-query.mjs", &requests);
+    let js = calls("module:search-query", &requests);
     let mut at = 0;
     let mut appended = 0;
     for query in &queries {
@@ -345,7 +346,7 @@ fn evaluate_matches_node() {
     for (index, query) in queries.iter().enumerate() {
         requests.push(("run", vec![Value::from(query.as_str()), Value::Bool(index % 2 == 0), strings(&ids), Value::Bool(index % 3 == 0)]));
     }
-    let js = calls(&driver("search-query.mjs"), &requests);
+    let js = calls(&driver("search-query"), &requests);
     let universe: Scores = ids.iter().map(|id| (id.clone(), 1.0)).collect();
     let mut compared = 0;
     for (index, (query, js)) in queries.iter().zip(&js).enumerate() {

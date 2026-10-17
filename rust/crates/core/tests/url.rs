@@ -5,7 +5,8 @@ mod common;
 use mm_core::{Value, arr, obj};
 use mm_js::url;
 
-const DRIVER: &str = "rust/crates/core/tests/drivers/url.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:url";
 
 fn parsed(input: &str, base: Option<&str>) -> Value {
     let Some(url) = url::parse(input, base) else { return Value::Null };
