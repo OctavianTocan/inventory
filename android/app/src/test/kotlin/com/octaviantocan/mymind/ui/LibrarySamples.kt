@@ -88,6 +88,7 @@ object LibrarySamples {
  * @param suggestions Tag suggestions above the results.
  * @param query Text in the search field.
  * @param grid Scroll position of the grid; null keeps one of its own.
+ * @param topOfMind Pinned cards of the Top of Mind row.
  */
 @Composable
 fun SampleEverything(
@@ -99,6 +100,7 @@ fun SampleEverything(
     suggestions: List<Suggestion> = emptyList(),
     query: String = "",
     grid: LazyStaggeredGridState? = null,
+    topOfMind: List<Card> = LibrarySamples.topOfMind,
 ) {
     val focus = remember { FocusRequester() }
     EverythingContent(
@@ -123,6 +125,7 @@ fun SampleEverything(
         onOpenSettings = {},
         onAdd = {},
         gridState = grid ?: remember { LazyStaggeredGridState() },
+        topOfMind = topOfMind,
     )
 }
 

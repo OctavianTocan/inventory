@@ -51,6 +51,14 @@ val mymindResourceFiles = listOf(
     "drawable/spaces_checkmark.xml",
     "drawable/ic_chevron_down_light.xml",
     "drawable/ic_spaces.xml",
+    "drawable/baseline_photo_library_24.xml",
+    "drawable/baseline_camera_alt_24.xml",
+    "drawable/ic_upload_progress.png",
+    "drawable/ic_image.xml",
+    "drawable/ic_video.xml",
+    "drawable/ic_pdf.xml",
+    "drawable/ic_text.xml",
+    "drawable/ic_delete.xml",
 )
 
 val robolectricJvmArgs = listOf(

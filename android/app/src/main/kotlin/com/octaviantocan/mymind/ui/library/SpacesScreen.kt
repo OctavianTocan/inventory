@@ -46,6 +46,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -87,7 +89,9 @@ private const val STACK_SCALE = 0.9f
  * @param onOpenCard Called with a card tapped inside a space and that space's id.
  * @param onNewSpace Called when the + button of the list is tapped.
  * @param onDeleteSpace Called when "Delete space" is picked in an opened space's menu.
+ * @param onAddToSpace Called with the opened space when its + button is tapped.
  * @param modifier Modifier for the page.
+ * @param onLongPressCard Called with a card long-pressed inside a space and that space's id.
  */
 @Composable
 fun SpacesScreen(
@@ -97,13 +101,22 @@ fun SpacesScreen(
     onOpenCard: (Card, String) -> Unit,
     onNewSpace: () -> Unit,
     onDeleteSpace: (Space) -> Unit,
+    onAddToSpace: (Space) -> Unit,
     modifier: Modifier = Modifier,
+    onLongPressCard: ((Card, String) -> Unit)? = null,
 ) {
     val spaces by viewModel.spaces.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { if (spaces.spaces.isEmpty()) viewModel.loadSpaces() }
     BackHandler(enabled = openSpace != null) { onOpenSpace(null) }
     if (openSpace == null) {
-        SpaceListContent(spaces, onOpenSpace = onOpenSpace, onRetry = viewModel::loadSpaces, onAdd = onNewSpace, modifier = modifier)
+        SpaceListContent(
+            spaces,
+            onOpenSpace = onOpenSpace,
+            onRetry = viewModel::loadSpaces,
+            onAdd = onNewSpace,
+            modifier = modifier,
+            onRefresh = viewModel::refreshSpaces,
+        )
     } else {
         val feed = viewModel.spaceFeed(openSpace.id)
         val state by feed.state.collectAsStateWithLifecycle()
@@ -113,9 +126,11 @@ fun SpacesScreen(
             onBack = { onOpenSpace(null) },
             onLoadMore = feed::loadMore,
             onOpenCard = { onOpenCard(it, openSpace.id) },
-            onAdd = {},
+            onAdd = { onAddToSpace(openSpace) },
             onDelete = { onDeleteSpace(openSpace) },
             modifier = modifier,
+            onRefresh = { viewModel.refreshSpaceFeed(openSpace.id) },
+            onLongPressCard = onLongPressCard?.let { press -> { card: Card -> press(card, openSpace.id) } },
         )
     }
 }
@@ -128,21 +143,31 @@ fun SpacesScreen(
  * @param onRetry Called to read the spaces again after a failure.
  * @param onAdd Called when the + button is tapped.
  * @param modifier Modifier for the page.
+ * @param onRefresh Called when the list is pulled down to refresh.
  */
 @Composable
-fun SpaceListContent(state: SpacesState, onOpenSpace: (Space) -> Unit, onRetry: () -> Unit, onAdd: () -> Unit, modifier: Modifier = Modifier) {
+fun SpaceListContent(
+    state: SpacesState,
+    onOpenSpace: (Space) -> Unit,
+    onRetry: () -> Unit,
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier,
+    onRefresh: () -> Unit = {},
+) {
     Box(modifier.fillMaxSize().background(MymindTheme.page.background)) {
         when {
             state.spaces.isEmpty() && state.error != null -> WebErrorScreen(onRetry = onRetry)
             state.spaces.isEmpty() && !state.loaded -> PageSpinner()
-            else -> LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = PAGE_GUTTER, end = PAGE_GUTTER, top = VIEW_HEADER_HEIGHT + SPACE_LIST_GAP, bottom = GRID_BOTTOM_PADDING),
-                horizontalArrangement = Arrangement.spacedBy(PAGE_GUTTER),
-                verticalArrangement = Arrangement.spacedBy(SPACE_ROW_GAP),
-            ) {
-                items(state.spaces, key = { it.id }) { space -> SpaceStack(space, state.covers[space.id]) { onOpenSpace(space) } }
+            else -> PullRefresh(state.refreshing, onRefresh, top = VIEW_HEADER_HEIGHT) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = PAGE_GUTTER, end = PAGE_GUTTER, top = VIEW_HEADER_HEIGHT + SPACE_LIST_GAP, bottom = GRID_BOTTOM_PADDING),
+                    horizontalArrangement = Arrangement.spacedBy(PAGE_GUTTER),
+                    verticalArrangement = Arrangement.spacedBy(SPACE_ROW_GAP),
+                ) {
+                    items(state.spaces, key = { it.id }) { space -> SpaceStack(space, state.covers[space.id]) { onOpenSpace(space) } }
+                }
             }
         }
         ViewHeader(title = "All Spaces")
@@ -161,6 +186,8 @@ fun SpaceListContent(state: SpacesState, onOpenSpace: (Space) -> Unit, onRetry: 
  * @param onAdd Called when the + button is tapped.
  * @param modifier Modifier for the page.
  * @param onDelete Called when "Delete space" is picked in the menu; null leaves the menu dots without a menu.
+ * @param onRefresh Called when the grid is pulled down to refresh.
+ * @param onLongPressCard Called with a long-pressed card, or null to ignore long presses.
  */
 @Composable
 fun SpaceContent(
@@ -172,18 +199,30 @@ fun SpaceContent(
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
     onDelete: (() -> Unit)? = null,
+    onRefresh: () -> Unit = {},
+    onLongPressCard: ((Card) -> Unit)? = null,
 ) {
     Box(modifier.fillMaxSize().background(MymindTheme.page.background)) {
-        if (feed.empty) PageSpinner() else CardGrid(feed, onLoadMore, onOpenCard, top = VIEW_HEADER_HEIGHT + VIEW_HEADER_GAP)
+        if (feed.empty) {
+            PageSpinner()
+        } else {
+            PullRefresh(feed.refreshing, onRefresh, top = VIEW_HEADER_HEIGHT) {
+                CardGrid(feed, onLoadMore, onOpenCard, top = VIEW_HEADER_HEIGHT + VIEW_HEADER_GAP, onLongPressCard = onLongPressCard)
+            }
+        }
         ViewHeader(title = space.name.orEmpty(), onBack = onBack, showMenu = true, onDelete = onDelete)
         AddFab(onAdd, Modifier.align(Alignment.BottomEnd))
     }
 }
 
-/** The 60 dp title bar: optional back arrow, centred title, optional menu dots that open "Delete space". */
+/**
+ * The 60 dp title bar: optional back arrow, centred title, optional menu dots that open "Delete space" with the
+ * long-press haptic the web asks for when space options open.
+ */
 @Composable
 private fun ViewHeader(title: String, onBack: (() -> Unit)? = null, showMenu: Boolean = false, onDelete: (() -> Unit)? = null) {
     val color = viewHeaderColor()
+    val haptic = LocalHapticFeedback.current
     Box(Modifier.fillMaxWidth().height(VIEW_HEADER_HEIGHT).background(MymindTheme.page.background)) {
         Text(
             title,
@@ -222,7 +261,10 @@ private fun ViewHeader(title: String, onBack: (() -> Unit)? = null, showMenu: Bo
                 val tap = if (onDelete != null) {
                     Modifier
                         .semantics { contentDescription = "Space options" }
-                        .clickable(interactionSource = null, indication = null, role = Role.Button) { expanded = true }
+                        .clickable(interactionSource = null, indication = null, role = Role.Button) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            expanded = true
+                        }
                 } else {
                     Modifier
                 }

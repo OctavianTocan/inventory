@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
  * @property switchCheckedThumb Thumb of a switch that is on.
  * @property dangerLabel Colour of the danger zone caption.
  * @property dangerButton Fill of the account deletion button.
+ * @property queueItem Fill of a row in the upload queue's list.
  */
 @Immutable
 class MymindColors(
@@ -61,6 +62,7 @@ class MymindColors(
     val switchCheckedThumb: Color,
     val dangerLabel: Color,
     val dangerButton: Color,
+    val queueItem: Color,
 )
 
 /** Colours of the dark appearance. */
@@ -91,6 +93,7 @@ val MymindDarkColors = MymindColors(
     switchCheckedThumb = Color(0xFF8493A9),
     dangerLabel = Color(0xFF67000A),
     dangerButton = Color(0xFFC00013),
+    queueItem = Color(0xFF14161E),
 )
 
 /** Colours of the light appearance. */
@@ -121,4 +124,5 @@ val MymindLightColors = MymindColors(
     switchCheckedThumb = Color(0xFFA7B4C7),
     dangerLabel = Color(0xFF67000A),
     dangerButton = Color(0xFFC00013),
+    queueItem = Color(0xFFF1F3F7),
 )

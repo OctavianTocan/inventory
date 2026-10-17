@@ -68,7 +68,9 @@ every request:
 
 The server has no JSON route for the Serendipity deck. The web page `GET /serendipity` is a recorded document that
 carries the deck's cards inside the HTML (18 elements with `data-id` in the recorded page), and its script only calls
-`POST /serendipity/complete` when the deck is finished. The app can read the deck's card ids from that page.
+`POST /serendipity/complete` when the deck is finished. The app can read the deck's card ids from that page, but only
+from the partial page: `Accept: text/html` with `x-partial: 1`, as the web's `util.getPartialHTML` asks for it. A
+document request (`Sec-Fetch-Dest: document`) gets the page shell with no cards.
 
 ### Card
 

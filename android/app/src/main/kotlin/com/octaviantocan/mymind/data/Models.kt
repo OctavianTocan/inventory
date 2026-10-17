@@ -201,3 +201,53 @@ data class GoogleSignInRequest(val idToken: String, val nonce: String, val devic
 
 @Serializable
 data class PasswordSignInRequest(val username: String, val password: String, val device: String)
+
+/**
+ * Card ids of the Serendipity deck, read from the `data-id` attributes of the `mymind-card` elements of the
+ * `/serendipity` page.
+ *
+ * @param html The page.
+ * @return The ids in page order, each once; empty when the page holds none.
+ */
+fun serendipityIdsOf(html: String): List<String> =
+    DATA_ID.findAll(html).map { it.groupValues[1] }.filter { it.isNotBlank() }.distinct().toList()
+
+private val DATA_ID = Regex("""<mymind-card\b[^>]*?\bdata-id\s*=\s*["']([^"']+)["']""")
+
+/**
+ * Permission to upload one file, from `POST /uploads/authorize`.
+ *
+ * @property url Path the file's pieces are sent to, such as `/uploads/<id>`.
+ * @property token Upload token for the `x-upload-token` header.
+ */
+@Serializable
+data class UploadAuthorization(val url: String, val token: String)
+
+/**
+ * Answer to one uploaded piece of a file.
+ *
+ * @property id Upload id, sent as `x-upload-id` with the later pieces.
+ * @property blob The stored file once complete; its id is the `uploadId` a Media card is made from.
+ * @property received Bytes the server holds so far.
+ * @property done True after the last piece.
+ */
+@Serializable
+data class UploadChunkAnswer(val id: String, val blob: UploadBlob? = null, val received: Double? = null, val done: Boolean = false)
+
+/**
+ * The stored file of an upload.
+ *
+ * @property id Id `POST /objects` takes as `uploadId`.
+ */
+@Serializable
+data class UploadBlob(val id: String)
+
+/**
+ * Body of `POST /objects` for an uploaded file.
+ *
+ * @property type Always `Media`.
+ * @property uploadId Blob id of the finished upload.
+ * @property spaceId Space the new card joins, or null.
+ */
+@Serializable
+data class MediaBody(val type: String, val uploadId: String, val spaceId: String? = null)

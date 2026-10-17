@@ -30,6 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -84,6 +86,7 @@ enum class SearchType(val type: String, val label: String, val slug: String) {
  * @param onOpenSettings Called when the hamburger is tapped.
  * @param onAdd Called when the + button is tapped.
  * @param modifier Modifier for the page.
+ * @param onLongPressCard Called with a grid card the user long-pressed.
  */
 @Composable
 fun EverythingScreen(
@@ -92,8 +95,10 @@ fun EverythingScreen(
     onOpenSettings: () -> Unit,
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongPressCard: ((Card) -> Unit)? = null,
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
+    val pinned by viewModel.topOfMind.state.collectAsStateWithLifecycle()
     val query by viewModel.search.query.collectAsStateWithLifecycle()
     val filter by viewModel.search.filter.collectAsStateWithLifecycle()
     val types by viewModel.search.types.collectAsStateWithLifecycle()
@@ -137,6 +142,11 @@ fun EverythingScreen(
         onOpenSettings = onOpenSettings,
         onAdd = onAdd,
         modifier = modifier,
+        topOfMind = pinned.cards,
+        onLoadMoreTopOfMind = viewModel.topOfMind::loadMore,
+        onRefresh = viewModel::refreshEverything,
+        onRefreshResults = results::refresh,
+        onLongPressCard = onLongPressCard,
     )
 }
 
@@ -165,6 +175,11 @@ fun EverythingScreen(
  * @param onAdd Called when the + button is tapped.
  * @param modifier Modifier for the page.
  * @param gridState Scroll position of the library grid.
+ * @param topOfMind Pinned cards in pin order, shown in the row above the grid.
+ * @param onLoadMoreTopOfMind Called when the Top of Mind row nears its end.
+ * @param onRefresh Called when the library grid is pulled down to refresh.
+ * @param onRefreshResults Called when the search results are pulled down to refresh.
+ * @param onLongPressCard Called with a long-pressed card of the grid or the results, or null to ignore long presses.
  */
 @Composable
 fun EverythingContent(
@@ -190,19 +205,27 @@ fun EverythingContent(
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
     gridState: LazyStaggeredGridState = rememberLazyStaggeredGridState(),
+    topOfMind: List<Card> = emptyList(),
+    onLoadMoreTopOfMind: () -> Unit = {},
+    onRefresh: () -> Unit = {},
+    onRefreshResults: () -> Unit = {},
+    onLongPressCard: ((Card) -> Unit)? = null,
 ) {
     val page = MymindTheme.page
     Box(modifier.fillMaxSize().background(page.background)) {
         when {
-            searching && searchResults != null -> CardGrid(searchResults, onLoadMoreResults, onOpenCard, top = UNDER_SEARCH_BAR) {
-                resultChips(filter, suggestions, onChoose, onRemoveFilter)
+            searching && searchResults != null -> PullRefresh(searchResults.refreshing, onRefreshResults, top = UNDER_SEARCH_BAR) {
+                CardGrid(searchResults, onLoadMoreResults, onOpenCard, top = UNDER_SEARCH_BAR, onLongPressCard = onLongPressCard) {
+                    resultChips(filter, suggestions, onChoose, onRemoveFilter)
+                }
             }
             searching -> SearchChips(typeChips, onChoose, Modifier.padding(top = UNDER_SEARCH_BAR))
             feed.cards.isEmpty() && feed.error != null -> WebErrorScreen(onRetry = onRetry)
             feed.empty -> PageSpinner()
-            else -> {
-                val pinned = feed.cards.filter { it.pinned }.sortedBy { it.pinPosition ?: Long.MAX_VALUE }
-                CardGrid(feed, onLoadMore, onOpenCard, state = gridState, top = UNDER_SEARCH_BAR) { topOfMindHeader(pinned, onOpenCard) }
+            else -> PullRefresh(feed.refreshing, onRefresh, top = UNDER_SEARCH_BAR) {
+                CardGrid(feed, onLoadMore, onOpenCard, state = gridState, top = UNDER_SEARCH_BAR, onLongPressCard = onLongPressCard) {
+                    topOfMindHeader(topOfMind, onOpenCard, onLoadMoreTopOfMind)
+                }
             }
         }
         Box(Modifier.fillMaxWidth().height(PAGE_GUTTER).background(page.background))
@@ -263,17 +286,21 @@ private fun ChipFlow(modifier: Modifier, content: @Composable () -> Unit) {
     ) { content() }
 }
 
-/** One 32.7 dp search chip; [chosen] draws it in the accent colour. */
+/** One 32.7 dp search chip; [chosen] draws it in the accent colour. A tap gives the long-press haptic, as on the web. */
 @Composable
 private fun SearchChip(label: String, chosen: Boolean, onClick: () -> Unit) {
     val page = MymindTheme.page
+    val haptic = LocalHapticFeedback.current
     val ink = if (MymindTheme.colors.dark) Color(0xFF8B94A1) else page.muted
     Box(
         Modifier
             .height(32.7.dp)
             .clip(RoundedCornerShape(50))
             .background(if (chosen) MymindTheme.colors.accent else page.surface)
-            .clickable(onClick = onClick)
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
+            }
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {

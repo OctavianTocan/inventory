@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,7 +32,8 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
 /**
- * Bottom tab bar drawn over the screen content, with a gradient that fades the content out behind it.
+ * Bottom tab bar drawn over the screen content, with a gradient that fades the content out behind it. Every tap gives
+ * the confirm haptic, as the original app's tab bar does.
  *
  * @param selected Tab shown as selected.
  * @param onSelect Called with the tab the user tapped.
@@ -39,6 +42,7 @@ import com.octaviantocan.mymind.ui.theme.MymindTheme
 @Composable
 fun MymindTabBar(selected: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) {
     val fade = MymindTheme.colors.tabBarFade
+    val haptic = LocalHapticFeedback.current
     Box(
         modifier
             .fillMaxWidth()
@@ -52,7 +56,12 @@ fun MymindTabBar(selected: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Mo
             contentColor = Color.Transparent,
             elevation = 0.dp,
         ) {
-            Tab.entries.forEach { tab -> TabBarItem(tab, tab == selected) { onSelect(tab) } }
+            Tab.entries.forEach { tab ->
+                TabBarItem(tab, tab == selected) {
+                    haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                    onSelect(tab)
+                }
+            }
         }
     }
 }

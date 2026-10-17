@@ -35,6 +35,16 @@ menu deletes one, and Same Vibe, Download and Copy work. Routes, the inert contr
 are listed in `docs/android-screens.md` (S11, S12 and "Library screens: API gaps"). An emulator smoke run against a
 scratch library exercised each of these.
 
+Status (2026-10-17, round 3): haptics follow the real app (the tab bar's confirm, the long-press haptic where the
+page asks for one; none on pull to refresh or delete, which the real app has none on). Pull to refresh (Material 3)
+is on Everything, the search results, the Spaces list and an opened space. The + on Everything and inside a space
+opens the real app's photo source popup (S21) and uploads through `/uploads/authorize`, chunked `PUT`s with
+`x-upload-token` and `POST /objects {"type":"Media"}`, with the real app's upload queue strip. Top of Mind reads
+`/app/v1/top-of-mind`, and Serendipity deals the deck of the partial `/serendipity` page. An emulator smoke run against
+the local Rust server with a scratch library exercised uploads (library and space, a 42 MB file in two pieces, the
+server stopped mid-upload), pull to refresh, pins and the deck. Details and the differences from the real app are in
+`docs/android-screens.md` ("Haptics", S06, S08, S21).
+
 ## Decisions (the user, 2026-10-16)
 
 - **A working app that matches the real app 1:1.** Both at once: it has to work, and every screen has to look

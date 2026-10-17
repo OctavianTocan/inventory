@@ -44,7 +44,7 @@ private val CIRCLE = 100.dp
 private val DOT = 5.dp
 
 /**
- * The Serendipity tab: one card of a random deck at a time with Forget and Keep, and a dot per card of the deck.
+ * The Serendipity tab: one card of the deck at a time with Forget and Keep, and a dot per card of the deck.
  *
  * @param viewModel Library behind the tab.
  * @param onOpenCard Called with the card on show when it is tapped.
@@ -88,10 +88,9 @@ fun SerendipityContent(
             val height = maxHeight
             when {
                 state.error != null && state.deck.isEmpty() -> WebErrorScreen(onRetry = onDeal)
+                state.dealt && !state.loading && state.deck.isEmpty() -> DeckMessage(EMPTY_DECK, onDeal)
                 state.loading || state.deck.isEmpty() -> PageSpinner()
-                state.finished -> Box(Modifier.fillMaxSize().clickable(onClick = onDeal), contentAlignment = Alignment.Center) {
-                    Text("All done. Tap for a new round.", style = TextStyle(color = Color.White, fontSize = 16.sp, fontFamily = MymindTheme.fonts.nunito))
-                }
+                state.finished -> DeckMessage(FINISHED_DECK, onDeal)
                 else -> {
                     val card = checkNotNull(state.current)
                     Box(
@@ -127,6 +126,17 @@ fun SerendipityContent(
         }
     }
 }
+
+/** A line of white text in the middle of the page; a tap deals again. */
+@Composable
+private fun DeckMessage(text: String, onDeal: () -> Unit) {
+    Box(Modifier.fillMaxSize().clickable(onClick = onDeal), contentAlignment = Alignment.Center) {
+        Text(text, style = TextStyle(color = Color.White, fontSize = 16.sp, fontFamily = MymindTheme.fonts.nunito))
+    }
+}
+
+private const val FINISHED_DECK = "All done. Tap for a new round."
+private const val EMPTY_DECK = "Nothing to rediscover right now."
 
 /** One of the two 100 dp round buttons with an outline and a label. */
 @Composable

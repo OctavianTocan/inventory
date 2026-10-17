@@ -65,6 +65,16 @@ class SessionExpiryTest {
     }
 
     @Test
+    fun aRefusedUploadPieceKeepsTheSession() {
+        server.enqueue(MockResponse().setResponseCode(401).setBody("Invalid upload authorization"))
+        val piece = Request.Builder().url(server.url("/uploads/u1")).header("x-upload-token", "upload-tok").build()
+        client.newCall(piece).execute().close()
+        assertEquals("Bearer tok-123", server.takeRequest().getHeader("Authorization"))
+        assertEquals(SessionState.SignedIn, session.state.value)
+        assertEquals("tok-123", store.value)
+    }
+
+    @Test
     fun otherErrorsKeepTheSession() {
         server.enqueue(MockResponse().setResponseCode(500))
         get()

@@ -7,25 +7,33 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okio.BufferedSink
 import java.io.IOException
 import java.io.InputStream
 
-/** Adds the bearer token and signs the session out when the server rejects a token-bearing request with 401. */
+/**
+ * Adds the bearer token and signs the session out when the server rejects a token-bearing request with 401. An upload
+ * piece refused with 401 leaves the session alone, since that answer is about its upload token.
+ */
 class AuthInterceptor(private val session: Session) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val token = session.token ?: return chain.proceed(chain.request())
-        val response = chain.proceed(
-            chain.request().newBuilder().header("Authorization", "Bearer $token").build(),
-        )
-        if (response.code == 401) session.invalidate(token)
+        val request = chain.request()
+        val response = chain.proceed(request.newBuilder().header("Authorization", "Bearer $token").build())
+        if (response.code == 401 && request.header(UPLOAD_TOKEN_HEADER) == null) session.invalidate(token)
         return response
     }
 }
+
+private const val UPLOAD_TOKEN_HEADER = "x-upload-token"
 
 /** Why a call failed, in terms the UI can word. */
 sealed interface ApiFailure {
@@ -111,6 +119,85 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
         send(get("app/v1/spaces/$id/cards", "limit" to limit.toString(), "cursor" to cursor), CardPage.serializer())
 
     /**
+     * @param limit page size, 1 to 200.
+     * @param cursor `next` of the previous page, or null for the first page.
+     * @return One page of the pinned cards in pin order.
+     */
+    suspend fun topOfMind(limit: Int, cursor: String?): ApiResult<CardPage> =
+        send(get("app/v1/top-of-mind", "limit" to limit.toString(), "cursor" to cursor), CardPage.serializer())
+
+    /**
+     * Reads the Serendipity deck from the partial web page, which carries its cards as `mymind-card` elements.
+     *
+     * @return Card ids of the deck in its order, or the failure.
+     */
+    suspend fun serendipityIds(): ApiResult<List<String>> = withContext(Dispatchers.IO) {
+        // The document request gets the page shell without the deck; the web's deck script asks for the partial.
+        val request = Request.Builder().url(url("serendipity")).header("Accept", "text/html").header("x-partial", "1").get().build()
+        execute(request) { ApiResult.Ok(serendipityIdsOf(it)) }
+    }
+
+    /**
+     * Asks for permission to upload files.
+     *
+     * @param count Number of files, 1 to 100.
+     * @return One authorization per file.
+     */
+    suspend fun authorizeUploads(count: Int): ApiResult<List<UploadAuthorization>> =
+        send(
+            Request.Builder().url(url("uploads/authorize", "count" to count.toString())).post(ByteArray(0).toRequestBody()).build(),
+            ListSerializer(UploadAuthorization.serializer()),
+        )
+
+    /**
+     * Sends one piece of a file with the web upload headers; the app token stays in `Authorization`.
+     *
+     * @param authorization The file's authorization from [authorizeUploads].
+     * @param uploadId Id from the first piece's answer, or null for the first piece.
+     * @param name File name.
+     * @param mime File media type.
+     * @param total Length of the whole file in bytes.
+     * @param start Offset of the piece's first byte in the file.
+     * @param length Bytes in the piece, at most 32 MiB.
+     * @param source Stream at [start]; exactly [length] bytes are read from it and it is left open.
+     * @return The server's answer, or the failure.
+     */
+    suspend fun uploadChunk(
+        authorization: UploadAuthorization,
+        uploadId: String?,
+        name: String,
+        mime: String,
+        total: Long,
+        start: Long,
+        length: Long,
+        source: InputStream,
+    ): ApiResult<UploadChunkAnswer> {
+        val request = Request.Builder()
+            .url(server.trimEnd('/') + "/" + authorization.url.trimStart('/'))
+            .header("Content-Range", "bytes $start-${start + length - 1}/$total")
+            .header("x-file-name", encodeUri(name))
+            .header(UPLOAD_TOKEN_HEADER, authorization.token)
+            .apply { if (uploadId != null) header("x-upload-id", uploadId) }
+            .put(StreamBody(mime.toMediaTypeOrNull() ?: OCTET_STREAM, source, length))
+            .build()
+        return send(request, UploadChunkAnswer.serializer())
+    }
+
+    /**
+     * Creates a Media card from a finished upload.
+     *
+     * @param uploadId Blob id of the finished upload.
+     * @param spaceId Space the card joins, or null.
+     * @return The new card's id.
+     */
+    suspend fun createMedia(uploadId: String, spaceId: String?): ApiResult<String> =
+        send(
+            Request.Builder().url(url("objects"))
+                .post(AppJson.encodeToString(MediaBody("Media", uploadId, spaceId)).toRequestBody(JSON_TYPE)).build(),
+            IdAnswer.serializer(),
+        ).map { it.id }
+
+    /**
      * @param query Search text in mymind's query syntax.
      * @param limit page size, 1 to 200.
      * @param cursor `next` of the previous page, or null for the first page.
@@ -125,12 +212,7 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
      * @return The config, or the failure; a page without a config script gives an empty one.
      */
     suspend fun pageConfig(): ApiResult<PageConfig> = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(url("everything"))
-            .header("Accept", "text/html")
-            .header("Sec-Fetch-Dest", "document")
-            .get()
-            .build()
-        execute(request) { ApiResult.Ok(pageConfigOf(it)) }
+        execute(documentRequest("everything")) { ApiResult.Ok(pageConfigOf(it)) }
     }
 
     /**
@@ -268,6 +350,12 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
     private fun get(path: String, vararg query: Pair<String, String?>): Request =
         Request.Builder().url(url(path, *query)).get().build()
 
+    private fun documentRequest(path: String): Request = Request.Builder().url(url(path))
+        .header("Accept", "text/html")
+        .header("Sec-Fetch-Dest", "document")
+        .get()
+        .build()
+
     private suspend fun write(request: Request.Builder): ApiResult<Unit> =
         withContext(Dispatchers.IO) { execute(request.build()) { ApiResult.Ok(Unit) } }
 
@@ -294,8 +382,41 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
 
     private companion object {
         val JSON_TYPE = "application/json".toMediaType()
+        val OCTET_STREAM = "application/octet-stream".toMediaType()
     }
 }
+
+/** A request body of the next [length] bytes of [source], sent once. */
+private class StreamBody(private val type: MediaType, private val source: InputStream, private val length: Long) : RequestBody() {
+    override fun contentType() = type
+
+    override fun contentLength() = length
+
+    override fun isOneShot() = true
+
+    override fun writeTo(sink: BufferedSink) {
+        val buffer = ByteArray(STREAM_BUFFER)
+        var left = length
+        while (left > 0) {
+            val read = source.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
+            if (read < 0) throw IOException("The file ended early")
+            sink.write(buffer, 0, read)
+            left -= read
+        }
+    }
+}
+
+private const val STREAM_BUFFER = 64 * 1024
+
+/** [text] as JavaScript's `encodeURI` writes it: UTF-8 percent escapes for everything but the URI characters. */
+private fun encodeUri(text: String): String = buildString {
+    for (byte in text.toByteArray(Charsets.UTF_8)) {
+        val char = (byte.toInt() and 0xFF).toChar()
+        if (char.code < 0x80 && (char.isLetterOrDigit() || char in URI_KEPT)) append(char) else append("%%%02X".format(byte.toInt() and 0xFF))
+    }
+}
+
+private const val URI_KEPT = ";,/?:@&=+$-_.!~*'()#"
 
 /** Maps an error response to a failure; [body] is the raw response text. */
 fun failureOf(code: Int, body: String): ApiFailure {

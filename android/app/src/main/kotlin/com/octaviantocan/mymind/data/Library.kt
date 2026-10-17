@@ -113,4 +113,52 @@ interface Library {
 
     /** @return Success, or the failure, after telling the server a Serendipity deck was finished. */
     suspend fun completeSerendipity(): ApiResult<Unit>
+
+    /**
+     * @param cursor `next` of the previous page, or null for the first page.
+     * @return One page of the cards pinned to Top of Mind, in pin order.
+     */
+    suspend fun topOfMind(cursor: String?): ApiResult<CardPage>
+
+    /**
+     * @param cardId Card to read.
+     * @return The card as the server has it now.
+     */
+    suspend fun card(cardId: String): ApiResult<Card>
+
+    /** @return Card ids of the Serendipity deck, in the deck's order. */
+    suspend fun serendipityIds(): ApiResult<List<String>>
+
+    /**
+     * @param count Number of files, 1 to 100.
+     * @return One upload authorization per file.
+     */
+    suspend fun authorizeUploads(count: Int): ApiResult<List<UploadAuthorization>>
+
+    /**
+     * Sends one piece of a file.
+     *
+     * @param authorization The file's authorization.
+     * @param uploadId Id from the first piece's answer, or null for the first piece.
+     * @param file The file.
+     * @param start Offset of the piece's first byte.
+     * @param length Bytes in the piece, at most 32 MiB.
+     * @param source Stream at [start]; exactly [length] bytes are read from it and it is left open.
+     * @return The server's answer, or the failure.
+     */
+    suspend fun uploadChunk(
+        authorization: UploadAuthorization,
+        uploadId: String?,
+        file: UploadFile,
+        start: Long,
+        length: Long,
+        source: InputStream,
+    ): ApiResult<UploadChunkAnswer>
+
+    /**
+     * @param uploadId Blob id of a finished upload.
+     * @param spaceId Space the new card joins, or null.
+     * @return The new Media card's id.
+     */
+    suspend fun createMedia(uploadId: String, spaceId: String?): ApiResult<String>
 }

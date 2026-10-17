@@ -5,6 +5,7 @@ import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.MymindApi
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.Tag
+import com.octaviantocan.mymind.data.UploadAuthorization
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -104,5 +105,73 @@ class MymindApiTest {
         assertEquals(ApiResult.Failed(ApiFailure.Server(404)), api.media("u/b.png") {})
         assertEquals("/media/u/a.png", server.takeRequest().path)
         assertEquals("/media/u/b.png", server.takeRequest().path)
+    }
+
+    @Test
+    fun topOfMindReadsThePinnedRoute() = runBlocking {
+        answer("""{"cards":[{"id":"p1","type":"Note","flags":512,"created":"x","modified":"x","bumped":"x"}],"next":null}""")
+        val page = (api.topOfMind(50, null) as ApiResult.Ok).value
+        assertEquals(listOf("p1"), page.cards.map { it.id })
+        assertEquals("/app/v1/top-of-mind?limit=50", server.takeRequest().path)
+    }
+
+    @Test
+    fun serendipityIdsComeFromTheCardsOfThePage() = runBlocking {
+        answer(
+            """<main data-id="page"><mymind-card class="a" data-id="c1"></mymind-card>""" +
+                """<mymind-card data-id='c2'><div data-id="inner"></div></mymind-card><mymind-card data-id="c1"></mymind-card></main>""",
+        )
+        assertEquals(ApiResult.Ok(listOf("c1", "c2")), api.serendipityIds())
+        val request = server.takeRequest()
+        assertEquals("GET /serendipity", "${request.method} ${request.path}")
+        assertEquals("text/html", request.getHeader("Accept"))
+        assertEquals("1", request.getHeader("x-partial"))
+        assertEquals(null, request.getHeader("Sec-Fetch-Dest"))
+    }
+
+    @Test
+    fun uploadsAreAuthorizedSentInPiecesAndBecomeMediaCards() = runBlocking {
+        answer("""[{"url":"/uploads/u1","token":"up-1"},{"url":"/uploads/u2","token":"up-2"}]""")
+        answer("""{"id":"u1","blob":{"id":"u1"},"received":4,"done":false}""")
+        answer("""{"id":"u1","blob":{"id":"u1"},"received":6,"done":true}""")
+        answer("""{"id":"c9"}""", 201)
+        answer("""{"id":"c10"}""", 201)
+        val authorizations = (api.authorizeUploads(2) as ApiResult.Ok).value
+        assertEquals("up-2", authorizations[1].token)
+        val source = "abcdef".byteInputStream()
+        val first = (api.uploadChunk(authorizations[0], null, "a photo é.jpg", "image/jpeg", 6, 0, 4, source) as ApiResult.Ok).value
+        val last = (api.uploadChunk(authorizations[0], first.id, "a photo é.jpg", "image/jpeg", 6, 4, 2, source) as ApiResult.Ok).value
+        assertEquals(true, last.done)
+        assertEquals(ApiResult.Ok("c9"), api.createMedia(last.blob!!.id, "s1"))
+        assertEquals(ApiResult.Ok("c10"), api.createMedia("u2", null))
+
+        val authorize = server.takeRequest()
+        assertEquals("POST /uploads/authorize?count=2", "${authorize.method} ${authorize.path}")
+        val one = server.takeRequest()
+        assertEquals("PUT /uploads/u1", "${one.method} ${one.path}")
+        assertEquals("image/jpeg", one.getHeader("Content-Type"))
+        assertEquals("bytes 0-3/6", one.getHeader("Content-Range"))
+        assertEquals("a%20photo%20%C3%A9.jpg", one.getHeader("x-file-name"))
+        assertEquals("up-1", one.getHeader("x-upload-token"))
+        assertEquals(null, one.getHeader("x-upload-id"))
+        assertEquals("abcd", one.body.readUtf8())
+        val two = server.takeRequest()
+        assertEquals("bytes 4-5/6", two.getHeader("Content-Range"))
+        assertEquals("u1", two.getHeader("x-upload-id"))
+        assertEquals("ef", two.body.readUtf8())
+        val media = server.takeRequest()
+        assertEquals("POST /objects", "${media.method} ${media.path}")
+        assertEquals("""{"type":"Media","uploadId":"u1","spaceId":"s1"}""", media.body.readUtf8())
+        assertEquals("""{"type":"Media","uploadId":"u2"}""", server.takeRequest().body.readUtf8())
+    }
+
+    @Test
+    fun aFileThatEndsEarlyFailsItsPiece() = runBlocking {
+        answer("{}")
+        val authorization = UploadAuthorization("/uploads/u1", "up-1")
+        assertEquals(
+            ApiResult.Failed(ApiFailure.Network),
+            api.uploadChunk(authorization, null, "a.png", "image/png", 10, 0, 10, "abc".byteInputStream()),
+        )
     }
 }
