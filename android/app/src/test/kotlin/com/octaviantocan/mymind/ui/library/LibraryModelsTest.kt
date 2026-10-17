@@ -25,11 +25,11 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import kotlin.random.Random
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LibraryModelsTest {
@@ -170,15 +170,16 @@ class LibraryModelsTest {
     }
 
     @Test
-    fun serendipityDealsEighteenAndCompletesOnce() = runTest(dispatcher) {
-        val cards = (1..30).map { testCard("c$it") }
-        val library = FakeLibrary(pages = mapOf(null to CardPage(cards, next = "p2")))
-        val model = SerendipityModel(this, library, Random(1))
+    fun serendipityDealsThePageDeckInOrderAndCompletesOnce() = runTest(dispatcher) {
+        val ids = (1..18).map { "c$it" }
+        val cards = ids.associateWith { testCard(it) } + ("gone" to testCard("gone").copy(deleted = "2026-10-16T08:00:00Z"))
+        val library = FakeLibrary(cardsById = cards - "c5", deckIds = ids + "gone")
+        val model = SerendipityModel(this, library)
         model.deal()
         advanceUntilIdle()
         val deck = model.state.value.deck
-        assertEquals(SerendipityModel.DECK_SIZE, deck.size)
-        assertEquals(deck.size, deck.map { it.id }.toSet().size)
+        assertEquals(ids - "c5", deck.map { it.id })
+        assertEquals("deck", library.calls.first())
         assertEquals(deck.first(), model.state.value.current)
 
         model.keep()
@@ -194,9 +195,26 @@ class LibraryModelsTest {
     }
 
     @Test
+    fun serendipityReportsAnEmptyDeckAndAFailedPage() = runTest(dispatcher) {
+        val library = FakeLibrary(deckIds = emptyList())
+        val model = SerendipityModel(this, library)
+        model.deal()
+        advanceUntilIdle()
+        assertTrue(model.state.value.dealt)
+        assertTrue(model.state.value.deck.isEmpty())
+        assertNull(model.state.value.error)
+
+        library.deckIds = null
+        model.deal()
+        advanceUntilIdle()
+        assertFalse(model.state.value.dealt)
+        assertNotNull(model.state.value.error)
+    }
+
+    @Test
     fun serendipityForgetKeepsTheCardWhenTheServerRefuses() = runTest(dispatcher) {
-        val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(testCard("a"), testCard("b")))))
-        val model = SerendipityModel(this, library, Random(1))
+        val library = FakeLibrary(cardsById = mapOf("a" to testCard("a"), "b" to testCard("b")), deckIds = listOf("a", "b"))
+        val model = SerendipityModel(this, library)
         model.deal()
         advanceUntilIdle()
         library.writeFailure = ApiFailure.Network
@@ -210,7 +228,7 @@ class LibraryModelsTest {
             pages = mapOf(null to CardPage(listOf(testCard("a"), testCard("b")))),
             config = PageConfig(colorScheme = "dark", features = setOf("reader", "sameVibe")),
         )
-        val viewModel = LibraryViewModel(library, random = Random(1))
+        val viewModel = LibraryViewModel(library, io = dispatcher)
         advanceUntilIdle()
         assertEquals(PageScheme.Dark, viewModel.scheme.value)
         assertEquals(setOf("reader", "sameVibe"), viewModel.features.value)
@@ -226,7 +244,7 @@ class LibraryModelsTest {
     @Test
     fun schemeFallsBackToTheAccountWhenThePageConfigFails() = runTest(dispatcher) {
         val library = FakeLibrary(config = null, user = User(colorScheme = "light"))
-        val viewModel = LibraryViewModel(library, random = Random(1))
+        val viewModel = LibraryViewModel(library, io = dispatcher)
         advanceUntilIdle()
         assertEquals(PageScheme.Light, viewModel.scheme.value)
         assertTrue(viewModel.features.value.isEmpty())
@@ -236,7 +254,7 @@ class LibraryModelsTest {
     fun tagsAreAddedOneByOneAndRemovedByTheirId() = runTest(dispatcher) {
         val card = testCard("a", tags = listOf(Tag("t-old", "old")))
         val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(card))))
-        val viewModel = LibraryViewModel(library, random = Random(1))
+        val viewModel = LibraryViewModel(library, io = dispatcher)
         advanceUntilIdle()
 
         val tagged = (viewModel.addTags(card, listOf("one", "two")) as ApiResult.Ok).value
@@ -256,7 +274,7 @@ class LibraryModelsTest {
         val s1 = Space("s1", "One")
         val s2 = Space("s2", "Two")
         val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(card))), spaceList = listOf(s1, s2))
-        val viewModel = LibraryViewModel(library, random = Random(1))
+        val viewModel = LibraryViewModel(library, io = dispatcher)
         viewModel.loadSpaces()
         advanceUntilIdle()
 
@@ -279,7 +297,7 @@ class LibraryModelsTest {
     @Test
     fun openingTheTagsSubmenuReadsTheTagChoices() = runTest(dispatcher) {
         val library = FakeLibrary(allTags = listOf("b", "a"), recent = listOf("a"))
-        val viewModel = LibraryViewModel(library, random = Random(1))
+        val viewModel = LibraryViewModel(library, io = dispatcher)
         val outcome = viewModel.perform(CardMenuItem(CardMenuAction.AddTags), testCard("c"), null)
         advanceUntilIdle()
         assertEquals(CardMenuOutcome.OpenSubmenu(CardSubmenu.Tags), outcome)

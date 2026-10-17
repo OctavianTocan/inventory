@@ -27,7 +27,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -110,6 +112,7 @@ fun CardSheet(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TagChips(tags: List<Tag>, style: TextStyle, onRemove: (Tag) -> Unit) {
+    val haptic = LocalHapticFeedback.current
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         tags.forEach { tag ->
             Row(
@@ -124,7 +127,10 @@ private fun TagChips(tags: List<Tag>, style: TextStyle, onRemove: (Tag) -> Unit)
                     "\u00D7",
                     Modifier
                         .semantics { contentDescription = "Remove tag ${tag.name.orEmpty()}" }
-                        .clickable(role = Role.Button) { onRemove(tag) }
+                        .clickable(role = Role.Button) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onRemove(tag)
+                        }
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     style = style,
                 )

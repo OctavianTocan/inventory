@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScope
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
@@ -26,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +57,7 @@ private const val LOAD_AHEAD = 6
  * @param modifier Modifier for the grid.
  * @param state Scroll position.
  * @param top Space above the first row.
+ * @param onLongPressCard Called with a card the user long-pressed, or null to ignore long presses.
  * @param header Full-width items placed before the cards.
  */
 @Composable
@@ -65,6 +68,7 @@ fun CardGrid(
     modifier: Modifier = Modifier,
     state: LazyStaggeredGridState = rememberLazyStaggeredGridState(),
     top: Dp = PAGE_GUTTER,
+    onLongPressCard: ((Card) -> Unit)? = null,
     header: (LazyStaggeredGridScope.() -> Unit)? = null,
 ) {
     LaunchedEffect(state) {
@@ -85,7 +89,9 @@ fun CardGrid(
         verticalItemSpacing = PAGE_GUTTER,
     ) {
         header?.invoke(this)
-        items(feed.cards, key = { it.id }) { card -> CardTile(card, onClick = { onOpenCard(card) }) }
+        items(feed.cards, key = { it.id }) { card ->
+            CardTile(card, onClick = { onOpenCard(card) }, onLongClick = onLongPressCard?.let { { it(card) } })
+        }
         if (feed.cards.isNotEmpty() && (feed.loading || feed.error != null)) {
             item(span = StaggeredGridItemSpan.FullLine) { GridFooter(feed, onLoadMore) }
         }
@@ -110,11 +116,29 @@ private fun GridFooter(feed: FeedState, onRetry: () -> Unit) {
  * @param cards Pinned cards in pin order.
  * @param onOpenCard Called with the tapped card.
  * @param modifier Modifier for the row.
+ * @param onLoadMore Called when the end of the loaded pins comes near.
  */
 @Composable
-fun TopOfMindRow(cards: List<Card>, onOpenCard: (Card) -> Unit, modifier: Modifier = Modifier) {
+fun TopOfMindRow(cards: List<Card>, onOpenCard: (Card) -> Unit, modifier: Modifier = Modifier, onLoadMore: () -> Unit = {}) {
+    val state = rememberLazyListState()
+    SideEffect {
+        // Without this, a new first pin lands left of a row resting at its start.
+        if (state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset == 0 && !state.isScrollInProgress) {
+            state.requestScrollToItem(0)
+        }
+    }
+    LaunchedEffect(state) {
+        snapshotFlow {
+            val last = state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            last >= state.layoutInfo.totalItemsCount - LOAD_AHEAD
+        }
+            .distinctUntilChanged()
+            .filter { it }
+            .collect { onLoadMore() }
+    }
     LazyRow(
         modifier.fillMaxWidth().height(100.dp),
+        state = state,
         contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
         horizontalArrangement = Arrangement.spacedBy(PAGE_GUTTER),
     ) {
@@ -141,12 +165,13 @@ fun PageSpinner(modifier: Modifier = Modifier) {
  *
  * @param cards Pinned cards in pin order.
  * @param onOpenCard Called with the tapped card.
+ * @param onLoadMore Called when the end of the loaded pins comes near.
  */
-fun LazyStaggeredGridScope.topOfMindHeader(cards: List<Card>, onOpenCard: (Card) -> Unit) {
+fun LazyStaggeredGridScope.topOfMindHeader(cards: List<Card>, onOpenCard: (Card) -> Unit, onLoadMore: () -> Unit = {}) {
     if (cards.isEmpty()) return
     item(key = "top-of-mind", span = StaggeredGridItemSpan.FullLine) {
         Column {
-            TopOfMindRow(cards, onOpenCard, Modifier.bleed(PAGE_GUTTER))
+            TopOfMindRow(cards, onOpenCard, Modifier.bleed(PAGE_GUTTER), onLoadMore)
             Spacer(Modifier.height(1.dp))
         }
     }

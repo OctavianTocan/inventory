@@ -65,6 +65,25 @@ class Repository(private val api: MymindApi, private val session: Session) : Lib
 
     override suspend fun completeSerendipity(): ApiResult<Unit> = api.completeSerendipity()
 
+    override suspend fun topOfMind(cursor: String?): ApiResult<CardPage> = api.topOfMind(PAGE_SIZE, cursor)
+
+    override suspend fun card(cardId: String): ApiResult<Card> = api.card(cardId)
+
+    override suspend fun serendipityIds(): ApiResult<List<String>> = api.serendipityIds()
+
+    override suspend fun authorizeUploads(count: Int): ApiResult<List<UploadAuthorization>> = api.authorizeUploads(count)
+
+    override suspend fun uploadChunk(
+        authorization: UploadAuthorization,
+        uploadId: String?,
+        file: UploadFile,
+        start: Long,
+        length: Long,
+        source: InputStream,
+    ): ApiResult<UploadChunkAnswer> = api.uploadChunk(authorization, uploadId, file.name, file.mime, file.size, start, length, source)
+
+    override suspend fun createMedia(uploadId: String, spaceId: String?): ApiResult<String> = api.createMedia(uploadId, spaceId)
+
     private suspend fun finish(answer: ApiResult<TokenAnswer>): SignInOutcome = when (answer) {
         is ApiResult.Ok -> {
             session.signIn(answer.value.token)

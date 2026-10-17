@@ -182,9 +182,17 @@ async fn download(request: &web_sys::Request, env: &Env, url: &url::Url, user: &
         return Ok(Response::new(200, Headers::from([("content-type", "text/html; charset=utf-8"), ("cache-control", "no-store")]), page));
     }
     let name = percent_decode(&url.path()["/download/".len()..]);
+    if name.as_deref() == Some(mm_core::download_page::ANDROID_RELEASE)
+        && let Some(release) = mm_core::download_page::android_release(&manifest)
+    {
+        let headers = Headers::from([("content-type", "application/json; charset=utf-8"), ("cache-control", "no-store")]);
+        let body = json::stringify(&release)?.unwrap_or_default();
+        return Ok(Response::new(200, headers, if method == "HEAD" { Body::Empty } else { body.into() }));
+    }
     let file = name.as_ref().and_then(|name| manifest.get("files").as_array().into_iter().flatten().find(|entry| entry.get("name").as_str() == Some(name)));
     let Some(file) = file else { return Ok(text(404, "Not found.\n", &Headers::new())) };
     let name = file.get("name").to_js_string();
+    let kind = mm_core::download_page::content_type(file);
     let key = format!("downloads/{name}");
     let (size, body) = if method == "HEAD" {
         match bucket.head(&key).await? {
@@ -198,7 +206,7 @@ async fn download(request: &web_sys::Request, env: &Env, url: &url::Url, user: &
         }
     };
     let headers = Headers::from([
-        ("content-type", "application/gzip".to_owned()),
+        ("content-type", kind.to_owned()),
         ("content-length", size.to_string()),
         ("content-disposition", format!("attachment; filename=\"{name}\"")),
         ("cache-control", "no-store".to_owned()),

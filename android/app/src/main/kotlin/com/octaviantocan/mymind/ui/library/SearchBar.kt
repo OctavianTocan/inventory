@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -131,7 +133,16 @@ fun SearchBar(
                 },
             )
             if (!focused) Hamburger(faint, onOpenSettings, Modifier.padding(start = 15.dp))
-            if (focused) ClearButton(onClear, Modifier.align(Alignment.CenterEnd).padding(end = 11.dp))
+            if (focused) {
+                val haptic = LocalHapticFeedback.current
+                ClearButton(
+                    {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onClear()
+                    },
+                    Modifier.align(Alignment.CenterEnd).padding(end = 11.dp),
+                )
+            }
         }
         if (!focused) {
             Spacer(Modifier.width(ADD_GAP))

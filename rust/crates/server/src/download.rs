@@ -1,15 +1,15 @@
-//! Port of `deploy/download-server.mjs`: the packaged desktop app at `/download` for anyone signed in to the hosted
-//! library, checked against the sessions the library's sign-in stores.
+//! Port of `deploy/download-server.mjs`: the packaged apps at `/download` for anyone signed in to the hosted library,
+//! checked against the sessions and app tokens the library's sign-in stores.
 
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
 use mm_core::auth_store::install_auth_schema;
-use mm_core::download_page::download_page;
+use mm_core::download_page::{ANDROID_RELEASE, android_release, content_type, download_page};
 use mm_core::http::{Body, Headers, Request, Response};
 use mm_core::sql::{Sql, SqlExt};
 use mm_core::{Error, Result, params};
-use mm_js::{Value, base64, json, text::decode_utf8, uri::decode_uri_component};
+use mm_js::{Value, base64, json, text, text::decode_utf8, uri::decode_uri_component};
 use mm_sqlite::Sqlite;
 use sha2::{Digest, Sha256};
 
@@ -17,7 +17,8 @@ use crate::bucket_fs::file_stream;
 use crate::http::Handler;
 use crate::node_path::join;
 
-/// The download server: the listing and the packaged files of one directory, for requests with a session.
+/// The download server: the listing and the packaged files of one directory, for requests with a session or an app
+/// token.
 pub struct Downloads {
     dir: PathBuf,
     auth: Sqlite,
@@ -36,6 +37,13 @@ fn id_at(rest: &str) -> Option<&str> {
 // The first match of `/(?:^|;\s*)mm_session=([^;]+)/` in a cookie header.
 fn session_id(cookie: &str) -> Option<&str> {
     id_at(cookie).or_else(|| cookie.match_indices(';').find_map(|(index, _)| id_at(cookie[index + 1..].trim_start_matches(js_space))))
+}
+
+// The token of an `Authorization: Bearer` header, read as the library's sign-in reads it.
+fn bearer(header: &str) -> Option<&str> {
+    header.get(..6).filter(|prefix| prefix.eq_ignore_ascii_case("bearer"))?;
+    let rest = header[6..].trim_start_matches(' ');
+    (rest.len() < header.len() - 6 && !rest.is_empty() && !rest.chars().any(text::is_whitespace)).then_some(rest)
 }
 
 fn plain(status: u16, body: &str, extra: &[(&str, &str)]) -> Response {
@@ -62,11 +70,23 @@ impl Downloads {
         Ok(Self { dir, auth })
     }
 
-    // The email of the unexpired session in the request's cookie, or `None`.
+    // The email of the unexpired session in the request's cookie, else of its unexpired app token, or `None`.
     fn user(&self, request: &Request) -> Result<Option<String>> {
-        let Some(id) = request.header("cookie").and_then(session_id) else { return Ok(None) };
-        let hash = base64::hex(&Sha256::digest(id.as_bytes()));
-        let Some(row) = self.auth.one("SELECT email, expires_ms FROM sessions WHERE hash = ?", params![hash])? else { return Ok(None) };
+        if let Some(id) = request.header("cookie").and_then(session_id)
+            && let Some(email) = self.email("SELECT email, expires_ms FROM sessions WHERE hash = ?", id)?
+        {
+            return Ok(Some(email));
+        }
+        match request.header("authorization").and_then(bearer) {
+            Some(token) => self.email("SELECT email, expires_ms FROM app_tokens WHERE hash = ?", token),
+            None => Ok(None),
+        }
+    }
+
+    // The email of the unexpired row that `query` finds by the hash of `secret`.
+    fn email(&self, query: &str, secret: &str) -> Result<Option<String>> {
+        let hash = base64::hex(&Sha256::digest(secret.as_bytes()));
+        let Some(row) = self.auth.one(query, params![hash])? else { return Ok(None) };
         let live = row.number("expires_ms").is_some_and(|expires| expires > mm_core::runtime::now_ms());
         Ok(row.text("email").filter(|email| live && !email.is_empty()).map(str::to_owned))
     }
@@ -99,6 +119,13 @@ impl Downloads {
         }
         let name = decode_uri_component(pathname.get("/download/".len()..).unwrap_or_default()).ok();
         let manifest = self.manifest().await?;
+        if name.as_deref() == Some(ANDROID_RELEASE)
+            && let Some(release) = android_release(&manifest)
+        {
+            let headers = Headers::from_pairs([("content-type", "application/json; charset=utf-8"), ("cache-control", "no-store")]);
+            let body = json::stringify(&release)?.unwrap_or_default();
+            return Ok(Response::new(200, headers, if request.method == "HEAD" { Body::Empty } else { body.into() }));
+        }
         let Value::Array(files) = (match manifest {
             Value::Null | Value::Undefined => return Err(Error::invalid("Cannot read properties of null (reading 'files')")),
             other => other.get("files").clone(),
@@ -113,18 +140,18 @@ impl Downloads {
             if let (Value::String(listed), Some(name)) = (entry.get("name"), &name)
                 && listed == name
             {
-                found = Some(listed.clone());
+                found = Some((listed.clone(), content_type(entry)));
                 break;
             }
         }
-        let file = found.map(|name| (join(&self.dir, &name), name));
+        let file = found.map(|(name, kind)| (join(&self.dir, &name), name, kind));
         let info = match &file {
-            Some((path, _)) => tokio::fs::metadata(path).await.ok(),
+            Some((path, _, _)) => tokio::fs::metadata(path).await.ok(),
             None => None,
         };
-        let (Some((path, name)), Some(info)) = (file, info) else { return Ok(plain(404, "Not found.\n", &[])) };
+        let (Some((path, name, kind)), Some(info)) = (file, info) else { return Ok(plain(404, "Not found.\n", &[])) };
         let headers = Headers::from_pairs([
-            ("content-type", "application/gzip".to_owned()),
+            ("content-type", kind.to_owned()),
             ("content-length", info.len().to_string()),
             ("content-disposition", format!("attachment; filename=\"{name}\"")),
             ("cache-control", "no-store".to_owned()),

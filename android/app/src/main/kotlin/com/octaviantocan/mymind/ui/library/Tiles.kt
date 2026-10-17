@@ -3,6 +3,7 @@ package com.octaviantocan.mymind.ui.library
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -79,11 +80,19 @@ private val NOTE_TEXT = 13.2.sp
  * @param caption False leaves the title out, as in space stacks.
  * @param deck True draws the tile the way Serendipity shows it: post text at the page's base size, no coloured edge
  *   and no title.
+ * @param onLongClick Called after a long press, with the long-press haptic; null leaves long presses alone.
  */
 @Composable
-fun CardTile(card: Card, onClick: () -> Unit, modifier: Modifier = Modifier, caption: Boolean = true, deck: Boolean = false) {
+fun CardTile(
+    card: Card,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    caption: Boolean = true,
+    deck: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+) {
     val kind = tileKind(card)
-    Column(modifier.fillMaxWidth().clickable(interactionSource = null, indication = null, onClick = onClick)) {
+    Column(modifier.fillMaxWidth().combinedClickable(interactionSource = null, indication = null, onLongClick = onLongClick, onClick = onClick)) {
         when (kind) {
             TileKind.Note -> NoteTile(card)
             TileKind.Post -> PostTile(card, deck)

@@ -54,7 +54,7 @@ bar, card header, settings drawer, card menus, dialogs and error screens.
 | S18 | Web error screen | native | built (`ui/errors`) |
 | S19 | Offline screen | native | built (`ui/errors`) |
 | S20 | API error dialog | native | built (`ui/errors`) |
-| S21 | Photo source popup | native | none |
+| S21 | Photo source popup | native | built (`ui/upload/AddMediaPopup.kt`), opened by the + buttons, not compared (no capture) |
 | S22 | Share sheet (share target) | native, own activity | none |
 | S23 | Video player | native, own activity | none |
 | S24 | Permission dialog, biometric prompt, quick-note notification | system + native | none |
@@ -227,6 +227,29 @@ other roles were not determined.
 - Lottie tab icons are 44 x 44 at 100 fps, 100 frames, 1.0 s (`decoded/res/raw/{everything,spaces,serendipity}_{light,dark}.json`).
 - `load_spin.json` is 480 x 600 at 30 fps, 120 frames, 4.0 s (`decoded/res/raw/load_spin.json`).
 
+### Haptics
+
+The real app has haptics, so ours plays them where it does and of the same type, and adds none of its own (decided
+in round 3: the user wanted haptics, and the code settles where the real app has them).
+
+- **Native:** every tab tap plays the confirm haptic (`HapticFeedbackType.Confirm`, constant 16, `CONFIRM`;
+  `jadx/db/a.java`, `eg/c.java`, `eg/f.java`). The image viewer's long press plays the long-press haptic
+  (`jadx/b0/x2.java` case 3, `fg/n.java:2876`); S13 is not built.
+- **From the page:** the web front-end calls `mymind.native.generateFeedback()`, and the native "Haptics" bridge plays
+  the long-press haptic (`HapticFeedbackType.LongPress`, constant 0; `jadx/bg/t.java:127`, `bg/h0.java:70`,
+  `fg/n.java:2334`, `aj/c.java` case 9). The page calls it (scripts under `mirror/static/134/0.109.0/scripts/`) on:
+  the 500 ms card long press that opens the native card menu (`components/menu.js`); the space options toggle
+  (`components/dropdown.js:67`); a tag's remove and a tag value tap (`tagging.js:507`, `:513`); a type or tag chip in
+  the search suggestions (`components/SearchSuggestions.js:236`, `:260`); search clear and remove filter
+  (`search.js:91`, `:562`); the Top of Mind drag reorder (`TopOfMind.js:202`, not built).
+- **None** on pull to refresh (`components/pull-to-refresh.js` has no call) or on a delete confirm, so ours has none
+  there either, although the round's fallback list named both.
+- **Ours:** Compose `LocalHapticFeedback` only, which follows the system's touch feedback setting; no custom
+  vibration. Tab bar (`ui/shell/TabBar.kt`, Confirm); card tile long press (`ui/library/Tiles.kt`, the long-press
+  haptic that `combinedClickable` plays itself); the opened space's menu dots (`SpacesScreen.kt`); a tag's remove in
+  the card view (`ui/card/CardSheet.kt`); the search chips and the search clear (`EverythingScreen.kt`,
+  `SearchBar.kt`). Tested with a recording `HapticFeedback` (`InteractionTest`).
+
 ---
 
 ## S01 Splash
@@ -392,7 +415,42 @@ other roles were not determined.
   `Tiles.kt`, `CardKinds.kt`, `CardFeed.kt`, `LibraryViewModel.kt`): the search bar with the hamburger (opens S14) and
   the + button, the Top of Mind row (pinned cards), then the two-column masonry grid that loads the next page near
   its end. Tiles follow the web card classes: picture, web page, article, post (coloured edge per platform), note,
-  repository, video. Screenshots: `S06_everything_{top,scrolled,account_system}_{light,dark}`.
+  repository, video. A long press on a tile opens the card menu (S11) without opening the card, as the page's 500 ms
+  long press does. Screenshots: `S06_everything_{top,scrolled,account_system}_{light,dark}`,
+  `S06_top_of_mind_{light,dark}`, `S06_pull_refresh_{light,dark}`, `S06_upload_strip{,_details}_{light,dark}`.
+- **Top of Mind:** the row reads `GET /app/v1/top-of-mind` (pin order, paged; the row loads the next page near its
+  end) instead of picking pinned cards out of the library. Adding or removing a pin from the card menu reads it again.
+  A row resting at its start stays at its start when a new first pin arrives, so the new pin shows (`TopOfMindRow`;
+  the lazy row would otherwise keep its first key in place and push the new pin off to the left).
+- **Pull to refresh** (Everything, the search results, S07's list and an opened space): Material 3
+  `PullToRefreshBox` (`ui/library/PullRefresh.kt`), its indicator under the search bar or the 60 dp header, the
+  accent arrow on the page surface. It reads the first page again; when that page starts the list already shown
+  (same cards, same order, and either more pages or no more cards than shown) nothing changes, so the scroll
+  position stays; otherwise the list is replaced by the new first page and paging starts over. Pulling Everything
+  reads Top of Mind again too. A failed read keeps the list. The page's own pull to refresh
+  (`components/pull-to-refresh.js`: a downward swipe of at least 150 px with at most 100 px sideways while the page is
+  at the top) shows a 35 px Lottie in the top bar (`mymind-syncing-progress-bar`, at least 2.1 s) and synchronises;
+  ours keeps the Material indicator the round asked for, so its look differs. No haptic, as on the page.
+- **Uploads** (the + here and inside an opened space): the + opens S21. "Photo library" opens the system picker for
+  several images and videos (`PickMultipleVisualMedia`), "Take photo" the camera into a cache file shared through
+  `FileProvider` (`<package>.provider`, `res/xml/file_paths.xml`), as the real app does (`jadx/yf/j.java`,
+  `fg/l0.java`, `rf/b.java`). Each file then goes through the web flow (`docs/write-api.md` 4.2, `docs/app-api.md`
+  "Uploads from the app"): `POST /uploads/authorize?count=N` (at most 100 files a call); `PUT` of each `url` in
+  32 MiB pieces with `content-type`, `content-range`, `x-file-name` (encodeURI), the upload token in
+  `x-upload-token`, `x-upload-id` from the second piece, and the app's own bearer token; then
+  `POST /objects {"type":"Media","uploadId"}` (with `spaceId` inside a space, followed by
+  `PUT /spaces/{s}/objects/{c}`). Files go one at a time (`ui/library/UploadQueue.kt`). A new card is put first in
+  Everything; inside a space the space and the space list are read again. Empty files and files over 500 MB (the
+  server's limits) fail without a request. The system photo picker names its files by media id (`20.jpg`), not by
+  the original name, so those are the names the queue and the server get.
+- **Upload queue strip** (`ui/upload/UploadStrip.kt`, the real app's `jadx/a0/i.java` case 10): shown while the queue
+  holds files and the tab is not Serendipity, fading in and out; 8 dp from the sides and 120 dp from the bottom,
+  palette j, 8 dp corners, shadow black 20% (y 8, blur 24); a tap opens or closes the list. Header at least 48 dp,
+  16 dp side padding (24 dp and 20 dp top and bottom with the list), the turning `ic_upload_progress` at 18 dp and
+  "N item(s) in your upload queue" in Nunito 16/20 sp, -0.01 em, palette h. List rows: at least 48 dp, 12 dp in from
+  the strip, palette m, 4 dp corners; the kind icon (`ic_image`, `ic_video`, `ic_pdf`, `ic_text`) at 20 dp, red
+  (palette n) on a failed file; "Image saved on yyyy.M.d" or the error in red; the turning icon at 14 dp while the
+  file is sent, a 32 dp red delete button on a failed file that removes it from the list.
 - **Facts:** the page is the mymind web page with `body.android` rules (above). The search bar shows the hamburger
   icon (class `hamburger-enabled`, `mirror/.../app.css:18028-18053`, 25 x 17 px mask, 60% opacity); a tap on it sends
   `view:open` with name `SettingsView` (`mirror/static/134/0.109.0/scripts/search.js:97-105`). The bar has a shadow
@@ -409,9 +467,14 @@ other roles were not determined.
     to label baseline 68 px and label width 126 px, the same, label 2 px lower; Top of Mind tiles, x and size the same.
 - **Remaining differences:** no platform logos, GitHub logo or article site logo (the post X mark is a text glyph);
   the column each card lands in can differ from the web masonry; Robolectric's narrower Nunito (see Facts).
-- **Inert:** the + (an upload needs `POST /uploads/authorize` and then `PUT /uploads/{id}` with the upload's own
-  bearer token, which the app's token header would replace) and the composer peek (`noteComposer:peekOut`; S25 is
-  not determined).
+- **Uploads, ours against the real app:** the real app queues uploads in WorkManager (`UploadBlobWorker`), so they
+  outlive the app; ours sends them from the view model, so closing the app stops them. The real app's failure text
+  falls back to "Unknown error"; ours shows the API error text, and its own for an empty or oversized file. A photo
+  taken with the camera is sent as `image/jpeg` from a `.jpg` cache file. Both the `spaceId` field and the space
+  `PUT` are sent inside a space (the `PUT` is idempotent). Ours drops a file from the queue once its card exists, so
+  the strip fades out after the last one (reading "All items uploaded" while it fades); when the real app drops
+  finished work was not determined.
+- **Inert:** the composer peek (`noteComposer:peekOut`; S25 is not determined).
 - **Not determined:** where the class `hamburger-enabled` is set in the page.
 
 ## S07 Spaces tab
@@ -425,8 +488,10 @@ other roles were not determined.
   modal (`NewSpaceDialog.kt`: "Create new space", "Name your new space", "NEXT STEP", then "Pick a color" with the
   web's 16 colours and "FINISH & SAVE") and creates the space with `POST /spaces {name,color}`. The menu dots of an
   opened space open a menu with "Delete space" (`DELETE /spaces/{id}`) behind a confirm dialog in our own words,
-  because the web's delete modal text is not recorded. Screenshots: `S07_spaces_top_{light,dark}`,
-  `S07_space_open_{light,dark}`, `S07_new_space_{name,color}_{light,dark}`.
+  because the web's delete modal text is not recorded. The list and an opened space refresh on a pull (S06), and the
+  + inside an opened space uploads into that space (S06, "Uploads"). Screenshots: `S07_spaces_top_{light,dark}`,
+  `S07_space_open_{light,dark}`, `S07_new_space_{name,color}_{light,dark}`, `S07_pull_refresh_{light,dark}`,
+  `S08_upload_strip_space_{light,dark}` (the strip over an opened space).
 - **Compared** against `04-spaces-top-*.png` and `20-space-top-light.png`:
   - Header title, geometry: ink x 415 to 666, y 174 to 226 in the capture against 416 to 664, 176 to 227 in ours
     (baseline 214 against 215).
@@ -439,20 +504,24 @@ other roles were not determined.
     ours is (20,22,30) in both (under the threshold).
 - **Remaining differences:** the space stacks hold our sample cards, so only their geometry is comparable; the
   modal shows the spaces icon where the web shows its logo; the space menu is a Material dropdown without the web's
-  "Space Details" (smart spaces only); the + inside an opened space is inert (upload, see S06); renaming a space
-  (`PATCH /spaces/{id}` exists) is not built because the editable header is not.
+  "Space Details" (smart spaces only); renaming a space (`PATCH /spaces/{id}` exists) is not built because the
+  editable header is not.
 - **Not determined:** the route of an opened space inside the web page (ours keeps it in the tab's state).
 
 ## S08 Serendipity tab
 
 - **Reached:** third tab; `navigate /clear` (`jadx/wf/b.java`).
 - **Kind:** WebView.
-- **Ours today:** native (`ui/library/SerendipityScreen.kt`, `SerendipityModel` in `LibraryViewModel.kt`): a deck of
-  18 random cards dealt from `/app/v1/cards`, one at a time; Forget (moves the card to the trash, keeps it when the
-  server refuses) and Keep in two 100 dp round buttons; a dot per card; at the end `POST /serendipity/complete`
-  once. The tile is drawn as the page draws it: post text at the base size, no coloured edge (`.inner` clips it with
-  `overflow: hidden; max-height: 55vh`), no title. The page reaches under the status bar. Screenshots:
-  `S08_serendipity_{light,dark}`, `S05_spinner_serendipity_{light,dark}`.
+- **Ours today:** native (`ui/library/SerendipityScreen.kt`, `SerendipityModel` in `LibraryViewModel.kt`): the deck the
+  web page deals, in its order: the `data-id` of each `mymind-card` in the partial `GET /serendipity` page (`Accept:
+  text/html` and `x-partial: 1`, as the deck script asks through `util.getPartialHTML`; the document request gets the
+  page shell without the deck), read with the app's bearer token, each card then read from `/app/v1/cards/{id}` (cards
+  that fail or are in the trash are left out); one card at a time; Forget (moves the card to the trash, keeps it when
+  the server refuses) and Keep in two 100 dp round buttons; a dot per card; at the end `POST /serendipity/complete`
+  once. An empty deck says so in our words ("Nothing to rediscover right now."), and a tap deals again. The tile is
+  drawn as the page draws it: post text at the base size, no coloured edge (`.inner` clips it with `overflow: hidden;
+  max-height: 55vh`), no title. The page reaches under the status bar. Screenshots: `S08_serendipity_{light,dark}`,
+  `S05_spinner_serendipity_{light,dark}`.
 - **Compared**, geometry against `05-serendipity-top-light.png`: buttons x 259 to 821, y 1712 to 1993 against 1711 to
   1992 in ours; the dot row y 2035 to 2050, x 293 to 784 against 2035 to 2049, 295 to 784.
   `05-serendipity-top-dark.png` has a bright card picture under the buttons, so it gives no ink boxes.
@@ -520,7 +589,7 @@ other roles were not determined.
 
 ## S11 Card menu
 
-- **Reached:** tap the menu icon in the card header.
+- **Reached:** tap the menu icon in the card header, or long-press a card in a grid (the page's 500 ms long press).
 - **Kind:** native Compose (`jadx/fg/h0.java`, `fg/l0.java`).
 - **Ours today:** `ui/menu/CardMenu.kt` (`CardMenuSheet`, `CardMenuContent`, `CardMenuAction`, `MenuColors`) and
   `ui/menu/CardActions.kt` (`cardMenuItems`, `CardActions`), opened from `MainShell`. The menu is a rounded card
@@ -554,9 +623,10 @@ other roles were not determined.
   the original file, saved to Downloads through MediaStore as `<card id>.<format>` like the web's name, then the real
   app's toast "Successfully downloaded"), Same Vibe (`/app/v1/search?q=similar:<id>` on the Everything tab under a
   "Same Vibe" chip, the query alone as on the web), Add tags and Add to space (open S12), Top of Mind add and remove
-  (`POST /objects/{id}/pin`, `/unpin`), Remove from space (`DELETE /spaces/{space}/objects/{id}`), Delete
-  (`DELETE /objects/{id}`, the trash). Each updates the open lists; a refused write shows the API error dialog
-  (S20). Unit tests use a fake library (`ui/menu/CardActionsTest`) and a mock server (`MymindApiTest`).
+  (`POST /objects/{id}/pin`, `/unpin`, then the Top of Mind row is read again), Remove from space
+  (`DELETE /spaces/{space}/objects/{id}`), Delete (`DELETE /objects/{id}`, the trash). Each updates the open lists;
+  a refused write shows the API error dialog (S20). Unit tests use a fake library (`ui/menu/CardActionsTest`) and a
+  mock server (`MymindApiTest`).
 - **Inert:** Reader Mode (no route serves the reader text, and S17 is not built) and locked rows.
 - **Not determined:** the open animation of the real sheet; ours uses the Material 3 sheet's slide.
 
@@ -736,13 +806,18 @@ other roles were not determined.
 
 ## S21 Photo source popup
 
-- **Reached:** the note editor or card page asks to add a photo (native popup).
-- **Kind:** native (`jadx/rf/b.java:248-385`). **Ours today:** none.
+- **Reached:** the page's file input, which the + on Everything and inside a space opens: the WebView's
+  `onShowFileChooser` (`jadx/yf/j.java`) shows the popup (`fg/l0.java` calling `rf/b.java`), not the system chooser.
+- **Kind:** native (`jadx/rf/b.java:248-385`). **Ours today:** `ui/upload/AddMediaPopup.kt`, opened by our + buttons
+  (`MainShell`), Back closes it. "Photo library" opens the system photo picker for several images and videos, "Take
+  photo" the camera (row shown only when a camera app answers `IMAGE_CAPTURE`, declared in the manifest's
+  `<queries>`). What follows is in S06 ("Uploads"). Screenshots: `S21_add_popup{,_no_camera}_{light,dark}`. Not
+  compared: the capture has no shot of it.
 - **Facts:** black 70% scrim over the whole screen (tap closes). The popup is aligned top end, width 60% of the
   parent, 16 dp padding, palette i fill, 8 dp corners. Rows: "Photo library" with `baseline_photo_library_24`, then a
   divider (palette j), then "Take photo" with `baseline_camera_alt_24` (second row only when a camera app exists).
   Row text Nunito 16 sp weight 500, palette h; icon palette h.
-- **Not determined:** how the popup is opened; whether the 60% is a fraction of the screen or of an intrinsic width.
+- **Not determined:** whether the 60% is a fraction of the screen or of an intrinsic width (ours: of the screen).
 
 ## S22 Share sheet
 
@@ -818,16 +893,15 @@ colour. No route carries these (listed, not added):
 
 - The user's name (S14 greeting) and plan name (S14 "YOUR PLAN"): not in `/app/v1/me`, `/account.json` or the
   page config.
-- A Serendipity deck: no route serves one; ours deals 18 random cards from the first `/app/v1/cards` page.
-- The Top of Mind order as a list: `/cards` sends it in MessagePack for the web; JSON has only each card's
-  `pinPosition`, which ours sorts by.
 - `GET /cards/{id}/markdown` (the web's Copy) and `GET /cards/{id}/download` (the web's Download): the web front-end
   calls them, no backend of this project serves them. Ours copies the note text and downloads the original from
   `/media/`.
 - The reader text for Reader Mode.
-- An upload the app's token can make: `PUT /uploads/{id}` needs the upload's own bearer token, which the app's
-  token header would replace, so the + buttons stay inert.
 - Platform and site logos, and the card web page itself.
+
+Closed in round 3 by the server additions in `docs/app-api.md`: the Top of Mind list (`GET /app/v1/top-of-mind`),
+uploads with the app's token (the upload token moves to `x-upload-token`), and the Serendipity deck (the ids in the
+partial `GET /serendipity` page, which the app's token can read).
 
 Behaviour of the real app that looks like a bug, noted and not copied:
 
@@ -839,9 +913,11 @@ Behaviour of the real app that looks like a bug, noted and not copied:
 
 Left out until the user says yes (native extras or flows the real app has that need data changes):
 
-- No haptics, no predictive back, no pull to refresh (native extras the real app has; they need the user's yes).
-- Inert: the + on Everything and inside a space (upload, above), the composer peek (S25 not determined), Reader Mode
-  (no reader text route), and renaming a space.
+- No predictive back. Haptics and pull to refresh are built (round 3, the user's yes): haptics only where the real
+  app has them ("Haptics" above), pull to refresh as a Material 3 indicator (S06).
+- No Trash screen, so no pull to refresh there; no Top of Mind reorder by drag, and no image viewer (S13).
+- Uploads run in the view model, not in a WorkManager job, so they stop when the app process ends (S06).
+- Inert: the composer peek (S25 not determined), Reader Mode (no reader text route), and renaming a space.
 - The tab bar stays drawn while search is focused; the capture README says the real one hides, and with the
   keyboard up the keyboard covers it in both.
 

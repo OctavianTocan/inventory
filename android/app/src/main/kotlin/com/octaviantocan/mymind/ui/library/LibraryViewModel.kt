@@ -10,6 +10,7 @@ import com.octaviantocan.mymind.data.Library
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.Tag
+import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.data.map
 import com.octaviantocan.mymind.ui.describe
 import com.octaviantocan.mymind.ui.menu.CardActions
@@ -18,14 +19,17 @@ import com.octaviantocan.mymind.ui.menu.CardMenuOutcome
 import com.octaviantocan.mymind.ui.menu.CardSubmenu
 import com.octaviantocan.mymind.ui.menu.FileSaver
 import com.octaviantocan.mymind.ui.theme.PageScheme
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 /**
  * What the Spaces tab shows.
@@ -35,6 +39,7 @@ import kotlin.random.Random
  * @property loading True while the list is being fetched.
  * @property error Text for the last failed fetch, or null.
  * @property loaded True once the list was read, even when it is empty.
+ * @property refreshing True while pull to refresh reads the list again.
  */
 data class SpacesState(
     val spaces: List<Space> = emptyList(),
@@ -42,6 +47,7 @@ data class SpacesState(
     val loading: Boolean = false,
     val error: String? = null,
     val loaded: Boolean = false,
+    val refreshing: Boolean = false,
 )
 
 /**
@@ -53,16 +59,16 @@ data class SpacesState(
 data class TagChoices(val all: List<String> = emptyList(), val recent: List<String> = emptyList())
 
 /**
- * The library behind the three tabs, search and the card menu.
+ * The library behind the three tabs, search, the card menu and the upload queue.
  *
  * @param library Reads and writes of the account's library.
  * @param saver Where Download puts a card's file.
- * @param random Source of the Serendipity deck's order.
+ * @param io Dispatcher picked files are read on.
  */
 class LibraryViewModel(
     private val library: Library,
     saver: FileSaver = FileSaver { _, _, _ -> ApiResult.Failed(ApiFailure.Server(0)) },
-    random: Random = Random.Default,
+    io: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     private val mutableScheme = MutableStateFlow(PageScheme.System)
     private val mutableFeatures = MutableStateFlow(emptySet<String>())
@@ -73,6 +79,12 @@ class LibraryViewModel(
 
     /** The Everything tab's cards, newest first. */
     val everything = CardFeed(viewModelScope) { library.cards(it) }
+
+    /** Cards pinned to Top of Mind, in pin order. */
+    val topOfMind = CardFeed(viewModelScope) { library.topOfMind(it) }
+
+    /** Files being uploaded from the + button. */
+    val uploads = UploadQueue(viewModelScope, library, onUploaded = ::showUploaded, io = io)
 
     /** Appearance of the library pages, from the account's setting. */
     val scheme: StateFlow<PageScheme> = mutableScheme
@@ -90,10 +102,11 @@ class LibraryViewModel(
     val search = SearchModel(viewModelScope, library)
 
     /** The Serendipity deck. */
-    val serendipity = SerendipityModel(viewModelScope, library, random)
+    val serendipity = SerendipityModel(viewModelScope, library)
 
     init {
         everything.loadMore()
+        topOfMind.loadMore()
         viewModelScope.launch {
             when (val config = library.pageConfig()) {
                 is ApiResult.Ok -> {
@@ -120,6 +133,49 @@ class LibraryViewModel(
         }
     }
 
+    /** Pull to refresh on Everything: reads the first page of the library and Top of Mind again. */
+    fun refreshEverything() {
+        everything.refresh()
+        topOfMind.refresh()
+    }
+
+    /** Pull to refresh on the Spaces list: reads the spaces and their first cards again, keeping them on show. */
+    fun refreshSpaces() {
+        if (mutableSpaces.value.refreshing || mutableSpaces.value.loading) return
+        if (!mutableSpaces.value.loaded) return loadSpaces()
+        mutableSpaces.update { it.copy(refreshing = true) }
+        viewModelScope.launch {
+            when (val answer = library.spaces()) {
+                is ApiResult.Ok -> {
+                    val fresh = answer.value.spaces
+                    fresh.map { space -> launch { readCover(space.id) } }.forEach { it.join() }
+                    mutableSpaces.update { state ->
+                        state.copy(spaces = fresh, covers = state.covers.filterKeys { id -> fresh.any { it.id == id } }, refreshing = false)
+                    }
+                }
+                is ApiResult.Failed -> mutableSpaces.update { it.copy(refreshing = false) }
+            }
+        }
+    }
+
+    /**
+     * Pull to refresh in an opened space: reads its first page and its entry in the Spaces list again.
+     *
+     * @param spaceId The space.
+     */
+    fun refreshSpaceFeed(spaceId: String) {
+        spaceFeed(spaceId).refresh()
+        refreshSpace(spaceId)
+    }
+
+    /**
+     * Uploads picked files, the + button's job; each new card appears at the top of the library when it is done.
+     *
+     * @param files Picked files.
+     * @param spaceId Space the + was tapped in, or null on Everything.
+     */
+    fun upload(files: List<UploadFile>, spaceId: String?) = uploads.add(files, spaceId)
+
     /**
      * @param spaceId Space to list.
      * @return The space's cards, read on first use and kept while this view model lives.
@@ -145,7 +201,10 @@ class LibraryViewModel(
                 replaceEverywhere(card.copy(spaces = card.spaces.orEmpty() - outcome.spaceId))
                 refreshSpace(outcome.spaceId)
             }
-            is CardMenuOutcome.PinChanged -> replaceEverywhere(outcome.card)
+            is CardMenuOutcome.PinChanged -> {
+                replaceEverywhere(outcome.card)
+                topOfMind.refresh()
+            }
             is CardMenuOutcome.ShowSimilar -> search.similarTo(outcome.card)
             is CardMenuOutcome.OpenSubmenu -> when (outcome.submenu) {
                 CardSubmenu.Tags -> loadTagChoices()
@@ -242,8 +301,7 @@ class LibraryViewModel(
         if (answer is ApiResult.Ok) {
             spaceFeeds.remove(space.id)
             mutableSpaces.update { state -> state.copy(spaces = state.spaces.filterNot { it.id == space.id }, covers = state.covers - space.id) }
-            val all = listOf(everything, search.results.value) + spaceFeeds.values
-            all.forEach { feed ->
+            feeds().forEach { feed ->
                 feed.state.value.cards.filter { space.id in it.spaces.orEmpty() }.forEach { feed.replace(it.copy(spaces = it.spaces.orEmpty() - space.id)) }
             }
         }
@@ -252,6 +310,17 @@ class LibraryViewModel(
     /** Moves the Serendipity card on show to the trash, takes it out of every list and moves the deck on. */
     fun forgetSerendipityCard() {
         viewModelScope.launch { serendipity.forget()?.let { id -> feeds().forEach { it.remove(id) } } }
+    }
+
+    private suspend fun showUploaded(cardId: String, spaceId: String?) {
+        when (val answer = library.card(cardId)) {
+            is ApiResult.Ok -> everything.prepend(answer.value)
+            is ApiResult.Failed -> everything.refresh()
+        }
+        if (spaceId != null) {
+            spaceFeeds[spaceId]?.refresh()
+            refreshSpace(spaceId)
+        }
     }
 
     private fun reloadSpaces() {
@@ -273,7 +342,7 @@ class LibraryViewModel(
 
     private fun replaceEverywhere(card: Card) = feeds().forEach { it.replace(card) }
 
-    private fun feeds() = listOf(everything, search.results.value) + spaceFeeds.values
+    private fun feeds() = listOf(everything, topOfMind, search.results.value) + spaceFeeds.values
 }
 
 /**
@@ -439,12 +508,14 @@ private fun quoted(name: String): String =
  * @property index Position of the card on show; equal to the deck size once the round is over.
  * @property loading True while the deck is being drawn.
  * @property error Text for the last failure, or null.
+ * @property dealt True once a deck was read, even an empty one.
  */
 data class SerendipityState(
     val deck: List<Card> = emptyList(),
     val index: Int = 0,
     val loading: Boolean = false,
     val error: String? = null,
+    val dealt: Boolean = false,
 ) {
     /** The card on show, or null before the deck is drawn and after the round. */
     val current: Card? get() = deck.getOrNull(index)
@@ -454,25 +525,27 @@ data class SerendipityState(
 }
 
 /**
- * The Serendipity round: a random deck of cards to keep or forget one by one.
+ * The Serendipity round: the deck the server's Serendipity page holds, to keep or forget card by card.
  *
  * @param scope Scope the reads and writes run in.
- * @param library Source of the cards and target of the writes.
- * @param random Order of the deck.
+ * @param library Source of the deck and the cards, and target of the writes.
  */
-class SerendipityModel(private val scope: CoroutineScope, private val library: Library, private val random: Random) {
+class SerendipityModel(private val scope: CoroutineScope, private val library: Library) {
     private val mutableState = MutableStateFlow(SerendipityState())
 
     /** The deck and position. */
     val state: StateFlow<SerendipityState> = mutableState
 
-    /** Draws a new deck of [DECK_SIZE] cards from the first page of the library. */
+    /** Reads the deck's card ids from the Serendipity page, then each card; cards that are gone or trashed are left out. */
     fun deal() {
         if (mutableState.value.loading) return
         mutableState.value = SerendipityState(loading = true)
         scope.launch {
-            mutableState.value = when (val answer = library.cards(null)) {
-                is ApiResult.Ok -> SerendipityState(deck = answer.value.cards.shuffled(random).take(DECK_SIZE))
+            mutableState.value = when (val answer = library.serendipityIds()) {
+                is ApiResult.Ok -> {
+                    val cards = answer.value.map { id -> async { (library.card(id) as? ApiResult.Ok)?.value } }.awaitAll()
+                    SerendipityState(deck = cards.filterNotNull().filter { it.deleted == null }, dealt = true)
+                }
                 is ApiResult.Failed -> SerendipityState(error = describe(answer.failure))
             }
         }
@@ -499,11 +572,5 @@ class SerendipityModel(private val scope: CoroutineScope, private val library: L
         if (state.current == null) return
         mutableState.value = state.copy(index = state.index + 1)
         if (mutableState.value.finished) scope.launch { library.completeSerendipity() }
-    }
-
-    /** Size of a Serendipity deck, as on the web. */
-    companion object {
-        /** Cards in one round. */
-        const val DECK_SIZE = 18
     }
 }

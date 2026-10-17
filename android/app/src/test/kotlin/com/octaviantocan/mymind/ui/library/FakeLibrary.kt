@@ -11,7 +11,12 @@ import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.SpaceList
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.Tag
+import com.octaviantocan.mymind.data.UploadAuthorization
+import com.octaviantocan.mymind.data.UploadBlob
+import com.octaviantocan.mymind.data.UploadChunkAnswer
+import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.data.User
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
 /**
@@ -68,6 +73,9 @@ fun testCard(
  * @param recent Recent tags.
  * @param suggestions Search suggestions by query.
  * @param media Bytes of uploaded files by path.
+ * @param pinnedPages Pages of Top of Mind by cursor.
+ * @param cardsById Cards `card` answers with; a missing id fails with 404.
+ * @param deckIds Card ids of the Serendipity page, or null to fail its read with a network error.
  */
 class FakeLibrary(
     var pages: Map<String?, CardPage> = mapOf(null to CardPage()),
@@ -79,12 +87,21 @@ class FakeLibrary(
     var recent: List<String> = emptyList(),
     var suggestions: Map<String, List<Suggestion>> = emptyMap(),
     var media: Map<String, ByteArray> = emptyMap(),
+    var pinnedPages: Map<String?, CardPage> = mapOf(null to CardPage()),
+    var cardsById: Map<String, Card> = emptyMap(),
+    var deckIds: List<String>? = emptyList(),
 ) : Library {
     /** Calls in the order they arrived, such as `trash:c1`. */
     val calls = mutableListOf<String>()
 
     /** When set, every write fails with it. */
     var writeFailure: ApiFailure? = null
+
+    /** When set, upload pieces fail with it. */
+    var chunkFailure: ApiFailure? = null
+
+    /** Bytes each upload received, by upload id. */
+    val uploaded = mutableMapOf<String, ByteArrayOutputStream>()
 
     override suspend fun me(): ApiResult<User> = ApiResult.Ok(user).also { calls += "me" }
 
@@ -148,6 +165,48 @@ class FakeLibrary(
     override suspend fun removeFromSpace(spaceId: String, cardId: String) = write("unspace:$spaceId:$cardId") {}
 
     override suspend fun completeSerendipity() = write("complete") {}
+
+    override suspend fun topOfMind(cursor: String?): ApiResult<CardPage> {
+        calls += "topOfMind:$cursor"
+        return pinnedPages[cursor]?.let { ApiResult.Ok(it) } ?: ApiResult.Failed(ApiFailure.Network)
+    }
+
+    override suspend fun card(cardId: String): ApiResult<Card> {
+        calls += "card:$cardId"
+        return cardsById[cardId]?.let { ApiResult.Ok(it) } ?: ApiResult.Failed(ApiFailure.Server(404))
+    }
+
+    override suspend fun serendipityIds(): ApiResult<List<String>> {
+        calls += "deck"
+        return deckIds?.let { ApiResult.Ok(it) } ?: ApiResult.Failed(ApiFailure.Network)
+    }
+
+    override suspend fun authorizeUploads(count: Int) =
+        write("authorize:$count") { (1..count).map { UploadAuthorization("/uploads/u${authorized + it}", "token${authorized + it}") } }
+            .also { if (it is ApiResult.Ok) authorized += count }
+
+    override suspend fun uploadChunk(
+        authorization: UploadAuthorization,
+        uploadId: String?,
+        file: UploadFile,
+        start: Long,
+        length: Long,
+        source: InputStream,
+    ): ApiResult<UploadChunkAnswer> {
+        val id = authorization.url.substringAfterLast('/')
+        calls += "chunk:${authorization.token}:$uploadId:${file.name}:$start+$length/${file.size}"
+        chunkFailure?.let { return ApiResult.Failed(it) }
+        val bytes = ByteArray(length.toInt())
+        var read = 0
+        while (read < bytes.size) read += source.read(bytes, read, bytes.size - read).also { check(it > 0) }
+        uploaded.getOrPut(id) { ByteArrayOutputStream() }.write(bytes)
+        val done = start + length == file.size
+        return ApiResult.Ok(UploadChunkAnswer(id, blob = UploadBlob(id), received = (start + length).toDouble(), done = done))
+    }
+
+    override suspend fun createMedia(uploadId: String, spaceId: String?) = write("media:$uploadId:$spaceId") { "card-$uploadId" }
+
+    private var authorized = 0
 
     private fun <T> write(call: String, value: () -> T): ApiResult<T> {
         calls += call

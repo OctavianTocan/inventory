@@ -68,7 +68,9 @@ every request:
 
 The server has no JSON route for the Serendipity deck. The web page `GET /serendipity` is a recorded document that
 carries the deck's cards inside the HTML (18 elements with `data-id` in the recorded page), and its script only calls
-`POST /serendipity/complete` when the deck is finished. The app can read the deck's card ids from that page.
+`POST /serendipity/complete` when the deck is finished. The app can read the deck's card ids from that page, but only
+from the partial page: `Accept: text/html` with `x-partial: 1`, as the web's `util.getPartialHTML` asks for it. A
+document request (`Sec-Fetch-Dest: document`) gets the page shell with no cards.
 
 ### Card
 
@@ -124,3 +126,16 @@ Fields are omitted when the stored card has no value; the app treats every field
 - `/hub` WebSocket with `Authorization: Bearer`: the same events the web gets (`object:created`, `object:updated`,
   …). The app re-reads `GET /app/v1/cards/<id>` for each changed id.
 - Writes: the endpoints in `docs/write-api.md`, with `Authorization: Bearer` instead of the session cookie.
+
+## App updates
+
+`/download` takes the app token as well as the session cookie (the Worker's sign-in gate, and
+`mymind download-server` locally).
+
+- `GET /download/android.json`: the newest Android package, `{versionName, versionCode, url, bytes, sha256, built,
+  notes, history}`. `url` is the package's path on the same server, `notes` are that version's changelog lines, and
+  `history` holds `versionName`, `versionCode`, `date` and `notes` of every version, newest first. 404 when no
+  Android package is published.
+- `GET /download/<name>.apk`: the package, sent as `application/vnd.android.package-archive`.
+
+The manifest entry behind both is described in `docs/plans/2026-10-17-1935-feat-android-updates-plan.md`.

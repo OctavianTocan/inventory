@@ -18,12 +18,14 @@ import kotlinx.coroutines.launch
  * @property loading True while a page is being fetched.
  * @property endReached True once the server has no further page.
  * @property error Text for the last failed fetch, or null.
+ * @property refreshing True while pull to refresh reads the first page again.
  */
 data class FeedState(
     val cards: List<Card> = emptyList(),
     val loading: Boolean = false,
     val endReached: Boolean = false,
     val error: String? = null,
+    val refreshing: Boolean = false,
 ) {
     /** True before the first page arrived, while it loads or after it failed. */
     val empty: Boolean get() = cards.isEmpty() && !endReached
@@ -39,6 +41,7 @@ class CardFeed(private val scope: CoroutineScope, private val load: suspend (cur
     private val mutableState = MutableStateFlow(FeedState())
     private var cursor: String? = null
     private var job: Job? = null
+    private var refreshJob: Job? = null
 
     /** The cards and the loading state. */
     val state: StateFlow<FeedState> = mutableState
@@ -69,9 +72,47 @@ class CardFeed(private val scope: CoroutineScope, private val load: suspend (cur
     /** Drops what is loaded and reads the first page again. */
     fun reload() {
         job?.cancel()
+        refreshJob?.cancel()
         cursor = null
         mutableState.value = FeedState()
         loadMore()
+    }
+
+    /**
+     * Reads the first page again for pull to refresh, keeping the cards on show until it arrives. When the list
+     * already starts with that page, nothing changes; otherwise the list becomes the fresh page. A failed read leaves
+     * a loaded list as it is and turns an empty one into the error. Does nothing while a refresh runs.
+     */
+    fun refresh() {
+        if (mutableState.value.refreshing) return
+        if (mutableState.value.cards.isEmpty()) return reload()
+        mutableState.update { it.copy(refreshing = true) }
+        refreshJob = scope.launch {
+            when (val result = load(null)) {
+                is ApiResult.Ok -> {
+                    val fresh = result.value
+                    val shown = mutableState.value.cards
+                    val unchanged = shown.take(fresh.cards.size) == fresh.cards && (fresh.next != null || shown.size == fresh.cards.size)
+                    if (unchanged) {
+                        mutableState.update { it.copy(refreshing = false) }
+                    } else {
+                        job?.cancel()
+                        cursor = fresh.next
+                        mutableState.value = FeedState(cards = fresh.cards.distinctBy { it.id }, endReached = fresh.next == null)
+                    }
+                }
+                is ApiResult.Failed -> mutableState.update { it.copy(refreshing = false) }
+            }
+        }
+    }
+
+    /**
+     * Puts a new card at the front of the list without asking the server.
+     *
+     * @param card The card; one the list holds already moves to the front.
+     */
+    fun prepend(card: Card) {
+        mutableState.update { state -> state.copy(cards = listOf(card) + state.cards.filterNot { it.id == card.id }) }
     }
 
     /**
