@@ -58,6 +58,7 @@ private val ICON_PILE_SHAPE = RoundedCornerShape(16.dp)
  * @param greetingName Name appended to the greeting.
  * @param pictures Artwork of the drawer.
  * @param scrollState Scroll position of the body.
+ * @param updates Update rows to add after the account rows.
  */
 @Composable
 fun SettingsSheet(
@@ -69,6 +70,7 @@ fun SettingsSheet(
     greetingName: String = "",
     pictures: SettingsPictures = defaultSettingsPictures(),
     scrollState: ScrollState = rememberScrollState(),
+    updates: SettingsUpdates = SettingsUpdates(),
 ) {
     val dark = MymindTheme.colors.dark
     val zoom = animateFloatAsState(if (dark) NIGHT_ZOOM else DAY_ZOOM)
@@ -80,7 +82,7 @@ fun SettingsSheet(
         Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
             FirstScreenful(account, plan, greetingName, pictures, scrollState.value)
             Spacer(Modifier.height(20.dp))
-            Rows(backdrop, pictures, onSignOut)
+            Rows(backdrop, pictures, onSignOut, updates)
             DangerZone(onClick = {}, modifier = Modifier.padding(horizontal = SIDE))
             Spacer(Modifier.height(16.dp))
             SettingsFooter(version, pictures.badge, Modifier.padding(horizontal = SIDE))
@@ -118,7 +120,7 @@ private fun FirstScreenful(account: String?, plan: String?, greetingName: String
 }
 
 @Composable
-private fun Rows(backdrop: GlassBackdrop, pictures: SettingsPictures, onSignOut: () -> Unit) {
+private fun Rows(backdrop: GlassBackdrop, pictures: SettingsPictures, onSignOut: () -> Unit, updates: SettingsUpdates) {
     val side = Modifier.padding(horizontal = SIDE)
     GlassRow("Quick note notification", backdrop, onClick = {}, modifier = side) {
         SettingsSwitch(checked = false, onCheckedChange = {})
@@ -128,6 +130,18 @@ private fun Rows(backdrop: GlassBackdrop, pictures: SettingsPictures, onSignOut:
     Spacer(Modifier.height(8.dp))
     GlassRow("Sign out of mymind", backdrop, onClick = onSignOut, modifier = side) { RowIcon(pictures.signOut) }
     Spacer(Modifier.height(8.dp))
+    if (updates.visible) {
+        GlassRow(updates.versionLabel, backdrop, onClick = {}, modifier = side)
+        Spacer(Modifier.height(8.dp))
+        GlassRow("Check for updates", backdrop, onClick = updates.onCheck, modifier = side) { RowValue(updates.status) }
+        Spacer(Modifier.height(8.dp))
+        if (updates.showAllow) {
+            GlassRow("Allow mymind to install updates", backdrop, onClick = updates.onAllow, modifier = side)
+            Spacer(Modifier.height(8.dp))
+        }
+        GlassRow("Changelog", backdrop, onClick = updates.onChangelog, modifier = side)
+        Spacer(Modifier.height(8.dp))
+    }
 }
 
 @Composable

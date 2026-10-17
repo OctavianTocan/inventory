@@ -26,10 +26,11 @@ private const val SCRIM_ALPHA = 0.66f
  *
  * @param drawerState State that opens and closes the drawer.
  * @param settings State and actions behind the drawer.
+ * @param updates Update rows of the drawer.
  * @param content Screen the drawer slides over.
  */
 @Composable
-fun SettingsDrawerHost(drawerState: DrawerState, settings: SettingsViewModel, content: @Composable () -> Unit) {
+fun SettingsDrawerHost(drawerState: DrawerState, settings: SettingsViewModel, updates: SettingsUpdates = SettingsUpdates(), content: @Composable () -> Unit) {
     val state by settings.state.collectAsStateWithLifecycle()
     LaunchedEffect(drawerState.isOpen) {
         if (drawerState.isOpen) settings.refresh()
@@ -39,6 +40,7 @@ fun SettingsDrawerHost(drawerState: DrawerState, settings: SettingsViewModel, co
         account = state.email,
         version = appVersion(LocalContext.current),
         onSignOut = settings::signOut,
+        updates = updates,
         content = content,
     )
 }
@@ -52,6 +54,7 @@ fun SettingsDrawerHost(drawerState: DrawerState, settings: SettingsViewModel, co
  * @param onSignOut Called when the user taps the sign out row.
  * @param pictures Artwork of the drawer.
  * @param scrollState Scroll position of the drawer body.
+ * @param updates Update rows of the drawer.
  * @param content Screen the drawer slides over.
  */
 @Composable
@@ -62,6 +65,7 @@ fun SettingsDrawer(
     onSignOut: () -> Unit,
     pictures: SettingsPictures = defaultSettingsPictures(),
     scrollState: ScrollState = rememberScrollState(),
+    updates: SettingsUpdates = SettingsUpdates(),
     content: @Composable () -> Unit,
 ) {
     ModalNavigationDrawer(
@@ -71,7 +75,7 @@ fun SettingsDrawer(
                 Modifier.fillMaxWidth(SHEET_WIDTH_FRACTION).fillMaxHeight(),
                 drawerContainerColor = MymindTheme.colors.settingsSheet,
             ) {
-                SettingsSheet(account = account, version = version, onSignOut = onSignOut, pictures = pictures, scrollState = scrollState)
+                SettingsSheet(account = account, version = version, onSignOut = onSignOut, pictures = pictures, scrollState = scrollState, updates = updates)
             }
         },
         drawerState = drawerState,

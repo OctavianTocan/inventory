@@ -115,6 +115,11 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
   section; `mymind download-server` and the Worker serve `/download/android.json` and the APK type, and the
   download server accepts app tokens. Tests: `rust/crates/core/tests/download_android.rs` (page, JSON, type, the
   gate) and `rust/crates/server/tests/download_android.rs` (the token, expired, revoked and unknown credentials).
+- 2026-10-17: steps 2 and 3 are built in `android/` and `deploy/publish-android.sh`. Unit tests 197, buildSrc tests 9,
+  `assembleDebug` and `assembleRelease` (scratch key) pass; an emulator run updated 0.2.0 to 0.2.1 (foreground sheet)
+  and to 0.2.2 (background notification action), silently both times. `publish-android.sh` without `--local` was never
+  run. Changes from the plan: an extra `UpToDate` state, and the release build picks its network security config
+  (`network_strict`, or `network_loopback` when pointed at an `http://` server).
 
 ## Order
 

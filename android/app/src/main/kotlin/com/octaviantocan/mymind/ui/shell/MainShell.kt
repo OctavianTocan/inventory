@@ -61,6 +61,7 @@ import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 import com.octaviantocan.mymind.ui.menu.SelectSpacePage
 import com.octaviantocan.mymind.ui.menu.cardMenuItems
 import com.octaviantocan.mymind.ui.settings.SettingsDrawerHost
+import com.octaviantocan.mymind.ui.settings.SettingsUpdates
 import com.octaviantocan.mymind.ui.settings.SettingsViewModel
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import com.octaviantocan.mymind.ui.theme.PageScheme
@@ -98,10 +99,17 @@ private data class AddTarget(val spaceId: String?)
  *
  * @param viewModel Library behind the tabs and the card menu.
  * @param settingsViewModel State and actions behind the settings drawer.
+ * @param updates Update rows of the settings drawer.
+ * @param extras Drawn over everything, such as the update sheets.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainShell(viewModel: LibraryViewModel, settingsViewModel: SettingsViewModel) {
+fun MainShell(
+    viewModel: LibraryViewModel,
+    settingsViewModel: SettingsViewModel,
+    updates: SettingsUpdates = SettingsUpdates(),
+    extras: @Composable () -> Unit = {},
+) {
     var tab by rememberSaveable { mutableStateOf(Tab.Everything) }
     var openSpace by remember { mutableStateOf<Space?>(null) }
     var opened by remember { mutableStateOf<OpenedCard?>(null) }
@@ -155,7 +163,7 @@ fun MainShell(viewModel: LibraryViewModel, settingsViewModel: SettingsViewModel)
         }
     }
 
-    SettingsDrawerHost(drawerState, settingsViewModel) {
+    SettingsDrawerHost(drawerState, settingsViewModel, updates) {
         ShellFrame(
             tab = tab,
             onSelectTab = { tab = it },
@@ -339,6 +347,7 @@ fun MainShell(viewModel: LibraryViewModel, settingsViewModel: SettingsViewModel)
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
         )
     }
+    extras()
     failure?.let { ApiErrorDialog(title = null, message = describe(it), onDismiss = { failure = null }) }
 }
 

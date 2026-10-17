@@ -1,3 +1,4 @@
+import com.octaviantocan.mymind.changelog.Changelog
 import java.nio.file.Files
 
 plugins {
@@ -95,6 +96,47 @@ abstract class CopyMymindResources : DefaultTask() {
     }
 }
 
+abstract class CopyChangelog : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val source: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val output: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val target = output.get().asFile
+        target.deleteRecursively()
+        target.mkdirs()
+        source.get().asFile.copyTo(target.resolve("CHANGELOG.md"))
+    }
+}
+
+val changelogFile: File = providers.gradleProperty("mymindChangelog").orNull
+    ?.let { File(it).let { file -> if (file.isAbsolute) file else rootProject.file(file) } }
+    ?: rootProject.file("CHANGELOG.md")
+val changelogEntries = changelogFile.let { file ->
+    if (!file.isFile) throw GradleException("Changelog missing: ${file.path}. Every version needs an entry in android/CHANGELOG.md.")
+    Changelog.parse(file.readText(), file.name)
+}
+val latestEntry = changelogEntries.first()
+
+val releaseTasks = setOf("assembleRelease", "bundleRelease", "packageRelease")
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.project == project && it.name in releaseTasks } && System.getenv("ANDROID_RELEASE_PASSWORD").isNullOrEmpty()) {
+        throw GradleException(
+            "Release builds need ANDROID_RELEASE_PASSWORD (and MYMIND_RELEASE_STORE and MYMIND_RELEASE_ALIAS when they differ " +
+                "from ~/.config/mymind/android-release.jks and mymind) in the environment.",
+        )
+    }
+}
+
+val copyChangelog = tasks.register<CopyChangelog>("copyChangelog") {
+    source.set(changelogFile)
+    output.set(layout.buildDirectory.dir("generated/changelog-assets"))
+}
+
 val copyMymindResources = tasks.register<CopyMymindResources>("copyMymindResources") {
     sources.from(mymindResourceFiles.map { rootProject.file("decoded/res/$it") })
     output.set(layout.projectDirectory.dir("generated/mymind-res"))
@@ -103,6 +145,8 @@ val copyMymindResources = tasks.register<CopyMymindResources>("copyMymindResourc
 androidComponents {
     onVariants { variant ->
         variant.sources.res?.addGeneratedSourceDirectory(copyMymindResources, CopyMymindResources::output)
+        variant.sources.assets?.addGeneratedSourceDirectory(copyChangelog, CopyChangelog::output)
+        variant.sources.kotlin?.addStaticSourceDirectory(rootProject.file("buildSrc/src/main/kotlin/com/octaviantocan/mymind/changelog").path)
     }
 }
 
@@ -120,6 +164,9 @@ fun webClientId(): String {
         .orEmpty()
 }
 
+val mymindServer: String = providers.gradleProperty("mymindServer").getOrElse("https://mymind.octaviantocan.com")
+val mymindDownloads: String = providers.gradleProperty("mymindDownloads").getOrElse(mymindServer)
+
 fun quoted(value: String) = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
@@ -130,19 +177,36 @@ android {
         applicationId = "com.octaviantocan.mymind"
         minSdk = 32
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
-        buildConfigField("String", "SERVER_URL", quoted(providers.gradleProperty("mymindServer").getOrElse("https://mymind.octaviantocan.com")))
+        versionCode = latestEntry.versionCode
+        versionName = latestEntry.versionName
+        buildConfigField("String", "SERVER_URL", quoted(mymindServer))
+        buildConfigField("String", "DOWNLOADS_URL", quoted(mymindDownloads))
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", quoted(webClientId()))
+    }
+
+    signingConfigs {
+        create("release") {
+            val home = System.getProperty("user.home")
+            storeFile = File(System.getenv("MYMIND_RELEASE_STORE") ?: "$home/.config/mymind/android-release.jks")
+            storeType = "PKCS12"
+            keyAlias = System.getenv("MYMIND_RELEASE_ALIAS") ?: "mymind"
+            storePassword = System.getenv("ANDROID_RELEASE_PASSWORD")
+            keyPassword = System.getenv("ANDROID_RELEASE_PASSWORD")
+        }
     }
 
     buildTypes {
         debug {
             manifestPlaceholders["appLabel"] = "mymind dev"
+            manifestPlaceholders["networkSecurityConfig"] = "@xml/network_loopback"
         }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             manifestPlaceholders["appLabel"] = "mymind"
+            // Cleartext to the emulator's host only for a release pointed at a local server, as in the end-to-end run.
+            val local = listOf(mymindServer, mymindDownloads).any { it.startsWith("http://") }
+            manifestPlaceholders["networkSecurityConfig"] = if (local) "@xml/network_loopback" else "@xml/network_strict"
         }
     }
 
@@ -169,6 +233,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material)
     implementation(libs.androidx.compose.material3)

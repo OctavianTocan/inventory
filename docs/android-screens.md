@@ -694,6 +694,9 @@ in round 3: the user wanted haptics, and the code settles where the real app has
 - **Remaining differences:** no name in the greeting and no plan block (the API has neither); an extra row under
   the account block in `09-settings-top-*.png` is not built, because its label is not in the native strings and its
   source is not in the `jadx/ig/` code (`ig/v` is `NeedsUpgrade(buttonTitle)`), so it was not determined.
+- **Update rows (ours, not mymind's):** after the sign-out row: "Version X (N)", "Check for updates" with its state as
+  trailing text, "Allow mymind to install updates" while Android blocks installs, and "Changelog" (opens the bundled
+  changelog). The same state drives the "What's new" sheet and the after-update sheet (`ui/update/`).
 - **Background:** picture `settings_background_light.png` (464 x 1027) or `settings_background_dark.png` (518 x 1218)
   (`decoded/res/drawable`, chosen in `jadx/xf/l.java`, `xf/m.java`), scaled 1.15 (night) or 1.5 (day) with animation.
 - **Content.** The first screenful is a column of fixed height (the window height minus the status and navigation
