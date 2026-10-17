@@ -45,8 +45,9 @@ Backend changes, all in `rust/crates/core/src/`:
   expiry and sliding rules. Cookie and app-token paths are unchanged; tests in `rust/crates/core/tests/extension_auth.rs`.
 - `api.rs`: `POST /browser-extension/activate` is acknowledged; `WebPage` and URL-only `Media` creates become link
   cards; `GET /tags/manual` answers JSON when asked for `application/json`.
-- Known gaps: the `?type=screenshot` cover is not applied to the card, `Content` creates become notes without
-  `source`, and `Media` by URL is left to the capture jobs.
+- Screenshot attachments (`?type=screenshot`) set the card cover; `Content` creates preserve the page URL as
+  `source.url`. Synthetic integration coverage: `rust/crates/core/tests/backend_gaps.rs`.
+- Known gaps: `Media` by URL is left to the capture jobs.
 
 ## Security model
 

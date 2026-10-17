@@ -377,6 +377,7 @@ impl Writer {
     }
 
     /// Save a note, plain text or URL, bumping an existing URL when present (`create`).
+    /// Explicit Content keeps selected text as prose and its string source as `source.url`.
     ///
     /// # Arguments
     /// * `body` - Request body: `content`, `type`, `prose`, `title`, `source`, `spaceId`, `uploadId`, `isDraft`, `isStub`.
@@ -394,7 +395,8 @@ impl Writer {
         let db = self.store.db();
         let content = body.get("content");
         let mut parsed = None;
-        if let Some(source) = content.as_str().map(text::trim).filter(|trimmed| LINK.is_match(trimmed)) {
+        let is_content = body.get("type").as_str() == Some("Content");
+        if !is_content && let Some(source) = content.as_str().map(text::trim).filter(|trimmed| LINK.is_match(trimmed)) {
             parsed = Some(url::parse(source, None).ok_or_else(|| fail(400, "Invalid URL"))?);
         }
         if let Some(address) = &parsed {
@@ -422,7 +424,7 @@ impl Writer {
         };
         let ts = self.tick()?;
         let screenshot = body.get("type").as_str() == Some("Screenshot");
-        let kind = if parsed.is_some() { if screenshot { "Screenshot" } else { "Placeholder" } } else { "Note" };
+        let kind = if parsed.is_some() { if screenshot { "Screenshot" } else { "Placeholder" } } else if is_content { "Content" } else { "Note" };
         let mut data: Value = obj! {
             "type" => kind,
             "flags" => if parsed.is_some() && screenshot { 1.0 } else { 0.0 },
@@ -458,6 +460,9 @@ impl Writer {
             };
             document_body(&prose)?;
             data.set("prose", prose);
+            if is_content && let Some(source) = body.get("source").as_str().filter(|source| !source.is_empty()) {
+                data.set("source", obj! { "url" => source });
+            }
         }
         if media.truthy() && body.get("source").truthy() {
             data.set("source", obj! { "name" => body.get("source").to_js_string() });

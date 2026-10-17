@@ -10,7 +10,7 @@ use crate::capture_http::forbidden;
 use crate::enrichment::Enrichment;
 use crate::form_data::{self, FormValue};
 use crate::host::{Media, MediaInput, MediaUser, Resource, ResourceOptions};
-use crate::http::Request;
+use crate::http::{Request, search_param};
 use crate::store::{IdKind, Store};
 use crate::store_write::Writer;
 use crate::uploads::Uploads;
@@ -107,6 +107,7 @@ fn spread(value: &Value) -> Result<Vec<Value>> {
 impl MediaWrites {
     /// Answer a clipboard file (`POST /objects` as multipart) or an image attachment
     /// (`POST /objects/:id/attachments`), as the function `createMediaWrites` returns does.
+    /// Attachments with `type=screenshot` also replace the cover and finish its pending display state.
     ///
     /// # Arguments
     /// * `request` - The request; its body is read only for those two routes.
@@ -189,7 +190,20 @@ impl MediaWrites {
             added.insert("uploadId", original.clone());
         }
         attachments.push(added.into());
-        let patch = Value::from(obj! { "extras" => obj! { "attachments" => Value::Array(attachments) } });
+        let mut patch = Value::from(obj! { "extras" => obj! { "attachments" => Value::Array(attachments) } });
+        if search_param(&request.url, "type").as_deref() == Some("screenshot") {
+            let extras = patch.get_mut("extras").expect("extras object");
+            extras.set("cover", self.media.cover(blob)?);
+            for key in ["capturePending", "screenshotPending", "screenshotFailed"] {
+                extras.set(key, Value::Undefined);
+            }
+            let data = baseline.get("data");
+            let mut changes = obj! { "flags" => (data.get("flags").to_number() as i32) & !((1 << 21) | (1 << 22)) };
+            if data.get("type").as_str() == Some("Placeholder") {
+                changes.insert("type", "WebPage");
+            }
+            patch.set("data", changes);
+        }
         self.writer.run(|writer| {
             writer.enrich(id, &patch, &mut baseline)?;
             if let Some((key, _)) = &upload {
