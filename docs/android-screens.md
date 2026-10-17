@@ -618,8 +618,10 @@ in round 3: the user wanted haptics, and the code settles where the real app has
   shows (locked) only without `reader`. The same script gives the account's `colorScheme`; `GET /app/v1/me` is the
   fallback when the page cannot be read.
 - **Wired to the API** (`data/Api.kt`; every call carries the app's bearer token): Visit source (opens `url`), Copy
-  (the note text of a note, quote or content card; the web copies `GET /cards/{id}/markdown`, which no backend of
-  this project serves, so formatting is lost and an image card's Copy does nothing), Download (`GET /media/{path}`,
+  (the Android client still copies the note text of a note, quote or content card, so formatting is lost and an
+  image card's Copy does nothing; the Rust backend now serves `GET /cards/{id}/markdown` to cookie, app-token and
+  extension sessions, with an inferred Markdown format; wiring Android to it remains client work), Download
+  (`GET /media/{path}`,
   the original file, saved to Downloads through MediaStore as `<card id>.<format>` like the web's name, then the real
   app's toast "Successfully downloaded"), Same Vibe (`/app/v1/search?q=similar:<id>` on the Everything tab under a
   "Same Vibe" chip, the query alone as on the web), Add tags and Add to space (open S12), Top of Mind add and remove
@@ -896,9 +898,9 @@ colour. No route carries these (listed, not added):
 
 - The user's name (S14 greeting) and plan name (S14 "YOUR PLAN"): not in `/app/v1/me`, `/account.json` or the
   page config.
-- `GET /cards/{id}/markdown` (the web's Copy) and `GET /cards/{id}/download` (the web's Download): the web front-end
-  calls them, no backend of this project serves them. Ours copies the note text and downloads the original from
-  `/media/`.
+- `GET /cards/{id}/markdown` (the web's Copy) is served by Rust, including for app bearer tokens; its formatting is
+  inferred from the web client, not a recorded response. Ours still copies the note text and should use it.
+- `GET /cards/{id}/download` (the web's Download) remains unserved. Ours downloads the original from `/media/`.
 - The reader text for Reader Mode.
 - Platform and site logos, and the card web page itself.
 

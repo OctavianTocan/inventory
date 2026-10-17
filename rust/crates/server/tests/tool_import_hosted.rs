@@ -191,7 +191,7 @@ fn library_with_recordings_and_runs_matches() {
     );
     eprintln!("both runs took {:?}", started.elapsed());
     assert!(stdout.contains("captured: {"), "{stdout}");
-    assert!(stdout.contains("media: 4"), "{stdout}");
+    assert!(stdout.contains("media: 5"), "{stdout}");
     assert!(same_tables(&out.js.join("test.db"), &out.rust.join("test.db")) > 1000);
     let files = same_tree(&out.js.join("bucket"), &out.rust.join("bucket"));
     assert!(files > 5000, "{files}");

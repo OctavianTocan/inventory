@@ -18,6 +18,7 @@ use crate::host::{Fetch, Media, Resource, Screenshot, UploadStorage};
 use crate::http::{Headers, Request, Response, search_param};
 use crate::media_writes::{MediaWrites, bind_id, upload_id};
 use crate::render::iphone::iphone_card;
+use crate::render::markdown::card_markdown;
 use crate::render::views::{render_detail, render_pinned, render_share};
 use crate::search::Search;
 use crate::site::LibraryApi;
@@ -51,6 +52,7 @@ static SHARE_PAGE: LazyLock<Regex> = LazyLock::new(|| route(r"^/shares/([^/]+)$"
 static QUERY_CHECK: LazyLock<Regex> = LazyLock::new(|| route(r"^/queries/([^/]+)/check$"));
 static RELATED: LazyLock<Regex> = LazyLock::new(|| route(r"^/embeddings/related/([^/]+)$"));
 static DETAIL: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)/detail$"));
+static MARKDOWN: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)/markdown$"));
 static CARD: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)$"));
 static SPACE: LazyLock<Regex> = LazyLock::new(|| route(r"^/spaces/([^/]+)$"));
 static OBJECT_READ: LazyLock<Regex> = LazyLock::new(|| route(r"^/objects/([^/]+)(?:/(tags|content|revisions))?$"));
@@ -834,6 +836,13 @@ impl Api {
                 headers.set("access-control-expose-headers", "x-object-quota, x-checkpoint");
             }
             self.reply(url, self.device_cards(&rows, variant)?, 200, headers)?
+        } else if get && let Some(m) = captures(&MARKDOWN, path) {
+            let row = self.require_card(&m[1])?;
+            let content = match self.store.db().one("SELECT body FROM card_content WHERE card_id = ?", &[row.id.as_str().into()])? {
+                Some(found) => parse(found.text("body").unwrap_or(""))?,
+                None => Value::Null,
+            };
+            self.reply(url, self.localize(&card_markdown(&parse(&row.data)?, &content)), 200, type_header("text/markdown; charset=utf-8"))?
         } else if get && let Some(m) = captures(&DETAIL, path) {
             let Some(row) = self.store.card(&m[1], None)? else { return Ok(None) };
             if !parse(&row.extras)?.get("local").truthy() && (self.has_replay)(request)? {
