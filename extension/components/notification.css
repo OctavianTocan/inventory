@@ -146,11 +146,11 @@ mymind-notification.upgrade-notification .mymind-notification-image {
 .mymind-notification-full {
   margin-top: -5px;
   padding: 70px 0;
+  background-color: #FF581A;
   background-position: center center;
   background-repeat: no-repeat;
-  background-size: cover;
   color: #fff;
-  font-family: 'Louize', serif;
+  font-family: 'Instrument Serif', serif;
   letter-spacing: -0.1em;
   text-align: center;
 }
@@ -173,4 +173,8 @@ mymind-notification.upgrade-notification .mymind-notification-image {
 .mymind-notification-full a:hover {
   background: #ff5924;
   color: #fff;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('../fonts/instrument-serif.woff2') format('woff2');
 }

@@ -544,12 +544,8 @@ fn complete_synthetic_search_mutation_capture_and_semantic_scenarios() {
         store
             .db()
             .execute(
-                "INSERT OR REPLACE INTO api_metadata VALUES (?,200,?,?)",
-                &[
-                    format!("/spaces/{space_id}").into(),
-                    "{}".into(),
-                    r#"{"checked":"2000-01-01T00:00:00Z"}"#.into(),
-                ],
+                "UPDATE spaces SET query = json_set(query, '$.checked', ?) WHERE id = ?",
+                &["2000-01-01T00:00:00Z".into(), space_id.as_str().into()],
             )
             .unwrap();
         same(
@@ -1091,69 +1087,27 @@ fn legacy_row_migration_triggers_reopen_and_recorded_search_floors() {
     recorded_assertions(&root);
 }
 
-// Preserve the five original real-library overlap floors and exact replay fallback checks.
+// Verify prefix searches, suggestions, query checks and backfill estimate on the seeded synthetic library.
 fn recorded_assertions(root: &Path) {
     let file = library(root);
     let server = start(root, &file, true, &[]);
     let mut client = Client::new(server.port);
     let store = Rc::new(Store::new(Rc::new(Sqlite::open(&file, false).unwrap())).unwrap());
-    let comparison = mymind::tool_search_recordings::compare_recordings(&store, root).unwrap();
-    assert_eq!(comparison.len(), 5);
-    for (row, (query, floor)) in comparison.iter().zip([
-        ("de", 1585),
-        ("des", 933),
-        ("desi", 789),
-        ("desig", 786),
-        ("design", 786),
-    ]) {
-        assert_eq!(row.get("q").as_str(), Some(query));
-        assert!(
-            row.get("overlap").as_f64().expect("numeric field") >= floor as f64,
-            "recorded prefix {query} overlap floor {floor}"
+    let search = Search::new(store.clone(), None, false).unwrap();
+    for query in ["de", "des", "desi", "desig", "design"] {
+        let expected = search
+            .text(query, &obj! { "wildcard" => true }.into())
+            .unwrap();
+        assert!(expected.count >= 20, "seeded prefix {query} count");
+        let answer = get(&mut client, &format!("/search?q={query}&wildcard=true"));
+        assert_eq!(
+            answer.get("count").as_f64().expect("numeric field"),
+            expected.count as f64
         );
     }
-    let index =
-        json::parse(&std::fs::read_to_string(root.join("replay/index.json")).unwrap()).unwrap();
-    let mut paths = vec![
-        "/search?q=design&wildcard=true".to_owned(),
-        "/search/suggestions".to_owned(),
-        "/search/suggestions?q=design".to_owned(),
-    ];
-    let prefix = "GET https://access.mymind.com";
-    let checks = regex::Regex::new(r"^/queries/[^/]+/check$").unwrap();
-    for (key, _) in index.as_object().unwrap().iter() {
-        if let Some(path) = key.strip_prefix(prefix)
-            && checks.is_match(path)
-        {
-            paths.push(path.into());
-        }
-    }
-    assert!(paths.len() > 3, "recorded query checks are present");
-    for path in paths {
-        let entry = index.get(&format!("{prefix}{path}"));
-        let body = std::fs::read_to_string(
-            root.join("replay/bodies")
-                .join(entry.get("file").as_str().unwrap()),
-        )
-        .unwrap();
-        let localized = body
-            .replace("https://static.accelerator.net/", "/_static/")
-            .replace("https://media.mymind.host/", "/_mediahost/")
-            .replace("https://carbon-media.accelerator.net/", "/_carbon/")
-            .replace("https://access.mymind.com/", "/");
-        let answer = request(
-            &mut client,
-            "GET",
-            &path,
-            &Value::Undefined,
-            "application/json",
-            "application/json",
-        );
-        assert!(
-            answer.body == localized.as_bytes(),
-            "recorded search/check bytes identical"
-        );
-    }
+    let check_reply = get(&mut client, "/queries/00000002UnEquery000001/check");
+    assert!(check_reply.get("added").as_array().is_some());
+    assert!(check_reply.get("removed").as_array().is_some());
     let unrecorded = get(&mut client, "/search?q=unrecordedzz&wildcard=false");
     assert_eq!(
         unrecorded.get("count").as_f64().expect("numeric field"),
@@ -1169,22 +1123,6 @@ fn recorded_assertions(root: &Path) {
         &arr![],
         "unrecorded suggestions empty",
     );
-    let search = Search::new(store, None, false).unwrap();
-    let read = |path: &str| {
-        json::parse(
-            &std::fs::read_to_string(
-                root.join("replay/bodies").join(
-                    index
-                        .get(&format!("{prefix}{path}"))
-                        .get("file")
-                        .as_str()
-                        .unwrap(),
-                ),
-            )
-            .unwrap(),
-        )
-        .unwrap()
-    };
     let types = Value::Array(
         search
             .suggestions("")
@@ -1195,18 +1133,22 @@ fn recorded_assertions(root: &Path) {
     );
     same(
         &types,
-        &read("/search/suggestions"),
-        "recorded type counts exact",
+        &get(&mut client, "/search/suggestions"),
+        "seeded type counts exact",
     );
-    let tags = search.suggestions("design").unwrap();
-    for live in read("/search/suggestions?q=design").as_array().unwrap() {
-        assert!(
-            tags.iter().any(|tag| tag.query_text.to_lowercase()
-                == live.get("queryText").as_str().unwrap().to_lowercase()
-                && tag.count == live.get("count").as_f64().expect("numeric field")),
-            "recorded tag count"
-        );
-    }
+    let tags = Value::Array(
+        search
+            .suggestions("design")
+            .unwrap()
+            .iter()
+            .map(|item| item.to_value())
+            .collect(),
+    );
+    same(
+        &tags,
+        &get(&mut client, "/search/suggestions?q=design"),
+        "seeded tag suggestions exact",
+    );
     let estimate = backfill(root, &file, &[], "http://127.0.0.1:1");
     assert!(estimate.status.success());
     let stdout = String::from_utf8(estimate.stdout).unwrap();

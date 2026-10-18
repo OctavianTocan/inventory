@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::{Random, assert_same, calls, root};
+use common::{Random, assert_same, calls};
 use mm_core::capture_html::{capture_title, detect_type, page_metadata, plain_text, profile_image, sanitize_post, source_url};
 use mm_core::{Value, arr, obj};
 
@@ -48,9 +48,11 @@ fn generated(seed: u64, count: usize) -> Vec<String> {
 }
 
 fn recorded_pages() -> Vec<String> {
-    let mut paths: Vec<_> = std::fs::read_dir(root().join("capture/details")).unwrap().map(|entry| entry.unwrap().path()).collect();
-    paths.sort();
-    paths.iter().step_by(15).filter_map(|path| std::fs::read_to_string(path).ok()).collect()
+    vec![
+        "<!doctype html><html><head><title>Synthetic Article - Example</title><meta property=\"og:title\" content=\"Synthetic Article\"><meta property=\"og:image\" content=\"https://example.org/cover.png\"><meta name=\"description\" content=\"Synthetic description\"><link rel=\"canonical\" href=\"https://example.org/article\"></head><body><article><h1>Synthetic Article</h1><p>First paragraph of synthetic HTML with <a href=\"/relative\">a link</a>.</p></article></body></html>".to_owned(),
+        "<!doctype html><html><head><title>Second Page | Example</title><script type=\"application/ld+json\">{\"@type\":\"SoftwareApplication\",\"name\":\"Example App\"}</script></head><body><main><p>Body text with entities &amp; quotes &quot;here&quot;.</p><img src=\"/img/photo.jpg\"></main></body></html>".to_owned(),
+        "<div><p>Post body with <a href=\"https://example.com/path\">external link</a> and <script>alert(1)</script> inline script.</p></div>".to_owned(),
+    ]
 }
 
 // Logical identity for a frozen pre-switch comparison.

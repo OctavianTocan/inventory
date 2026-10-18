@@ -25,10 +25,8 @@ use mymind::http::serve;
 use mymind::local_media::LocalMedia;
 use mymind::media_processor::LocalProcessor;
 use mymind::node_path::{listen_error, resolve};
-use mymind::read_metadata::import_read_metadata;
-use mymind::replica::{Options, Replica};
 use mymind::screenshot::ChromiumScreenshot;
-use mymind::serve::{FilePages, Listener, Server};
+use mymind::serve::{Listener, Server};
 use mymind::uploads_fs::DirectoryUploads;
 use tokio::net::TcpListener;
 
@@ -69,14 +67,10 @@ async fn start(root: PathBuf) -> Result<(), String> {
     let offline = var("OFFLINE") == Some("1");
     let hosted = var("HOSTED") == Some("1");
     let fetch: Rc<dyn Fetch> = Rc::new(NativeFetch::new());
-    let replica = Rc::new(Replica::load(&Options { root: root.clone(), offline, hosted }, Rc::clone(&fetch)).await.map_err(|error| error.to_string())?);
-    if !hosted {
-        mm_core::runtime::spawn(Rc::clone(&replica).watch());
-    }
     let auth = if mm_core::auth::enabled(&env).map_err(|error| format!("Error: {error}"))? {
         let file = var("AUTH_DB").map_or_else(|| root.join("data").join("auth.db"), PathBuf::from);
         let db = Rc::new(mm_sqlite::Sqlite::open(&file, false).map_err(|error| error.to_string())?);
-        let options = AuthOptions::new(env.clone(), main_port, db, Rc::clone(&fetch), Rc::new(FilePages::new(&root)));
+        let options = AuthOptions::new(env.clone(), main_port, db, Rc::clone(&fetch));
         Auth::new(options).map_err(|error| format!("Error: {error}"))?.map(Rc::new)
     } else {
         None
@@ -124,16 +118,8 @@ async fn start(root: PathBuf) -> Result<(), String> {
         && database.exists()
     {
         let store = Rc::new(Store::new(Rc::new(Sqlite::open(&database, false).map_err(|error| error.to_string())?)).map_err(|error| error.to_js_string())?);
-        import_read_metadata(&store, &root).await.map_err(|error| error.to_js_string())?;
         let folder = database.parent().map(Path::to_path_buf).unwrap_or_default();
         let media = var("STORE_MEDIA").map_or_else(|| folder.join("media"), |path| resolve(&cwd, path));
-        let has_replay = {
-            let replica = Rc::clone(&replica);
-            Box::new(move |request: &mm_core::http::Request| {
-                let detail = request.pathname().strip_prefix("/cards/").and_then(|rest| rest.strip_suffix("/detail")).filter(|id| !id.is_empty() && !id.contains('/'));
-                Ok(replica.replayed_for(request, &request.url).is_some() || replica.has_detail(detail.unwrap_or("")))
-            })
-        };
         let options = ApiOptions {
             store,
             media: Rc::new(LocalMedia::new(media)),
@@ -144,19 +130,17 @@ async fn start(root: PathBuf) -> Result<(), String> {
             readonly,
             localize: mm_core::site::localize,
             push: push(),
-            has_replay,
             random: mm_core::runtime::random_bytes,
         };
         api = Some(Rc::new(Api::new(options).await.map_err(|error| error.to_js_string())?));
     }
-    let store_db = var("STORE_DB").filter(|path| !path.is_empty());
     let server = Rc::new(Server {
-        replica: Rc::clone(&replica),
+        mirror: root.join("mirror").join("static"),
+        fetch: Rc::clone(&fetch),
         auth: auth.clone(),
         api,
         hosted: site.clone(),
         offline,
-        store: store_db.map(|path| resolve(&cwd, path)),
     });
     let local_port = match (&auth, var("LOCAL_PORT").filter(|text| !text.is_empty())) {
         (Some(_), Some(text)) => Some(port(text)?),
@@ -173,9 +157,7 @@ async fn start(root: PathBuf) -> Result<(), String> {
     if site.is_some() {
         println!("hosted library {library}{flag}");
     } else {
-        let (cards, details, replayed) = replica.counts();
-        println!("{cards} cards, {details} detail views, captured {}{flag}", replica.captured_at());
-        println!("{replayed} replayed responses from REA scenarios");
+        println!("local library{flag}");
     }
     let listener = Rc::new(Listener::new(Rc::clone(&server), true));
     hubs.borrow_mut().push(listener.hub());
@@ -211,7 +193,7 @@ async fn container() -> Result<(), String> {
     Ok(())
 }
 
-const USAGE: &str = "Usage: mymind [serve | download-server | container | capture-fixtures | seed-db | import-hosted | auth-user | upload-hosted | embed-library | try-ai | search-recordings] [options]
+const USAGE: &str = "Usage: mymind [serve | download-server | container | capture-fixtures | seed-db | import-hosted | auth-user | upload-hosted | migrate-media | embed-library | try-ai] [options]
   serve            the replica (default; PORT, AUTH, STORE_DB, OFFLINE and others from the environment and .env)
   download-server  signed-in downloads (DOWNLOAD_PORT, DOWNLOAD_DIR, AUTH_DB)
   container        the media container (PORT)
@@ -226,9 +208,9 @@ fn main() -> ExitCode {
         Some("import-hosted") => return ExitCode::from(mymind::runtime::run(mymind::tool_import_hosted::run(&root, &arguments))),
         Some("auth-user") => return ExitCode::from(mymind::runtime::run(mymind::tool_auth_user::run(&root, &arguments))),
         Some("upload-hosted") => return ExitCode::from(mymind::runtime::run(mymind::tool_upload_hosted::run(&root, &arguments))),
+        Some("migrate-media") => return ExitCode::from(mymind::runtime::run(mymind::tool_migrate_media::run(&root, &arguments))),
         Some("embed-library") => return ExitCode::from(mymind::runtime::run(mymind::tool_embed_library::run(&root, &arguments))),
         Some("try-ai") => return ExitCode::from(mymind::runtime::run(mymind::tool_try_ai::run(&root, &arguments))),
-        Some("search-recordings") => return ExitCode::from(mymind::runtime::run(mymind::tool_search_recordings::run(&root, &arguments))),
         None | Some("serve" | "download-server" | "container") if arguments.iter().any(|a| a == "--help" || a == "-h") => {
             println!("{USAGE}");
             return ExitCode::SUCCESS;

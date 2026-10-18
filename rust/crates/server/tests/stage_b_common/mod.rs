@@ -47,9 +47,7 @@ pub fn scratch(name: &str) -> PathBuf {
 /// The isolated root with capture, mirror and replay symlinks.
 pub fn root(name: &str) -> PathBuf {
     let root = scratch(name);
-    for name in ["capture", "mirror", "replay"] {
-        std::os::unix::fs::symlink(http::repo().join(name), root.join(name)).unwrap();
-    }
+    std::os::unix::fs::symlink(http::repo().join("mirror"), root.join("mirror")).unwrap();
     assert!(!root.join(".env").exists() && !root.join(".dev.vars").exists());
     root
 }

@@ -24,7 +24,6 @@ pub mod hub;
 pub mod library_rows;
 pub mod media_files;
 pub mod media_writes;
-pub mod recorded;
 pub mod render;
 pub mod render_card;
 pub mod runtime;

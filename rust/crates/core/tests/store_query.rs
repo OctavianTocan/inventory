@@ -77,7 +77,6 @@ fn run(file: &Path, query_id: &str, persist: bool, seed: u64, prep: usize) -> Re
     if !PREPS[prep].is_empty() {
         db.exec_batch(PREPS[prep])?;
     }
-    db.exec_batch("INSERT OR IGNORE INTO api_metadata (path, status, headers, attributes) SELECT '/spaces/' || id, 200, '{}', '{}' FROM spaces")?;
     let ids = db
         .query("SELECT id FROM cards WHERE user_id = ? ORDER BY id", &[store.default_user_id()?.into()])?
         .iter()
@@ -99,7 +98,6 @@ fn run(file: &Path, query_id: &str, persist: bool, seed: u64, prep: usize) -> Re
         "seen" => search.seen.into_inner(),
         "members" => rows(&*db, "SELECT space_id, card_id, rank, score, query_id, excluded FROM space_cards ORDER BY space_id, card_id")?,
         "queries" => rows(&*db, "SELECT id, query FROM spaces WHERE query IS NOT NULL ORDER BY id")?,
-        "metadata" => rows(&*db, "SELECT path FROM api_metadata ORDER BY path")?,
     }
     .into())
 }

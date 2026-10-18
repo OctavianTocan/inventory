@@ -17,10 +17,6 @@ pub const LOCAL_PREFIXES: [(&str, &str); 3] = [
     ("/_carbon/", "https://carbon-media.accelerator.net/"),
 ];
 
-/// Grey image served for card media that was never captured (`IMAGE_PLACEHOLDER`).
-pub const IMAGE_PLACEHOLDER: &str =
-    r##"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#e9e7e3"/></svg>"##;
-
 /// The library API as the servers call it (`createApi`): it answers the routes it owns and leaves the rest to the
 /// recordings.
 #[async_trait(?Send)]
@@ -34,14 +30,11 @@ pub trait LibraryApi {
     /// What the server answers with a 500.
     async fn handle(&self, request: &mut Request) -> Result<Option<Response>>;
 
-    /// The desktop document shell with the library's own state in place of the recorded one (`api.shell`).
-    ///
-    /// # Arguments
-    /// * `html` - Recorded shell HTML.
+    /// Render the page shell from the library database (`api.shell`).
     ///
     /// # Errors
     /// What the server answers with a 500.
-    fn shell(&self, html: &str) -> Result<String>;
+    fn shell(&self) -> Result<String>;
 }
 
 /// A server for one hosted library that answers every request it is given (`createHosted().handle`).
@@ -90,10 +83,10 @@ pub fn is_text_extension(extension: &str) -> bool {
     matches!(extension, ".js" | ".mjs" | ".css" | ".html" | ".json" | ".svg")
 }
 
-/// Rewrite mymind's origins in recorded text to the replica's local paths (`localize`).
+/// Rewrite mymind's origins in text to local paths (`localize`).
 ///
 /// # Arguments
-/// * `text` - Recorded text.
+/// * `text` - Input text.
 pub fn localize(text: &str) -> String {
     let mut out = text.to_owned();
     for (local, origin) in LOCAL_PREFIXES {
@@ -154,7 +147,7 @@ pub fn send_range(request_headers: &Headers, status: u16, body: Vec<u8>, headers
     Response::send(206, body[start..=end].to_vec(), &headers.clone().with(&range))
 }
 
-/// The recording key of a request to the replica, in the shape `tools/replay-store.mjs` records live requests
+/// The recording key of a request, in the shape the old recorder used
 /// (`replayKeyFor`).
 ///
 /// # Arguments

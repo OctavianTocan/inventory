@@ -10,7 +10,6 @@ use js_sys::{Object, Reflect};
 use mm_core::hosted::{Hosted, HostedOptions};
 use mm_core::http::{Headers, Response};
 use mm_core::library_rows::{insert_rows, table_digest};
-use mm_core::recorded::Recorded;
 use mm_core::site::Site;
 use mm_core::sql::{Sql, SqlExt, SqlValue};
 use mm_core::store::Store;
@@ -146,8 +145,7 @@ impl Inner {
                 }
                 self.state.storage().delete_all().await.map_err(worker_error)?;
                 let sql: Rc<dyn Sql> = db.clone();
-                Store::new(sql.clone())?;
-                Recorded::new(sql)?;
+                Store::new(sql)?;
                 Ok(obj! { "library" => library, "tables" => self.tables()? }.into())
             }
             "rows" => {

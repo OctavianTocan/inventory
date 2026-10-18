@@ -310,7 +310,7 @@ fn state(db: &Sqlite) -> Value {
     state.into()
 }
 
-async fn rust_phase(file: &Path, upload_dir: &Path, phase: &Value, shell: &str) -> Value {
+async fn rust_phase(file: &Path, upload_dir: &Path, phase: &Value) -> Value {
     COUNTER.store(0, Ordering::SeqCst);
     LOG.with(|log| log.borrow_mut().clear());
     FETCHES.with(|fetches| fetches.borrow_mut().clear());
@@ -331,7 +331,6 @@ async fn rust_phase(file: &Path, upload_dir: &Path, phase: &Value, shell: &str) 
         readonly: phase.get("readonly").truthy(),
         localize,
         push: Box::new(move |target, payload| sink.borrow_mut().push(json::to_string(&plain(&arr![target, payload.clone()])).into())),
-        has_replay: Box::new(|request| Ok(request.header("x-replay") == Some("1"))),
         random,
     })
     .await
@@ -341,7 +340,7 @@ async fn rust_phase(file: &Path, upload_dir: &Path, phase: &Value, shell: &str) 
     let mut answers = Vec::new();
     for step in phase.get("steps").as_array().unwrap() {
         if step.get("op").as_str() == Some("shell") {
-            answers.push(obj! { "shell" => api.shell(shell).unwrap() }.into());
+            answers.push(obj! { "shell" => api.shell().unwrap() }.into());
             continue;
         }
         let target = resolve(step.get("target").as_str().unwrap(), &db, &names);
@@ -649,7 +648,6 @@ fn compare(name: &str, phase: &Value, rust: &Value, expected: &common::Answer) -
 #[test]
 fn api_matches_node() {
     runtime::install(&TestRuntime);
-    let shell = String::from_utf8_lossy(&std::fs::read(common::root().join("capture/shell.html")).unwrap()).into_owned();
     let offline = obj! { "OFFLINE" => "1" }.into();
     let hosted_ai = obj! {
         "OFFLINE" => "1",
@@ -669,7 +667,7 @@ fn api_matches_node() {
         let (js_copy, rust_copy) = (common::temp_copy(&common::test_db()), common::temp_copy(&common::test_db()));
         let (js_dir, rust_dir) = (scratch(&format!("{name}-js")), scratch(&format!("{name}-rust")));
         let js = common::call(DRIVER, "run", vec![js_copy.to_string_lossy().as_ref().into(), js_dir.join("uploads").to_string_lossy().as_ref().into(), phase.clone()]);
-        let rust = mymind::runtime::run(rust_phase(&rust_copy, &rust_dir.join("uploads"), phase, &shell));
+        let rust = mymind::runtime::run(rust_phase(&rust_copy, &rust_dir.join("uploads"), phase));
         let handled = compare(name, phase, &rust, &js);
         println!("{name}: {} steps, {handled} answered, {} log lines, {} fetches", phase.get("steps").as_array().unwrap().len(), rust.get("log").as_array().unwrap().len(), rust.get("fetches").as_array().unwrap().len());
         total += handled;

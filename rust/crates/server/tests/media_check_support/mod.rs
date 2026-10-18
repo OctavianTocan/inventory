@@ -248,7 +248,6 @@ pub async fn api(
         readonly: false,
         localize: |value| value.to_owned(),
         push: Box::new(|_, _| {}),
-        has_replay: Box::new(|_| Ok(false)),
         random: runtime::random_bytes,
     })
     .await

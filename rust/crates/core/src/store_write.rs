@@ -242,7 +242,6 @@ impl Writer {
     }
 
     fn store_space(&self, id: &str, event: &str, kind: i64) -> Result<()> {
-        self.store.db().execute("DELETE FROM api_metadata WHERE path = ?", &[format!("/spaces/{id}").into()])?;
         let ts = self.tick()?;
         self.change(id, 190, kind, ts)?;
         self.queue(event, obj! { "id" => id }.into());

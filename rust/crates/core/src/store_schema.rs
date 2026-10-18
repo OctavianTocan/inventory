@@ -78,13 +78,6 @@ CREATE TABLE IF NOT EXISTS changes (
 ) STRICT;
 CREATE INDEX IF NOT EXISTS changes_ts ON changes (user_id, ts_ns);
 
-CREATE TABLE IF NOT EXISTS api_metadata (
-  path TEXT PRIMARY KEY,
-  status INTEGER NOT NULL,
-  headers TEXT NOT NULL CHECK (json_valid(headers)),
-  attributes TEXT NOT NULL CHECK (json_valid(attributes))
-) STRICT;
-
 CREATE TABLE IF NOT EXISTS card_content (
   card_id TEXT PRIMARY KEY REFERENCES cards (id) ON DELETE CASCADE,
   body TEXT NOT NULL CHECK (json_valid(body))

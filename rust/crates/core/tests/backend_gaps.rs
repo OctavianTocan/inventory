@@ -8,7 +8,7 @@ use std::sync::Once;
 use async_trait::async_trait;
 use futures_executor::block_on;
 use mm_core::api::{Api, ApiOptions};
-use mm_core::auth::{Auth, AuthOptions, SigninPages};
+use mm_core::auth::{Auth, AuthOptions};
 use mm_core::auth_store::install_auth_schema;
 use mm_core::host::{AnalysisImage, Fetch, FetchedResource, Media, MediaInput, MediaResult, MediaUser, PreparedMedia, Resource, ResourceOptions, Screenshot, UploadStorage};
 use mm_core::http::{Body, Request, Response};
@@ -105,12 +105,6 @@ impl Screenshot for Host {
         panic!("no browser in synthetic tests")
     }
 }
-#[async_trait(?Send)]
-impl SigninPages for Host {
-    async fn page(&self, _name: &str) -> Result<String> {
-        Ok("sign in".into())
-    }
-}
 
 // Construct an empty synthetic library with no filesystem or external services.
 fn setup() -> (Rc<Store>, Api) {
@@ -130,7 +124,6 @@ fn setup() -> (Rc<Store>, Api) {
         readonly: false,
         localize: str::to_owned,
         push: Box::new(|_, _| {}),
-        has_replay: Box::new(|_| Ok(false)),
         random: runtime::random_bytes,
     }))
     .unwrap();
@@ -243,7 +236,7 @@ fn auth() -> Auth {
         ("GOOGLE_CLIENT_SECRET".into(), "synthetic".into()),
         ("OWNER_EMAIL".into(), "test@example.test".into()),
     ]);
-    Auth::new(AuthOptions::new(env, 3000, db, Rc::new(Host), Rc::new(Host))).unwrap().unwrap()
+    Auth::new(AuthOptions::new(env, 3000, db, Rc::new(Host))).unwrap().unwrap()
 }
 
 #[test]
@@ -341,7 +334,6 @@ fn markdown_image_empty_and_readonly_exports() {
         readonly: true,
         localize: str::to_owned,
         push: Box::new(|_, _| {}),
-        has_replay: Box::new(|_| Ok(false)),
         random: runtime::random_bytes,
     }))
     .unwrap();
@@ -377,4 +369,231 @@ fn markdown_leaves_ordinary_punctuation_alone() {
     let plain = "Meet at 3.30 - bring snake_case notes & a+b (maybe!) #1 <3";
     let id = create(&api, obj! { "type" => "Note", "content" => plain }.into());
     assert_eq!(text(send(&api, "GET", &format!("/cards/{id}/markdown"), "", &[])), format!("{plain}\n"));
+}
+
+#[test]
+fn shell_template_renders_all_page_routes_with_user_data_and_mirror_scripts() {
+    let (store, api) = setup();
+    let id = create(&api, obj! { "type" => "Note", "content" => "Pinned top of mind note" }.into());
+    assert_eq!(send(&api, "POST", &format!("/objects/{id}/pin"), "{}", &[("content-type", "application/json")]).status, 200);
+    store
+        .db()
+        .execute(
+            "UPDATE users SET flags = 2048, settings = ? WHERE id = 'test'",
+            &[r#"{"colorScheme":"system","locale":"en-GB","timeZoneId":"Europe/London","onboardFlags":128,"objectLimit":50000}"#.into()],
+        )
+        .unwrap();
+    for route in [
+        "/everything",
+        &format!("/things/{id}"),
+        "/spaces",
+        "/serendipity",
+        "/trash",
+        "/account",
+        "/achievements",
+        "/bookshelf",
+    ] {
+        let response = send(&api, "GET", route, "", &[("sec-fetch-dest", "document")]);
+        assert_eq!(response.status, 200, "route {route}");
+        assert_eq!(response.headers.get("content-type"), Some("text/html; charset=utf-8"), "route {route}");
+        let html = text(response);
+        assert!(html.contains("/_static/134/0.109.0/scripts/app.js"), "mirror app.js missing on {route}");
+        assert!(html.contains("<mymind-top-of-mind class=\"tom introduced\">"), "onboard flag missing on {route}");
+        assert!(html.contains(&format!("data-id=\"{id}\"")), "pinned card missing on {route}");
+        assert!(!html.contains("00000002UnE"), "recorded card id leaked on {route}");
+        let cfg_str = html
+            .split_once("<script id=\"config\" type=\"application/json\">")
+            .unwrap()
+            .1
+            .split_once("</script>")
+            .unwrap()
+            .0;
+        let cfg = json::parse(cfg_str).unwrap();
+        assert_eq!(cfg.get("user").get("uid").as_str(), Some("test"), "user.uid on {route}");
+        assert_eq!(cfg.get("user").get("flags").as_f64(), Some(2048.0), "user.flags on {route}");
+        assert_eq!(cfg.get("locale").as_str(), Some("en-GB"), "locale on {route}");
+        assert_eq!(cfg.get("timeZoneId").as_str(), Some("Europe/London"), "timeZoneId on {route}");
+        assert_eq!(cfg.get("quotas").get("objects").get("count").as_f64(), Some(1.0), "quota count on {route}");
+    }
+}
+
+#[test]
+fn detail_reader_and_pinned_card_render_from_database_for_old_and_new_cards() {
+    let (store, _api) = setup();
+    // Construct an API where has_replay is true, proving old cards no longer defer to recordings.
+    let api = block_on(Api::new(ApiOptions {
+        store: store.clone(),
+        media: Rc::new(Host),
+        upload_storage: Rc::new(Memory::default()),
+        screenshot: Rc::new(Host),
+        resource: Rc::new(Host),
+        fetch: Rc::new(Host),
+        readonly: false,
+        localize: str::to_owned,
+        push: Box::new(|_, _| {}),
+        random: runtime::random_bytes,
+    }))
+    .unwrap();
+
+    let insert_old_card = |id: &str, kind: &str, data: Value, html: &str, extras: Value| {
+        store
+            .db()
+            .execute(
+                "INSERT INTO cards (id, user_id, type, flags, data, html, extras, created_ns, modified_ns, bumped_ns) VALUES (?, 'test', ?, 0, ?, ?, ?, 1700000000000000000, 1700000000000000000, 1700000000000000000)",
+                &[
+                    id.into(),
+                    kind.into(),
+                    json::to_string(&data).into(),
+                    html.into(),
+                    json::to_string(&extras).into(),
+                ],
+            )
+            .unwrap();
+    };
+
+    // 1. Old Article card with reader content in card_content and summary in extras.
+    insert_old_card(
+        "old-article",
+        "Article",
+        obj! {
+            "type" => "Article",
+            "title" => "Twelve Principles of Animation",
+            "created" => "2026-01-15T10:00:00Z",
+            "source" => obj! { "url" => "https://example.com/animation" }
+        }
+        .into(),
+        r#"<mymind-card class="article" data-id="old-article"><div class="hover"></div><div class="inner"><h3>Twelve Principles of Animation</h3><mymind-image><img class="lazy" data-src="/media/old-article/cover.webp"/></mymind-image></div></mymind-card>"#,
+        obj! { "summary" => "Imported TLDR for animation article" }.into(),
+    );
+    store
+        .db()
+        .execute(
+            "INSERT INTO card_content (card_id, body) VALUES ('old-article', ?)",
+            &[r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Motion on the web is communication."}]}]}"#.into()],
+        )
+        .unwrap();
+
+    // 2. Old Image card
+    insert_old_card(
+        "old-image",
+        "Image",
+        obj! {
+            "type" => "Image",
+            "title" => "Mountain Sunrise",
+            "created" => "2026-01-16T10:00:00Z",
+            "blob" => obj! { "path" => "old-image/photo.webp", "width" => 1200, "height" => 800 }
+        }
+        .into(),
+        r#"<mymind-card class="image" data-id="old-image"><div class="hover"></div><mymind-image><img class="lazy" data-src="/media/old-image/photo.webp"/></mymind-image></mymind-card>"#,
+        obj! { "summary" => "A crisp mountain sunrise photo" }.into(),
+    );
+
+    // 3. Old PDF (Document) card
+    insert_old_card(
+        "old-pdf",
+        "Document",
+        obj! {
+            "type" => "Document",
+            "title" => "Architecture Spec.pdf",
+            "created" => "2026-01-17T10:00:00Z",
+            "blob" => obj! { "path" => "old-pdf/spec.pdf", "width" => 642, "height" => 840 }
+        }
+        .into(),
+        r#"<mymind-card class="document" data-id="old-pdf"><div class="hover"></div><mymind-image><img class="lazy" data-src="/media/old-pdf/spec.pdf;page(1)/642x840-t.webp"/></mymind-image></mymind-card>"#,
+        obj! {}.into(),
+    );
+
+    // 4. Old Link (WebPage) card
+    insert_old_card(
+        "old-link",
+        "WebPage",
+        obj! {
+            "type" => "WebPage",
+            "title" => "Example Docs",
+            "created" => "2026-01-18T10:00:00Z",
+            "source" => obj! { "url" => "https://docs.example.com" }
+        }
+        .into(),
+        r#"<mymind-card class="web-page" data-id="old-link"><div class="hover"></div><mymind-image><img class="lazy" data-src="/media/old-link/shot.webp"/></mymind-image><p class="title">Example Docs</p></mymind-card>"#,
+        obj! {}.into(),
+    );
+
+    let article_detail = text(send(&api, "GET", "/cards/old-article/detail", "", &[]));
+    assert!(article_detail.contains("data-action=\"/objects/old-article/content\""));
+    assert!(article_detail.contains("Motion on the web is communication."));
+    assert!(article_detail.contains("Imported TLDR for animation article"));
+
+    let article_reader = text(send(&api, "GET", "/cards/old-article/reader", "", &[]));
+    assert!(article_reader.contains("Motion on the web is communication."));
+
+    let image_detail = text(send(&api, "GET", "/cards/old-image/detail", "", &[]));
+    assert!(image_detail.contains("src=\"/media/old-image/photo.webp\""));
+    assert!(!image_detail.contains("class=\"lazy\""));
+    assert!(image_detail.contains("A crisp mountain sunrise photo"));
+
+    let pdf_detail = text(send(&api, "GET", "/cards/old-pdf/detail", "", &[]));
+    assert!(pdf_detail.contains("src=\"/media/old-pdf/spec.pdf;page(1)/642x840-t.webp\""));
+
+    let link_detail = text(send(&api, "GET", "/cards/old-link/detail", "", &[]));
+    assert!(link_detail.contains("src=\"/media/old-link/shot.webp\""));
+    assert!(link_detail.contains("https://docs.example.com"));
+
+    for id in ["old-article", "old-image", "old-pdf", "old-link"] {
+        let pinned = text(send(&api, "GET", &format!("/cards/{id}?template=PinnedCard"), "", &[]));
+        assert!(pinned.contains(&format!("class=\"tom__item draggable\" data-id=\"{id}\"")));
+        assert!(!pinned.contains("class=\"lazy\""));
+    }
+}
+
+#[test]
+fn remaining_routes_and_readonly_search_come_from_database_and_code() {
+    let (store, api) = setup();
+    let space_resp = send(
+        &api,
+        "POST",
+        "/spaces",
+        r##"{"name":"Smart","color":"#166ff4","query":{"filters":["Unique"],"matches":[]}}"##,
+        &[("content-type", "application/json")],
+    );
+    assert_eq!(space_resp.status, 200);
+    let query_id = json::parse(&text(space_resp)).unwrap().get("query").get("id").as_str().unwrap().to_owned();
+    let card_id = create(&api, obj! { "type" => "Note", "content" => "Unique serendipity note keyword" }.into());
+    let readonly = block_on(Api::new(ApiOptions {
+        store,
+        media: Rc::new(Host),
+        upload_storage: Rc::new(Memory::default()),
+        screenshot: Rc::new(Host),
+        resource: Rc::new(Host),
+        fetch: Rc::new(Host),
+        readonly: true,
+        localize: str::to_owned,
+        push: Box::new(|_, _| {}),
+        random: runtime::random_bytes,
+    }))
+    .unwrap();
+
+    let search_res = json::parse(&text(send(&readonly, "GET", "/search?q=Unique", "", &[]))).unwrap();
+    assert_eq!(search_res.get("count").as_f64(), Some(1.0));
+
+    let sugg_res = json::parse(&text(send(&readonly, "GET", "/search/suggestions?q=", "", &[]))).unwrap();
+    assert!(sugg_res.is_array());
+
+    let check_res = json::parse(&text(send(&readonly, "GET", &format!("/queries/{query_id}/check"), "", &[]))).unwrap();
+    assert_eq!(check_res.get("added").as_array().map(|a| a.len()), Some(1));
+
+    assert_eq!(text(send(&readonly, "GET", "/news/unread", "", &[])), r#"{"count":0}"#);
+    assert!(text(send(&readonly, "GET", "/news", "", &[])).contains("news__wrap"));
+    assert_eq!(text(send(&readonly, "GET", "/achievements/unseen", "", &[])), "[]");
+    assert_eq!(
+        json::parse(&text(send(&readonly, "GET", "/ui", "", &[]))).unwrap().get("version").as_str(),
+        Some("0.109.0")
+    );
+    assert!(text(send(&readonly, "GET", "/manifest.webmanifest", "", &[])).contains("\"/everything\""));
+    assert!(text(send(&readonly, "GET", "/account/blocks/subscription", "", &[])).contains("subscription-block"));
+    assert!(text(send(&readonly, "GET", "/components/NewSpaceModal", "", &[])).contains("new-space-modal"));
+    assert!(text(send(&readonly, "GET", "/components/TomIntroductionModal", "", &[])).contains("tom-introduction-modal"));
+    assert!(text(send(&readonly, "GET", "/components/OnboardingChecklist", "", &[])).contains("onboarding-checklist"));
+    let serendipity_html = text(send(&readonly, "GET", "/serendipity", "", &[("x-partial", "1")]));
+    assert!(serendipity_html.contains("serendipity-outro"));
+    assert!(serendipity_html.contains(&card_id));
 }

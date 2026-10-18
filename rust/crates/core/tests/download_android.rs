@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use async_trait::async_trait;
-use mm_core::auth::{Auth, AuthOptions, SigninPages};
+use mm_core::auth::{Auth, AuthOptions};
 use mm_core::auth_store::install_auth_schema;
 use mm_core::download_page::{APK_TYPE, android_release, content_type, download_page};
 use mm_core::host::Fetch;
@@ -98,15 +98,6 @@ fn only_android_entries_are_sent_as_packages() {
     assert_eq!(content_type(&json::parse(r#"{"name":"x","platform":"ios"}"#).unwrap()), "application/gzip");
 }
 
-struct Pages;
-
-#[async_trait(?Send)]
-impl SigninPages for Pages {
-    async fn page(&self, _name: &str) -> Result<String> {
-        Ok("<html></html>".to_owned())
-    }
-}
-
 struct NoFetch;
 
 #[async_trait(?Send)]
@@ -131,7 +122,7 @@ fn gate() -> (Auth, Rc<dyn Sql>) {
         .into_iter()
         .map(|(name, value)| (name.to_owned(), value.to_owned()))
         .collect();
-    let auth = Auth::new(AuthOptions::new(env, 3000, db.clone(), Rc::new(NoFetch), Rc::new(Pages))).unwrap().unwrap();
+    let auth = Auth::new(AuthOptions::new(env, 3000, db.clone(), Rc::new(NoFetch))).unwrap().unwrap();
     (auth, db)
 }
 

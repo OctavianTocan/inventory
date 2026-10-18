@@ -10,7 +10,7 @@ use std::rc::Rc;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use media_check_support::{
-    Denied, Fixture, ask_hosted, body, collect, hosted, library, png, request, status,
+    Denied, Fixture, ask_hosted, body, collect, hosted, library, png, status,
 };
 use mm_core::host::{
     AnalysisImage, Bucket, ByteSpan, MediaInput, MediaProcessor, MediaUser, ObjectInfo,
@@ -19,9 +19,7 @@ use mm_core::host::{
 use mm_core::hosted::{Hosted, HostedOptions};
 use mm_core::hosted_media::{BucketUploads, HostedMedia};
 use mm_core::http::{Body, Headers};
-use mm_core::recorded::Recorded;
-use mm_core::site::IMAGE_PLACEHOLDER;
-use mm_core::sql::Sql;
+use mm_core::sql::{Sql, SqlExt};
 use mm_core::uploads::{UploadOptions, UploadRequest, Uploads};
 use mm_core::{Result, Value, obj};
 use mymind::bucket_fs::DirectoryBucket;
@@ -530,65 +528,6 @@ async fn bucket_uploads(fixture: &Fixture) {
     );
 }
 
-// Recordings keep the first copy and resolve device before verification-run variants.
-fn recordings(fixture: &Fixture) {
-    let (db, _) = library(&fixture.root.join("recorded.db"));
-    let recorded = Recorded::new(db).unwrap();
-    let key = "GET https://access.mymind.com/thing";
-    recorded
-        .put(
-            key,
-            200,
-            &obj! { "content-type" => "text/plain" }.into(),
-            b"plain",
-        )
-        .unwrap();
-    recorded.put(key, 200, &obj! {}.into(), b"second").unwrap();
-    recorded
-        .put(&format!("iphone|{key}"), 200, &obj! {}.into(), b"phone")
-        .unwrap();
-    recorded
-        .put(
-            &format!("run:r1|iphone|{key}"),
-            200,
-            &obj! {}.into(),
-            b"phone run",
-        )
-        .unwrap();
-    recorded
-        .put(&format!("run:r1|{key}"), 200, &obj! {}.into(), b"run")
-        .unwrap();
-    for (headers, expected) in [
-        (vec![], "plain"),
-        (vec![("user-agent", IPHONE)], "phone"),
-        (
-            vec![("user-agent", IPHONE), ("x-replay-run", "r1")],
-            "phone run",
-        ),
-        (vec![("x-replay-run", "r1")], "run"),
-        (vec![("x-replay-run", "r2")], "plain"),
-    ] {
-        assert_eq!(
-            recorded
-                .entry(&request("GET", "/thing", Body::Empty, &headers), key)
-                .unwrap()
-                .unwrap()
-                .body,
-            expected.as_bytes()
-        );
-    }
-    assert!(
-        recorded
-            .entry(
-                &request("GET", "/other", Body::Empty, &[]),
-                "GET https://access.mymind.com/other"
-            )
-            .unwrap()
-            .is_none()
-    );
-    assert_eq!(recorded.count().unwrap(), 4);
-}
-
 // Missing capture prefixes are unrepresentable: Hosted derives its private capture field from a required valid library.
 async fn capture_prefix_is_required_by_construction(fixture: &Fixture) {
     let bucket = Rc::new(DirectoryBucket::new(fixture.directory("bucket-prefix")));
@@ -630,34 +569,6 @@ async fn site_fallbacks(fixture: &Fixture) {
         &[r#"{"onboardFlags":128}"#.into()],
     )
     .unwrap();
-    let recorded = Recorded::new(db.clone()).unwrap();
-    recorded
-        .put(
-            "GET https://access.mymind.com/news/unread",
-            200,
-            &obj! { "content-type" => "application/json" }.into(),
-            b"[1]",
-        )
-        .unwrap();
-    // The real API's observable desktop shell mutation replaces the JS harness's `[desktop]` marker.
-    let html = r#"<p>everything</p><mymind-top-of-mind class="tom ">"#;
-    let desktop = r#"<p>everything</p><mymind-top-of-mind class="tom introduced">"#;
-    recorded
-        .put(
-            "DOC https://access.mymind.com/everything",
-            200,
-            &obj! { "content-type" => "text/html" }.into(),
-            html.as_bytes(),
-        )
-        .unwrap();
-    recorded
-        .put(
-            "shell",
-            200,
-            &obj! { "content-type" => "text/html" }.into(),
-            b"<p>shell</p>",
-        )
-        .unwrap();
     bucket
         .write(
             "static/app.js",
@@ -672,63 +583,70 @@ async fn site_fallbacks(fixture: &Fixture) {
         .unwrap();
     for (key, bytes) in [
         ("static/plain.css", &b"css"[..]),
-        ("libraries/one/capture/media/a/b;100x100.webp", &b"wide"[..]),
-        ("libraries/one/capture/media/a/b;10x10.webp", &b"small"[..]),
-        ("libraries/one/capture/media/a/clip.mp4", &b"0123456789"[..]),
-        (
-            "libraries/two/capture/media/a/other.webp",
-            &b"other library"[..],
-        ),
-        ("capture/media/a/shared.webp", &b"shared"[..]),
+        ("libraries/one/media/a/b.webp", &b"wide"[..]),
+        ("libraries/one/renditions/a_b;50x50.webp", &b"wide"[..]),
+        ("libraries/one/renditions/a_b;10x10.webp", &b"small"[..]),
+        ("libraries/one/media/a/clip.mp4", &b"0123456789"[..]),
+        ("libraries/two/media/a/other.webp", &b"other library"[..]),
+        ("media/a/shared.webp", &b"shared"[..]),
     ] {
         bucket
             .write(key, Body::Bytes(bytes.to_vec()), None, None)
             .await
             .unwrap();
     }
-    let site = hosted(db, bucket, &fixture.root, "one").await;
+    let site = hosted(db.clone(), bucket, &fixture.root, "one").await;
+    assert!(
+        db.one(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name IN ('recorded', 'api_metadata')",
+            &[],
+        )
+        .unwrap()
+        .is_none()
+    );
     assert_eq!(
         ask_hosted(&site, "GET", "/news/unread", Body::Empty, &[])
             .await
             .text(),
-        "[1]"
+        r#"{"count":0}"#
     );
-    assert_eq!(
-        ask_hosted(
+    for route in [
+        "/everything",
+        "/things/card-1",
+        "/spaces",
+        "/serendipity",
+        "/trash",
+        "/account",
+        "/achievements",
+        "/bookshelf",
+        "/anything/else",
+    ] {
+        let text = ask_hosted(
             &site,
             "GET",
-            "/everything",
+            route,
             Body::Empty,
-            &[("sec-fetch-dest", "document")]
+            &[("sec-fetch-dest", "document")],
         )
         .await
-        .text(),
-        desktop
-    );
-    assert_eq!(
-        ask_hosted(
-            &site,
-            "GET",
-            "/everything",
-            Body::Empty,
-            &[("sec-fetch-dest", "document"), ("user-agent", IPHONE)]
-        )
-        .await
-        .text(),
-        html
-    );
-    assert_eq!(
-        ask_hosted(
-            &site,
-            "GET",
-            "/anything/else",
-            Body::Empty,
-            &[("sec-fetch-dest", "document")]
-        )
-        .await
-        .text(),
-        desktop
-    );
+        .text()
+        .to_owned();
+        assert!(text.contains("<mymind-top-of-mind class=\"tom introduced\">"), "route {route}");
+        assert!(text.contains("/_static/134/0.109.0/scripts/app.js"), "route {route}");
+        assert!(!text.contains("stale recorded"), "route {route}");
+    }
+    let phone_text = ask_hosted(
+        &site,
+        "GET",
+        "/everything",
+        Body::Empty,
+        &[("sec-fetch-dest", "document"), ("user-agent", IPHONE)],
+    )
+    .await
+    .text()
+    .to_owned();
+    assert!(phone_text.contains("<mymind-top-of-mind class=\"tom introduced\">"));
+    assert!(phone_text.contains("/_static/134/0.109.0/scripts/app.js"));
     let code = ask_hosted(&site, "GET", "/_static/app.js", Body::Empty, &[]).await;
     assert_eq!(code.text(), "code");
     assert_eq!(code.headers.get("content-type"), Some("text/javascript"));
@@ -759,7 +677,7 @@ async fn site_fallbacks(fixture: &Fixture) {
         "wide"
     );
     assert_eq!(
-        ask_hosted(&site, "GET", "/_mediahost/a/b;10x10.webp", Body::Empty, &[])
+        ask_hosted(&site, "GET", "/media/a/b;10x10.webp", Body::Empty, &[])
             .await
             .text(),
         "small"
@@ -808,7 +726,7 @@ async fn site_fallbacks(fixture: &Fixture) {
         )
         .await
         .status,
-        200
+        416
     );
     let head = ask_hosted(&site, "HEAD", "/media/a/clip.mp4", Body::Empty, &[]).await;
     assert_eq!(head.status, 200);
@@ -817,33 +735,20 @@ async fn site_fallbacks(fixture: &Fixture) {
     for path in [
         "/media/a/other.webp",
         "/media/a/shared.webp",
-        "/media/..%2F..%2Ftwo%2Fcapture%2Fmedia%2Fa%2Fother.webp",
+        "/media/..%2F..%2Ftwo%2Fmedia%2Fa%2Fother.webp",
     ] {
         assert_eq!(
             ask_hosted(&site, "GET", path, Body::Empty, &[])
                 .await
-                .text(),
-            IMAGE_PLACEHOLDER
+                .status,
+            404
         );
     }
-    let recorded_range = ask_hosted(
-        &site,
-        "GET",
-        "/news/unread",
-        Body::Empty,
-        &[("range", "bytes=9-")],
-    )
-    .await;
-    assert_eq!(recorded_range.status, 416);
-    assert_eq!(
-        recorded_range.headers.get("content-range"),
-        Some("bytes */3")
-    );
     assert_eq!(
         ask_hosted(&site, "GET", "/media/none/x.webp", Body::Empty, &[])
             .await
-            .text(),
-        IMAGE_PLACEHOLDER
+            .status,
+        404
     );
     assert_eq!(
         ask_hosted(&site, "GET", "/media/none/x.mp4", Body::Empty, &[])
@@ -851,11 +756,11 @@ async fn site_fallbacks(fixture: &Fixture) {
             .status,
         404
     );
-    assert!(
+    assert_eq!(
         ask_hosted(&site, "GET", "/cards/abc/detail", Body::Empty, &[])
             .await
-            .text()
-            .contains("Detail view not captured for abc.")
+            .status,
+        404
     );
     assert_eq!(
         ask_hosted(&site, "POST", "/unknown", body(obj! {}.into()), &[])
@@ -962,7 +867,7 @@ async fn hosted_uploads_and_attachments(fixture: &Fixture) {
     let alias = ask_hosted(
         &site,
         "GET",
-        &format!("/_mediahost/{path}"),
+        &format!("/media/{path}"),
         Body::Empty,
         &[("range", "bytes=2-8")],
     )
@@ -1043,7 +948,6 @@ fn check_hosted_media() {
         renditions(&fixture).await;
         previews(&fixture).await;
         bucket_uploads(&fixture).await;
-        recordings(&fixture);
         capture_prefix_is_required_by_construction(&fixture).await;
         site_fallbacks(&fixture).await;
         hosted_uploads_and_attachments(&fixture).await;

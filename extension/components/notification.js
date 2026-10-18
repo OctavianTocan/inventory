@@ -183,7 +183,7 @@ const mymind = (self.mymind ??= {});
           notification.update({
             message: 'Could not add a tag. Please try again later.',
             status: 'error',
-            icon: chrome.runtime.getURL('mymind/icons/logo.svg'),
+              icon: chrome.runtime.getURL('icons/logo.svg'),
           });
           break;
         default:
@@ -229,14 +229,13 @@ const mymind = (self.mymind ??= {});
     constructor(element, upgradeUrl) {
       super(element);
       this.redirect = upgradeUrl;
-      const url = (path) => chrome.runtime.getURL(`mymind/${path}`);
+      const url = (path) => chrome.runtime.getURL(path);
       element.innerHTML = `<div class="mymind-notification-wrap">
         <div class="mymind-notification-inner">
           <div class="mymind-notification-image" style="background-image:url('${url('icons/logo.svg')}');"></div>
           <span>Your mind is full. <br> Please upgrade your plan.</span>
         </div>
-        <div class="mymind-notification-full" style="background-image:url('${url('images/full-mind-bg.png')}');">
-          <img src="${url('images/become-a-mastermind.svg')}">
+        <div class="mymind-notification-full">
           <a target="_blank" href="${upgradeUrl}">SEE OUR PLANS</a>
         </div></div>`;
       element.classList.add('upgrade-notification');
@@ -274,7 +273,7 @@ const mymind = (self.mymind ??= {});
     const shadow = root.attachShadow({ mode: 'open' });
 
     const font = el('style', {
-      textContent: `@font-face { font-family: 'Nunito'; src: url('${chrome.runtime.getURL('mymind/fonts/nunito.woff2')}') format('woff2'); }`,
+      textContent: `@font-face { font-family: 'Nunito'; src: url('${chrome.runtime.getURL('fonts/nunito.woff2')}') format('woff2'); }`,
     });
     document.body.append(font);
 

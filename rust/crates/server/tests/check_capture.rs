@@ -595,7 +595,7 @@ async fn media(h: &Harness) -> (String, String) {
         let result = h
             .request(
                 "GET",
-                &format!("/_mediahost/{}{suffix}", text(blob, "path")),
+                &format!("/media/{}{suffix}", text(blob, "path")),
                 b"",
                 &[],
             )

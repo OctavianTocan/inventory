@@ -6,8 +6,9 @@ use std::path::Path;
 
 use mm_core::Value;
 use mm_core::ai::{Ai, AiImage, AiItem, EmbedKind, TagSource, VocabularyEntry, cosine};
+use mm_core::sql::Sql;
 use mm_js::{json, number, text};
-
+use mm_sqlite::Sqlite;
 use crate::env_file::{self, Loaded};
 use crate::fetch::NativeFetch;
 use crate::parse_args::{Kind, Opt, parse};
@@ -52,7 +53,7 @@ fn decode_component(input: &str) -> Result<String, String> {
     String::from_utf8(out).map_err(|_| malformed())
 }
 
-// The cover image on disk for a recorded card, preferring formats Jev and Gemini embeddings accept.
+// The cover image on disk for a card, preferring formats Jev and Gemini embeddings accept.
 fn find_image(root: &Path, html: &str) -> Result<Option<Cover>, String> {
     let mut found = Vec::new();
     let mut at = 0;
@@ -66,7 +67,7 @@ fn find_image(root: &Path, html: &str) -> Result<Option<Cover>, String> {
         }
         at = body + run;
         let url = decode_component(html[start..at].replace("&amp;", "&").split('?').next().unwrap_or(""))?;
-        if root.join("capture").join(url.trim_start_matches('/')).exists() {
+        if root.join("data").join(url.trim_start_matches('/')).exists() {
             found.push(url);
         }
     }
@@ -84,7 +85,7 @@ fn find_image(root: &Path, html: &str) -> Result<Option<Cover>, String> {
         "webp" => "image/webp",
         _ => return Ok(None),
     };
-    let path = root.join("capture").join(pick.trim_start_matches('/'));
+    let path = root.join("data").join(pick.trim_start_matches('/'));
     let data = std::fs::read(&path).map_err(|error| error.to_string())?;
     let file = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     Ok(Some(Cover { mime, data, file }))
@@ -165,16 +166,16 @@ fn pick_cards(cards: &[Card], count: f64) -> Vec<&Card> {
 }
 
 fn load_cards(root: &Path) -> Result<Vec<Card>, String> {
-    let bytes = std::fs::read(root.join("capture").join("cards.json")).map_err(|error| error.to_string())?;
-    let recorded = json::parse(&String::from_utf8_lossy(&bytes)).map_err(|error| error.message().to_owned())?;
-    let Value::Array(entries) = recorded else {
-        return Err("recorded.map is not a function".to_owned());
-    };
-    entries
-        .iter()
-        .map(|entry| {
-            let html = text_of(entry.get("html"));
-            let data = json::parse(&text_of(entry.get("json"))).map_err(|error| error.message().to_owned())?;
+    let db_path = root.join("data").join("mymind.db");
+    let db = Sqlite::open(&db_path, true).map_err(|error| error.to_string())?;
+    let rows = db
+        .query("SELECT data, html FROM cards WHERE deleted_ns IS NULL ORDER BY bumped_ns DESC, id DESC", &[])
+        .map_err(|error| error.to_string())?;
+    rows.iter()
+        .map(|row| {
+            let html = row.text("html").unwrap_or_default().to_owned();
+            let raw_data = row.text("data").unwrap_or("{}");
+            let data = json::parse(raw_data).map_err(|error| error.message().to_owned())?;
             let image = find_image(root, &html)?;
             Ok(Card { data, image })
         })
@@ -269,10 +270,10 @@ async fn work(root: &Path, args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Run the AI features on a few recorded cards (`main` of `tools/try-ai.mjs`).
+/// Run the AI features on a few library cards (`main` of `tools/try-ai.mjs`).
 ///
 /// # Arguments
-/// * `root` - The repository root: `.env` (without overriding the process environment) and `capture/`.
+/// * `root` - The repository root: `.env` (without overriding the process environment) and `data/`.
 /// * `args` - The arguments after the subcommand name: `[--cards N] [--vocab N] [--query text]...`.
 ///
 /// # Returns

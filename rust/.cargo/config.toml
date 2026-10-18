@@ -1,4 +1,3 @@
 [env]
 MYMIND_TEST_DB = { value = "test-fixtures/mymind.db", relative = true, force = false }
 MYMIND_TEST_HOSTED_DB = { value = "test-fixtures/hosted-test.db", relative = true, force = false }
-MYMIND_TEST_HOSTED_BUCKET = { value = "test-fixtures/hosted-bucket", relative = true, force = false }

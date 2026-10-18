@@ -19,7 +19,7 @@ use crate::http::{Headers, Request, Response, search_param};
 use crate::media_writes::{MediaWrites, bind_id, upload_id};
 use crate::render::iphone::iphone_card;
 use crate::render::markdown::card_markdown;
-use crate::render::views::{render_detail, render_pinned, render_share};
+use crate::render::views::{render_component, render_detail, render_pinned, render_serendipity, render_share};
 use crate::search::Search;
 use crate::site::LibraryApi;
 use crate::sql::{SqlExt, SqlValue};
@@ -51,7 +51,7 @@ static ACHIEVEMENT: LazyLock<Regex> = LazyLock::new(|| route(r"^/achievements/([
 static SHARE_PAGE: LazyLock<Regex> = LazyLock::new(|| route(r"^/shares/([^/]+)$"));
 static QUERY_CHECK: LazyLock<Regex> = LazyLock::new(|| route(r"^/queries/([^/]+)/check$"));
 static RELATED: LazyLock<Regex> = LazyLock::new(|| route(r"^/embeddings/related/([^/]+)$"));
-static DETAIL: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)/detail$"));
+static DETAIL: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)/(?:detail|reader)$"));
 static MARKDOWN: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)/markdown$"));
 static CARD: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)$"));
 static SPACE: LazyLock<Regex> = LazyLock::new(|| route(r"^/spaces/([^/]+)$"));
@@ -80,9 +80,6 @@ fn route(pattern: &str) -> Regex {
 /// Broadcasts a committed hub event: `(target, payload)`.
 pub type Push = Box<dyn Fn(&str, &Value)>;
 
-/// Whether the server can replay this exact request.
-pub type HasReplay = Box<dyn Fn(&Request) -> Result<bool>>;
-
 /// What [`Api::new`] serves (`options` of `createApi` for an already open store).
 pub struct ApiOptions {
     /// Open store whose read metadata is already imported; the host closes it.
@@ -103,8 +100,6 @@ pub struct ApiOptions {
     pub localize: fn(&str) -> String,
     /// Broadcasts a committed hub event: `(target, payload)`.
     pub push: Push,
-    /// Whether the server can replay this exact request.
-    pub has_replay: HasReplay,
     /// Random bytes behind share and upload ids.
     pub random: fn(usize) -> Vec<u8>,
 }
@@ -121,7 +116,6 @@ pub struct Api {
     writes: MediaWrites,
     readonly: bool,
     localize: fn(&str) -> String,
-    has_replay: HasReplay,
 }
 
 enum Mutation {
@@ -359,6 +353,9 @@ fn problem(error: Error) -> Result<Response> {
     Ok(Response::send(status, body, &type_header("application/problem+json")))
 }
 
+/// Checked-in page shell template with recorded card data stripped.
+pub const SHELL_TEMPLATE: &str = include_str!("../templates/shell.html");
+
 impl Api {
     /// Open the API over a store (`createApi` with `store`): sweep stale uploads and requeue unfinished local cards
     /// unless read-only.
@@ -424,7 +421,6 @@ impl Api {
             writes,
             readonly: options.readonly,
             localize: options.localize,
-            has_replay: options.has_replay,
         })
     }
 
@@ -521,17 +517,8 @@ impl Api {
     }
 
     // Restore recorded transport headers while generating current bodies and quota headers.
-    fn reply(&self, url: &Url, body: impl Into<crate::http::Body>, status: u16, headers: Headers) -> Result<Response> {
-        let key = format!("{}{}", url.path(), crate::http::search(url));
-        let mut all = Headers::new();
-        if let Some(saved) = self.store.db().one("SELECT headers FROM api_metadata WHERE path = ?", &[key.into()])?
-            && let Value::Object(recorded) = parse(saved.text("headers").unwrap_or(""))?
-        {
-            for (name, value) in recorded.iter() {
-                all.set(&*name, value.to_js_string());
-            }
-        }
-        Ok(Response::send(status, body, &all.with(&headers)))
+    fn reply(&self, _url: &Url, body: impl Into<crate::http::Body>, status: u16, headers: Headers) -> Result<Response> {
+        Ok(Response::send(status, body, &headers))
     }
 
     fn reply_json(&self, url: &Url, body: &Value) -> Result<Response> {
@@ -753,9 +740,10 @@ impl Api {
         if let Some(response) = self.app.handle(method, url).await? {
             return Ok(Some(response));
         }
-        if (get || method == "HEAD") && (path.starts_with("/media/") || path.starts_with("/_mediahost/")) {
-            let relative = path.strip_prefix("/media/").or_else(|| path.strip_prefix("/_mediahost/")).unwrap_or(path);
-            let Some(result) = self.media.response(relative).await? else { return Ok(None) };
+        if (get || method == "HEAD") && let Some(relative) = path.strip_prefix("/media/") {
+            let Some(result) = self.media.response(relative).await? else {
+                return Ok(Some(Response::send(404, "", &type_header("text/plain"))));
+            };
             return Ok(Some(self.media.send(&result, method, request.header("range")).await?));
         }
         if !self.readonly && method == "POST" && path == "/uploads/authorize" {
@@ -798,11 +786,14 @@ impl Api {
                 Some(card) => Response::send(200, self.localize(&render_share(&card)?), &type_header(HTML_TYPE)),
             }));
         }
-        if get && request.header("sec-fetch-dest") == Some("document") {
-            return Ok(None);
-        }
-        if get && (["/search", "/search/suggestions"].contains(&path) || QUERY_CHECK.is_match(path)) && self.readonly && (self.has_replay)(request)? {
-            return Ok(None);
+        let page_load = request.header("sec-fetch-dest") == Some("document")
+            || (request.header("x-partial").is_none()
+                && (matches!(path, "/" | "/everything" | "/trash" | "/account" | "/achievements" | "/bookshelf")
+                    || path.starts_with("/things/")
+                    || (request.header("accept").is_some_and(|accept| accept.contains("text/html"))
+                        && (path == "/spaces" || path.starts_with("/spaces/")))));
+        if get && page_load {
+            return Ok(Some(Response::send(200, self.shell()?, &type_header(HTML_TYPE))));
         }
         let response = if get && path == "/search" {
             let mut options = search_object(url);
@@ -844,10 +835,7 @@ impl Api {
             };
             self.reply(url, self.localize(&card_markdown(&parse(&row.data)?, &content)), 200, type_header("text/markdown; charset=utf-8"))?
         } else if get && let Some(m) = captures(&DETAIL, path) {
-            let Some(row) = self.store.card(&m[1], None)? else { return Ok(None) };
-            if !parse(&row.extras)?.get("local").truthy() && (self.has_replay)(request)? {
-                return Ok(None);
-            }
+            let row = self.require_card(&m[1])?;
             let share = match self.active_share(&row.id, true)? {
                 Some(share) => {
                     let id = share.text("id").unwrap_or("").to_owned();
@@ -863,10 +851,8 @@ impl Api {
             };
             let headers = Headers::from([("content-type", HTML_TYPE), ("x-partial", "CardDetail")]);
             self.reply(url, self.localize(&render_detail(&row, &share, &content)?), 200, headers)?
-        } else if !phone && get && search_param(url, "template").as_deref() == Some("PinnedCard") && let Some(m) = captures(&CARD, path) {
-            let Some(row) = self.store.card(&m[1], None)?.filter(|row| parse(&row.extras).is_ok_and(|extras| extras.get("local").truthy())) else {
-                return Ok(None);
-            };
+        } else if get && search_param(url, "template").as_deref() == Some("PinnedCard") && let Some(m) = captures(&CARD, path) {
+            let row = self.require_card(&m[1])?;
             self.reply(url, self.localize(&render_pinned(&row)), 200, Headers::from([("content-type", HTML_TYPE), ("x-partial", "PinnedCard")]))?
         } else if get && !url.query_pairs().any(|(name, _)| name == "template") && let Some(m) = captures(&CARD, path) {
             let row = self.require_card(&m[1])?;
@@ -878,19 +864,7 @@ impl Api {
         } else if get && path == "/spaces" {
             self.reply_json(url, &Value::Array(self.store.spaces(None)?.iter().map(|space| space.to_value()).collect()))?
         } else if get && let Some(m) = captures(&SPACE, path) {
-            let mut space = self.store.space(&m[1])?.ok_or_else(|| Error::status(404, "Space not found"))?.to_value();
-            let metadata = self.store.db().one("SELECT attributes FROM api_metadata WHERE path = ?", &[path.into()])?;
-            if space.get("query").truthy()
-                && let Some(metadata) = metadata
-            {
-                let attributes = parse(metadata.text("attributes").unwrap_or(""))?;
-                let checked = member(&attributes, "checked")?.clone();
-                if let Some(query) = space.get_mut("query")
-                    && !checked.is_nullish()
-                {
-                    query.set("checked", checked);
-                }
-            }
+            let space = self.store.space(&m[1])?.ok_or_else(|| Error::status(404, "Space not found"))?.to_value();
             self.reply_json(url, &space)?
         } else if get && path == "/tags/manual" {
             let tags: Vec<Value> = self.store.tags_manual(None)?.iter().map(|tag| tag.to_value()).collect();
@@ -983,21 +957,40 @@ impl Api {
         } else if get && (path == "/quota" || path == "/quotas/objects") {
             self.reply(url, stringify(&self.store.quota(None)?.to_value())?, 200, self.with_quota(json_headers())?)?
         } else if get && path == "/account.json" {
-            let metadata = self.store.db().one("SELECT attributes FROM api_metadata WHERE path = ?", &[path.into()])?;
-            let mut account = match metadata {
-                Some(metadata) => parse(metadata.text("attributes").unwrap_or(""))?.get("account").clone(),
-                None => obj! {}.into(),
-            };
-            if account.is_nullish() {
-                return Err(Error::invalid("Cannot set properties of undefined (setting 'quotas')"));
-            }
-            let mut quotas = match account.get("quotas") {
-                Value::Object(existing) => existing.clone(),
-                _ => Object::new(),
-            };
-            quotas.insert("objects", self.store.quota(None)?.to_value());
-            account.set("quotas", quotas);
-            self.reply(url, stringify(&account)?, 200, self.with_quota(json_headers())?)?
+            let account = obj! { "quotas" => obj! { "objects" => self.store.quota(None)?.to_value() } };
+            self.reply(url, stringify(&account.into())?, 200, self.with_quota(json_headers())?)?
+        } else if get && path == "/news/unread" {
+            self.reply(url, r#"{"count":0}"#, 200, json_headers())?
+        } else if get && path == "/news" {
+            self.reply(
+                url,
+                r#"<div class="news__wrap"><h2 class="news__title">News &amp; updates<br>for your mind.</h2><div class="scrollable"><div class="scrollbar" autohide><div class="handle"></div></div><div class="content"></div></div></div>"#,
+                200,
+                type_header(HTML_TYPE),
+            )?
+        } else if get && path == "/achievements/unseen" {
+            self.reply(url, "[]", 200, json_headers())?
+        } else if get && path == "/ui" {
+            self.reply(url, r#"{"environmentName":"Production","version":"0.109.0"}"#, 200, json_headers())?
+        } else if get && path == "/manifest.webmanifest" {
+            self.reply(
+                url,
+                r##"{"name":"mymind","short_name":"mymind","start_url":"/everything","background_color":"#fff","description":"The extension for your mind","display":"fullscreen","icons":[{"src":"/_static/134/0.109.0/images/favicon.png","sizes":"144x144","type":"image/png"}]}"##,
+                200,
+                type_header("application/manifest+json; charset=utf-8"),
+            )?
+        } else if get && path.starts_with("/account/blocks/") {
+            self.reply(
+                url,
+                r#"<div class="subscription-block"><h2 class="header">Your subscription</h2><div class="lhs"><p class="renewal-note">Self-hosted library</p></div></div>"#,
+                200,
+                type_header(HTML_TYPE),
+            )?
+        } else if get && let Some(name) = path.strip_prefix("/components/") {
+            self.reply(url, render_component(name), 200, type_header(HTML_TYPE))?
+        } else if get && path == "/serendipity" {
+            let rows = self.store.grid_cards(None, 0, Some(18))?;
+            self.reply(url, render_serendipity(&rows, self.localize), 200, type_header(HTML_TYPE))?
         } else {
             if get || self.readonly {
                 return Ok(None);
@@ -1019,28 +1012,21 @@ impl LibraryApi for Api {
         }
     }
 
-    fn shell(&self, html: &str) -> Result<String> {
-        if self.readonly {
-            return Ok(html.to_owned());
-        }
+    fn shell(&self) -> Result<String> {
         let store = &self.store;
         let user = store.user(None)?.ok_or_else(|| Error::invalid("Cannot read properties of undefined (reading 'settings')"))?;
-        let local_pin = user.settings.get("pinsChanged").truthy()
-            || store.db().one("SELECT id FROM cards WHERE json_extract(extras, '$.local') = 1 AND (flags & 512) != 0 LIMIT 1", &[])?.is_some();
-        let mut html = html.to_owned();
-        if local_pin {
-            let mut contents = String::new();
-            for card in store.pinned_cards(None)? {
-                contents.push_str(&self.localize(&render_pinned(&card)));
-            }
-            html = pinned_list(&html, &contents);
+        let mut contents = String::new();
+        for card in store.pinned_cards(None)? {
+            contents.push_str(&self.localize(&render_pinned(&card)));
         }
+        contents.push_str("\n            <div class=\"tom__empty \">\n              <p><i></i> Drop card here to keep it top of mind.</p>\n            </div>\n          ");
+        let mut html = pinned_list(SHELL_TEMPLATE, &contents);
         // Onboarding flag 128 is the one the client sets after showing the Top of Mind introduction.
         let onboard = user.settings.get("onboardFlags");
         if to_int32(if onboard.is_nullish() { 0.0 } else { onboard.to_number() }) & 128 != 0 {
             html = html.replacen("<mymind-top-of-mind class=\"tom \">", "<mymind-top-of-mind class=\"tom introduced\">", 1);
         }
-        let Some(found) = CONFIG.captures(&html) else { return Ok(html) };
+        let Some(found) = CONFIG.captures(&html) else { return Ok(self.localize(&html)) };
         let mut config = parse(&found[2])?;
         for key in ["colorScheme", "locale", "timeZoneId", "soundEnabled", "onboardFlags"] {
             if let Some(value) = user.settings.as_object().and_then(|settings| settings.get(key)) {
@@ -1049,7 +1035,10 @@ impl LibraryApi for Api {
         }
         let flags = Value::Number(user.flags as f64);
         match config.get_mut("user") {
-            Some(target @ Value::Object(_)) => target.set("flags", flags),
+            Some(target @ Value::Object(_)) => {
+                target.set("uid", Value::from(user.id.as_str()));
+                target.set("flags", flags);
+            }
             _ => return Err(Error::invalid("Cannot set properties of undefined (setting 'flags')")),
         }
         let quota = store.quota(None)?.to_value();
@@ -1059,7 +1048,25 @@ impl LibraryApi for Api {
         }
         let replaced = format!("{}{}{}", &found[1], stringify(&config)?.replace('<', "\\u003c"), &found[3]);
         let range = found.get(0).expect("whole match").range();
-        Ok(format!("{}{replaced}{}", &html[..range.start], &html[range.end..]))
+        let mut out = format!("{}{replaced}{}", &html[..range.start], &html[range.end..]);
+        match config.get("colorScheme").as_str() {
+            Some("system") => {
+                out = out.replacen(
+                    "id=\"dark-stylesheet\" href=\"/_static/134/0.109.0/styles/dark.css\" media=\"all\"",
+                    "id=\"dark-stylesheet\" href=\"/_static/134/0.109.0/styles/dark.css\" media=\"(prefers-color-scheme: dark)\"",
+                    1,
+                );
+            }
+            Some("light") => {
+                out = out.replacen(
+                    "id=\"dark-stylesheet\" href=\"/_static/134/0.109.0/styles/dark.css\" media=\"all\"",
+                    "id=\"dark-stylesheet\" href=\"/_static/134/0.109.0/styles/dark.css\" media=\"not all\"",
+                    1,
+                );
+            }
+            _ => {}
+        }
+        Ok(self.localize(&out))
     }
 }
 

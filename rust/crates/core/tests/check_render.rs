@@ -9,24 +9,24 @@ use mm_js::json;
 use recordings::{Recording, recording_extras};
 
 const TYPE_COUNTS: &[(&str, usize)] = &[
-    ("WebPage", 341),
-    ("XPost", 934),
-    ("Article", 174),
-    ("YouTubeVideo", 26),
-    ("Repository", 281),
-    ("Video", 77),
-    ("Note", 31),
-    ("Image", 141),
-    ("Screenshot", 215),
-    ("InstagramReel", 36),
-    ("SoftwareApplication", 3),
-    ("Product", 4),
-    ("Document", 3),
-    ("ThreadsPost", 4),
+    ("WebPage", 2),
+    ("XPost", 2),
+    ("Article", 2),
+    ("YouTubeVideo", 2),
+    ("Repository", 2),
+    ("Video", 2),
+    ("Note", 2),
+    ("Image", 2),
+    ("Screenshot", 2),
+    ("InstagramReel", 2),
+    ("SoftwareApplication", 2),
+    ("Product", 2),
+    ("Document", 2),
+    ("ThreadsPost", 2),
     ("Placeholder", 2),
-    ("SubstackNote", 1),
+    ("SubstackNote", 2),
     ("Content", 2),
-    ("RedditPost", 1),
+    ("RedditPost", 2),
 ];
 
 #[derive(Debug, PartialEq)]
@@ -197,7 +197,7 @@ fn every_recorded_card_and_each_link_save_stage_have_exact_original_html() {
     let cards = recordings::captured_cards();
     let report = check_cards(&cards, &options(&[]).expect("default options"))
         .expect("recorded render cases");
-    assert_eq!(cards.len(), 2276, "complete original captured corpus");
+    assert_eq!(cards.len(), 36, "complete synthetic captured corpus");
     assert_eq!(
         report.counts.len(),
         TYPE_COUNTS.len() + 1,
@@ -221,8 +221,8 @@ fn every_recorded_card_and_each_link_save_stage_have_exact_original_html() {
             .iter()
             .map(|(_, _, count)| count)
             .sum::<usize>(),
-        2279,
-        "2276 cards plus all three lifecycle stages"
+        39,
+        "36 cards plus all three lifecycle stages"
     );
     passed(&report, 3);
 }
@@ -255,24 +255,24 @@ macro_rules! recorded_type {
     };
 }
 
-recorded_type!(recorded_type_webpage, "WebPage", 341);
-recorded_type!(recorded_type_xpost, "XPost", 934);
-recorded_type!(recorded_type_article, "Article", 174);
-recorded_type!(recorded_type_youtube_video, "YouTubeVideo", 26);
-recorded_type!(recorded_type_repository, "Repository", 281);
-recorded_type!(recorded_type_video, "Video", 77);
-recorded_type!(recorded_type_note, "Note", 31);
-recorded_type!(recorded_type_image, "Image", 141);
-recorded_type!(recorded_type_screenshot, "Screenshot", 215);
-recorded_type!(recorded_type_instagram_reel, "InstagramReel", 36);
-recorded_type!(recorded_type_software_application, "SoftwareApplication", 3);
-recorded_type!(recorded_type_product, "Product", 4);
-recorded_type!(recorded_type_document, "Document", 3);
-recorded_type!(recorded_type_threads_post, "ThreadsPost", 4);
+recorded_type!(recorded_type_webpage, "WebPage", 2);
+recorded_type!(recorded_type_xpost, "XPost", 2);
+recorded_type!(recorded_type_article, "Article", 2);
+recorded_type!(recorded_type_youtube_video, "YouTubeVideo", 2);
+recorded_type!(recorded_type_repository, "Repository", 2);
+recorded_type!(recorded_type_video, "Video", 2);
+recorded_type!(recorded_type_note, "Note", 2);
+recorded_type!(recorded_type_image, "Image", 2);
+recorded_type!(recorded_type_screenshot, "Screenshot", 2);
+recorded_type!(recorded_type_instagram_reel, "InstagramReel", 2);
+recorded_type!(recorded_type_software_application, "SoftwareApplication", 2);
+recorded_type!(recorded_type_product, "Product", 2);
+recorded_type!(recorded_type_document, "Document", 2);
+recorded_type!(recorded_type_threads_post, "ThreadsPost", 2);
 recorded_type!(recorded_type_placeholder, "Placeholder", 2);
-recorded_type!(recorded_type_substack_note, "SubstackNote", 1);
+recorded_type!(recorded_type_substack_note, "SubstackNote", 2);
 recorded_type!(recorded_type_content, "Content", 2);
-recorded_type!(recorded_type_reddit_post, "RedditPost", 1);
+recorded_type!(recorded_type_reddit_post, "RedditPost", 2);
 
 #[test]
 fn original_option_rejections_and_unknown_type_failure_are_preserved() {

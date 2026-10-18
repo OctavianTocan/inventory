@@ -2,8 +2,7 @@
 
 use std::rc::Rc;
 
-use async_trait::async_trait;
-use mm_core::auth::{Auth as Gate, AuthOptions, SigninPages};
+use mm_core::auth::{Auth as Gate, AuthOptions};
 use mm_core::auth_store::{Identity, library_of, list_users, set_library};
 use mm_core::http::{Body, Headers, Response};
 use mm_core::sql::{Sql, SqlExt, SqlValue};
@@ -20,15 +19,6 @@ use crate::sql_do::DoSql;
 pub const CALL: &str = "x-mymind-call";
 
 const UNAUTHORIZED: &str = r#"{"type":"about:blank","status":401,"title":"Unauthorized"}"#;
-
-struct NoPages;
-
-#[async_trait(?Send)]
-impl SigninPages for NoPages {
-    async fn page(&self, name: &str) -> Result<String> {
-        Err(Error::internal(format!("The Worker has no recorded sign-in page {name}")))
-    }
-}
 
 /// The one Durable Object that holds sign-in for every library: sessions, app tokens, password users and which library
 /// each account reaches.
@@ -121,7 +111,7 @@ impl worker::DurableObject for Auth {
         let db = DoSql::open(&state);
         let gate = db.clone().and_then(|db| {
             let sql: Rc<dyn Sql> = db;
-            Gate::new(AuthOptions::new(crate::runtime::strings(env.as_ref()), 443, sql, Rc::new(WorkerFetch), Rc::new(NoPages)))
+            Gate::new(AuthOptions::new(crate::runtime::strings(env.as_ref()), 443, sql, Rc::new(WorkerFetch)))
         });
         Self { db: db.ok(), gate }
     }

@@ -174,7 +174,6 @@ pub fn check_query<W: QueryWriter>(store: &Store, search: &dyn SpaceSearch, writ
         }
         let text = json::stringify(&query).map_err(|error| Error::internal(error.0))?.unwrap_or_default();
         db.execute("UPDATE spaces SET query = ? WHERE id = ?", &[text.into(), space_id.as_str().into()])?;
-        db.execute("DELETE FROM api_metadata WHERE path = ?", &[format!("/spaces/{space_id}").into()])?;
         if !added.is_empty() || !removed.is_empty() {
             writer.save_space(&space_id)?;
             for id in added.iter().map(|item| item.found.id.as_str()).chain(removed.iter().map(String::as_str)) {

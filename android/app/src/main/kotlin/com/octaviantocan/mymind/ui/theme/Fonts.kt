@@ -7,15 +7,15 @@ import androidx.compose.ui.text.font.FontVariation
 import com.octaviantocan.mymind.R
 
 /**
- * The three typefaces of the original app. Nunito is one variable font; each Nunito family fixes its weight axis
- * and is used with the default font weight, as the original does.
+ * The typefaces the app draws with. Nunito is one variable font; each Nunito family fixes its weight axis
+ * and is used with the default font weight. The title face is Instrument Serif, still exposed as `louize`
+ * so existing call sites keep that slot.
  *
- * @property louize Serif for large titles.
+ * @property louize Instrument Serif, used for large titles.
  * @property nunito Nunito at weight 400, the default text face.
  * @property nunitoMedium Nunito at weight 500.
  * @property nunitoSemiBold Nunito at weight 600.
  * @property nunitoBold Nunito at weight 700.
- * @property avenir Avenir Roman.
  */
 @Immutable
 class MymindFonts(
@@ -24,7 +24,6 @@ class MymindFonts(
     val nunitoMedium: FontFamily,
     val nunitoSemiBold: FontFamily,
     val nunitoBold: FontFamily,
-    val avenir: FontFamily,
 )
 
 private fun nunitoAt(weight: Int) = FontFamily(
@@ -33,10 +32,9 @@ private fun nunitoAt(weight: Int) = FontFamily(
 
 /** Fonts used by [MymindTheme]. */
 val MymindDefaultFonts = MymindFonts(
-    louize = FontFamily(Font(R.font.louize_regular)),
+    louize = FontFamily(Font(R.font.instrument_serif_regular)),
     nunito = nunitoAt(400),
     nunitoMedium = nunitoAt(500),
     nunitoSemiBold = nunitoAt(600),
     nunitoBold = nunitoAt(700),
-    avenir = FontFamily(Font(R.font.avenir_roman)),
 )

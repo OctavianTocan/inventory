@@ -34,14 +34,7 @@ fn checkout() -> PathBuf {
 
 /// Names the library files the server cannot start without that are missing from `root`.
 fn missing_library(root: &Path) -> Vec<&'static str> {
-    const REQUIRED: [&str; 6] = [
-        "capture/meta.json",
-        "capture/shell.html",
-        "capture/cards.json",
-        "capture/responses.json",
-        "capture/details.json",
-        "mirror/static",
-    ];
+    const REQUIRED: [&str; 1] = ["mirror/static"];
     REQUIRED.into_iter().filter(|file| !root.join(file).exists()).collect()
 }
 

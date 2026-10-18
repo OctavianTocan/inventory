@@ -206,7 +206,7 @@ async function createObject(request, tab) {
   await cards.delete(tab.id);
   const notification = new Notification(tab);
   const host = await getHost();
-  await notification.update({ message: 'One moment, saving...', status: 'loading', icon: 'loading-start.gif' });
+  await notification.update({ message: 'One moment, saving...', status: 'loading', icon: 'loading-start.svg' });
   const started = performance.now();
   let response;
   try {
@@ -239,7 +239,7 @@ async function createObject(request, tab) {
       message: existing ? 'Already in your mind' : 'Saved to your mind',
       status: 'success',
       redirect: `${host}/everything#${result.id}`,
-      icon: 'loading-finish.gif',
+      icon: 'loading-finish.svg',
     });
     if (!existing) tags.invalidate();
     result.status = response.status;

@@ -1,5 +1,4 @@
 import com.octaviantocan.mymind.changelog.Changelog
-import java.nio.file.Files
 
 plugins {
     alias(libs.plugins.android.application)
@@ -8,99 +7,12 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
-val mymindResourceFiles = listOf(
-    "raw/everything_light.json",
-    "raw/everything_dark.json",
-    "raw/spaces_light.json",
-    "raw/spaces_dark.json",
-    "raw/serendipity_light.json",
-    "raw/serendipity_dark.json",
-    "raw/load_spin.json",
-    "font/avenir_roman.otf",
-    "font/louize_regular.otf",
-    "font/nunito.ttf",
-    "drawable-xxxhdpi/splash_bg.png",
-    "drawable-xxxhdpi/mymind_splash_icon.png",
-    "drawable-nodpi/offline_notice.png",
-    "drawable/offline_bg.jpg",
-    "drawable/offline_bg_dark.png",
-    "drawable/svg_google.xml",
-    "drawable/ic_caret_down.xml",
-    "drawable/ic_horizontal_menu.xml",
-    "drawable/settings_background_light.png",
-    "drawable/settings_background_dark.png",
-    "drawable/icon_pile_light.png",
-    "drawable/icon_pile_dark.png",
-    "drawable/ic_hand.xml",
-    "drawable/help.xml",
-    "drawable/sign_out.xml",
-    "drawable/mymind_badge.png",
-    "drawable/addtagsicon.xml",
-    "drawable/addtospaceicon.xml",
-    "drawable/copytoclipboardicon.xml",
-    "drawable/visitsourceicon.xml",
-    "drawable/downloadicon.xml",
-    "drawable/samevibeicon.xml",
-    "drawable/deleteicon.xml",
-    "drawable/removefromspaceicon.xml",
-    "drawable/topofmindicon.xml",
-    "drawable/removetopofmindicon.xml",
-    "drawable/readermodeicon.xml",
-    "drawable/upgrade_dark.png",
-    "drawable/upgrade_light.png",
-    "drawable/close.xml",
-    "drawable/spaces_checkmark.xml",
-    "drawable-xxxhdpi/share_background.png",
-    "drawable/tags.xml",
-    "drawable/notes.xml",
-    "drawable/spaces.xml",
-    "drawable/checkmark.xml",
-    "drawable/sad_mymind.xml",
-    "drawable/ic_chevron_down_light.xml",
-    "drawable/ic_spaces.xml",
-    "drawable/baseline_photo_library_24.xml",
-    "drawable/baseline_camera_alt_24.xml",
-    "drawable/ic_upload_progress.png",
-    "drawable/ic_image.xml",
-    "drawable/ic_video.xml",
-    "drawable/ic_pdf.xml",
-    "drawable/ic_text.xml",
-    "drawable/ic_delete.xml",
-)
-
 val robolectricJvmArgs = listOf(
     "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
 ) + listOf(
     "java.lang", "java.lang.reflect", "java.io", "java.net", "java.nio", "java.util",
     "java.util.concurrent", "java.util.concurrent.atomic", "java.text", "sun.nio.ch", "sun.nio.fs",
 ).map { "--add-opens=java.base/$it=ALL-UNNAMED" }
-
-abstract class CopyMymindResources : DefaultTask() {
-    @get:InputFiles
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val sources: ConfigurableFileCollection
-
-    @get:OutputDirectory
-    abstract val output: DirectoryProperty
-
-    @TaskAction
-    fun copy() {
-        val missing = sources.files.filter { !it.isFile }
-        if (missing.isNotEmpty()) {
-            throw GradleException(
-                "mymind resources missing in android/decoded: ${missing.joinToString { it.name }}. " +
-                    "Decode the original app into android/decoded first (docs/android-plan.md).",
-            )
-        }
-        val target = output.get().asFile.toPath()
-        target.toFile().deleteRecursively()
-        sources.files.forEach { file ->
-            val folder = target.resolve(file.parentFile.name)
-            Files.createDirectories(folder)
-            Files.copy(file.toPath(), folder.resolve(file.name))
-        }
-    }
-}
 
 abstract class CopyChangelog : DefaultTask() {
     @get:InputFile
@@ -143,14 +55,8 @@ val copyChangelog = tasks.register<CopyChangelog>("copyChangelog") {
     output.set(layout.buildDirectory.dir("generated/changelog-assets"))
 }
 
-val copyMymindResources = tasks.register<CopyMymindResources>("copyMymindResources") {
-    sources.from(mymindResourceFiles.map { rootProject.file("decoded/res/$it") })
-    output.set(layout.projectDirectory.dir("generated/mymind-res"))
-}
-
 androidComponents {
     onVariants { variant ->
-        variant.sources.res?.addGeneratedSourceDirectory(copyMymindResources, CopyMymindResources::output)
         variant.sources.assets?.addGeneratedSourceDirectory(copyChangelog, CopyChangelog::output)
         variant.sources.kotlin?.addStaticSourceDirectory(rootProject.file("buildSrc/src/main/kotlin/com/octaviantocan/mymind/changelog").path)
     }
@@ -244,7 +150,6 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.material)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.lottie.compose)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)

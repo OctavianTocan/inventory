@@ -1,8 +1,8 @@
 # mymind reconstruction
 
 A localhost replica of `https://access.mymind.com/everything`. It runs mymind's real front-end against a local
-SQLite library seeded from your recordings. Notes, pasted text, URL placeholders, edits, tags, spaces and settings
-persist locally; unsupported reads still use the recordings. No write is forwarded to mymind.
+SQLite library. Notes, pasted text, URL placeholders, edits, tags, spaces and settings persist locally. No write
+is forwarded to mymind.
 
 ## Run it
 
@@ -14,32 +14,23 @@ rust/target/release/mymind serve        # http://localhost:4321/everything
 OFFLINE=1 rust/target/release/mymind serve # no network at all; static assets come from mirror/
 ```
 
-The recordings of your library and mymind's front-end are committed (see [Private data](#private-data)), so a clone can serve them after building the Rust executable. The working database `data/mymind.db` is not: it stays on the computer that hosts the library,
+mymind's front-end is committed (see [Private data](#private-data)). The working database `data/mymind.db` is not: it stays on the computer that hosts the library,
 which other machines reach over HTTPS (see [Hosting](#hosting)).
 Node dependencies support developer tooling; runtime media uses the pinned libvips build, ffmpeg, ffprobe, Poppler and Chromium.
 `SHARP_IGNORE_GLOBAL_LIBVIPS=1` keeps the extension screenshot-diff dependency on prebuilt binaries.
 
-When `data/mymind.db` exists, desktop card grids, individual cards, trash, spaces, tags, changes and object quotas
-come from SQLite. `POST /cards/grid` also hydrates current SQLite cards. Phone requests keep their device-specific
-recordings because the renderer currently generates desktop markup. Unsupported reads retain the existing
-`replay/` then `capture/` fallback; without a database, the entire server retains that fallback and ignores writes.
+Pages, cards, trash, spaces, tags, changes, search and object quotas come from SQLite.
 
 Set `STORE_DB=/path/to/library.db` to select another database. `STORE_READONLY=1` enables store reads while
-acknowledging writes without persisting them or broadcasting write events. Grid hydration still works in that mode.
-Search, suggestions and smart-space query checks use SQLite on both devices. In `STORE_READONLY=1`, exact
-recorded search/suggestion/query-check requests retain their device/run replay, while unrecorded requests use
-SQLite without persisting query-check membership changes. Normal writable mode always searches the store.
-Unrecorded API calls are logged as `[miss]`, media without a recording as `[placeholder]`.
+acknowledging writes without persisting them or broadcasting write events.
 
 To build the initial database, run `rust/target/release/mymind seed-db`. Rebuilding replaces an existing database, including its
-local edits. The seed also imports response metadata and the recorded space-detail query-check times; card and
-space bodies are generated from the stored rows. Older phase 1 databases import that metadata on first startup.
+local edits. Card and space bodies are generated from the stored rows.
 
 Card and space writes use one transaction, regenerate affected card markup, append change-log entries and broadcast SignalR events
 to connected `/hub` clients after commit. Polling returns the latest change per object so a delete cannot be undone
 by an older queued update in the client. Drafts stay outside the main grid until committed. New or edited desktop
-cards have generated editable details and pinned previews; unchanged detail/template recordings retain their
-existing replay path. Shared cards have local URLs with a 24-hour expiry and revocation.
+cards have generated editable details and pinned previews. Shared cards have local URLs with a 24-hour expiry and revocation.
 
 URL saves return `201` immediately, then `captureLink` enriches the placeholder in the background. Capture reads
 OpenGraph, Twitter, JSON-LD and public oEmbed metadata, detects social posts, videos, repositories, apps, products,
@@ -143,19 +134,15 @@ To reach the library from other computers, run the server with Google sign-in an
 | `AUTH_DB` | Sessions and password users, default `data/auth.db`. |
 | `LOCAL_PORT` | Also serves this computer without sign-in on `127.0.0.1:LOCAL_PORT`; tunnelled requests there get 403. |
 
-Signed-out visitors on this machine get mymind's own sign-in page (`capture/signin/`, recorded signed out by
-`node tools/capture-signin.mjs`); its Apple button does nothing. Signed-out visitors through a Cloudflare tunnel
-(`cf-connecting-ip`) get a plain sign-in page of the replica's own instead, with no mymind name, logo, favicon or
-assets, `noindex`, and a `robots.txt` that disallows everything: a public copy of a real company's sign-in page is
-what phishing filters flag. After sign-in everything is mymind's front-end as usual. Both pages' Google buttons open
-a popup; the server runs the OAuth flow (PKCE, `state`, `nonce`), verifies Google's ID token and sets a 30-day
-HttpOnly session cookie. API requests and the `/hub` socket without a session get 401, cross-origin writes 403.
+Signed-out visitors get the replica's own plain sign-in page, with no mymind name, logo, favicon or assets,
+`noindex`, and a `robots.txt` that disallows everything. After sign-in everything is mymind's front-end. The Google
+button opens a popup; the server runs the OAuth flow (PKCE, `state`, `nonce`), verifies Google's ID token and sets a
+30-day HttpOnly session cookie. API requests and the `/hub` socket without a session get 401, cross-origin writes 403.
 `/signout` ends the session.
 
 Password users (test accounts, or a browser without Google) sign in at `/signin/password`, which exists only once a
-user has been added; mymind's own sign-in page stays as recorded and does not link to it, the plain one does. A
-password session reaches the same library as the owner. Ten wrong passwords for a username, or 30 from one address, lock it for 15
-minutes.
+user has been added; the plain sign-in page links to it. A password session reaches the same library as the owner.
+Ten wrong passwords for a username, or 30 from one address, lock it for 15 minutes.
 
 ```bash
 rust/target/release/mymind auth-user add tester --save-env TEST_USER   # generates a password into .env as TEST_USER_NAME/_PASSWORD
@@ -195,9 +182,7 @@ git push mini-002 cloudflare
 scp rust/target/release/mymind rust/libvips/linux-x64/libvips-cpp.so.8.17.3 \
   mini-002-netcup:apps/mymind-reconstruction/rust/target/release/
 ssh mini-002-netcup 'systemctl --user restart mymind-replica mymind-download'
-# after a re-capture, also copy the videos Git leaves out:
-rsync -a -m --include='*/' --include='*.mp4' --include='*.webm' --include='*.mov' --exclude='*' \
-  capture/ mini-002-netcup:apps/mymind-reconstruction/capture/
+
 ```
 
 To move the host to another machine, stop and disable the services on the old one first (two connectors would split
@@ -342,22 +327,6 @@ The server reads `.env` in the checkout, so AI features work in the app when the
 - **Testing drops without a file manager** (e.g. on Xvfb): `cargo run --release --example drag_source -- <file>`
   opens a small window whose button drags that file.
 
-## Re-capture
-
-Needs Chrome with remote debugging on port 9222 and a logged-in mymind tab open.
-
-```bash
-npm run capture -- --media-cards 300 --detail-cards 30   # add --videos to include mp4s
-npm run capture -- --media-only                            # only the card media still missing (add --videos for mp4s)
-npm run capture -- --details-only                          # detail views, article readers and detail media of every card lacking them
-npm run mirror                                             # static JS/CSS/fonts for OFFLINE=1
-node tools/capture-signin.mjs                              # the signed-out sign-in page, from a cookie-less context
-```
-
-Every pass only sends GETs. A full pass replaces the card list and shell, and adds to the recorded detail views,
-readers and media instead of replacing them. `--details-only` reads the card list from `data/mymind.db` (`--db`
-picks another).
-
 ## How it was reverse engineered
 
 1. Find the page: `rea list-browser-targets http://127.0.0.1:9222`.
@@ -366,7 +335,7 @@ picks another).
 3. Export and statically analyse the scripts:
    `rea export-web-scripts evidence/page-capture.json evidence/scripts` then
    `rea analyze-javascript-application evidence/scripts`.
-4. Record the data the UI needs (`tools/capture.mjs`) and replay it (`mymind serve`).
+4. The data the UI needed was recorded, then replaced by the local database (`mymind serve`).
 
 Hopper and Ghidra are not involved. They read native machine code; this app ships readable JavaScript.
 
@@ -381,27 +350,15 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 
 ## Known gaps
 
-- Recorded detail views cover every card that existed at the last `--details-only` pass. A card without one
-  (e.g. saved on live mymind afterwards) gets a generated detail whose body is its grid card.
-- Uncaptured historical media retains its placeholder fallback: 6 of the 511 detail media failed to download, all
-  reader images of one card ("Sub-agents are just wrong"); every grid video is present. Generated AI thumbnails
-  remain later work.
-- New cards saved on live mymind reach the library only through a re-capture and
-  `rust/target/release/mymind seed-db`, which replaces local edits.
 - Local search approximates the live ranking engine; historical cards without vectors need an explicit hosted
   embedding backfill. Text-only backfill skips historical cards with no usable text; new visual analysis can
   embed their image.
 
 ## Private data
 
-`capture/` and `replay/` hold your own library (cards and recorded responses) and `mirror/` holds mymind's
-front-end. All three are committed so that a clone runs by itself, which makes this repository private data: keep it
-private. Before committing them, run `npm run bundle`: it moves replay bodies no recording uses into the gitignored
-`replay/unreferenced/` and snapshots `data/` into `library/` as a local backup.
+`mirror/` holds mymind's front-end and is committed, which makes this repository private data: keep it private.
+`npm run bundle` snapshots `data/` into `library/` as a local backup.
 
-Never committed: `.env` (API keys), `data/` (the working database), `library/` (its snapshot), recorded videos
-(`capture/**/*.mp4`, `*.webm`, `*.mov`), `evidence/` (verification screenshots) and `replay/unreferenced/`. Commits
-made before the database left Git still contain `library/mymind.db`; removing it from them means rewriting history.
-
-Replay recordings keep only content-type, CORS and app `x-` headers, so no cookies are stored; recorded pages still
-carry mymind's per-session authenticity token, which is useless without the session cookie.
+Never committed: `.env` (API keys), `data/` (the working database), `library/` (its snapshot) and `evidence/`
+(verification screenshots). Commits made before the database left Git still contain `library/mymind.db`; removing
+it from them means rewriting history. Git history still contains the old `capture/` and `replay/` recordings.

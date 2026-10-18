@@ -9,8 +9,8 @@ export const LOCAL_PREFIXES = [
 ];
 
 /**
- * Rewrite mymind's origins in recorded text to the replica's local paths.
- * @param {string} text Recorded text.
+ * Rewrite mymind's origins in text to the replica's local paths.
+ * @param {string} text Input text.
  * @returns {string} The text with every mymind origin replaced.
  */
 export const localize = (text) =>

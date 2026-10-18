@@ -400,7 +400,6 @@ impl Harness {
                 readonly,
                 localize: str::to_owned,
                 push: Box::new(push(hub, snapshots.clone(), store.clone())),
-                has_replay: Box::new(|_| Ok(false)),
                 random: runtime::random_bytes,
             })
             .await

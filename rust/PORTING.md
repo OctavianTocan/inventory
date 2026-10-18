@@ -26,7 +26,7 @@ host `crates/server/src/`, behind core host traits also implemented by the Worke
   `Ok(None)`.
 - `mm_core::host`: the async host traits (`#[async_trait(?Send)]`): `Bucket`, `Fetch` (`fetch` follows redirects
   as Node's `fetch` does; `fetch_unfollowed` is `redirect: 'manual'`), `Media`, `UploadStorage`, `Resource` (the
-  capture transport) and `Screenshot`. `mm_core::auth::SigninPages` reads the recorded sign-in pages.
+  capture transport) and `Screenshot`.
 - `mm_core::runtime`: `spawn`, `sleep`, `timeout` (`AbortSignal.timeout`), `log` (`console.log`), `env`
   (`process.env`), `random_bytes`, `random_uuid`, `now_ms` (`Date.now()`).
 - `mm_core::{Error, Result}`: `Error::status(400, "message")` where JS threw an error with a `status`;
@@ -89,11 +89,9 @@ hub tests need an idle runtime. Run Cargo with `nice -n 19`, `--offline`, `-j 2`
 `cargo clippy --all-targets -- -D warnings` stays clean.
 
 The native `mymind serve`, `download-server` and `container` subcommands share the same backend.
-Operational commands include `seed-db`, `import-hosted`, `upload-hosted`, `auth-user`, `embed-library`, `try-ai`,
-`capture-fixtures` and `search-recordings`. Developer tools resolve only a Rust binary through
-`tools/server-command.mjs`; `MYMIND_SERVER` overrides its default `rust/target/release/mymind` path.
-`tools/digests.mjs` hashes request-serving Rust sources, manifests, build/config inputs and replay helpers for
-coverage. Backend or normalization edits make earlier drive evidence `verifier-result-incompatible`.
+Operational commands include `seed-db`, `import-hosted`, `upload-hosted`, `auth-user`, `embed-library`, `try-ai`
+and `capture-fixtures`. Developer tools resolve only a Rust binary through `tools/server-command.mjs`;
+`MYMIND_SERVER` overrides its default `rust/target/release/mymind` path.
 
 `rust/container/Dockerfile` builds the media container from `mymind container`, pinned libvips, ffmpeg, Poppler and
 Chromium. It needs no Node runtime; the Worker's `wrangler.jsonc` selects this image and its repository build context.

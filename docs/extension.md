@@ -5,27 +5,23 @@ step. It talks to the replica backend, never to `access.mymind.com`.
 
 ## Install from the hosted site
 
-`/download` on the hosted site lists the newest extension as `mymind-extension-<version>.zip`, with mymind's assets
-included. Unzip it, open `chrome://extensions`, turn on developer mode, "Load unpacked" and choose the
-`mymind-extension` folder; to update, unzip the new version over it and press Reload. Sign in to the site in the same
-browser profile.
+`/download` on the hosted site lists the newest extension as `mymind-extension-<version>.zip`. Unzip it, open
+`chrome://extensions`, turn on developer mode, "Load unpacked" and choose the `mymind-extension` folder; to update,
+unzip the new version over it and press Reload. Sign in to the site in the same browser profile.
 
 `deploy/publish-extension.sh` makes and publishes that zip: it reads the version from `extension/manifest.json`, which
-must be higher than the published one, zips `extension/` without `tests/`, `tools/` and dot files, uploads it with
-`deploy/upload-downloads.sh`, and checks as the test user that `/download` lists it and the zip matches its checksum.
-`--local <dir>` publishes into a local downloads folder instead. First published 2026-10-17: version 1.0.0, 379,803
-bytes.
+must be higher than the published one, zips `extension/` without `tests/`, `tools/`, `mymind/` and dot files, uploads
+it with `deploy/upload-downloads.sh`, and checks as the test user that `/download` lists it and the zip matches its
+checksum. `--local <dir>` publishes into a local downloads folder instead. First published 2026-10-17: version 1.0.0,
+379,803 bytes.
 
 ## Setup for development
 
-1. `node extension/tools/copy-mymind-assets.mjs [path/to/mymind-extension-3.3.0]` copies mymind's images, icons, gifs,
-   the Nunito font and `vendor/tiptap.min.js` into `extension/mymind/`, which is git-ignored. The default source is
-   the unpacked extension in the Chromium profile that has it installed.
-2. Open `chrome://extensions`, turn on developer mode, "Load unpacked", choose `extension/`.
-3. Open the extension's options and set the host. The default is `https://mymind.octaviantocan.com`; for development
+1. Open `chrome://extensions`, turn on developer mode, "Load unpacked", choose `extension/`.
+2. Open the extension's options and set the host. The default is `https://mymind.octaviantocan.com`; for development
    use `http://localhost:4331` or another local port. Only the default host is granted at install. `localhost`,
    `127.0.0.1` and any `https://` host are optional host permissions that the options page requests when you save.
-4. Sign in to that host in the same browser profile. The extension reads the `mm_session` cookie of the host with
+3. Sign in to that host in the same browser profile. The extension reads the `mm_session` cookie of the host with
    `chrome.cookies` and sends it as `Authorization: Bearer`.
 
 ## Features
