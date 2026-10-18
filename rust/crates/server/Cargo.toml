@@ -1,6 +1,6 @@
 [package]
 name = "mymind"
-description = "The native server: the replay replica, hosted libraries and the operational subcommands"
+description = "The native server: hosted libraries and the operational subcommands"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true

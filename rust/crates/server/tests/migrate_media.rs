@@ -72,7 +72,7 @@ fn build_synthetic_library(root: &Path) -> PathBuf {
          VALUES ('0000c3', 'u1', 'Image', 0, ?, ?, ?, 300, 300, 300)",
         &[
             SqlValue::Text(r#"{"type":"Image","title":"Missing","blob":{"path":"acct/c3/missing","type":"image/png","width":100,"height":100}}"#.into()),
-            SqlValue::Text(r#"<mymind-card data-id="0000c3"><img data-src="/media/acct/c3/missing;100x100.webp"/></mymind-card>"#.into()),
+            SqlValue::Text(r#"<mymind-card data-id="0000c3"><img data-src="/media/acct/c3/missing;100x100.webp" src="https://media.mymind.host/acct/c3/missing.png"/></mymind-card>"#.into()),
             SqlValue::Text(r#"{"id":"0000c3","cover":{"src":"/media/acct/c3/missing;100x100.webp","width":100,"height":100}}"#.into()),
         ],
     )
@@ -111,7 +111,7 @@ fn local_migration_copies_media_rewrites_links_reports_missing_and_is_idempotent
         report_path.to_string_lossy().into_owned(),
     ];
     let status = runtime.block_on(mymind::tool_migrate_media::run(&root, &args));
-    assert_eq!(status, 0);
+    assert_eq!(status, 1);
 
     // Card 1: largest rendition picked as original, both renditions in .renditions.
     assert_eq!(std::fs::read(media_dir.join("acct/c1/b1.webp")).unwrap(), b"larger-rendition-800x600-bytes");
@@ -131,7 +131,8 @@ fn local_migration_copies_media_rewrites_links_reports_missing_and_is_idempotent
     assert!(html.contains("/media/acct/c2/b2;250x250.webp 1x, /media/acct/c2/b2;500x500.webp 2x"), "html was not rewritten: {html}");
     assert!(!extras.contains("media.mymind.host"), "extras still contains media.mymind.host: {extras}");
     assert!(extras.contains("/media/acct/c2/b2;250x250.webp 1x, /media/acct/c2/b2;500x500.webp 2x"), "extras was not rewritten: {extras}");
-
+    let missing_row = db.one("SELECT html FROM cards WHERE id = '0000c3'", &[]).unwrap().unwrap();
+    assert!(missing_row.text("html").unwrap().contains("https://media.mymind.host/acct/c3/missing.png"), "missing host URL was rewritten away");
     // Report lists Card 3 as missing.
     let report: Value = json::parse(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
     assert_eq!(report.get("rewrittenCards").as_f64(), Some(1.0));
@@ -145,7 +146,7 @@ fn local_migration_copies_media_rewrites_links_reports_missing_and_is_idempotent
 
     // Second run changes nothing.
     let status2 = runtime.block_on(mymind::tool_migrate_media::run(&root, &args));
-    assert_eq!(status2, 0);
+    assert_eq!(status2, 1);
     let report2: Value = json::parse(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
     assert_eq!(report2.get("rewrittenCards").as_f64(), Some(0.0));
     assert_eq!(report2.get("migratedOriginals").as_f64(), Some(0.0));
@@ -253,12 +254,12 @@ fn bucket_migration_uploads_objects_and_skips_existing_on_second_run() {
         report_path.to_string_lossy().into_owned(),
     ];
     let status = runtime.block_on(mymind::tool_migrate_media::run(&root, &args));
-    assert_eq!(status, 0);
+    assert_eq!(status, 1);
     assert_eq!(put_count.load(Ordering::SeqCst), 7);
 
     // Second run uploads nothing because HEAD reports matching sizes.
     let status2 = runtime.block_on(mymind::tool_migrate_media::run(&root, &args));
-    assert_eq!(status2, 0);
+    assert_eq!(status2, 1);
     assert_eq!(put_count.load(Ordering::SeqCst), 7);
 
     if let Ok(mut stream) = std::net::TcpStream::connect(("127.0.0.1", port)) {

@@ -1,5 +1,5 @@
-//! `handle` of `server.mjs`: sign-in, the tunnel refusal and the framed-media redirect, then a hosted library, or the
-//! library API in front of the replay replica; and each listener's `/hub` WebSocket.
+//! `handle` of `server.mjs`: sign-in and the tunnel refusal, then a hosted library or the
+//! library API; and each listener's `/hub` WebSocket.
 
 use std::path::{Path, PathBuf};
 use std::rc::Rc;

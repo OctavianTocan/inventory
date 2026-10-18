@@ -147,7 +147,7 @@ pub fn send_range(request_headers: &Headers, status: u16, body: Vec<u8>, headers
     Response::send(206, body[start..=end].to_vec(), &headers.clone().with(&range))
 }
 
-/// The recording key of a request to the replica, in the shape `tools/replay-store.mjs` records live requests
+/// The recording key of a request, in the shape the old recorder used
 /// (`replayKeyFor`).
 ///
 /// # Arguments

@@ -164,12 +164,26 @@ fn collect_sources(capture_dir: &Path, replay_dir: &Path) -> Result<BTreeMap<Str
     Ok(map)
 }
 
-fn rewrite_text(input: &str) -> String {
-    let out = MYMIND_MEDIA_URL.replace_all(input, "/media/$1");
-    LOCAL_MEDIAHOST_URL.replace_all(&out, "/media/$1").into_owned()
+fn media_stem(path: &str) -> Option<&str> {
+    let stem = path.split(';').next().unwrap_or(path);
+    if stem.is_empty() || stem.split('/').any(|part| part == ".." || part == "." || part.is_empty()) { None } else { Some(stem) }
 }
 
-fn rewrite_database(db: &Sqlite) -> Result<usize> {
+fn rewrite_match(caps: &regex::Captures, media_dir: &Path) -> String {
+    let path = caps.get(1).map(|item| item.as_str()).unwrap_or("");
+    if media_stem(path).is_some_and(|stem| has_existing_original(media_dir, stem)) {
+        format!("/media/{path}")
+    } else {
+        caps.get(0).map(|item| item.as_str()).unwrap_or("").to_owned()
+    }
+}
+
+fn rewrite_text(input: &str, media_dir: &Path) -> String {
+    let out = MYMIND_MEDIA_URL.replace_all(input, |caps: &regex::Captures| rewrite_match(caps, media_dir));
+    LOCAL_MEDIAHOST_URL.replace_all(&out, |caps: &regex::Captures| rewrite_match(caps, media_dir)).into_owned()
+}
+
+fn rewrite_database(db: &Sqlite, media_dir: &Path) -> Result<usize> {
     let mut rewritten = 0usize;
     let rows = db.query("SELECT id, data, html, extras FROM cards", &[])?;
     let mut card_updates = Vec::new();
@@ -178,9 +192,9 @@ fn rewrite_database(db: &Sqlite) -> Result<usize> {
         let data = row.text("data").unwrap_or_default();
         let html = row.text("html").unwrap_or_default();
         let extras = row.text("extras").unwrap_or_default();
-        let new_data = rewrite_text(data);
-        let new_html = rewrite_text(html);
-        let new_extras = rewrite_text(extras);
+        let new_data = rewrite_text(data, media_dir);
+        let new_html = rewrite_text(html, media_dir);
+        let new_extras = rewrite_text(extras, media_dir);
         if new_data != data || new_html != html || new_extras != extras {
             card_updates.push((id, new_data, new_html, new_extras));
         }
@@ -195,7 +209,7 @@ fn rewrite_database(db: &Sqlite) -> Result<usize> {
     for row in &content_rows {
         let card_id = row.text("card_id").unwrap_or_default().to_owned();
         let body = row.text("body").unwrap_or_default();
-        let new_body = rewrite_text(body);
+        let new_body = rewrite_text(body, media_dir);
         if new_body != body {
             content_updates.push((card_id, new_body));
         }
@@ -356,17 +370,6 @@ fn migrate_stem(media_dir: &Path, stem: &str, candidates: &[Candidate]) -> Resul
     Ok((originals, renditions))
 }
 
-fn encode_component(input: &str) -> String {
-    let mut out = String::new();
-    for byte in input.bytes() {
-        if byte.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&byte) {
-            out.push(char::from(byte));
-        } else {
-            out.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    out
-}
 
 async fn upload_media_to_bucket(base_url: &str, token: &str, library: &str, media_dir: &Path, concurrency: usize) -> std::result::Result<(u64, u64), String> {
     let fetch = NativeFetch::new();
@@ -397,7 +400,7 @@ async fn upload_media_to_bucket(base_url: &str, token: &str, library: &str, medi
                 let idx = next.get();
                 next.set(idx + 1);
                 let (key, file, size) = &items[idx];
-                let encoded_key = key.split('/').map(encode_component).collect::<Vec<_>>().join("/");
+                let encoded_key = key.split('/').map(uri::encode_uri_component).collect::<Vec<_>>().join("/");
                 let url = format!("{base}/_admin/bucket/{encoded_key}");
 
                 let mut head_req = Request::new("HEAD", &url).map_err(|e| e.to_string())?;
@@ -481,7 +484,6 @@ async fn run_inner(root: &Path, args: &[String]) -> std::result::Result<u8, Stri
     let db = std::rc::Rc::new(Sqlite::open(&db_path, false).map_err(|e| e.to_string())?);
     let sql: std::rc::Rc<dyn Sql> = db.clone();
     let _store = mm_core::store::Store::new(sql).map_err(|e| e.to_string())?;
-    let rewritten_cards = rewrite_database(&db).map_err(|e| e.to_string())?;
     let sources = collect_sources(&capture_dir, &replay_dir).map_err(|e| e.to_string())?;
 
     let rows = db.query("SELECT id, type, data, html, extras FROM cards", &[]).map_err(|e| e.to_string())?;
@@ -575,6 +577,8 @@ async fn run_inner(root: &Path, args: &[String]) -> std::result::Result<u8, Stri
         skipped = sk;
     }
 
+    let rewritten_cards = rewrite_database(&db, &media_dir).map_err(|e| e.to_string())?;
+    let incomplete = !missing.is_empty();
     let mut report = obj! {
         "cards" => rows.len() as f64,
         "rewrittenCards" => rewritten_cards as f64,
@@ -593,7 +597,7 @@ async fn run_inner(root: &Path, args: &[String]) -> std::result::Result<u8, Stri
     let serialized = json::to_string(&report_val);
     std::fs::write(&report_path, format!("{serialized}\n")).map_err(|e| failure(e, &report_path).to_string())?;
     println!("{}", mm_js::inspect::console_line(&[report_val]));
-    Ok(0)
+    Ok(if incomplete { 1 } else { 0 })
 }
 
 /// Run `mymind migrate-media`.
@@ -603,7 +607,7 @@ async fn run_inner(root: &Path, args: &[String]) -> std::result::Result<u8, Stri
 /// * `args` - Arguments after the subcommand name.
 ///
 /// # Returns
-/// Exit status (`0` on success, `2` on usage error, `1` on runtime error).
+/// Exit status (`0` when every required file is present, `2` on usage error, `1` when a file is missing or a step fails).
 pub async fn run(root: &Path, args: &[String]) -> u8 {
     mm_core::runtime::set_env(std::env::vars().collect());
     match run_inner(root, args).await {

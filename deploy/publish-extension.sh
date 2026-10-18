@@ -77,7 +77,7 @@ zip_and_stage() {
   python3 -I - "$extension" "$out/$name" <<'PYEOF'
 import os, sys, zipfile
 base, target = sys.argv[1:3]
-skip = {"tests", "tools"}
+skip = {"tests", "tools", "mymind"}
 count = 0
 with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
     for folder, dirs, files in os.walk(base):

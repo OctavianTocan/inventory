@@ -7,10 +7,11 @@ import androidx.compose.ui.text.font.FontVariation
 import com.octaviantocan.mymind.R
 
 /**
- * The three typefaces of the original app. Nunito is one variable font; each Nunito family fixes its weight axis
- * and is used with the default font weight, as the original does.
+ * The typefaces the app draws with. Nunito is one variable font; each Nunito family fixes its weight axis
+ * and is used with the default font weight. The title face is Instrument Serif, still exposed as `louize`
+ * so existing call sites keep that slot.
  *
- * @property louize Serif for large titles.
+ * @property louize Instrument Serif, used for large titles.
  * @property nunito Nunito at weight 400, the default text face.
  * @property nunitoMedium Nunito at weight 500.
  * @property nunitoSemiBold Nunito at weight 600.

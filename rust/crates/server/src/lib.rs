@@ -1,4 +1,4 @@
-//! The native host: the replay replica and hosted libraries over HTTP, the download server and the operational
+//! The native host: hosted libraries over HTTP, the download server and the operational
 //! subcommands, on a single-threaded Tokio runtime.
 
 pub mod bucket_fs;
