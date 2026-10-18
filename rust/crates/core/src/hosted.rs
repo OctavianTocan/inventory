@@ -9,7 +9,6 @@ use mm_js::{Value, text, uri};
 use regex::Regex;
 
 use crate::api::{Api, ApiOptions, Push};
-use crate::device::device_variant;
 use crate::host::{Bucket, Fetch, MediaProcessor, Resource, Screenshot};
 use crate::hosted_media::{BucketUploads, HostedMedia};
 use crate::http::{Body, Headers, Request, Response};
@@ -69,14 +68,6 @@ fn extension(key: &str) -> String {
 
 fn text_type(key: &str) -> &'static str {
     content_type(&extension(key)).unwrap_or("application/octet-stream")
-}
-
-fn desktop(request: &Request) -> bool {
-    device_variant(request.header("user-agent").unwrap_or("")).is_empty()
-}
-
-fn document(request: &Request) -> bool {
-    request.method == "GET" && request.header("sec-fetch-dest") == Some("document")
 }
 
 // A JS value as `String(value)` writes it into a header.
@@ -180,24 +171,10 @@ impl Hosted {
         let local = LOCAL_PREFIXES.iter().any(|(prefix, _)| pathname.starts_with(prefix)) || pathname.starts_with("/media/");
         let entry = if local { None } else { self.recorded.entry(request, &replay_key_for(&request.method, &request.headers, &url))? };
         if let Some(entry) = entry {
-            let mut body = entry.body;
-            if desktop(request) && request.header("sec-fetch-dest") == Some("document") {
-                body = self.api.shell(&text::decode_utf8(&body))?.into_bytes();
-            }
-            return Ok(send_range(&request.headers, entry.status as u16, body, &recorded_headers(&entry.headers)));
+            return Ok(send_range(&request.headers, entry.status as u16, entry.body, &recorded_headers(&entry.headers)));
         }
         if let Some(relative) = pathname.strip_prefix("/_static/") {
             return self.serve_static(relative, &search).await;
-        }
-        if document(request) {
-            let everything = url.join("/everything").map_err(|error| Error::internal(error.to_string()))?;
-            let shell = match self.recorded.entry(request, &replay_key_for(&request.method, &request.headers, &everything))? {
-                Some(entry) => Some(entry),
-                None => self.recorded.entry(request, "shell")?,
-            };
-            let html = text::decode_utf8(shell.as_ref().map_or(&[][..], |entry| &entry.body));
-            let body = if desktop(request) { self.api.shell(&html)? } else { html };
-            return Ok(send(200, body, &[("content-type", "text/html; charset=utf-8")]));
         }
         if request.method == "GET"
             && let Some(found) = DETAIL.captures(&pathname)

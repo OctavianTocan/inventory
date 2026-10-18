@@ -359,6 +359,9 @@ fn problem(error: Error) -> Result<Response> {
     Ok(Response::send(status, body, &type_header("application/problem+json")))
 }
 
+/// Checked-in page shell template with recorded card data stripped.
+pub const SHELL_TEMPLATE: &str = include_str!("../templates/shell.html");
+
 impl Api {
     /// Open the API over a store (`createApi` with `store`): sweep stale uploads and requeue unfinished local cards
     /// unless read-only.
@@ -799,8 +802,14 @@ impl Api {
                 Some(card) => Response::send(200, self.localize(&render_share(&card)?), &type_header(HTML_TYPE)),
             }));
         }
-        if get && request.header("sec-fetch-dest") == Some("document") {
-            return Ok(None);
+        let page_load = request.header("sec-fetch-dest") == Some("document")
+            || (request.header("x-partial").is_none()
+                && (matches!(path, "/" | "/everything" | "/trash" | "/account" | "/achievements" | "/bookshelf")
+                    || path.starts_with("/things/")
+                    || (request.header("accept").is_some_and(|accept| accept.contains("text/html"))
+                        && (path == "/spaces" || path.starts_with("/spaces/") || path == "/serendipity"))));
+        if get && page_load {
+            return Ok(Some(Response::send(200, self.shell()?, &type_header(HTML_TYPE))));
         }
         if get && (["/search", "/search/suggestions"].contains(&path) || QUERY_CHECK.is_match(path)) && self.readonly && (self.has_replay)(request)? {
             return Ok(None);
@@ -1020,28 +1029,21 @@ impl LibraryApi for Api {
         }
     }
 
-    fn shell(&self, html: &str) -> Result<String> {
-        if self.readonly {
-            return Ok(html.to_owned());
-        }
+    fn shell(&self) -> Result<String> {
         let store = &self.store;
         let user = store.user(None)?.ok_or_else(|| Error::invalid("Cannot read properties of undefined (reading 'settings')"))?;
-        let local_pin = user.settings.get("pinsChanged").truthy()
-            || store.db().one("SELECT id FROM cards WHERE json_extract(extras, '$.local') = 1 AND (flags & 512) != 0 LIMIT 1", &[])?.is_some();
-        let mut html = html.to_owned();
-        if local_pin {
-            let mut contents = String::new();
-            for card in store.pinned_cards(None)? {
-                contents.push_str(&self.localize(&render_pinned(&card)));
-            }
-            html = pinned_list(&html, &contents);
+        let mut contents = String::new();
+        for card in store.pinned_cards(None)? {
+            contents.push_str(&self.localize(&render_pinned(&card)));
         }
+        contents.push_str("\n            <div class=\"tom__empty \">\n              <p><i></i> Drop card here to keep it top of mind.</p>\n            </div>\n          ");
+        let mut html = pinned_list(SHELL_TEMPLATE, &contents);
         // Onboarding flag 128 is the one the client sets after showing the Top of Mind introduction.
         let onboard = user.settings.get("onboardFlags");
         if to_int32(if onboard.is_nullish() { 0.0 } else { onboard.to_number() }) & 128 != 0 {
             html = html.replacen("<mymind-top-of-mind class=\"tom \">", "<mymind-top-of-mind class=\"tom introduced\">", 1);
         }
-        let Some(found) = CONFIG.captures(&html) else { return Ok(html) };
+        let Some(found) = CONFIG.captures(&html) else { return Ok(self.localize(&html)) };
         let mut config = parse(&found[2])?;
         for key in ["colorScheme", "locale", "timeZoneId", "soundEnabled", "onboardFlags"] {
             if let Some(value) = user.settings.as_object().and_then(|settings| settings.get(key)) {
@@ -1050,7 +1052,10 @@ impl LibraryApi for Api {
         }
         let flags = Value::Number(user.flags as f64);
         match config.get_mut("user") {
-            Some(target @ Value::Object(_)) => target.set("flags", flags),
+            Some(target @ Value::Object(_)) => {
+                target.set("uid", Value::from(user.id.as_str()));
+                target.set("flags", flags);
+            }
             _ => return Err(Error::invalid("Cannot set properties of undefined (setting 'flags')")),
         }
         let quota = store.quota(None)?.to_value();
@@ -1060,7 +1065,25 @@ impl LibraryApi for Api {
         }
         let replaced = format!("{}{}{}", &found[1], stringify(&config)?.replace('<', "\\u003c"), &found[3]);
         let range = found.get(0).expect("whole match").range();
-        Ok(format!("{}{replaced}{}", &html[..range.start], &html[range.end..]))
+        let mut out = format!("{}{replaced}{}", &html[..range.start], &html[range.end..]);
+        match config.get("colorScheme").as_str() {
+            Some("system") => {
+                out = out.replacen(
+                    "id=\"dark-stylesheet\" href=\"/_static/134/0.109.0/styles/dark.css\" media=\"all\"",
+                    "id=\"dark-stylesheet\" href=\"/_static/134/0.109.0/styles/dark.css\" media=\"(prefers-color-scheme: dark)\"",
+                    1,
+                );
+            }
+            Some("light") => {
+                out = out.replacen(
+                    "id=\"dark-stylesheet\" href=\"/_static/134/0.109.0/styles/dark.css\" media=\"all\"",
+                    "id=\"dark-stylesheet\" href=\"/_static/134/0.109.0/styles/dark.css\" media=\"not all\"",
+                    1,
+                );
+            }
+            _ => {}
+        }
+        Ok(self.localize(&out))
     }
 }
 

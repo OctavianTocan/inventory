@@ -638,15 +638,13 @@ async fn site_fallbacks(fixture: &Fixture) {
             b"[1]",
         )
         .unwrap();
-    // The real API's observable desktop shell mutation replaces the JS harness's `[desktop]` marker.
-    let html = r#"<p>everything</p><mymind-top-of-mind class="tom ">"#;
-    let desktop = r#"<p>everything</p><mymind-top-of-mind class="tom introduced">"#;
+    // Recorded DOC or shell entries are ignored: page loads always render our shell template.
     recorded
         .put(
             "DOC https://access.mymind.com/everything",
             200,
             &obj! { "content-type" => "text/html" }.into(),
-            html.as_bytes(),
+            b"<p>stale recorded everything</p>",
         )
         .unwrap();
     recorded
@@ -654,7 +652,7 @@ async fn site_fallbacks(fixture: &Fixture) {
             "shell",
             200,
             &obj! { "content-type" => "text/html" }.into(),
-            b"<p>shell</p>",
+            b"<p>stale recorded shell</p>",
         )
         .unwrap();
     bucket
@@ -690,42 +688,43 @@ async fn site_fallbacks(fixture: &Fixture) {
             .text(),
         "[1]"
     );
-    assert_eq!(
-        ask_hosted(
+    for route in [
+        "/everything",
+        "/things/card-1",
+        "/spaces",
+        "/serendipity",
+        "/trash",
+        "/account",
+        "/achievements",
+        "/bookshelf",
+        "/anything/else",
+    ] {
+        let text = ask_hosted(
             &site,
             "GET",
-            "/everything",
+            route,
             Body::Empty,
-            &[("sec-fetch-dest", "document")]
+            &[("sec-fetch-dest", "document")],
         )
         .await
-        .text(),
-        desktop
-    );
-    assert_eq!(
-        ask_hosted(
-            &site,
-            "GET",
-            "/everything",
-            Body::Empty,
-            &[("sec-fetch-dest", "document"), ("user-agent", IPHONE)]
-        )
-        .await
-        .text(),
-        html
-    );
-    assert_eq!(
-        ask_hosted(
-            &site,
-            "GET",
-            "/anything/else",
-            Body::Empty,
-            &[("sec-fetch-dest", "document")]
-        )
-        .await
-        .text(),
-        desktop
-    );
+        .text()
+        .to_owned();
+        assert!(text.contains("<mymind-top-of-mind class=\"tom introduced\">"), "route {route}");
+        assert!(text.contains("/_static/134/0.109.0/scripts/app.js"), "route {route}");
+        assert!(!text.contains("stale recorded"), "route {route}");
+    }
+    let phone_text = ask_hosted(
+        &site,
+        "GET",
+        "/everything",
+        Body::Empty,
+        &[("sec-fetch-dest", "document"), ("user-agent", IPHONE)],
+    )
+    .await
+    .text()
+    .to_owned();
+    assert!(phone_text.contains("<mymind-top-of-mind class=\"tom introduced\">"));
+    assert!(phone_text.contains("/_static/134/0.109.0/scripts/app.js"));
     let code = ask_hosted(&site, "GET", "/_static/app.js", Body::Empty, &[]).await;
     assert_eq!(code.text(), "code");
     assert_eq!(code.headers.get("content-type"), Some("text/javascript"));

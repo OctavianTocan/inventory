@@ -378,3 +378,49 @@ fn markdown_leaves_ordinary_punctuation_alone() {
     let id = create(&api, obj! { "type" => "Note", "content" => plain }.into());
     assert_eq!(text(send(&api, "GET", &format!("/cards/{id}/markdown"), "", &[])), format!("{plain}\n"));
 }
+
+#[test]
+fn shell_template_renders_all_page_routes_with_user_data_and_mirror_scripts() {
+    let (store, api) = setup();
+    let id = create(&api, obj! { "type" => "Note", "content" => "Pinned top of mind note" }.into());
+    assert_eq!(send(&api, "POST", &format!("/objects/{id}/pin"), "{}", &[("content-type", "application/json")]).status, 200);
+    store
+        .db()
+        .execute(
+            "UPDATE users SET flags = 2048, settings = ? WHERE id = 'test'",
+            &[r#"{"colorScheme":"system","locale":"en-GB","timeZoneId":"Europe/London","onboardFlags":128,"objectLimit":50000}"#.into()],
+        )
+        .unwrap();
+    for route in [
+        "/everything",
+        &format!("/things/{id}"),
+        "/spaces",
+        "/serendipity",
+        "/trash",
+        "/account",
+        "/achievements",
+        "/bookshelf",
+    ] {
+        let response = send(&api, "GET", route, "", &[("sec-fetch-dest", "document")]);
+        assert_eq!(response.status, 200, "route {route}");
+        assert_eq!(response.headers.get("content-type"), Some("text/html; charset=utf-8"), "route {route}");
+        let html = text(response);
+        assert!(html.contains("/_static/134/0.109.0/scripts/app.js"), "mirror app.js missing on {route}");
+        assert!(html.contains("<mymind-top-of-mind class=\"tom introduced\">"), "onboard flag missing on {route}");
+        assert!(html.contains(&format!("data-id=\"{id}\"")), "pinned card missing on {route}");
+        assert!(!html.contains("00000002UnE"), "recorded card id leaked on {route}");
+        let cfg_str = html
+            .split_once("<script id=\"config\" type=\"application/json\">")
+            .unwrap()
+            .1
+            .split_once("</script>")
+            .unwrap()
+            .0;
+        let cfg = json::parse(cfg_str).unwrap();
+        assert_eq!(cfg.get("user").get("uid").as_str(), Some("test"), "user.uid on {route}");
+        assert_eq!(cfg.get("user").get("flags").as_f64(), Some(2048.0), "user.flags on {route}");
+        assert_eq!(cfg.get("locale").as_str(), Some("en-GB"), "locale on {route}");
+        assert_eq!(cfg.get("timeZoneId").as_str(), Some("Europe/London"), "timeZoneId on {route}");
+        assert_eq!(cfg.get("quotas").get("objects").get("count").as_f64(), Some(1.0), "quota count on {route}");
+    }
+}

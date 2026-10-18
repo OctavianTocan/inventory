@@ -10,7 +10,7 @@ use std::time::Duration;
 use mm_core::device::device_variant;
 use mm_core::host::Fetch;
 use mm_core::http::{Headers, Request, Response};
-use mm_core::site::{LOCAL_PREFIXES, LibraryApi, content_type, is_text_extension, localize, localize_value, replay_key_for, send_range, single_range};
+use mm_core::site::{LOCAL_PREFIXES, LibraryApi, content_type, is_text_extension, localize, localize_value, replay_key_for, send_range};
 use mm_core::{Error, Object, Result, Value};
 use mm_js::json;
 use url::Url;
@@ -170,8 +170,7 @@ impl Replica {
             return Ok(replica);
         }
         replica.meta = read_json(&replica.capture.join("meta.json")).await?;
-        let shell = read_file(&replica.capture.join("shell.html")).await.map_err(js_failure)?;
-        replica.shell = localize(&String::from_utf8_lossy(&shell));
+        replica.shell = mm_core::api::SHELL_TEMPLATE.to_owned();
         let Value::Array(cards) = read_json(&replica.capture.join("cards.json")).await? else {
             return Err(js_failure("TypeError: cards.map is not a function".into()));
         };
@@ -388,13 +387,10 @@ impl Replica {
         Ok(send(200, pack_cards(cards), &[("content-type", "application/msgpack")]))
     }
 
-    // The desktop shell from the API when the server has one; phones keep the recorded HTML.
-    fn shell_for(api: Option<&dyn LibraryApi>, request: &Request, html: &[u8]) -> Result<Option<String>> {
+    // The document shell from the API when the server has one.
+    fn shell_for(api: Option<&dyn LibraryApi>) -> Result<Option<String>> {
         let Some(api) = api else { return Ok(None) };
-        if !device_variant(request.header("user-agent").unwrap_or("")).is_empty() {
-            return Ok(None);
-        }
-        api.shell(&String::from_utf8_lossy(html)).map(Some)
+        api.shell().map(Some)
     }
 
     /// Answer a request from the recordings, after the sign-in gate and the library API passed it on: the part of
@@ -412,27 +408,19 @@ impl Replica {
         let search = mm_js::url::search(&url);
         let key = format!("{} {pathname}{search}", request.method);
         let document = request.header("sec-fetch-dest") == Some("document");
+        if request.method == "GET" && document {
+            let body = Self::shell_for(api)?.unwrap_or_else(|| self.shell.clone()).into_bytes();
+            return Ok(send(200, body, &[("content-type", "text/html; charset=utf-8")]));
+        }
         let local = LOCAL_PREFIXES.iter().any(|(prefix, _)| pathname.starts_with(prefix)) || pathname.starts_with("/media/");
         if !local && let Some(entry) = self.replayed_for(request, &url) {
             let body = self.replay_body(&entry).await?;
             let headers = entry_headers(&entry);
             let status = entry_status(&entry);
-            if document && let Some(shell) = Self::shell_for(api, request, &body)? {
-                return shell_range(request, status, shell, &headers);
-            }
             return Ok(send_range(&request.headers, status, body.as_ref().clone(), &headers));
         }
         if let Some(relative) = pathname.strip_prefix("/_static/") {
             return self.serve_static(relative, &search).await;
-        }
-        if request.method == "GET" && document {
-            let everything = mm_js::url::parse("/everything", Some(url.as_str())).expect("a path parses against an http URL");
-            let body = match self.replayed_for(request, &everything) {
-                Some(entry) => self.replay_body(&entry).await?.as_ref().clone(),
-                None => self.shell.clone().into_bytes(),
-            };
-            let body = Self::shell_for(api, request, &body)?.map_or(body, String::into_bytes);
-            return Ok(send(200, body, &[("content-type", "text/html; charset=utf-8")]));
         }
         if key == "GET /cards" {
             let checkpoint = match self.meta.get("checkpoint") {
@@ -472,17 +460,4 @@ impl Replica {
         let wants_json = request.header("accept").unwrap_or("").contains("json");
         Ok(if wants_json { send(200, "{}", &[("content-type", "application/json")]) } else { send(404, "", &[("content-type", "text/plain")]) })
     }
-}
-
-// `sendRange` given the shell's string, which the JS measured in UTF-16 units and could not slice.
-fn shell_range(request: &Request, status: u16, shell: String, headers: &Headers) -> Result<Response> {
-    let length = mm_js::text::len(&shell);
-    let part = mm_core::media_files::byte_range(single_range(&request.headers), length as f64);
-    if status != 200 || part.status == 200 {
-        return Ok(Response::send(status, shell, headers));
-    }
-    if part.status == 416 {
-        return Ok(Response::send(416, "", &headers.clone().with(&Headers::from([("content-range", format!("bytes */{length}"))]))));
-    }
-    Err(js_failure("TypeError: body.subarray is not a function".into()))
 }

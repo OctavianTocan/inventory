@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>mymind</title>
+
+    <link rel="icon" href="/_static/134/0.109.0/images/favicon.png"/>
+    <link rel="apple-touch-icon" href="/_static/134/0.109.0/images/apple-touch-icon.png"/>
+    <link rel="manifest" href="/manifest.webmanifest"/>
+
+    <link rel="stylesheet" href="/_static/134/0.109.0/styles/app.css" />
+
+    
+
+    
+    <link rel="stylesheet" id="dark-stylesheet" href="/_static/134/0.109.0/styles/dark.css" media="all"/>
+    
+
+    <link rel="stylesheet" href="/_static/134/0.109.0/serendipity/styles/serendipity.css" />
+    
+    
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+    <meta id="authenticityToken" content=""/>
+    <script id="config" type="application/json">{"locale":"en-US","currency":"USD","timeZoneId":"Europe/Madrid","channel":"Labs","ui":{"version":"0.109.0"},"aiLevel":3,"colorScheme":"dark","offlineEnabled":false,"features":["advancedAI","beautify","reader","video","sameVibe","customIcons","pdfAnalysis","smartSpaces","researchLabs"],"isGuest":false,"maxUploadSize":500000000,"maxQueueSize":100,"index":{"mode":"server"},"onboardFlags":0,"quotas":{"objects":{"count":0,"limit":50000},"storage":{"count":0,"limit":200000000000}},"assets":{"baseUrl":"/_static/134/0.109.0/"},"account":{"uid":"local"},"user":{"uid":"local","flags":0},"environmentName":"Production"}</script>
+
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/api.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/intro.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/util.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/grid.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/nlp.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/editor.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/search.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/spaces.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/uploading.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/upsells.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/synchronizer.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/cards.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/assistant.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/diagnostics.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/components/achievement.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/components/SearchSuggestions.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/components/composer.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/components/slashMenu.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/components/graphMenu.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/modules/router.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/components/modal.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/modules/collections.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/modules/gestures.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/modules/prose.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/modules/layouts.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/modules/scrollable.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/modules/dragdrop.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/vendor/msgpack.min.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/vendor/tiptap.3.min.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/vendor/lit.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/vendor/lottie.js"/>
+    <link rel="modulepreload" href="/_static/134/0.109.0/scripts/vendor/signalr.min.js"/>
+  </head>
+
+  <body class="loading desktop main-view theme-1">
+    <mymind-backdrop></mymind-backdrop>
+
+    
+    <mymind-lightbox-close-bar on-click="lightbox:close">
+      <button>ESC to close card</button>
+    </mymind-lightbox-close-bar>
+    
+
+    <mymind-lightbox></mymind-lightbox>
+
+    <mymind-debugger>
+  <span class="close"></span>
+
+  <div class="inner">
+    <h1>DEBUG</h1>
+
+    
+
+    
+    <div class="debug-row"><label>account id</label></div>
+    
+
+    <div class="debug-row"><label>ui version</label> 0.109.0</div>
+
+    
+    <div class="debug-row"><label>browser</label> Chrome 154.0.0</div>
+    
+
+    
+
+    
+
+    <div class="debug-row"><label>environment</label> Production</div>
+
+    <div class="debug-row"><label>viewport</label> <span class="viewport-dimensions">0x0</span></div>
+    
+    
+
+    <div class="debug-row grid-row"><label>grid</label> <span class="grid-details"></span></div>
+
+    <div class="debug-row connection-row">
+      <label>websocket</label>
+      <span class="connection-status">...</span>
+      <span class="connection-counter">0</span>
+    </div>
+
+    <div class="debug-row"><label>synced</label> <span class="synced">never</span></div>
+
+    
+
+    <pre><code class="log">LOG!</code></pre>
+  </div>
+</mymind-debugger>
+
+    <nav class="sidebar">
+  <button class="back-to-top" on-click="scroll:top">
+    <!-- <span class="icon"></span> -->
+  </button>
+  <a href="/everything" class="branding branding-new" on-click="search:reset">
+    <div class="icons">
+      <span class="face"></span>
+      <span class="arrow"></span>
+    </div>
+    <div class="icon"></div>
+  </a>
+
+  <div class="bottom">
+    <!--
+    
+    -->
+    <div class="bottom-sidebar-content">
+      <div class="achievements">
+        <a href="/achievements" aria-label="Achievements">
+          <i></i>
+        </a>
+      </div>
+      <div class="inner-color-scheme">
+        <div class="color-scheme-toggle dark" on-click="colorScheme:displaySelector">
+          <div class="planet"></div>
+          <div class="elements">
+            
+            <svg viewBox="0 0 500 500">
+              <circle cx="250" cy="250" r="200"/>
+            </svg>
+            
+            <svg viewBox="0 0 500 500">
+              <circle cx="250" cy="250" r="200"/>
+            </svg>
+            
+            <svg viewBox="0 0 500 500">
+              <circle cx="250" cy="250" r="200"/>
+            </svg>
+            
+            <svg viewBox="0 0 500 500">
+              <circle cx="250" cy="250" r="200"/>
+            </svg>
+            
+            <svg viewBox="0 0 500 500">
+              <circle cx="250" cy="250" r="200"/>
+            </svg>
+            
+            <svg viewBox="0 0 500 500">
+              <circle cx="250" cy="250" r="200"/>
+            </svg>
+            
+            <svg viewBox="0 0 500 500">
+              <circle cx="250" cy="250" r="200"/>
+            </svg>
+            
+            <svg viewBox="0 0 500 500">
+              <circle cx="250" cy="250" r="200"/>
+            </svg>
+            
+          </div>
+        </div>
+        <div class="color-scheme-selector">
+          
+          <div class="light " data-value="light" on-click="colorScheme:set">Light</div>
+          
+          <div class="dark current" data-value="dark" on-click="colorScheme:set">Dark</div>
+          
+          <div class="system " data-value="system" on-click="colorScheme:set">System</div>
+          
+        </div>
+      </div>
+      
+  
+      <div class="news-link">
+        <span class="notification-count">1</span>
+        <a class="news-icon" on-click="news:toggle"></a>
+      </div>
+  
+      <div class="density-selector">
+        <span class="icon grid_3"></span>
+  
+        <div class="wrap">
+          <span class="icon grid_2 selected" data-value="400" on-click="density:update"></span>
+          <span class="icon grid_3" data-value="300" on-click="density:update"></span>
+          <span class="icon grid_4" data-value="200" on-click="density:update"></span>
+        </div>
+      </div>
+  
+      <div>
+        <a class="settings-gear" href="/account"></a>
+      </div>
+    </div>
+    
+  </div>
+</nav>
+
+    <mymind-bulk-selection-toolbar>
+  <div class="inner">
+    <div class="lhs">You currently have <span class="count">0 cards selected</span></div>
+    <div class="middle">
+      <span class="bulk-action add-tag">
+        <i class="icon"></i>
+        <label inert>Add tags</label>
+        <form class="tag-control bulk">
+          <div class="field">
+            <input class="input" name="content" autocomplete="off" maxlength="60" required/>
+            <ul class="suggestions"></ul>
+          </div>
+          <button class="submit"></button>
+        </form>
+      </span>      
+      <span class="bulk-action add-to-space" on-click="batch:addToSpace">
+        <i class="icon"></i>
+        <label inert>Add to space</label>
+        <mymind-space-chooser backdrop="transparent"></mymind-space-chooser>
+      </span>
+      <span class="bulk-action delete-object" on-click="batch:deleteSelectedObjects">
+        <i class="icon"></i>
+        <label inert>Delete cards</label>
+      </span>
+    </div>
+    <div class="rhs">
+      <button class="done">CANCEL</button>
+    </div>
+  </div>
+</mymind-bulk-selection-toolbar>
+    
+    <div class="ios-solid-bar"></div>
+
+    <mymind-syncing-progress-bar data-path="/_static/134/0.109.0/animations/head-spin.json">
+      <div class="spinner"></div>
+      <span class="progress">syncing <span class="current">x</span> of <span class="total">x</span></span>
+      <span class="error-message"></span>
+    </mymind-syncing-progress-bar>
+
+    
+    <nav class="main-nav">
+      
+
+      
+
+      <a class="item everything active" href="/everything">Everything</a>
+      <a class="item spaces " href="/spaces">Spaces</a>
+
+      
+
+      
+      <a class="item clear " href="/serendipity">Serendipity</a>
+      
+    </nav>
+    
+   
+    <div class="top-background"></div>
+    <mymind-top class="top">
+      <!-- <div class="background-blur"></div> -->
+<mymind-search-bar>
+  <div class="inner">
+    <span class="search-icon off-scroll-mobile"></span>
+    
+    <button class="vibe-toggle off-scroll-mobile" aria-label="Vibe mode">
+      <span class="vibe-toggle-tooltip">Vibe mode</span>
+      <!-- <img class="main-icon" src="/_static/134/0.109.0/icons/vibe-mode.svg" alt=""> -->
+      <div class="main-icon"></div>
+      <div class="mandala-icon">
+        <div class="inner-mandala-icon">
+          <img src="/_static/134/0.109.0/icons/vibe-mode-colored.svg" alt="">
+          <img class="icon-rotate icon-rotate-1" src="/_static/134/0.109.0/icons/vibe-mode-colored.svg" alt="">
+          <img class="icon-rotate icon-rotate-2" src="/_static/134/0.109.0/icons/vibe-mode-colored.svg" alt="">
+        </div>
+      </div>
+      <div class="background" aria-hidden="true"></div>
+      <img class="background-hover" src="/_static/134/0.109.0/images/vibe/vibe-hover.png" alt="">
+    </button>
+    
+    <span class="hint  off-scroll-mobile">Press <strong>ESC</strong> to reset search</span>
+    <span class="search-filters filters--desktop off-scroll-mobile"></span>
+    <input enterkeyhint="search" class="search-input off-scroll-mobile" placeholder="Search my mind…" autocapitalize="none"/>
+    <a class="toggle-shortcuts off-scroll-mobile" on-click="shortcuts:toggle"><mymind-command-key></mymind-command-key> <span>Shortcuts</span></a>
+    <button class="space-button" on-click="spaces:new" data-type="dynamic">
+      <mm-circle></mm-circle>
+      <span>SAVE SMART SPACE</span>
+    </button>
+  </div>
+
+  <span class="search-filters filters--mobile off-scroll-mobile"></span>
+
+  <button class="clear off-scroll-mobile" on-click="search:exit">
+    <span class="clear-icon"></span>
+  </button>
+  
+  <div class="upload off-scroll-mobile" on-click="file:choose"></div>
+</mymind-search-bar>
+
+<mymind-search-suggestions>
+  <div class="content">
+    <span>Show all content matching <a class="query-text" on-click="search:updateLastBubble" data-query=""></a></span>
+  </div>
+</mymind-search-suggestions>
+
+<template id="search-filter-template">
+  <mymind-search-filter>
+    <span class="inner">
+      <span class="text"></span>
+      <span class="remove"></span>
+    </span>
+
+    <div class="bubble-circle bubble-circle--12"></div>
+    <div class="bubble-circle bubble-circle--11"></div>
+    <div class="bubble-circle bubble-circle--10"></div>
+    <div class="bubble-circle bubble-circle--9"></div>
+    <div class="bubble-circle bubble-circle--8"></div>
+    <div class="bubble-circle bubble-circle--7"></div>
+    <div class="bubble-circle bubble-circle--6"></div>
+    <div class="bubble-circle bubble-circle--5"></div>
+    <div class="bubble-circle bubble-circle--4"></div>
+    <div class="bubble-circle bubble-circle--3"></div>
+    <div class="bubble-circle bubble-circle--2"></div>
+    <div class="bubble-circle bubble-circle--1"></div>
+  </mymind-search-filter>
+</template>
+    </mymind-top>
+
+    <header></header>
+
+    
+<mymind-notification class="notification trash-introduction" data-flag-id="64">
+  <div>
+    <p>Your mind trash automatically clears itself every 30 days. If you like to restore a card and move it back into your mind, just click on it.</p>
+    <span class="dismiss"></span>
+  </div>
+</mymind-notification>
+
+
+
+
+<mymind-upload-progress-meter class="notification"></mymind-upload-progress-meter>
+
+    <div class="progress-notification">
+  <div class="progress-notification__block progress-notification__block--loading">
+  <p>One moment, saving...</p>
+  </div>
+  <div class="progress-notification__block progress-notification__block--error">
+    <p>Could not save to mymind.</p>
+    <a href="#">RETRY</a>
+  </div>
+</div>
+
+    <main on-drop="carbon:drop">
+      <mymind-search-suggestions-bar></mymind-search-suggestions-bar>
+      <mymind-top-of-mind class="tom ">
+  <div class="tom__container">
+    <label class="tom__title">TOP OF MIND</label>
+    <section class="tom__manager">
+      <div class="tom__content">
+        <div class="tom__list_wrapper">
+          <div class="tom__list sortable">
+            <div class="tom__empty ">
+              <p><i></i> Drop card here to keep it top of mind.</p>
+            </div>
+          </div>
+          </div>
+      </div>
+    </section>
+  </div>
+</mymind-top-of-mind>
+
+      
+
+
+<form class="mobile-note-composer" method="POST" action="/objects">
+  <button class="action open" type="button"><img src="/_static/134/0.109.0/icons/add-note.svg" inert/></button>
+
+  <div class="header bar">
+    <span class="close" on-click="card:close"></span>
+
+    <h3>Create a new note</h3>
+
+    <button type="submit">SAVE</button>
+  </div>
+
+  <div class="card-wrap">
+    <div class="card">
+      <label>Add a new note</label>
+
+      <div class="form">
+        <div class="editor empty">
+          <p class="note-placeholder">Start typing here…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+
+
+
+
+<div class="grid-wrapper">
+  <mymind-grid class="loading">    
+    <mymind-card class="new-note composer">
+      <span class="random-phrase"></span>
+      <div class="focus-mode__trigger focus-mode__trigger--new" on-click="focusMode:open">
+        <div class="tooltip">Focus (<mymind-command-key></mymind-command-key>+⇧+F)</div>
+      </div>
+
+      <label>New quick note</label>
+
+      <div class="guts">
+        <input name="title" class="title" type="hidden">
+        <div class="editor empty">
+          <p class="note-placeholder">Start typing here…</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="save-button">
+          <span>PRESS <mymind-command-key></mymind-command-key>+ENTER TO SAVE </span>
+        </button>
+      </div>
+    </mymind-card>
+  </mymind-grid>
+</div>
+
+
+    </main>
+
+    <div class="news">
+ 
+</div>
+
+<div class="news-overlay" on-click="news:toggle"></div>
+
+    <mymind-shortcuts>
+  <div class="shortcuts__scroll">
+    <h2 class="shortcuts__title">Shortcuts to<br>rule your mind</h2>
+
+    <div class="scrollable">
+      <div class="scrollbar" autohide>
+        <div class="handle"></div>
+      </div>
+      <div class="content">
+        <div class="shortcuts__group">
+          <h3 class="shortcuts__heading">REFINE YOUR SEARCH RESULTS</h3>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Press ENTER after a keyword to create a deep search.</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">SHOE</div>
+              <div class="shortcuts__item-separator">+</div>
+              <div class="shortcuts__item-label">RED</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Search for objects inside images</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">object: CAR</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">OR Search</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">cats || dogs</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Search for text within images or inside notes</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">text: CAR</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Search by card type</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">ARTICLES</div>
+              <div class="shortcuts__item-label">WEBSITES</div>
+              <div class="shortcuts__item-label">NOTES</div>
+              <div class="shortcuts__item-label">SNIPPETS</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Search files by format</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">format: PDF</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Search by date</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">YESTERDAY</div>
+              <div class="shortcuts__item-label">LAST WEEK</div>
+              <div class="shortcuts__item-label">MAY 19TH</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Exclude something from the search results</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">SHOE</div>
+              <div class="shortcuts__item-separator">+</div>
+              <div class="shortcuts__item-label">-RED</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">To find an exact match (text or text in images)</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">“SHOES”</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Filter results by a specific website</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">site: YOUTUBE</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Filter results by a specific tag</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-label">tag: NAMEOFTAG</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="shortcuts__group">
+          <h3 class="shortcuts__heading">GLOBAL SHORTCUTS</h3>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Shortcut to create a new note</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-button">N</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Saves note as a new card</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-button"><mymind-command-key></mymind-command-key></div>
+              <div class="shortcuts__item-separator">+</div>
+              <div class="shortcuts__item-button">ENTER</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Exit a card view</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-button">ESC</div>
+            </div>
+          </div>
+
+          <div class="shortcuts__item">
+            <p class="shortcuts__item-name">Focus on the search field</p>
+            <div class="shortcuts__item-value">
+              <div class="shortcuts__item-button">ENTER</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</mymind-shortcuts>
+
+<div class="shortcuts-overlay" on-click="shortcuts:toggle"></div>
+    
+    
+
+    
+  
+    <mymind-modal id="unsupported-file-type-notice" class="modal notice  dismissable">
+  <div class="box">
+
+    
+    <span class="close big" on-click="notice:close"></span>
+    
+
+    <div class="content">
+      <h2>Uh, what&#x2019;s that?</h2>
+      
+      <p>The file you're trying to upload <br /> is not supported by mymind.</p>
+
+      
+      
+      <div class="actions">
+        <div class="row"><a class="action" href="https://mymind.helpscoutdocs.com/article/19-what-files-do-you-support"><button class="cta button-orange button-xl">See what file types are supported</button></a></div>
+
+        
+      </div>
+      
+    </div>
+  </div>
+</mymind-modal>
+  
+    <dialog id="bulk-upload-upsell" class="modal alert side-by-side  dismissable">
+  <div class="box">
+    <span class="close" on-click="notice:close"></span>
+
+    <div class="lhs content">
+      <h2>That&#x2019;s a lot!</h2>
+      
+      <p>It looks like you’re trying to upload a lot of files at once.</p>
+<p>Bulk uploads are limited to 10 at the same time on the Student plan.</p>
+<p>Upgrade to Mastermind for bulk uploads.</p>
+
+    </div>
+
+    <div class="rhs">
+      <div class="actions">
+        <div class="row">
+          <a href="/upgrade?source=everything"><button class="button-orange button-m">Upgrade your mind</button></a>
+        </div>
+        <div class="row">
+          <a class="action" on-click="notice:close">nevermind</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+   <mymind-modal id="video-too-large-alert" class="modal notice  dismissable">
+  <div class="box">
+
+    
+    <span class="close big" on-click="notice:close"></span>
+    
+
+    <div class="content">
+      <h2>Uh, that&#x2019;s too big.</h2>
+      
+      <p>Your mind supports video files up to 500MB in size. <br /> <br /> If you need a place to save your movies or similar large files, mymind might be not the right place for it.</p>
+
+      
+      
+    </div>
+  </div>
+</mymind-modal>
+
+    <dialog id="file-too-large-upsell" class="modal alert side-by-side  dismissable">
+  <div class="box">
+    <span class="close" on-click="notice:close"></span>
+
+    <div class="lhs content">
+      <h2>Wow that&#x2019;s a little too big.</h2>
+      
+      <p>For files over <span class="file-limit">25MB</span> please upgrade to Mastermind which allows you to upload files up to 100MB per file.</p>
+<p>Your current limit is 25MB per file upload.</p>
+
+    </div>
+
+    <div class="rhs">
+      <div class="actions">
+        <div class="row">
+          <a href="/upgrade?source=everything"><button class="button-orange button-m">Upgrade your mind</button></a>
+        </div>
+        <div class="row">
+          <a class="action" on-click="notice:close">nevermind</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+    <mymind-focus-mode-editor>
+  <div class="box note">
+    <span class="focus-mode-close-button" on-click="focusMode:close">
+      <div class="tooltip">Press esc to close</div>
+    </span>
+
+    <div class="guts">
+      <div class="animation-container">
+
+        <div class="editor empty">
+          <p class="note-placeholder">
+            Start writing right here...
+          </p>
+        </div>
+      </div>
+          
+      <div class="actions">
+        <button class="save-button">SAVE (<mymind-command-key></mymind-command-key>+ENTER)</button>
+      </div>
+    </div>
+
+  </div>
+
+  <mymind-saving-indicator>
+  <div class="saving-indicator__spinner"></div>
+  <span class="saving-indicator__check"></span>
+  <span class="text">Saved to your mind</span>
+</mymind-saving-indicator>
+</mymind-focus-mode-editor>
+  
+    <input class="file-input" type="file" accept="image/*, image/webp, image/jxl, image/avif, video/*, audio/*, application/pdf, .heic" multiple>
+  
+    <div class="clear-placeholder"></div>
+
+    <span class="add-button" on-click="file:choose"></span>
+
+    
+
+    <mymind-card-menu>
+  <ul class="actions"></ul>
+
+  <form class="tag-control">
+    <p class="add-tags">Add tags</p>
+    <div class="field">
+      <input class="input" type="text" name="content" autocomplete="off" maxlength="60"/>
+      <ul class="suggestions"></ul>
+    </div>
+    
+    <p class="instruction">Hit return to add separate tags. <br/>Hover on added tags to remove them.</p>
+
+    <div class="added-tags"></div>
+
+    <button class="submit">Save tags</button>
+  </form>
+
+  <mymind-space-chooser></mymind-space-chooser>
+</mymind-card-menu>
+
+    
+  </body>
+
+  <template id="SpaceListHeaderTemplate">
+    <header class="space-list-header view-header">
+  <div class="inner split">
+    <div class="lhs">
+      <h1>All Spaces</h1>
+    </div>
+    
+    <div class="rhs">
+      <button class="space-button new" on-click="spaces:new" data-type="static">
+        <mm-circle></mm-circle>
+        <span>CREATE A NEW SPACE</span>
+      </button>
+    </div>
+  </div>
+</header>
+  </template>
+
+  <template id="SpaceDetailHeaderTemplate">
+    <header class="space-detail-header view-header">
+  <div class="inner">
+    <a class="back-link" on-click="app:back">
+      <span class="icon back-arrow"></span>
+      <mm-circle></mm-circle>
+    </a>
+
+    <input class="name" maxlength="100"/>
+
+    <button on-click="dropdown#space-options:toggle">
+      <span class="icon more"></span>
+    </button>
+
+    <div class="desktop space-options">
+      <label>
+        <span class="dynamic">This is a Smart Space</span>
+        <span on-click="spaceOptions:toggle" class="circle down-arrow"></span>
+      </label>
+
+      <div class="popover">
+        <span class="content">
+          <p class="dynamic">This Smart space magically fills itself. Cards that match the search terms below are automatically added to this space. You can also add or remove cards manually.</p>
+          <p class="link dynamic"><a on-click="smartSpace:showIntro">→ Watch how it works</a></p>
+          <div class="bottom dynamic">
+            <div class="search-filters"></div>
+          </div>
+
+          <div class="space-colors">
+            
+            <button class="space-color-option" data-hex="#75ffc0" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#75ffc0"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#c0c2ce" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#c0c2ce"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#ff8fa4" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#ff8fa4"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#000" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#000"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#19aad1" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#19aad1"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#17c37b" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#17c37b"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#ffdcd0" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#ffdcd0"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#166ff4" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#166ff4"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#cdff06" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#cdff06"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#f96" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#f96"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#bfb5d7" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#bfb5d7"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#96cbd1" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#96cbd1"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#cba0aa" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#cba0aa"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#fdf06f" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#fdf06f"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#7a30cf" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#7a30cf"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#ef3e4a" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#ef3e4a"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#ff9770" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#ff9770"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#70d6ff" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#70d6ff"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#b388eb" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#b388eb"></mm-circle>
+            </button>
+            
+            <button class="space-color-option" data-hex="#06d6a0" on-click="spaces#active:setColor" aria-label="Set space color" type="button">
+              <mm-circle style="--color:#06d6a0"></mm-circle>
+            </button>
+            
+          </div>
+
+          <button class="done-colors button-m button-ggg" on-click="spaceOptions:hideColors" type="button">Done</button>
+
+          <div class="actions">
+            <a class="change-color" on-click="spaceOptions:showColors">Change color</a>
+            <button class="delete-space-button button-m button-danger" on-click="spaces#active:openDeleteModal">DELETE SPACE</button>
+          </div>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <mymind-dropdown data-name="space-options">
+    <span class="space-details dynamic">
+      <p class="dynamic">This Smart space magically fills itself. Cards that match the search terms below are automatically added to this space. You can also add or remove cards manually.</p>
+      <div class="bottom dynamic">
+        <div class="search-filters"></div>
+      </div>
+    </span>
+    
+    <a class="action dynamic details" on-click="spaces#active:showDetails">
+      <i class="icon"></i> Space Details
+    </a>
+
+    <a class="action delete" on-click="spaces#active:openDeleteModal">
+      <i class="icon"></i> Delete space
+    </a>
+  </mymind-dropdown>
+  <button class="close-dropdownon" on-click="dropdown#space-options:close" aria-label="Close dropdown" type="button"></button>
+
+</header>
+  </template>
+  
+  <template id="TrashHeaderTemplate">
+    <header class="trash-header view-header">
+  <div class="inner split">
+    <div class="lhs">
+      <span class="remove" on-click="trash:exit"></span>
+      <h1>Mind Trash</h1>
+    </div>
+    <div class="rhs">
+      <span class="exit" on-click="trash:exit">EXIT MIND TRASH</span>
+    </div>
+  </div>
+  <button class="button-restore">
+    <span class="icon"></span> Press card to restore
+  </button>
+</header>
+
+  </template>
+
+  <template id="editorBubbleMenuTemplate">
+  <div class="editor-menu editor-bubble-menu">
+    <button class="toggle-bold">
+      <svg width="13" height="16" viewBox="0 0 13 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10.7568 11.4419C10.7568 10.0881 9.65946 8.99072 8.30566 8.99072H3.62012V13.8931H8.30566C9.65946 13.8931 10.7568 12.7957 10.7568 11.4419ZM10.2979 4.73975C10.2979 3.38597 9.20047 2.28857 7.84668 2.28857H3.62012V7.19092H7.84668C9.20036 7.19092 10.2977 6.09338 10.2979 4.73975ZM12.0977 4.73975C12.0976 6.0012 11.5475 7.13312 10.6748 7.91162C11.81 8.67491 12.5566 9.97108 12.5566 11.4419C12.5566 13.7898 10.6536 15.6929 8.30566 15.6929H1.02734C0.530399 15.6929 0.127134 15.2904 0.126953 14.7935C0.126953 14.2964 0.530287 13.8931 1.02734 13.8931H1.82031V2.28857H1.02734C0.530287 2.28857 0.126953 1.88524 0.126953 1.38818C0.126953 0.891127 0.530287 0.487793 1.02734 0.487793H7.84668C10.1946 0.487793 12.0977 2.39186 12.0977 4.73975Z"/>
+      </svg>
+    </button>
+    <button class="toggle-heading">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8.33974 0.490723C8.72506 0.490723 9.08606 0.608783 9.39735 0.833496C9.75881 1.07061 9.98741 1.42146 10.1337 1.77588L15.7138 14.4321C15.914 14.8868 15.7084 15.4181 15.2538 15.6187C14.799 15.8192 14.2678 15.6125 14.0673 15.1577L8.4872 2.50244C8.48299 2.4929 8.47837 2.48282 8.4745 2.47314C8.4224 2.34301 8.38613 2.31802 8.39735 2.32764C8.38001 2.31641 8.36212 2.30585 8.34559 2.29346C8.34477 2.29284 8.3443 2.29197 8.34364 2.2915C8.34266 2.29147 8.34111 2.2915 8.33974 2.2915C8.33089 2.29148 8.31885 2.29026 8.28602 2.31299L8.26649 2.33545C8.24465 2.36459 8.2112 2.41619 8.17274 2.50049L2.61415 15.1567C2.41423 15.6118 1.88271 15.8186 1.42763 15.6187C0.97288 15.4187 0.76611 14.888 0.965712 14.4331L6.52528 1.77686L6.52919 1.77002C6.68433 1.42527 6.91181 1.07286 7.26161 0.834473V0.833496C7.2627 0.832744 7.26443 0.832293 7.26552 0.831543C7.26878 0.829336 7.272 0.825918 7.27528 0.82373V0.824707C7.58925 0.610893 7.94988 0.490802 8.33974 0.490723Z"/>
+        <path d="M12.4521 8.98779C12.949 8.98802 13.3516 9.39126 13.3516 9.88818C13.3516 10.3851 12.949 10.7884 12.4521 10.7886H4.22559C3.72853 10.7886 3.3252 10.3852 3.3252 9.88818C3.3252 9.39113 3.72853 8.98779 4.22559 8.98779H12.4521Z"/>
+      </svg>
+    </button>
+    <button class="toggle-link">
+      <svg width="17" height="17" viewBox="0 0 17 17" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9.01985 5.11199C9.26845 4.6819 9.81865 4.53437 10.249 4.78266C10.6794 5.03119 10.8271 5.58224 10.5785 6.0127L7.66173 11.0648C7.4132 11.4952 6.86214 11.6429 6.43168 11.3944C6.00151 11.1459 5.85417 10.5956 6.10234 10.1653L9.01985 5.11199Z"/>
+        <path d="M9.2027 0.338834C10.2892 0.121288 11.4693 0.328754 12.4844 0.914793C13.4991 1.50085 14.2679 2.41859 14.6227 3.46808C14.9775 4.51771 14.8891 5.61402 14.378 6.51846L13.0031 8.89541C12.7695 9.2987 12.2113 9.41246 11.7561 9.14935C11.3008 8.886 11.1206 8.34473 11.3542 7.94114L12.7212 5.57765C13.0131 5.06101 13.0633 4.4348 12.8606 3.83525C12.6578 3.23576 12.2191 2.71165 11.6393 2.37694C11.0596 2.04224 10.3863 1.92429 9.76579 2.04846C9.14514 2.17274 8.627 2.52931 8.32554 3.04054L6.95749 5.40422C6.72396 5.80765 6.16576 5.92129 5.7105 5.65816C5.25518 5.39474 5.07494 4.8535 5.30853 4.44995L6.68013 2.08158L6.68337 2.07598C7.21106 1.18113 8.11634 0.556409 9.2027 0.338834Z"/>
+        <path d="M3.67355 7.28521C3.90624 6.88113 4.46508 6.76661 4.92088 7.02922C5.37638 7.29192 5.55707 7.83215 5.32445 8.23611L3.9602 10.602L3.96147 10.6027C3.66945 11.1194 3.61973 11.7464 3.82243 12.346C4.02517 12.9456 4.46394 13.4696 5.04367 13.8044C5.62341 14.1391 6.29668 14.257 6.91723 14.1328C7.53788 14.0086 8.05602 13.652 8.35748 13.1408L9.71982 10.7753C9.95258 10.3712 10.5114 10.2566 10.9671 10.5193C11.4226 10.782 11.6032 11.3223 11.3707 11.7262L9.99965 14.1053C9.47195 15.0002 8.56671 15.6249 7.48032 15.8425C6.39405 16.06 5.21484 15.853 4.19993 15.2672C3.18488 14.6812 2.41514 13.7629 2.0603 12.7132C1.70554 11.6636 1.79393 10.5673 2.30504 9.66284L2.30828 9.65723L3.67355 7.28521Z"/>
+      </svg>
+    </button>
+    <button class="toggle-todo">
+      <svg width="17" height="17" viewBox="0 0 17 17" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14.5371 8.09082C14.5369 4.66866 11.7621 1.89453 8.33984 1.89453C4.91783 1.89477 2.14379 4.66881 2.14355 8.09082C2.14355 11.4063 4.74727 14.1144 8.02148 14.2803L8.33984 14.2881C11.6553 14.2881 14.3633 11.6843 14.5293 8.41016L14.5371 8.09082ZM16.3369 8.09082C16.3369 12.5073 12.7563 16.0879 8.33984 16.0879C3.92357 16.0877 0.34375 12.5071 0.34375 8.09082C0.34399 3.6747 3.92372 0.0949665 8.33984 0.0947266C12.7562 0.0947266 16.3367 3.67455 16.3369 8.09082Z"/>
+        <path d="M9.78782 4.73683C10.0364 4.30641 10.5874 4.15872 11.0179 4.40724C11.4483 4.65577 11.5959 5.20685 11.3475 5.63728L8.1963 11.0939C8.05644 11.3358 7.81229 11.4993 7.53525 11.5359C7.25793 11.5724 6.97904 11.4777 6.7812 11.2799L4.87249 9.37102C4.52122 9.01952 4.52075 8.44964 4.87216 8.09824C5.22364 7.74681 5.79374 7.74739 6.14519 8.09885L7.22362 9.17678L9.78782 4.73683Z"/>
+      </svg>
+    </button>
+    <button class="toggle-highlight">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3.19566 9.32974C3.44426 8.89965 3.99446 8.7521 4.42476 9.0004C4.85522 9.24893 5.00288 9.79998 4.75435 10.2304L2.57822 13.9982L5.42699 13.9558L6.87253 11.4534C7.12106 11.0229 7.67212 10.8753 8.10258 11.1238C8.53304 11.3723 8.6807 11.9234 8.43217 12.3538L6.73139 15.2997C6.57294 15.5741 6.28117 15.7453 5.96435 15.7499L1.01939 15.8212C0.69569 15.8258 0.394806 15.6555 0.230901 15.3763C0.0670943 15.0972 0.0653783 14.7519 0.22705 14.4715L3.19566 9.32974Z"/>
+        <path d="M3.55062 5.5066C3.79916 5.07645 4.3494 4.92906 4.77973 5.17727C5.21019 5.42579 5.35785 5.97685 5.10932 6.40731L3.86981 8.5542L8.91471 11.4669L10.1552 9.31973C10.4037 8.8895 10.9539 8.74198 11.3843 8.99039C11.8146 9.23887 11.9619 9.78907 11.7136 10.2195L10.3231 12.6293L10.3219 12.6286C10.2237 12.7987 10.094 12.9484 9.93821 13.0681C9.78213 13.1879 9.60321 13.2761 9.41313 13.327C9.22317 13.3779 9.02481 13.3908 8.82985 13.365C8.63489 13.3393 8.44714 13.275 8.27687 13.1765L8.27713 13.1775L2.70905 9.96116C2.53858 9.86287 2.38821 9.73285 2.26838 9.57677C2.17866 9.45988 2.10715 9.33043 2.05536 9.19305L2.00965 9.05263L1.97903 8.90817C1.95517 8.7633 1.9524 8.61544 1.97165 8.46935L1.99858 8.32463C2.03204 8.18133 2.08597 8.04329 2.15989 7.91543L3.55062 5.5066Z"/>
+        <path d="M4.6504 0.751C4.89901 0.320915 5.44921 0.173366 5.87951 0.421663C6.30997 0.670191 6.45763 1.22125 6.2091 1.65171L4.32463 4.9157L11.5451 9.08446L13.4296 5.82046C13.6781 5.39 14.2292 5.24235 14.6596 5.49087C15.0901 5.7394 15.2378 6.29046 14.9892 6.72092L12.9533 10.2459C12.855 10.4162 12.7246 10.5659 12.5686 10.6856C12.4126 10.8055 12.2336 10.8937 12.0436 10.9446C11.8536 10.9955 11.6552 11.0083 11.4603 10.9826C11.2653 10.9569 11.0775 10.8925 10.9073 10.7941L3.16388 6.32266C2.9934 6.22437 2.84304 6.09435 2.7232 5.93827C2.63327 5.82114 2.56176 5.69131 2.50993 5.5536L2.46447 5.41413L2.43385 5.26967C2.40997 5.1248 2.40724 4.97695 2.42647 4.83085L2.45315 4.68519C2.48661 4.54216 2.54094 4.40456 2.61471 4.27693L4.6504 0.751Z"/>
+      </svg>
+    </button>
+    <div class="button-background" aria-hidden="true"></div>
+    <input class="editor-menu__url input-url" placeholder="https://your.link">
+  </div>
+</template>
+
+<template id="editorMobileMenuTemplate">
+  <div class="mobile-editor-menu">
+  <button class="toggle-bold">
+    <svg height="26" width="26" viewBox="0 0 26 26">
+      <path d="m15.6289 12.5418c.7756.2035 1.3732.5849 1.7928 1.1444.4323.5594.6485 1.2587.6485 2.0979 0 1.1825-.3878 2.0916-1.1634 2.7274-.7756.623-1.8755.9345-3.2995.9345h-4.80626c-.24158 0-.43867-.0699-.59124-.2098-.13987-.1399-.2098-.3242-.2098-.5531v-11.92021c0-.22886.06993-.41323.2098-.55309.15257-.13987.34966-.2098.59124-.2098h4.59646c1.3859 0 2.4603.30516 3.2232.91547.7629.61032 1.1443 1.47493 1.1443 2.59384 0 .72479-.1907 1.34779-.5721 1.86909-.3688.5213-.8901.9091-1.564 1.1634zm-6.08404-.5722h3.62374c1.0045 0 1.761-.2034 2.2696-.6103.5213-.4068.782-.9981.782-1.7737 0-1.52579-1.0172-2.28868-3.0516-2.28868h-3.62374zm3.90984 6.1795c1.0553 0 1.8309-.1907 2.3268-.5722.5086-.3941.7629-1.0045.7629-1.8309 0-1.653-1.0299-2.4794-3.0897-2.4794h-3.90984v4.8825z"></path>
+    </svg>
+  </button>
+  <button class="toggle-italic">
+    i
+  </button>
+  <button class="toggle-heading">
+    <svg height="26" width="26" viewBox="0 0 26 26">
+      <path d="m14.6831 18.664c.0509.1018.0763.2098.0763.3243 0 .1907-.0763.3496-.2289.4768-.1398.1271-.3115.1907-.5149.1907-.3179 0-.5404-.1526-.6676-.4577l-1.3541-3.0898h-7.19026l-1.37321 3.0898c-.12715.3051-.34966.4577-.66754.4577-.20343 0-.38144-.0636-.53402-.1907-.15258-.1399-.22887-.3052-.22887-.4959 0-.1017.02543-.2034.07629-.3052l5.45469-12.12997c.07629-.17801.19072-.31152.3433-.40052.15258-.08901.31788-.13351.49588-.13351.19073 0 .36238.05086.51496.15258.15258.089.26701.21615.3433.38145zm-9.30729-3.8526h6.04589l-3.03246-6.84695z"></path><path d="m19.8624 10.0433c2.3269 0 3.4903 1.2207 3.4903 3.6619v5.1877c0 .2289-.0699.4132-.2098.5531-.1272.1399-.3052.2098-.534.2098-.2289 0-.4133-.0699-.5531-.2098-.1399-.1399-.2098-.3242-.2098-.5531v-.9155c-.2416.5468-.6103.9727-1.1062 1.2779-.4959.2924-1.0681.4386-1.7165.4386-.5976 0-1.1507-.1207-1.6593-.3623-.4959-.2416-.8901-.5786-1.1825-1.0109-.2925-.4323-.4387-.9091-.4387-1.4304 0-.6993.178-1.2397.534-1.6211.3561-.3942.9409-.6739 1.7547-.8392.8138-.178 1.9454-.267 3.3949-.267h.4196v-.6294c0-.7629-.159-1.3224-.4768-1.6784-.3052-.356-.8074-.534-1.5068-.534-.8646 0-1.7419.2352-2.6319.7057-.3433.2161-.5849.3242-.7248.3242-.1526 0-.2797-.0572-.3814-.1717-.1018-.1144-.1526-.2606-.1526-.4386s.0508-.3306.1526-.4578c.1144-.1398.2924-.2797.534-.4196.445-.2542.9473-.4513 1.5067-.5912.5722-.1526 1.138-.2289 1.6974-.2289zm-.6293 8.43c.7629 0 1.3859-.2543 1.869-.7629.4959-.5213.7439-1.1888.7439-2.0026v-.5531h-.3433c-1.1189 0-1.9708.0509-2.5557.1526-.5849.089-1.0045.2479-1.2588.4768-.2416.2162-.3624.5404-.3624.9727 0 .4959.178.9091.5341 1.2397.3687.3179.8264.4768 1.3732.4768z"></path>
+    </svg>
+  </button>
+  <button class="toggle-link">
+    <svg height="26" viewBox="0 0 26 26" width="26">
+      <path clip-rule="evenodd" d="m14.3544 7.17192-.7969.82699c-.2643.26455-.4696.58195-.6025.93149s-.1903.72324-.1685 1.0965c.0224.3822-.2693.71-.6514.7324-.3821.0223-.71-.2694-.7323-.6515-.0333-.56848.0542-1.13759.2565-1.66991.2016-.53028.5127-1.0121.9129-1.41407l.7977-.82782c.7659-.76584 1.8047-1.196 2.8877-1.196 1.0831 0 2.1218.43024 2.8876 1.19608.7659.76584 1.1961 1.80454 1.1961 2.8876 0 1.08302-.4302 2.12172-1.1961 2.88762l-.7929.7929c-.4029.4025-.8867.7154-1.419.9178-.5323.2023-1.1014.2898-1.6699.2565-.3821-.0223-.6738-.3502-.6514-.7323.0223-.3821.3502-.6738.7323-.6514.3733.0218.747-.0356 1.0965-.1685.3496-.1329.667-.3382.9316-.6025l.7927-.7926c.5059-.5059.7901-1.19208.7901-1.90752s-.2842-1.40157-.7901-1.90747c-.5059-.50589-1.192-.7901-1.9075-.7901-.7134 0-1.3977.2826-1.9032.78581zm1.5818 2.23353c.2706.27066.2706.70945 0 .98015l-5.5506 5.5506c-.2707.2706-.70949.2706-.98015 0-.27066-.2707-.27066-.7095 0-.9801l5.55065-5.55065c.2706-.27066.7094-.27066.9801 0zm-7.49831 2.25385c.53232-.2023 1.10143-.2898 1.66991-.2565.3821.0223.6738.3502.6515.7323-.0224.3821-.3502.6738-.7324.6514-.37326-.0218-.74696.0356-1.0965.1685s-.66702.3382-.93157.6025l-.00883.0088-.81808.7881c-.50321.5055-.78581 1.1898-.78581 1.9032 0 .7155.28421 1.4016.7901 1.9075.5059.5059 1.19203.7901 1.90747.7901s1.40162-.2842 1.90752-.7901l.7927-.7927c.2642-.2646.4695-.582.6024-.9316.1329-.3495.1903-.7232.1685-1.0965-.0224-.3821.2693-.71.6514-.7323.3821-.0224.71.2693.7323.6514.0333.5685-.0542 1.1376-.2565 1.6699-.2024.5323-.515 1.0158-.9175 1.4187l-.7932.7932c-.7659.7659-1.8046 1.1961-2.88762 1.1961-1.08306 0-2.12176-.4302-2.8876-1.1961-.76584-.7658-1.19608-1.8045-1.19608-2.8876 0-1.083.43024-2.1217 1.19608-2.8876l.00908-.0091.81868-.7887c.40196-.4003.88377-.7113 1.41405-.9129z"></path>
+    </svg>
+  </button>
+  <button class="toggle-highlight">
+    <svg width="26" height="26" viewBox="0 0 26 26">
+      <path d="M6.95224 16.1742L7.98061 14.6045L6.95224 16.1742ZM6.95224 16.1742V16.1729L6.86036 16.3137C6.76061 16.4666 6.75225 16.661 6.83684 16.8205L5.12843 18.5296C5.12836 18.5296 5.1283 18.5297 5.12824 18.5298C4.98297 18.6721 4.92071 18.8789 4.96302 19.0774L4.96303 19.0774C5.00393 19.2688 5.139 19.4255 5.3219 19.4942L6.95224 16.1742ZM11.6998 17.7093C11.5899 17.7826 11.4678 17.8637 11.3317 17.9526L11.6998 17.7093ZM11.6998 17.7093C12.1415 17.4165 12.3742 17.2625 12.6186 17.1691C12.858 17.0776 13.1105 17.0437 13.5873 17.0009L13.5876 17.0013L13.6104 16.9996C13.7404 16.9902 13.8609 16.9307 13.9477 16.8338L13.9478 16.8337L20.3268 9.70298L20.3268 9.70299L20.3275 9.70218L20.3349 9.69313L20.3401 9.68668L20.3741 9.64702L20.3728 9.64597C21.149 8.66084 21.0671 7.24692 20.174 6.35878C20.174 6.35876 20.1739 6.35873 20.1739 6.3587L19.4971 5.68189C19.4971 5.68186 19.497 5.68182 19.497 5.68179C18.5902 4.76645 17.1319 4.70179 16.1476 5.53304L16.1473 5.53328L16.1314 5.547L16.1314 5.54699L16.1305 5.54775L9.09629 11.9902C9.00385 12.0748 8.94676 12.1914 8.9358 12.3158M11.6998 17.7093L8.25867 14.2733C8.18707 14.3814 8.10877 14.4996 8.02248 14.6318L7.98065 14.6044C8.06705 14.4721 8.14544 14.3537 8.21705 14.2456L8.22317 14.2364L8.22319 14.2364C8.51715 13.7935 8.67166 13.5603 8.76531 13.3147C8.85855 13.0702 8.89205 12.8116 8.9358 12.3158M8.9358 12.3158C8.9358 12.3158 8.9358 12.3158 8.9358 12.3158L8.98561 12.3202L8.9358 12.3158ZM5.32196 19.4942L7.39964 20.2775V20.2786L7.43251 20.2905C7.49745 20.3142 7.56594 20.3274 7.63635 20.3274L7.6366 20.3274C7.79632 20.3266 7.94914 20.2629 8.06204 20.15L8.06205 20.15L9.11354 19.0978C9.27344 19.1824 9.46725 19.1741 9.61969 19.0735C9.61971 19.0735 9.61974 19.0735 9.61976 19.0735L11.3316 17.9527L5.32196 19.4942ZM9.78205 13.4168L12.5177 16.1525C12.0679 16.2725 11.7503 16.4741 11.1463 16.8748L11.0949 16.9089L11.095 16.909C10.9998 16.9722 10.8967 17.0406 10.783 17.1149L10.783 17.1149L9.41145 18.0128L7.92103 16.5224L8.81815 15.153C8.9062 15.0192 8.98573 14.8988 9.05819 14.7905L9.0583 14.7903C9.45967 14.185 9.66194 13.8673 9.78205 13.4168ZM18.7885 6.38965L18.7886 6.38983L19.4657 7.0669L19.4658 7.06701C20.0031 7.60084 20.0491 8.45443 19.5726 9.04321L13.554 15.772L10.1585 12.3758L16.7989 6.29419C17.3863 5.80502 18.2504 5.84615 18.7885 6.38965ZM7.53643 19.2588L6.28638 18.7875L7.52854 17.5453L8.38925 18.406L7.53643 19.2588Z"></path>
+      <path d="M17.8074 20.781C17.8074 20.6478 17.7541 20.521 17.6603 20.4272C17.5665 20.3334 17.4397 20.2801 17.3065 20.2801H8.50734C8.23092 20.2801 8.00713 20.5048 8.00713 20.781C8.00713 21.058 8.23097 21.2819 8.50734 21.2819H17.3065C17.4395 21.2819 17.5664 21.2295 17.6603 21.1355C17.7541 21.0416 17.8074 20.9141 17.8074 20.781V20.781Z"></path><path d="M16.8815 7.355L16.88 7.35371L16.8473 7.38303L16.8472 7.38305L12.2712 11.4772L12.2711 11.4773C12.066 11.662 12.0488 11.9781 12.2327 12.184L12.2328 12.184C12.4167 12.3891 12.7328 12.4071 12.9387 12.2239L12.9388 12.2238L17.5149 8.12972C17.7215 7.94499 17.7387 7.6288 17.5548 7.42229L17.5547 7.42214C17.38 7.22743 17.0869 7.2015 16.8815 7.355Z"></path>
+    </svg>
+  </button>
+  <button class="toggle-todo">
+    <svg height="26" viewBox="0 0 26 26" width="26">
+      <path d="m13.1894 5c-4.5151 0-8.1894 3.6743-8.1894 8.1894 0 4.5159 3.6743 8.1894 8.1894 8.1894 4.5159 0 8.1894-3.6735 8.1894-8.1894 0-4.5151-3.6735-8.1894-8.1894-8.1894zm0 15.1189c-3.82064 0-6.92949-3.1088-6.92949-6.9295 0-3.82064 3.10885-6.92949 6.92949-6.92949 3.8207 0 6.9295 3.10885 6.9295 6.92949 0 3.8207-3.1088 6.9295-6.9295 6.9295z"></path><path d="m16.6209 8.84504c-.3119-.15591-.6898-.02913-.8457.2819l-3.3885 6.77826-1.9017-1.9016c-.2457-.2457-.64488-.2457-.89057 0-.2457.2457-.2457.6449 0 .8906l2.51977 2.5198c.1182.1189.2788.1843.4449.1843.0331 0 .067-.0032.1008-.0079.2-.0331.3717-.1591.4631-.3402l3.7797-7.55945c.1551-.31104.0291-.6898-.2819-.84571z"></path>
+    </svg>
+  </button>
+  <input class="mobile-editor-menu__url input-url" placeholder="https://your.link">
+</div>
+</template>
+  <template id="video-controls-template">
+  <div class="video-controls">
+    <div class="video-controls__final">
+      <progress class="video-controls__progress" min="0" max="100" value="0"></progress>
+      <button class="play" id="js-video-controls-play2"></button>
+      <button class="mute" title="Mute"></button>  
+      <button class="fullscreen" title="Full screen"></button>
+    </div>
+
+    <button class="video-controls__initial play play--main" title="Play" id="js-video-controls-play"></button>
+  </div>
+</template>
+
+  <script src="/_static/134/0.109.0/scripts/modules/core.js" crossorigin></script>
+  <script src="/_static/134/0.109.0/scripts/modules/forms.js" crossorigin></script>
+  <script src="/_static/134/0.109.0/scripts/modules/uploader.js" crossorigin></script>
+
+  <script src="/_static/134/0.109.0/scripts/vendor/color.min.js" crossorigin></script>
+  <script src="/_static/134/0.109.0/scripts/vendor/sortable.js" crossorigin></script>
+  <script src="/_static/134/0.109.0/scripts/vendor/gsap.min.js" crossorigin></script>
+  <script src="/_static/134/0.109.0/scripts/vendor/observer.min.js" crossorigin></script>
+  <script src="/_static/134/0.109.0/scripts/vendor/draggable.min.js" crossorigin></script>
+
+  <script type="module" src="/_static/134/0.109.0/scripts/base.js" crossorigin></script>
+
+  <script type="module" src="/_static/134/0.109.0/scripts/hotkeys.js" crossorigin></script>
+
+  
+
+  <script type="module" src="/_static/134/0.109.0/scripts/lightbox.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/objects.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/news.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/shortcuts.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/tagging.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/trash.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/notes.js" crossorigin></script>
+
+  <script type="module" src="/_static/134/0.109.0/scripts/components/banner.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/card.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/dropdown.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/editable.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/colorScheme.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/player.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/reader.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/tldr.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/NewSpaceModal.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/SpaceChooser.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/screenshot.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/palette.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/notifications.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/OnboardingChecklist.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/MarkAsComplete.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/TopOfMind.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/ImageLightbox.js" crossorigin></script>
+
+  <script type="module" src="/_static/134/0.109.0/scripts/views/card.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/views/spaces.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/views/bookshelf.js" crossorigin></script>
+
+  <script src="/_static/134/0.109.0/serendipity/scripts/serendipity_ogl.min.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/serendipity/scripts/serendipity.js" crossorigin></script>
+
+  <script type="module" src="/_static/134/0.109.0/scripts/app.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/hub.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/menu.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/select-mode.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/components/pull-to-refresh.js" crossorigin></script>
+  <script type="module" src="/_static/134/0.109.0/scripts/native/api.js" crossorigin></script>
+</html>

@@ -30,14 +30,11 @@ pub trait LibraryApi {
     /// What the server answers with a 500.
     async fn handle(&self, request: &mut Request) -> Result<Option<Response>>;
 
-    /// The desktop document shell with the library's own state in place of the recorded one (`api.shell`).
-    ///
-    /// # Arguments
-    /// * `html` - Recorded shell HTML.
+    /// Render the page shell from the library database (`api.shell`).
     ///
     /// # Errors
     /// What the server answers with a 500.
-    fn shell(&self, html: &str) -> Result<String>;
+    fn shell(&self) -> Result<String>;
 }
 
 /// A server for one hosted library that answers every request it is given (`createHosted().handle`).
