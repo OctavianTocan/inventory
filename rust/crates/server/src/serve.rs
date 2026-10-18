@@ -118,15 +118,6 @@ impl Listener {
             return Ok(Response::send(403, "This server has no sign-in configured.", &Headers::new()));
         }
         let pathname = request.pathname().to_owned();
-        let dest = request.header("sec-fetch-dest");
-        if request.method == "GET"
-            && pathname.starts_with("/media/")
-            && matches!(dest, Some("iframe" | "frame"))
-            && request.header("host").is_some_and(|host| host.starts_with("localhost"))
-        {
-            let location = format!("http://127.0.0.1:{}/_mediahost/{}{}", request.local_port, &pathname["/media/".len()..], request.search());
-            return Ok(Response::send(302, "", &Headers::from([("location", location)])));
-        }
         if let Some(hosted) = &server.hosted {
             return hosted.handle(request).await;
         }

@@ -77,6 +77,18 @@ fn build_synthetic_library(root: &Path) -> PathBuf {
         ],
     )
     .unwrap();
+    db.execute(
+        "INSERT INTO cards (id, user_id, type, flags, data, html, extras, created_ns, bumped_ns, modified_ns)
+         VALUES ('0000c4', 'u1', 'Article', 0, ?, '', '{}', 400, 400, 400)",
+        &[SqlValue::Text(r#"{"type":"Article","title":"Reader"}"#.into())],
+    )
+    .unwrap();
+    db.execute(
+        "INSERT INTO card_content (card_id, body) VALUES ('0000c4', ?)",
+        &[SqlValue::Text(r#"{"html":"<a href=\"/media/acct/c4/reader.pdf\">doc</a><img src=\"/media/acct/c4/gone.pdf\">"}"#.into())],
+    )
+    .unwrap();
+    write_file(&root.join("capture").join("media/acct/c4/reader.pdf"), b"reader-pdf");
 
     db_path
 }
@@ -123,12 +135,13 @@ fn local_migration_copies_media_rewrites_links_reports_missing_and_is_idempotent
     // Report lists Card 3 as missing.
     let report: Value = json::parse(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
     assert_eq!(report.get("rewrittenCards").as_f64(), Some(1.0));
-    assert_eq!(report.get("migratedOriginals").as_f64(), Some(2.0));
+    assert_eq!(report.get("migratedOriginals").as_f64(), Some(3.0));
     assert_eq!(report.get("migratedRenditions").as_f64(), Some(4.0));
+    assert_eq!(std::fs::read(media_dir.join("acct/c4/reader.pdf")).unwrap(), b"reader-pdf");
     let missing = report.get("missing").as_array().unwrap();
-    assert_eq!(missing.len(), 1);
-    assert_eq!(missing[0].get("cardId").as_str(), Some("0000c3"));
-    assert_eq!(missing[0].get("path").as_str(), Some("acct/c3/missing"));
+    assert_eq!(missing.len(), 2);
+    assert!(missing.iter().any(|item| item.get("cardId").as_str() == Some("0000c3") && item.get("path").as_str() == Some("acct/c3/missing")));
+    assert!(missing.iter().any(|item| item.get("cardId").as_str() == Some("0000c4") && item.get("path").as_str() == Some("acct/c4/gone.pdf")));
 
     // Second run changes nothing.
     let status2 = runtime.block_on(mymind::tool_migrate_media::run(&root, &args));
@@ -137,7 +150,7 @@ fn local_migration_copies_media_rewrites_links_reports_missing_and_is_idempotent
     assert_eq!(report2.get("rewrittenCards").as_f64(), Some(0.0));
     assert_eq!(report2.get("migratedOriginals").as_f64(), Some(0.0));
     assert_eq!(report2.get("migratedRenditions").as_f64(), Some(0.0));
-    assert_eq!(report2.get("missing").as_array().unwrap().len(), 1);
+    assert_eq!(report2.get("missing").as_array().unwrap().len(), 2);
 }
 
 #[test]
@@ -241,12 +254,12 @@ fn bucket_migration_uploads_objects_and_skips_existing_on_second_run() {
     ];
     let status = runtime.block_on(mymind::tool_migrate_media::run(&root, &args));
     assert_eq!(status, 0);
-    assert_eq!(put_count.load(Ordering::SeqCst), 6);
+    assert_eq!(put_count.load(Ordering::SeqCst), 7);
 
     // Second run uploads nothing because HEAD reports matching sizes.
     let status2 = runtime.block_on(mymind::tool_migrate_media::run(&root, &args));
     assert_eq!(status2, 0);
-    assert_eq!(put_count.load(Ordering::SeqCst), 6);
+    assert_eq!(put_count.load(Ordering::SeqCst), 7);
 
     if let Ok(mut stream) = std::net::TcpStream::connect(("127.0.0.1", port)) {
         let _ = stream.write_all(b"POST /__stop HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n");

@@ -40,6 +40,9 @@ static LOCAL_MEDIAHOST_URL: LazyLock<Regex> = LazyLock::new(|| {
 static HTML_MEDIA_ATTR: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?:data-src|data-srcset|src|srcset|poster)="([^"]+)""#).expect("pattern")
 });
+static MEDIA_PATH: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"/media/[^\s"'\\<>),]+"#).expect("pattern")
+});
 
 #[derive(Clone, Debug)]
 struct Candidate {
@@ -237,6 +240,14 @@ fn add_media_path(stems: &mut BTreeSet<String>, raw: &str) {
                 stems.insert(stem.to_owned());
             }
         }
+    }
+}
+fn stems_in_text(text: &str, stems: &mut BTreeSet<String>) {
+    for found in HTML_MEDIA_ATTR.captures_iter(text) {
+        add_media_path(stems, &found[1]);
+    }
+    for found in MEDIA_PATH.captures_iter(text) {
+        add_media_path(stems, &found[0]);
     }
 }
 
@@ -474,6 +485,17 @@ async fn run_inner(root: &Path, args: &[String]) -> std::result::Result<u8, Stri
     let sources = collect_sources(&capture_dir, &replay_dir).map_err(|e| e.to_string())?;
 
     let rows = db.query("SELECT id, type, data, html, extras FROM cards", &[]).map_err(|e| e.to_string())?;
+    let content_exists = db.one("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'card_content'", &[]).map_err(|e| e.to_string())?;
+    let content_rows = if content_exists.is_some() {
+        db.query("SELECT card_id, body FROM card_content", &[]).map_err(|e| e.to_string())?
+    } else {
+        Vec::new()
+    };
+    let mut content_by_card: BTreeMap<String, String> = BTreeMap::new();
+    for row in &content_rows {
+        content_by_card.insert(row.text("card_id").unwrap_or_default().to_owned(), row.text("body").unwrap_or_default().to_owned());
+    }
+
     let mut migrated_originals = 0usize;
     let mut migrated_renditions = 0usize;
     let mut processed_stems: BTreeSet<String> = BTreeSet::new();
@@ -485,7 +507,10 @@ async fn run_inner(root: &Path, args: &[String]) -> std::result::Result<u8, Stri
         let data = row.text("data").unwrap_or_default();
         let html = row.text("html").unwrap_or_default();
         let extras = row.text("extras").unwrap_or_default();
-        let stems = extract_card_stems(data, html, extras);
+        let mut stems = extract_card_stems(data, html, extras);
+        if let Some(body) = content_by_card.get(card_id) {
+            stems_in_text(body, &mut stems);
+        }
         for stem in stems {
             if kind == "Document" {
                 document_stems.push(stem.clone());
