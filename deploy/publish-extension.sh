@@ -13,10 +13,10 @@ Usage:
   deploy/publish-extension.sh
   deploy/publish-extension.sh --help
 
-Zips extension/ (with the mymind assets in extension/mymind/, without tests/, tools/ and dot files) into
+Zips extension/ (without tests/, tools/ and dot files) into
 mymind-extension-<version>.zip, with everything under one mymind-extension/ folder, and writes its entry into
 manifest.json. The version comes from extension/manifest.json and must be higher than the published one. Every file
-the extension manifest names has to exist; extension/tools/copy-mymind-assets.mjs copies the mymind assets.
+the extension manifest names has to exist.
 
 --local <dir>   Publishes into a local downloads directory. No upload and no network.
 (no option)     Publishes to production: stages the zip and the manifest under rust/target/publish-extension, uploads
@@ -47,7 +47,7 @@ named += [manifest.get("background", {}).get("service_worker"), manifest.get("op
 named += [path for group in manifest.get("web_accessible_resources", []) for path in group.get("resources", [])]
 missing = [path for path in named if path and not os.path.isfile(os.path.join(base, path))]
 if missing:
-    sys.exit("missing in extension/: " + ", ".join(missing) + " (run node extension/tools/copy-mymind-assets.mjs)")
+    sys.exit("missing in extension/: " + ", ".join(missing))
 print(version)
 PYEOF
 }

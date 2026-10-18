@@ -6,19 +6,16 @@ directly). `README.md` explains how to run and verify the replica; `docs/` holds
 ## What this is
 
 A localhost replica of mymind (`access.mymind.com`). The Rust binary (`mymind serve`, `rust/`) serves mymind's own
-front-end (`mirror/`) and answers its API from recordings of the user's library (`replay/`, `capture/`).
-It is becoming its own product: nothing checks it against mymind any more.
+front-end (`mirror/`) and answers its API from the local database and storage.
+It is its own product: nothing checks it against mymind any more.
 
 ## Hard rules
 
-1. **Never change the user's mymind account.** Only the live pass of `tools/drive.mjs` and `tools/capture.mjs` talk
-   to live mymind, and every non-GET they would send is answered by the replica instead. Keep it that way; never
-   add code that writes to `access.mymind.com`.
-2. **The repository is private data.** The user chose to commit the recordings of their library (`capture/`,
-   `mirror/`, `replay/`) so a clone runs by itself; the GitHub repository must stay private. The database stays
-   off Git: `.env`, `data/`, `library/`, `downloads/`, recorded videos and `evidence/` stay local. Run
-   `npm run bundle` before committing library changes, and never put cookies, JWTs or API keys into commits,
-   reports, logs or prompts (Codex prompts leave the machine too).
+1. **Never change the user's mymind account.** Nothing in this repo writes to `access.mymind.com`.
+2. **The repository is private data.** `mirror/` holds mymind's front-end and is committed so a clone can serve the
+   UI; the GitHub repository must stay private. The database stays off Git: `.env`, `data/`, `library/`,
+   `downloads/` and `evidence/` stay local. Run `npm run bundle` before committing library changes, and never put
+   cookies, JWTs or API keys into commits, reports, logs or prompts (Codex prompts leave the machine too).
 3. **Secrets live in `.env` only** (`TYPESAFE_API_KEY`, LLM keys, OAuth client secrets), read through
    the server process environment, never shipped to the browser.
 4. **No bot-detection workarounds.** No user-agent spoofing or stealth tricks against mymind.

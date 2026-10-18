@@ -6,8 +6,6 @@
     "node": ">=22"
   },
   "scripts": {
-    "capture": "node tools/capture.mjs",
-    "mirror": "node tools/mirror-static.mjs",
     "serve": "node tools/serve.mjs",
     "postinstall": "node tools/install-library.mjs",
     "bundle": "node tools/bundle-library.mjs"

@@ -1,7 +1,7 @@
 # Verification evidence, local caches and backups.
 evidence/
 node_modules/
-replay/unreferenced/
+
 *.bak-*
 
 # Local secrets (API keys).
@@ -10,11 +10,6 @@ replay/unreferenced/
 # The working database and its snapshots stay on this machine; other machines use the hosted server.
 data/
 library/
-
-# Videos are too large for Git; the hosted server serves them from this machine.
-capture/**/*.mp4
-capture/**/*.webm
-capture/**/*.mov
 
 # Desktop app build output.
 desktop/src-tauri/target/

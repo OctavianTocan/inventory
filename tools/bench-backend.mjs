@@ -87,9 +87,9 @@ async function send(base, request) {
   return { status: response.status, bytes };
 }
 
-// The largest captured media file of the hosted test library, as its `/media/` path.
+// The largest media file of the hosted test library, as its `/media/` path.
 async function largestMedia() {
-  const base = path.join(FIXTURES, 'hosted-bucket/libraries/test/capture/media');
+  const base = path.join(FIXTURES, 'hosted-bucket/libraries/test/source/media');
   let best = { size: 0, name: '' };
   for (const name of await readdir(base, { recursive: true })) {
     const info = await stat(path.join(base, name));
