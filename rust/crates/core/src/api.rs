@@ -80,9 +80,6 @@ fn route(pattern: &str) -> Regex {
 /// Broadcasts a committed hub event: `(target, payload)`.
 pub type Push = Box<dyn Fn(&str, &Value)>;
 
-/// Whether the server can replay this exact request.
-pub type HasReplay = Box<dyn Fn(&Request) -> Result<bool>>;
-
 /// What [`Api::new`] serves (`options` of `createApi` for an already open store).
 pub struct ApiOptions {
     /// Open store whose read metadata is already imported; the host closes it.
@@ -103,8 +100,6 @@ pub struct ApiOptions {
     pub localize: fn(&str) -> String,
     /// Broadcasts a committed hub event: `(target, payload)`.
     pub push: Push,
-    /// Whether the server can replay this exact request.
-    pub has_replay: HasReplay,
     /// Random bytes behind share and upload ids.
     pub random: fn(usize) -> Vec<u8>,
 }
@@ -522,17 +517,8 @@ impl Api {
     }
 
     // Restore recorded transport headers while generating current bodies and quota headers.
-    fn reply(&self, url: &Url, body: impl Into<crate::http::Body>, status: u16, headers: Headers) -> Result<Response> {
-        let key = format!("{}{}", url.path(), crate::http::search(url));
-        let mut all = Headers::new();
-        if let Some(saved) = self.store.db().one("SELECT headers FROM api_metadata WHERE path = ?", &[key.into()])?
-            && let Value::Object(recorded) = parse(saved.text("headers").unwrap_or(""))?
-        {
-            for (name, value) in recorded.iter() {
-                all.set(&*name, value.to_js_string());
-            }
-        }
-        Ok(Response::send(status, body, &all.with(&headers)))
+    fn reply(&self, _url: &Url, body: impl Into<crate::http::Body>, status: u16, headers: Headers) -> Result<Response> {
+        Ok(Response::send(status, body, &headers))
     }
 
     fn reply_json(&self, url: &Url, body: &Value) -> Result<Response> {
@@ -878,19 +864,7 @@ impl Api {
         } else if get && path == "/spaces" {
             self.reply_json(url, &Value::Array(self.store.spaces(None)?.iter().map(|space| space.to_value()).collect()))?
         } else if get && let Some(m) = captures(&SPACE, path) {
-            let mut space = self.store.space(&m[1])?.ok_or_else(|| Error::status(404, "Space not found"))?.to_value();
-            let metadata = self.store.db().one("SELECT attributes FROM api_metadata WHERE path = ?", &[path.into()])?;
-            if space.get("query").truthy()
-                && let Some(metadata) = metadata
-            {
-                let attributes = parse(metadata.text("attributes").unwrap_or(""))?;
-                let checked = member(&attributes, "checked")?.clone();
-                if let Some(query) = space.get_mut("query")
-                    && !checked.is_nullish()
-                {
-                    query.set("checked", checked);
-                }
-            }
+            let space = self.store.space(&m[1])?.ok_or_else(|| Error::status(404, "Space not found"))?.to_value();
             self.reply_json(url, &space)?
         } else if get && path == "/tags/manual" {
             let tags: Vec<Value> = self.store.tags_manual(None)?.iter().map(|tag| tag.to_value()).collect();
@@ -983,21 +957,8 @@ impl Api {
         } else if get && (path == "/quota" || path == "/quotas/objects") {
             self.reply(url, stringify(&self.store.quota(None)?.to_value())?, 200, self.with_quota(json_headers())?)?
         } else if get && path == "/account.json" {
-            let metadata = self.store.db().one("SELECT attributes FROM api_metadata WHERE path = ?", &[path.into()])?;
-            let mut account = match metadata {
-                Some(metadata) => parse(metadata.text("attributes").unwrap_or(""))?.get("account").clone(),
-                None => obj! {}.into(),
-            };
-            if account.is_nullish() {
-                return Err(Error::invalid("Cannot set properties of undefined (setting 'quotas')"));
-            }
-            let mut quotas = match account.get("quotas") {
-                Value::Object(existing) => existing.clone(),
-                _ => Object::new(),
-            };
-            quotas.insert("objects", self.store.quota(None)?.to_value());
-            account.set("quotas", quotas);
-            self.reply(url, stringify(&account)?, 200, self.with_quota(json_headers())?)?
+            let account = obj! { "quotas" => obj! { "objects" => self.store.quota(None)?.to_value() } };
+            self.reply(url, stringify(&account.into())?, 200, self.with_quota(json_headers())?)?
         } else if get && path == "/news/unread" {
             self.reply(url, r#"{"count":0}"#, 200, json_headers())?
         } else if get && path == "/news" {

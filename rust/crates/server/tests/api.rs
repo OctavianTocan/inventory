@@ -331,7 +331,6 @@ async fn rust_phase(file: &Path, upload_dir: &Path, phase: &Value) -> Value {
         readonly: phase.get("readonly").truthy(),
         localize,
         push: Box::new(move |target, payload| sink.borrow_mut().push(json::to_string(&plain(&arr![target, payload.clone()])).into())),
-        has_replay: Box::new(|request| Ok(request.header("x-replay") == Some("1"))),
         random,
     })
     .await

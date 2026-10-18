@@ -1,19 +1,20 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { DatabaseSync, backup } from 'node:sqlite';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { serverCommand } from './server-command.mjs';
+import { serverCommand, toolCommand } from './server-command.mjs';
 
 export const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-/** Database seeded from the recordings that verification servers and checks read; never the working library. */
-export const VERIFY_DB = join(ROOT, 'data/verify.db');
+/** Synthetic verification database seeded by `mymind seed-db`; never the working library. */
+export const VERIFY_DB = join(ROOT, 'rust/target/stage-b/tmp/synthetic-verify.db');
 export const msgpack = await import(pathToFileURL(join(ROOT, 'mirror/static/134/0.109.0/scripts/vendor/msgpack.min.js')).href);
 
 /**
- * Localize recorded URL strings as the Rust replica does, preserving codec values.
- * @param {unknown} value Decoded recording, JSON string or plain response bytes as a string.
+ * Localize URL strings as the Rust server does, preserving codec values.
+ * @param {unknown} value Decoded value, JSON string or plain response bytes as a string.
  * @returns {unknown} Copy with remote origins replaced by local paths.
  */
 export function localize(value) {
@@ -30,12 +31,12 @@ export function localize(value) {
 }
 
 /**
- * Copy the seeded database with SQLite backup and start an isolated, offline replica.
+ * Copy the seeded database with SQLite backup and start an isolated, offline server.
  * Never binds port 4321; PORT=0 lets the OS allocate a free loopback port.
  * @param {object} [options] Test server configuration.
  * @param {boolean} [options.readonly=false] Start in verification mode.
- * @param {string} [options.source] Seeded database to copy; defaults to `$TEST_SOURCE_DB`, then data/verify.db.
- * @param {boolean} [options.noStore=false] Exercise the legacy path with a nonexistent database.
+ * @param {string} [options.source] Seeded database to copy; defaults to `$TEST_SOURCE_DB`, then synthetic VERIFY_DB.
+ * @param {boolean} [options.noStore=false] Exercise the path with a nonexistent database.
  * @param {Record<string,string>} [options.env={}] Extra server environment (spawned servers only).
  * @returns {Promise<object>} Base URL, database path, temporary directory, request helpers and async cleanup.
  */
@@ -43,6 +44,11 @@ export async function testServer({ readonly = false, source = process.env.TEST_S
   if (process.argv.includes('--in-process')) throw new Error('--in-process is unavailable for Rust. Use: cd rust && cargo test --offline -p mymind --test check_writes -- --test-threads=2');
   const temporary = join(ROOT, 'rust/target/stage-b/tmp');
   await mkdir(temporary, { recursive: true });
+  if (source === VERIFY_DB && !existsSync(VERIFY_DB)) {
+    const seed = toolCommand('seed-db', ['--db', VERIFY_DB]);
+    const seeded = spawnSync(seed.command, seed.args, { cwd: ROOT, encoding: 'utf8' });
+    if (seeded.status !== 0) throw new Error(`seed-db failed: ${seeded.stderr || seeded.stdout}`);
+  }
   const dir = await mkdtemp(join(temporary, 'mymind-http-'));
   const dbPath = join(dir, 'test.db');
   let child;
@@ -51,9 +57,20 @@ export async function testServer({ readonly = false, source = process.env.TEST_S
     const db = new DatabaseSync(source, { readOnly: true });
     try { await backup(db, dbPath); } finally { db.close(); }
     const serverDb = noStore ? join(dir, 'missing.db') : dbPath;
+    const defaultMedia = source === VERIFY_DB ? join(temporary, 'media') : undefined;
     const { command, args } = serverCommand();
     child = spawn(command, args, { cwd: ROOT,
-        env: { ...process.env, PORT: '0', OFFLINE: '1', STORE_DB: serverDb, STORE_READONLY: readonly ? '1' : '0', STORE_LOAD_ENV: '0', MYMIND_ENV_FILE: join(dir, 'absent-env'), ...env },
+        env: {
+          ...process.env,
+          PORT: '0',
+          OFFLINE: '1',
+          STORE_DB: serverDb,
+          STORE_READONLY: readonly ? '1' : '0',
+          STORE_LOAD_ENV: '0',
+          MYMIND_ENV_FILE: join(dir, 'absent-env'),
+          ...(defaultMedia ? { STORE_MEDIA: defaultMedia } : {}),
+          ...env,
+        },
         stdio: ['ignore', 'pipe', 'pipe'] });
     child.stderr.on('data', chunk => { startupError += chunk; });
     const base = await new Promise((resolveReady, reject) => {

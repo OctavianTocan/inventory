@@ -1,13 +1,12 @@
-// Prepares the recordings for committing: moves replay bodies that no recording references into replay/unreferenced/
-// (gitignored), so Git only carries what a clone uses, and snapshots data/mymind.db (and data/media) into library/
-// as a local backup that stays out of Git. Usage: npm run bundle, then commit capture/, mirror/ and replay/.
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+// Snapshots data/mymind.db and data/media into library/ as a local backup that stays out of Git.
+// Usage: npm run bundle.
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 
 if (process.argv.includes('--help')) {
-  console.log('Usage: npm run bundle\nSnapshots the local library and moves unreferenced replay bodies into the local backup directory.');
+  console.log('Usage: npm run bundle\nSnapshots the local library database and media into the local backup directory.');
   process.exit(0);
 }
 
@@ -24,14 +23,4 @@ new DatabaseSync(source, { readOnly: true }).exec(`VACUUM INTO '${target.replace
 rmSync(path.join(bundle, 'media'), { recursive: true, force: true });
 if (existsSync(path.join(ROOT, 'data', 'media'))) cpSync(path.join(ROOT, 'data', 'media'), path.join(bundle, 'media'), { recursive: true });
 
-const bodies = path.join(ROOT, 'replay', 'bodies');
-const unreferenced = path.join(ROOT, 'replay', 'unreferenced');
-const used = new Set(Object.values(JSON.parse(readFileSync(path.join(ROOT, 'replay', 'index.json'), 'utf8'))).map(entry => entry.file));
-let moved = 0;
-for (const file of existsSync(bodies) ? readdirSync(bodies) : []) {
-  if (used.has(file)) continue;
-  mkdirSync(unreferenced, { recursive: true });
-  renameSync(path.join(bodies, file), path.join(unreferenced, file));
-  moved++;
-}
-console.log(`library/mymind.db written; ${moved} unreferenced replay bodies moved to replay/unreferenced/ (safe to delete).`);
+console.log('library/mymind.db written.');

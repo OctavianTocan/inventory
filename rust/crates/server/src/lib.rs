@@ -11,8 +11,6 @@ pub mod http;
 pub mod local_media;
 pub mod media_processor;
 pub mod node_path;
-pub mod read_metadata;
-pub mod replica;
 pub mod runtime;
 pub mod screenshot;
 pub mod serve;

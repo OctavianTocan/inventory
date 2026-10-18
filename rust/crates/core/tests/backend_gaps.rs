@@ -124,7 +124,6 @@ fn setup() -> (Rc<Store>, Api) {
         readonly: false,
         localize: str::to_owned,
         push: Box::new(|_, _| {}),
-        has_replay: Box::new(|_| Ok(false)),
         random: runtime::random_bytes,
     }))
     .unwrap();
@@ -335,7 +334,6 @@ fn markdown_image_empty_and_readonly_exports() {
         readonly: true,
         localize: str::to_owned,
         push: Box::new(|_, _| {}),
-        has_replay: Box::new(|_| Ok(false)),
         random: runtime::random_bytes,
     }))
     .unwrap();
@@ -433,7 +431,6 @@ fn detail_reader_and_pinned_card_render_from_database_for_old_and_new_cards() {
         readonly: false,
         localize: str::to_owned,
         push: Box::new(|_, _| {}),
-        has_replay: Box::new(|_| Ok(true)),
         random: runtime::random_bytes,
     }))
     .unwrap();
@@ -571,7 +568,6 @@ fn remaining_routes_and_readonly_search_come_from_database_and_code() {
         readonly: true,
         localize: str::to_owned,
         push: Box::new(|_, _| {}),
-        has_replay: Box::new(|_| Ok(true)),
         random: runtime::random_bytes,
     }))
     .unwrap();

@@ -5,15 +5,14 @@ use std::rc::Rc;
 use std::sync::LazyLock;
 
 use async_trait::async_trait;
-use mm_js::{Value, text, uri};
+use mm_js::{text, uri};
 use regex::Regex;
 
 use crate::api::{Api, ApiOptions, Push};
 use crate::host::{Bucket, Fetch, MediaProcessor, Resource, Screenshot};
 use crate::hosted_media::{BucketUploads, HostedMedia};
 use crate::http::{Body, Headers, Request, Response};
-use crate::recorded::Recorded;
-use crate::site::{LOCAL_PREFIXES, LibraryApi, Site, content_type, is_text_extension, localize, replay_key_for, send_range};
+use crate::site::{LOCAL_PREFIXES, LibraryApi, Site, content_type, is_text_extension, localize};
 use crate::sql::Sql;
 use crate::store::Store;
 use crate::{Error, Result, runtime};
@@ -50,7 +49,6 @@ pub struct HostedOptions {
 /// One library's server (`createHosted`'s result): the library API first, then its recordings and stored files.
 pub struct Hosted {
     api: Rc<Api>,
-    recorded: Rc<Recorded>,
     bucket: Rc<dyn Bucket>,
     offline: bool,
     upstream: Rc<dyn Fetch>,
@@ -66,21 +64,6 @@ fn extension(key: &str) -> String {
 
 fn text_type(key: &str) -> &'static str {
     content_type(&extension(key)).unwrap_or("application/octet-stream")
-}
-
-// A JS value as `String(value)` writes it into a header.
-fn header_text(value: &Value) -> String {
-    match value {
-        Value::Object(_) => "[object Object]".to_owned(),
-        other => other.to_js_string(),
-    }
-}
-
-fn recorded_headers(headers: &Value) -> Headers {
-    match headers {
-        Value::Object(headers) => Headers::from_pairs(headers.iter().map(|(name, value)| (name.into_owned(), header_text(value)))),
-        _ => Headers::new(),
-    }
 }
 
 // A decoded object key below `folder`, or `None` for a path that climbs out of it.
@@ -106,8 +89,6 @@ impl Hosted {
             return Err(Error::internal("Error: Library names are lower-case letters, digits and dashes"));
         }
         let prefix = format!("libraries/{}/", options.library);
-        let recorded = Rc::new(Recorded::new(Rc::clone(&options.db))?);
-        let replays = Rc::clone(&recorded);
         let api = Api::new(ApiOptions {
             store: Rc::new(Store::new(options.db)?),
             media: Rc::new(HostedMedia::new(Rc::clone(&options.bucket), &prefix, options.processor)),
@@ -118,11 +99,10 @@ impl Hosted {
             readonly: options.readonly,
             localize,
             push: options.push,
-            has_replay: Box::new(move |request| replays.has(request, &replay_key_for(&request.method, &request.headers, &request.url))),
             random: options.random,
         })
         .await?;
-        Ok(Self { api: Rc::new(api), recorded, bucket: options.bucket, offline: options.offline, upstream: options.fetch })
+        Ok(Self { api: Rc::new(api), bucket: options.bucket, offline: options.offline, upstream: options.fetch })
     }
 
     /// The library API, whose `shell` builds page shells.
@@ -166,11 +146,6 @@ impl Hosted {
         let url = request.url.clone();
         let pathname = request.pathname().to_owned();
         let search = mm_js::url::search(&url);
-        let local = LOCAL_PREFIXES.iter().any(|(prefix, _)| pathname.starts_with(prefix)) || pathname.starts_with("/media/");
-        let entry = if local { None } else { self.recorded.entry(request, &replay_key_for(&request.method, &request.headers, &url))? };
-        if let Some(entry) = entry {
-            return Ok(send_range(&request.headers, entry.status as u16, entry.body, &recorded_headers(&entry.headers)));
-        }
         if let Some(relative) = pathname.strip_prefix("/_static/") {
             return self.serve_static(relative, &search).await;
         }

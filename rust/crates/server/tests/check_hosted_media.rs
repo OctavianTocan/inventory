@@ -10,7 +10,7 @@ use std::rc::Rc;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use media_check_support::{
-    Denied, Fixture, ask_hosted, body, collect, hosted, library, png, request, status,
+    Denied, Fixture, ask_hosted, body, collect, hosted, library, png, status,
 };
 use mm_core::host::{
     AnalysisImage, Bucket, ByteSpan, MediaInput, MediaProcessor, MediaUser, ObjectInfo,
@@ -19,8 +19,7 @@ use mm_core::host::{
 use mm_core::hosted::{Hosted, HostedOptions};
 use mm_core::hosted_media::{BucketUploads, HostedMedia};
 use mm_core::http::{Body, Headers};
-use mm_core::recorded::Recorded;
-use mm_core::sql::Sql;
+use mm_core::sql::{Sql, SqlExt};
 use mm_core::uploads::{UploadOptions, UploadRequest, Uploads};
 use mm_core::{Result, Value, obj};
 use mymind::bucket_fs::DirectoryBucket;
@@ -529,65 +528,6 @@ async fn bucket_uploads(fixture: &Fixture) {
     );
 }
 
-// Recordings keep the first copy and resolve device before verification-run variants.
-fn recordings(fixture: &Fixture) {
-    let (db, _) = library(&fixture.root.join("recorded.db"));
-    let recorded = Recorded::new(db).unwrap();
-    let key = "GET https://access.mymind.com/thing";
-    recorded
-        .put(
-            key,
-            200,
-            &obj! { "content-type" => "text/plain" }.into(),
-            b"plain",
-        )
-        .unwrap();
-    recorded.put(key, 200, &obj! {}.into(), b"second").unwrap();
-    recorded
-        .put(&format!("iphone|{key}"), 200, &obj! {}.into(), b"phone")
-        .unwrap();
-    recorded
-        .put(
-            &format!("run:r1|iphone|{key}"),
-            200,
-            &obj! {}.into(),
-            b"phone run",
-        )
-        .unwrap();
-    recorded
-        .put(&format!("run:r1|{key}"), 200, &obj! {}.into(), b"run")
-        .unwrap();
-    for (headers, expected) in [
-        (vec![], "plain"),
-        (vec![("user-agent", IPHONE)], "phone"),
-        (
-            vec![("user-agent", IPHONE), ("x-replay-run", "r1")],
-            "phone run",
-        ),
-        (vec![("x-replay-run", "r1")], "run"),
-        (vec![("x-replay-run", "r2")], "plain"),
-    ] {
-        assert_eq!(
-            recorded
-                .entry(&request("GET", "/thing", Body::Empty, &headers), key)
-                .unwrap()
-                .unwrap()
-                .body,
-            expected.as_bytes()
-        );
-    }
-    assert!(
-        recorded
-            .entry(
-                &request("GET", "/other", Body::Empty, &[]),
-                "GET https://access.mymind.com/other"
-            )
-            .unwrap()
-            .is_none()
-    );
-    assert_eq!(recorded.count().unwrap(), 4);
-}
-
 // Missing capture prefixes are unrepresentable: Hosted derives its private capture field from a required valid library.
 async fn capture_prefix_is_required_by_construction(fixture: &Fixture) {
     let bucket = Rc::new(DirectoryBucket::new(fixture.directory("bucket-prefix")));
@@ -629,32 +569,11 @@ async fn site_fallbacks(fixture: &Fixture) {
         &[r#"{"onboardFlags":128}"#.into()],
     )
     .unwrap();
-    let recorded = Recorded::new(db.clone()).unwrap();
-    recorded
-        .put(
-            "GET https://access.mymind.com/news/unread",
-            200,
-            &obj! { "content-type" => "application/json" }.into(),
-            b"[1]",
-        )
-        .unwrap();
-    // Recorded DOC or shell entries are ignored: page loads always render our shell template.
-    recorded
-        .put(
-            "DOC https://access.mymind.com/everything",
-            200,
-            &obj! { "content-type" => "text/html" }.into(),
-            b"<p>stale recorded everything</p>",
-        )
-        .unwrap();
-    recorded
-        .put(
-            "shell",
-            200,
-            &obj! { "content-type" => "text/html" }.into(),
-            b"<p>stale recorded shell</p>",
-        )
-        .unwrap();
+    db.exec_batch(
+        "CREATE TABLE IF NOT EXISTS recorded (key TEXT PRIMARY KEY, status INTEGER NOT NULL, headers TEXT NOT NULL, body BLOB NOT NULL);
+         CREATE TABLE IF NOT EXISTS api_metadata (path TEXT PRIMARY KEY, status INTEGER NOT NULL, headers TEXT NOT NULL, attributes TEXT NOT NULL);",
+    )
+    .unwrap();
     bucket
         .write(
             "static/app.js",
@@ -681,7 +600,15 @@ async fn site_fallbacks(fixture: &Fixture) {
             .await
             .unwrap();
     }
-    let site = hosted(db, bucket, &fixture.root, "one").await;
+    let site = hosted(db.clone(), bucket, &fixture.root, "one").await;
+    assert!(
+        db.one(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name IN ('recorded', 'api_metadata')",
+            &[],
+        )
+        .unwrap()
+        .is_none()
+    );
     assert_eq!(
         ask_hosted(&site, "GET", "/news/unread", Body::Empty, &[])
             .await
@@ -1026,7 +953,6 @@ fn check_hosted_media() {
         renditions(&fixture).await;
         previews(&fixture).await;
         bucket_uploads(&fixture).await;
-        recordings(&fixture);
         capture_prefix_is_required_by_construction(&fixture).await;
         site_fallbacks(&fixture).await;
         hosted_uploads_and_attachments(&fixture).await;
