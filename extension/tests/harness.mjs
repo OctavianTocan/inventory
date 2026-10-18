@@ -37,11 +37,11 @@ export function ensureScratch() {
  * Copies the extension to the scratch folder with the loopback hosts granted in the manifest.
  * Optional host permissions need a user prompt that a headless browser cannot answer; the shipped manifest keeps them optional.
  * @returns {string} The folder to load as the unpacked extension.
- * @throws {Error} When the copied mymind assets are missing.
+ * @throws {Error} When the extension vendor script is missing.
  */
 export function prepareExtension() {
-  if (!existsSync(join(extensionDir, 'mymind', 'vendor', 'tiptap.min.js'))) {
-    throw new Error('run `node extension/tools/copy-mymind-assets.mjs` first');
+  if (!existsSync(join(extensionDir, 'vendor', 'tiptap.min.js'))) {
+    throw new Error('extension vendor script is missing');
   }
   const target = join(scratch, 'ext-under-test');
   rmSync(target, { recursive: true, force: true });

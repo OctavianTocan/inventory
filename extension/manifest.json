@@ -5,15 +5,15 @@
   "version": "1.0.0",
   "description": "Save pages, images, selections and notes to your replica of mymind.",
   "icons": {
-    "16": "mymind/images/icon_16.png",
-    "48": "mymind/images/icon_48.png",
-    "128": "mymind/images/icon_128.png",
-    "256": "mymind/images/icon_256.png"
+      "16": "icons/icon_16.png",
+      "32": "icons/icon_32.png",
+      "48": "icons/icon_48.png",
+      "128": "icons/icon_128.png"
   },
   "action": {
     "default_title": "Save to my mind",
     "default_icon": {
-      "256": "mymind/images/icon_256.png"
+        "128": "icons/icon_128.png"
     }
   },
   "background": {
@@ -59,12 +59,11 @@
       "resources": [
         "drawer.html",
         "components/notification.css",
-        "mymind/icons/logo.svg",
-        "mymind/icons/loading-start.gif",
-        "mymind/icons/loading-finish.gif",
-        "mymind/images/full-mind-bg.png",
-        "mymind/images/become-a-mastermind.svg",
-        "mymind/fonts/nunito.woff2"
+        "icons/logo.svg",
+        "icons/loading-start.svg",
+        "icons/loading-finish.svg",
+        "fonts/nunito.woff2",
+        "fonts/instrument-serif.woff2"
       ]
     }
   ]

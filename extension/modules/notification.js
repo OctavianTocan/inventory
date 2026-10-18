@@ -35,13 +35,13 @@ export class Notification {
 
   /**
    * Shows or replaces the toast.
-   * @param {{message: string | (string | {br: true} | {link: string})[], status?: string, icon?: string, redirect?: string, drawer?: boolean}} props - Toast content; `icon` names a file in `mymind/icons/`, `drawer` adds the tag and note frame.
+ * @param {{message: string | (string | {br: true} | {link: string})[], status?: string, icon?: string, redirect?: string, drawer?: boolean}} props - Toast content; `icon` names a file in `icons/`, `drawer` adds the tag and note frame.
    * @returns {Promise<void>} Resolves once the page has been told.
    */
   async update(props) {
     Notification.count += 1;
     await Notification.rememberRedirect(this.tab, props.redirect);
-    Object.assign(props, { id: Notification.count, icon: chrome.runtime.getURL(`mymind/icons/${props.icon ?? 'logo.svg'}`) });
+    Object.assign(props, { id: Notification.count, icon: chrome.runtime.getURL(`icons/${props.icon ?? 'logo.svg'}`) });
     await this.initialize();
     try {
       await chrome.scripting.executeScript({
