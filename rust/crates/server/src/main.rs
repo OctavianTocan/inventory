@@ -211,6 +211,12 @@ async fn container() -> Result<(), String> {
     Ok(())
 }
 
+const USAGE: &str = "Usage: mymind [serve | download-server | container | capture-fixtures | seed-db | import-hosted | auth-user | upload-hosted | embed-library | try-ai | search-recordings] [options]
+  serve            the replica (default; PORT, AUTH, STORE_DB, OFFLINE and others from the environment and .env)
+  download-server  signed-in downloads (DOWNLOAD_PORT, DOWNLOAD_DIR, AUTH_DB)
+  container        the media container (PORT)
+The other commands take --help.";
+
 fn main() -> ExitCode {
     let root = std::env::var_os("MYMIND_ROOT").map(PathBuf::from).or_else(|| std::env::current_dir().ok()).unwrap_or_else(|| PathBuf::from("."));
     let arguments: Vec<String> = std::env::args().skip(2).collect();
@@ -223,6 +229,14 @@ fn main() -> ExitCode {
         Some("embed-library") => return ExitCode::from(mymind::runtime::run(mymind::tool_embed_library::run(&root, &arguments))),
         Some("try-ai") => return ExitCode::from(mymind::runtime::run(mymind::tool_try_ai::run(&root, &arguments))),
         Some("search-recordings") => return ExitCode::from(mymind::runtime::run(mymind::tool_search_recordings::run(&root, &arguments))),
+        None | Some("serve" | "download-server" | "container") if arguments.iter().any(|a| a == "--help" || a == "-h") => {
+            println!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
+        Some("--help" | "-h" | "help") => {
+            println!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
         None | Some("serve") => mymind::runtime::run(start(root)),
         Some("download-server") => mymind::runtime::run(download_server(root)),
         Some("container") => mymind::runtime::run(container()),
