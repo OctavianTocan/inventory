@@ -71,7 +71,7 @@ export async function runFlows({ label, extension, outDir, setup }) {
     const send = async (message) => control.evaluate((payload) => chrome.runtime.sendMessage(payload), message);
     const api = async (path) => (await fetch(replica.origin + path, { headers: { Authorization: `Bearer ${session}`, Accept: 'application/json' } })).json();
 
-    const ui = label === 'ref' ? page : page.frameLocator('iframe.mymind-drawer-frame');
+    const ui = page.frameLocator('iframe.mymind-drawer-frame');
     const savePageRequest = send({ action: 'savePageOfTab', tabId: await tabId() });
     await toast(page);
     await page.waitForTimeout(150);
@@ -187,8 +187,8 @@ export async function runFlows({ label, extension, outDir, setup }) {
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
-  const [label, source, hostSetup] = process.argv.slice(2);
-  const extension = label === 'ref' ? source : prepareExtension();
+  const [label, hostSetup] = process.argv.slice(2);
+  const extension = prepareExtension();
   const out = join(repo, 'evidence', 'extension', 'shots');
   const setup = hostSetup === 'host'
     ? async (worker, origin) => {

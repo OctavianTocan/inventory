@@ -6,8 +6,8 @@ directly). `README.md` explains how to run and verify the replica; `docs/` holds
 ## What this is
 
 A localhost replica of mymind (`access.mymind.com`). The Rust binary (`mymind serve`, `rust/`) serves mymind's own
-front-end (`mirror/`) and answers its API from recordings of the user's library (`replay/`, `capture/`). Parity with
-live mymind is proven screenshot by screenshot with REA (`npm run verify`, `npm run coverage`).
+front-end (`mirror/`) and answers its API from recordings of the user's library (`replay/`, `capture/`).
+It is becoming its own product: nothing checks it against mymind any more.
 
 ## Hard rules
 
@@ -43,26 +43,11 @@ live mymind is proven screenshot by screenshot with REA (`npm run verify`, `npm 
 
 ## Long-running processes
 
-Verification is slow: a desktop `ui` suite takes 40–60 min, a phone `ui` suite about 25 min, a `cards` suite
-15–20 min, the full matrix 1.5–2.5 h. Spend that time only where it proves something.
+Before starting anything over 5 minutes, say how long it will take, run it in the background and wait for the
+completion notification instead of polling. Start runs over 30 minutes with `systemd-run --user --unit <name>` so they
+outlive the agent session (a session restart killed one), and wait on the unit.
 
-1. Run the narrowest check that proves the change: a patch suite `--suite <suite>@<part>` or a debug suite
-   (`smoke`, `core`) for the one profile you are fixing. Add a patch suite in `tools/suites.mjs` if none fits.
-2. Re-run a whole suite only when the change can affect all of it (the Rust sources that serve requests,
-   `tools/side.mjs`, `tools/page-determinism.js`, verifier flags). Run the full matrix once, at the end, before
-   claiming parity.
-3. `npm run coverage` lists exactly which runs are stale (`verifier-result-incompatible`); re-run only those.
-4. Before starting anything over 5 minutes, say how long it will take, run it in the background and wait for the
-   completion notification instead of polling. Start runs over 30 minutes with `systemd-run --user --unit <name>` so
-   they outlive the agent session (a session restart killed one), and wait on the unit. At most 2 drive runs in
-   parallel (3 got the agent Chromium OOM-killed); check `free -g` first.
-5. Delete `evidence/drive/claims/` before a fresh matrix, or every run is skipped as already claimed.
-6. Never edit replica code (`rust/crates/{js,msgpack,core,sqlite,server,worker}/src/`, their `Cargo.toml`, build
-   and config files, `tools/replay-store.mjs`) while drive runs are going. Coverage hashes those files when it
-   reports, so every run that finished before the edit becomes `verifier-result-incompatible` and has to be re-run.
-
-Claude Code sandbox notes: `drive`/`verify` need the agent Chromium on CDP `:9222`, which the Bash sandbox cannot
-reach, and `git` cannot read `~/.gitconfig` inside it; run both unsandboxed. Never `pkill -f` a pattern that also
+Claude Code sandbox notes: `git` cannot read `~/.gitconfig` inside the sandbox; run it unsandboxed. Never `pkill -f` a pattern that also
 matches your own shell command.
 
 ## Delegation

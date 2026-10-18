@@ -56,7 +56,7 @@ The 2026-10-15 APK save in `evidence/live-saves/2026-10-15-apk-link.jsonl` suppl
 templates: the fetched WebPage has flags 2097153; after AI reports no resource text and the screenshot fails,
 flags become 6291457 and the screenshot spinner remains. The hub uses the recorded event shapes and order.
 These stages are compared byte for byte by Rust `check_render` and exercised offline by `check_capture`; success,
-early-failure and text-bearing screenshot-failure paths retain their previous behavior without claiming live parity.
+early-failure and text-bearing screenshot-failure paths retain their previous behavior.
 
 Uploads use `POST /uploads/authorize`, bearer-authorized chunked `PUT /uploads/:id`, then `POST /objects` with
 `{type:"Media",uploadId}`. PNG/JPEG/WebP and other decoded raster images, videos and PDFs become local cards.
@@ -98,7 +98,7 @@ In a worktree with shared read-only `data/`, always select a temporary database;
 
 Install dependencies with `npm ci` (see [Run it](#run-it)). PDF/video previews require host `pdftoppm` (Poppler), `ffmpeg` and `ffprobe`.
 Page screenshots use `VERIFIER_CHROMIUM`, default `/usr/lib/chromium/chromium`, without touching the verifier's
-running browser. New screenshot output still needs host/browser verification before making a parity claim.
+running browser.
 Permanent delete and empty trash have no captured client calls, so only trash and restore are implemented.
 
 Run the local data and HTTP checks with the Rust binary built first:
@@ -112,8 +112,8 @@ node tools/check-download.mjs
 (cd rust && nice -n 19 cargo test --offline -j 2 -p mymind --test check_writes --test check_search --test check_media -- --test-threads=2)
 ```
 
-The HTTP checks copy the verification database (`data/verify.db`, see [Verify against
-live](#verify-against-live-11)) into temporary files and start isolated Rust servers on OS-assigned loopback
+The HTTP checks copy the test database (`data/verify.db`, seeded from the recordings with
+`mymind seed-db --db data/verify.db`) into temporary files and start isolated Rust servers on OS-assigned loopback
 ports. They never use port 4321. The HTTP harness requires loopback sockets; `--in-process` now reports the
 corresponding Rust test command. `check-auth` runs a stand-in Google with synthetic keys, token endpoint and
 JWKS; `check-download` uses scratch sign-in data. Neither contacts Google or loads the user's `.env`.
@@ -124,9 +124,7 @@ HTTP and hosted-provider stubs, generated media and isolated databases. The brow
 Chromium and tests local TCP/UDP sinks with an unguarded positive control. It needs Unix socket IPC as well as
 loopback TCP/UDP; an IPC-restricted sandbox fails the control rather than skipping it. Native media checks use
 real filesystem/media processing with stubbed media executables. Capture and browser assertions run entirely in Rust after the native Chromium gates passed. The capture fixture CLI is
-`mymind capture-fixtures`; the JS in-process fixture exports are retired. `sharp` remains a developer dependency
-for `extension/tests/diff.mjs`, which compares extension screenshots. Retirement dispositions are
-recorded in `evidence/r13/stage-b-report.md`. Browser/REA verification remains a separate host operation.
+`mymind capture-fixtures`.
 
 ## Sign-in (remote access)
 
@@ -332,7 +330,7 @@ The server reads `.env` in the checkout, so AI features work in the app when the
   an empty `dataTransfer.files` ([WebKit bug 323277](https://bugs.webkit.org/show_bug.cgi?id=323277)), so on Linux
   the app reads dropped files itself and hands them to the page as a `drop` event (`src/file_drop.rs`).
 - The app does not define `mymind.native`. mymind's Mac and phone apps use that bridge to hand card views, sheets
-  and menus to native code; without it the page runs as the browser UI that the REA runs verify.
+  and menus to native code; without it the page runs as the browser UI.
 
 ### Troubleshooting
 
@@ -360,77 +358,6 @@ Every pass only sends GETs. A full pass replaces the card list and shell, and ad
 readers and media instead of replacing them. `--details-only` reads the card list from `data/mymind.db` (`--db`
 picks another).
 
-## Verify against live, 1:1
-
-```bash
-OFFLINE=1 STORE_READONLY=1 STORE_DB=data/verify.db npm run serve   # replica on :4321, as verification requires
-npm run drive -- --profile desktop-light --suite ui     # one profile x suite: live, then replica, then REA diffs
-npm run verify                             # every profile (desktop light/dark, iPhone, Android) x suite (ui, cards)
-npm run verify -- --reseed                 # after the live library changed: all live passes, reseed, then replica passes
-npm run verify -- --replica-only           # after a code change: replica passes against the recorded live passes
-npm run coverage                           # REA's fail-closed verdict over all runs: ready / partial / failed
-```
-
-Verification never touches your working library: its server reads `data/verify.db`, a database seeded from the
-recordings that `tools/verify-all.mjs` creates on first use. `--reseed` needs no server running on `:4321`: it
-starts one, reseeds `data/verify.db` from the fresh recordings and restarts the server before the first replica
-pass.
-
-Needs the agent Chromium on CDP `:9222` signed in to mymind; only its two mymind session cookies and the page's
-localStorage are read, in memory, to sign in the verifier.
-
-Every verification server must use `STORE_DB=data/verify.db`, `STORE_READONLY=1`, because live writes are
-intercepted and sent to the replica as well, and `OFFLINE=1`, because `npm run coverage` only accepts runs that
-prove the replica renders without mymind's servers. `tools/verify-all.mjs` sets all three when starting a server. If a server is already running, restart it yourself in
-that mode before verifying; the verifier does not change the environment of an existing process.
-
-The Rust backend (`rust/`) builds with `rust/fetch-libvips.sh` once (it downloads the libvips build sharp ships), then
-`cargo build --release` in `rust/`. It is verified the same way: set `MYMIND_SERVER=rust/target/release/mymind` and
-every tool that starts a server (`drive`, `verify`, the HTTP checks, `check-download`) selects that Rust binary.
-By default all tools select `rust/target/release/mymind`, and `npm run coverage` judges the runs against the Rust sources. An already running listener must match the selected Rust executable; hosted modes also validate the
-proxy and backend digests.
-
-How a run makes live and replica comparable pixel for pixel (`tools/drive.mjs`, `tools/side.mjs`,
-`tools/page-determinism.js`, `tools/verifier-browser.mjs`):
-
-- **A deterministic browser.** A separate Chromium rendering offscreen (no windows, same user agent as the agent
-  browser) with software raster, no partial re-raster, no deferred image decode, main-thread animations, CPU WebGL
-  and no smooth input scrolling. The same page renders the same pixels on every run.
-- **Virtual time.** Both sides run on a paused fake clock (`Date`, timers, `requestAnimationFrame`, `performance`)
-  that only the driver advances. CSS animations, transitions and `element.animate()` are frozen the moment they
-  exist and stepped by the same amount; media holds its first frame. `performance.now()` and animation-frame
-  timestamps are rebased on the fake `Date` (Playwright's own versions keep counting real time). The browser's
-  smooth scrolling is made instant on both sides, since its scroll events land on whatever real frame comes next.
-- **Network in lockstep.** Every response is held and released at the same virtual instant on both sides, and time
-  does not move while a fetch, stream read, IndexedDB transaction, worker reply or history navigation is pending.
-  A slow live server and a fast localhost therefore reach each moment in the same state.
-- **Randomness.** `Math.random` and `crypto.randomUUID` get one seeded stream per calling line, so call order
-  across async work cannot shift values.
-- **Same data.** The live pass records every response into `replay/` (per device class, since mymind renders
-  different HTML for phones, and per run, since some responses are random, e.g. the serendipity deck); the replica
-  pass asks for exactly those.
-- **Media and other processes.** Videos never play (poster or first frame on both sides), and each screenshot is
-  retaken until two in a row agree, which lets out-of-process renderers (the PDF viewer, embeds) finish. Failed
-  loads (Chrome aborts in-flight requests whenever a network interface changes) are retried through the browser.
-- **Third-party players are masked.** YouTube, Vimeo, Spotify and similar iframes are painted grey on both sides:
-  their owners decide per embedding site what to show (a video can refuse to embed on `access.mymind.com` and show
-  "unavailable" on `localhost`), so their content is not the replica's to match. Their size and position still are.
-- **No writes reach your account.** On live, every non-GET request is answered by the replica server instead of
-  mymind (the same answer the replica gives itself). Report: `writesAnsweredLocally` in each `report.json`.
-- **Same input.** The pointer rests on a neutral spot, hover tests move it to identical coordinates, and virtual time
-  only moves after the real frame that delivers each input, scroll event and observer callback.
-
-Each run writes `evidence/drive/<profile>-<suite>/{live,replica}/*.png`, `diffs/`, `report.json` (REA verdict per
-screenshot) and `rea-evidence.json` (the REA diff Evidence records `tools/coverage.mjs` builds its verdict from).
-
-To re-verify only part of a run, use a patch suite named `<suite>@<part>` (e.g. `--suite ui@serendipity`, or
-`--suite cards@media` on phones); its screenshots replace the same-named ones of `<profile>-<suite>` in the coverage
-verdict. If `evidence/drive/claims/` exists, each run is done once across parallel `npm run verify` processes, and a
-claim file written by hand skips a run that is already verified; delete the folder afterwards.
-Suites (`tools/suites.mjs`) cover every route, card type, hover state of every element mymind styles on hover,
-frame-by-frame films of each transition, drag, color scheme, density, focus mode, news, shortcuts, search and
-serendipity, plus touch flows (swipe, pull to refresh) on phones.
-
 ## How it was reverse engineered
 
 1. Find the page: `rea list-browser-targets http://127.0.0.1:9222`.
@@ -440,8 +367,6 @@ serendipity, plus touch flows (swipe, pull to refresh) on phones.
    `rea export-web-scripts evidence/page-capture.json evidence/scripts` then
    `rea analyze-javascript-application evidence/scripts`.
 4. Record the data the UI needs (`tools/capture.mjs`) and replay it (`mymind serve`).
-5. Prove the result: `npm run verify` (REA `compare-web-screenshots` on every state), then
-   `npm run coverage` (REA `evaluate-reconstruction-coverage`).
 
 Hopper and Ghidra are not involved. They read native machine code; this app ships readable JavaScript.
 
@@ -458,19 +383,14 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 
 - Recorded detail views cover every card that existed at the last `--details-only` pass. A card without one
   (e.g. saved on live mymind afterwards) gets a generated detail whose body is its grid card.
-- Generated details and rich prose nodes have route/data coverage, but still need browser and REA parity checks.
 - Uncaptured historical media retains its placeholder fallback: 6 of the 511 detail media failed to download, all
   reader images of one card ("Sub-agents are just wrong"); every grid video is present. Generated AI thumbnails
   remain later work.
-- The sign-in page is not part of the REA matrix, whose verifier is signed in. Compared signed out under a frozen
-  clock with its animated WebGL background hidden, it matches live at 390x844 (0 pixels differ, also for "account
-  not found") and at 1440x900 differs in 1,505 edge pixels by at most 3 levels, the same noise as live against
-  itself. The background runs mymind's own mirrored script, but its phase is not frozen.
-- New cards saved on live mymind reach the replica only through a re-capture and reseed (`npm run verify --
-  --reseed` for verification, `rust/target/release/mymind seed-db` for the working library, which replaces local edits).
+- New cards saved on live mymind reach the library only through a re-capture and
+  `rust/target/release/mymind seed-db`, which replaces local edits.
 - Local search approximates the live ranking engine; historical cards without vectors need an explicit hosted
   embedding backfill. Text-only backfill skips historical cards with no usable text; new visual analysis can
-  embed their image. Browser and screenshot parity have not been claimed for generated search results.
+  embed their image.
 
 ## Private data
 

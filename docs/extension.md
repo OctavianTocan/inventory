@@ -28,21 +28,17 @@ bytes.
 4. Sign in to that host in the same browser profile. The extension reads the `mm_session` cookie of the host with
    `chrome.cookies` and sends it as `Authorization: Bearer`.
 
-## Features and parity
-
-Parity was measured against a patched copy of the real 3.3.0 (host, cookie name and origin handling changed only),
-driven through the same flows in a scratch Chromium, 1280x800 at device scale 1. Screenshots: `evidence/extension/shots/`
-(`ours-N-*`, `ref-N-*`, `diff-N-*`); `extension/tests/diff.mjs` rebuilds the diffs.
+## Features
 
 | Feature | Status |
 |---|---|
-| Toolbar action and `Ctrl+Shift+S` save the page, then upload a screenshot | Matches (toast and card). Screenshot upload untested: headless runs have no user gesture, so `captureVisibleTab` is refused in both extensions |
-| Context menus: add page, link, image, video, selection; "Open my mind" | Matches for page, image, selection. Menus themselves are not driven (no native menu in headless) |
-| Omnibox keyword `mm` | Untested (no omnibox in headless); code mirrors the reference |
-| Toast: saving, saved, error, sign-in notice, upgrade (402) | Matches, pixel diff 0 except an animated gif frame (62 px in step 2) |
-| Tag drawer: add, remove, suggestions, recent tags (now in an extension-origin frame) | Matches, pixel diff 0 except 13 px of the gif in step 4 |
-| Note editor (tiptap), saved with `PUT /objects/:id/note` (same frame) | Matches, pixel diff 0; note text verified in the library |
-| Blob video error toast | Matches |
+| Toolbar action and `Ctrl+Shift+S` save the page, then upload a screenshot | Works (toast and card). Screenshot upload untested: headless runs have no user gesture, so `captureVisibleTab` is refused |
+| Context menus: add page, link, image, video, selection; "Open my mind" | Works for page, image, selection. Menus themselves are not driven (no native menu in headless) |
+| Omnibox keyword `mm` | Untested (no omnibox in headless) |
+| Toast: saving, saved, error, sign-in notice, upgrade (402) | Works |
+| Tag drawer: add, remove, suggestions, recent tags (now in an extension-origin frame) | Works |
+| Note editor (tiptap), saved with `PUT /objects/:id/note` (same frame) | Works |
+| Blob video error toast | Works |
 | Activation ping on install | Implemented; endpoint acknowledges |
 | Instagram integration | Not implemented (needs optional host permission and mymind's overlay; omitted on purpose) |
 
@@ -123,7 +119,6 @@ optional host permissions cannot be granted headless. Chromium needs to run outs
   clearing on a session change; a recording stub shows no traversal reaches the server.
 - `node extension/tests/e2e.mjs`: save page, tag add and remove, and the note in the library, with real writes from
   the extension to the replica (no Origin rule).
-- `node extension/tests/flows.mjs <label> <extensionDir> [host]` takes the comparison screenshots; `node
-  extension/tests/diff.mjs` diffs `ours-*` against `ref-*`. Only `flows.mjs ref` depends on `evidence/`: it loads the
-  patched reference 3.3.0 from `evidence/extension/reference-local/`.
+- `node extension/tests/flows.mjs <label> [host]` runs the save flows and screenshots each step into
+  `evidence/extension/shots/`.
 - `cd rust && cargo test -p mm-core -j 2 -- --test-threads=2` and `cargo clippy -p mm-core --all-targets -j 2`.
