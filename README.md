@@ -25,14 +25,12 @@ Set `STORE_DB=/path/to/library.db` to select another database. `STORE_READONLY=1
 acknowledging writes without persisting them or broadcasting write events.
 
 To build the initial database, run `rust/target/release/mymind seed-db`. Rebuilding replaces an existing database, including its
-local edits. The seed also imports response metadata and the recorded space-detail query-check times; card and
-space bodies are generated from the stored rows. Older phase 1 databases import that metadata on first startup.
+local edits. Card and space bodies are generated from the stored rows.
 
 Card and space writes use one transaction, regenerate affected card markup, append change-log entries and broadcast SignalR events
 to connected `/hub` clients after commit. Polling returns the latest change per object so a delete cannot be undone
 by an older queued update in the client. Drafts stay outside the main grid until committed. New or edited desktop
-cards have generated editable details and pinned previews; unchanged detail/template recordings retain their
-existing replay path. Shared cards have local URLs with a 24-hour expiry and revocation.
+cards have generated editable details and pinned previews. Shared cards have local URLs with a 24-hour expiry and revocation.
 
 URL saves return `201` immediately, then `captureLink` enriches the placeholder in the background. Capture reads
 OpenGraph, Twitter, JSON-LD and public oEmbed metadata, detects social posts, videos, repositories, apps, products,
