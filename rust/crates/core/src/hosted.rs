@@ -20,8 +20,6 @@ use crate::{Error, Result, runtime};
 
 static LIBRARY: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z0-9-]+$").expect("pattern"));
 static EXTENSION: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\.[^./;]*$").expect("pattern"));
-static DETAIL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^/cards/([^/]+)/detail$").expect("pattern"));
-static NOT_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[^A-Za-z0-9_.-]").expect("pattern"));
 
 /// What [`Hosted::new`] serves a library with (`options` of `createHosted`).
 pub struct HostedOptions {
@@ -175,13 +173,6 @@ impl Hosted {
         }
         if let Some(relative) = pathname.strip_prefix("/_static/") {
             return self.serve_static(relative, &search).await;
-        }
-        if request.method == "GET"
-            && let Some(found) = DETAIL.captures(&pathname)
-        {
-            let id = NOT_WORD.replace_all(&uri::decode_uri_component(&found[1])?, "").into_owned();
-            let body = format!(r#"<div style="padding:48px;max-width:720px;margin:auto"><p style="opacity:.6">Detail view not captured for {id}.</p></div>"#);
-            return Ok(send(200, body, &[("content-type", "text/html; charset=utf-8")]));
         }
         if request.method != "GET" {
             if pathname != "/jserrors" {

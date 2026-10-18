@@ -342,37 +342,6 @@ impl Replica {
         Ok(Response::send(entry_status(entry), localize(&String::from_utf8_lossy(&body)), &entry_headers(entry)))
     }
 
-    // A captured detail view, or the card's grid HTML with a note when none was captured (`serveDetail`).
-    async fn serve_detail(&self, id: &str) -> Result<Response> {
-        let mut name = String::new();
-        let mut in_run = false;
-        for character in id.chars() {
-            let allowed = character.is_ascii_alphanumeric() || character == '.' || character == '-';
-            if allowed {
-                name.push(character);
-            } else if !in_run {
-                name.push('_');
-            }
-            in_run = !allowed;
-        }
-        let file = file_inside(&self.capture.join("details"), &format!("{name}.html"))?;
-        if let Some(file) = file
-            && let Ok(bytes) = read_file(&file).await
-        {
-            let mut headers = Headers::from([("content-type", "text/html; charset=utf-8")]);
-            let magic = self.details.get(id).map_or(&Value::Undefined, |detail| detail.get("headers").get("x-magic"));
-            if magic.truthy() {
-                headers.set("x-magic", header_text(magic));
-            }
-            return Ok(Response::send(200, localize(&String::from_utf8_lossy(&bytes)), &headers));
-        }
-        let html = self.cards_by_id.get(id).map_or("", |&index| self.cards[index].html.as_str());
-        let body = format!(
-            "<div style=\"padding:48px;max-width:720px;margin:auto\">{html}<p style=\"opacity:.6\">Detail view not captured for {id}. Re-run capture with a higher --detail-cards.</p></div>"
-        );
-        Ok(send(200, body, &[("content-type", "text/html; charset=utf-8")]))
-    }
-
     // `POST /cards/grid`: the recorded cards a JSON list of ids names, in its order.
     async fn grid(&self, request: &mut Request) -> Result<Response> {
         let body = request.take_body().bytes().await.map_err(|error| js_failure(format!("Error: {error}")))?;
@@ -433,10 +402,6 @@ impl Replica {
             return self.grid(request).await;
         }
         let card = pathname.strip_prefix("/cards/").filter(|_| request.method == "GET");
-        if let Some(id) = card.and_then(|rest| rest.strip_suffix("/detail")).filter(|id| !id.is_empty() && !id.contains('/')) {
-            let id = mm_js::uri::decode_uri_component(id).map_err(|error| js_failure(format!("URIError: {error}")))?;
-            return self.serve_detail(&id).await;
-        }
         if let Some(id) = card.filter(|id| !id.is_empty() && !id.contains('/'))
             && let Some(&index) = self.cards_by_id.get(id)
             && !url.query_pairs().any(|(name, _)| name == "template")

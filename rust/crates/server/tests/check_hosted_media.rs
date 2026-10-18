@@ -847,11 +847,11 @@ async fn site_fallbacks(fixture: &Fixture) {
             .status,
         404
     );
-    assert!(
+    assert_eq!(
         ask_hosted(&site, "GET", "/cards/abc/detail", Body::Empty, &[])
             .await
-            .text()
-            .contains("Detail view not captured for abc.")
+            .status,
+        404
     );
     assert_eq!(
         ask_hosted(&site, "POST", "/unknown", body(obj! {}.into()), &[])

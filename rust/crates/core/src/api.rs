@@ -51,7 +51,7 @@ static ACHIEVEMENT: LazyLock<Regex> = LazyLock::new(|| route(r"^/achievements/([
 static SHARE_PAGE: LazyLock<Regex> = LazyLock::new(|| route(r"^/shares/([^/]+)$"));
 static QUERY_CHECK: LazyLock<Regex> = LazyLock::new(|| route(r"^/queries/([^/]+)/check$"));
 static RELATED: LazyLock<Regex> = LazyLock::new(|| route(r"^/embeddings/related/([^/]+)$"));
-static DETAIL: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)/detail$"));
+static DETAIL: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)/(?:detail|reader)$"));
 static MARKDOWN: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)/markdown$"));
 static CARD: LazyLock<Regex> = LazyLock::new(|| route(r"^/cards/([^/]+)$"));
 static SPACE: LazyLock<Regex> = LazyLock::new(|| route(r"^/spaces/([^/]+)$"));
@@ -854,10 +854,7 @@ impl Api {
             };
             self.reply(url, self.localize(&card_markdown(&parse(&row.data)?, &content)), 200, type_header("text/markdown; charset=utf-8"))?
         } else if get && let Some(m) = captures(&DETAIL, path) {
-            let Some(row) = self.store.card(&m[1], None)? else { return Ok(None) };
-            if !parse(&row.extras)?.get("local").truthy() && (self.has_replay)(request)? {
-                return Ok(None);
-            }
+            let row = self.require_card(&m[1])?;
             let share = match self.active_share(&row.id, true)? {
                 Some(share) => {
                     let id = share.text("id").unwrap_or("").to_owned();
@@ -873,10 +870,8 @@ impl Api {
             };
             let headers = Headers::from([("content-type", HTML_TYPE), ("x-partial", "CardDetail")]);
             self.reply(url, self.localize(&render_detail(&row, &share, &content)?), 200, headers)?
-        } else if !phone && get && search_param(url, "template").as_deref() == Some("PinnedCard") && let Some(m) = captures(&CARD, path) {
-            let Some(row) = self.store.card(&m[1], None)?.filter(|row| parse(&row.extras).is_ok_and(|extras| extras.get("local").truthy())) else {
-                return Ok(None);
-            };
+        } else if get && search_param(url, "template").as_deref() == Some("PinnedCard") && let Some(m) = captures(&CARD, path) {
+            let row = self.require_card(&m[1])?;
             self.reply(url, self.localize(&render_pinned(&row)), 200, Headers::from([("content-type", HTML_TYPE), ("x-partial", "PinnedCard")]))?
         } else if get && !url.query_pairs().any(|(name, _)| name == "template") && let Some(m) = captures(&CARD, path) {
             let row = self.require_card(&m[1])?;

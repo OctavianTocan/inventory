@@ -33,6 +33,22 @@ fn editor(id: &str, kind: &str, prose: &Value) -> Result<String> {
     ))
 }
 
+fn eager_media(html: &str) -> String {
+    MEDIA_TAG
+        .replace_all(html, |found: &regex::Captures| {
+            let mut tag = found[0].to_owned();
+            for attribute in ["src", "srcset"] {
+                let lazy = format!(" data-{attribute}=");
+                if tag.contains(&lazy) {
+                    let plain = Regex::new(&format!(r#" {attribute}="[^"]*""#)).expect("pattern");
+                    tag = plain.replace_all(&tag, "").replacen(&lazy, &format!(" {attribute}="), 1);
+                }
+            }
+            tag.replace(" class=\"lazy\"", "").replace(" class=\"lazy ", " class=\"").replace(" lazy\"", "\"")
+        })
+        .into_owned()
+}
+
 /// Render a draggable pinned preview from a card's grid markup (`renderPinned`).
 ///
 /// # Arguments
@@ -41,7 +57,8 @@ fn editor(id: &str, kind: &str, prose: &Value) -> Result<String> {
 /// # Returns
 /// The Top of Mind item.
 pub fn render_pinned(row: &CardRow) -> String {
-    let cover = COVER.replace(&row.html, r#"<div class="tom__item-cover $1">"#).into_owned();
+    let html = eager_media(&row.html);
+    let cover = COVER.replace(&html, r#"<div class="tom__item-cover $1">"#).into_owned();
     let cover = HOVER.replace(&cover, "").into_owned();
     let cover = cover.strip_suffix("</mymind-card>").map_or(cover.clone(), |head| format!("{head}</div>"));
     format!(r#"<div class="tom__item draggable" data-id="{}">{cover}</div>"#, escape_html(&row.id))
@@ -61,19 +78,20 @@ pub fn render_pinned(row: &CardRow) -> String {
 /// An invalid-data error for malformed card JSON or a card without the fields the template reads.
 pub fn render_detail(row: &CardRow, share: &Value, content: &Value) -> Result<String> {
     let data = json::parse(&row.data)?;
+    let extras = json::parse(&row.extras).unwrap_or(Value::Null);
     let id = escape_html(&row.id);
     let class = CLASS.captures(&row.html).map_or(String::new(), |found| found[1].to_owned());
     let watchable = matches!(class.split(' ').next(), Some("youtube-video" | "instagram-reel"));
-    let summary = data.get("summary");
+    let summary = if data.get("summary").truthy() { data.get("summary") } else { extras.get("summary") };
     let tldr = if summary.truthy() { format!(r#"<mymind-tldr data-watchable="{watchable}"><p>{}</p></mymind-tldr>"#, e(summary)) } else { String::new() };
     let reader = if content.is_nullish() { data.get("prose") } else { content };
     let kind = data.get("type");
     let body = if matches!(kind.as_str(), Some("Note" | "Content")) {
         editor(&row.id, "prose", data.get("prose"))?
-    } else if kind.as_str() == Some("Article") && (reader.truthy() || json::parse(&row.extras)?.get("local").truthy()) {
+    } else if kind.as_str() == Some("Article") {
         editor(&row.id, "content", reader)?
     } else {
-        row.html.clone()
+        eager_media(&row.html)
     };
     let tags = data.get("tags");
     let tags_json = escape_html(&json::stringify(&if tags.is_nullish() { Value::Array(vec![]) } else { tags.clone() })?.unwrap_or_default());
@@ -100,7 +118,13 @@ pub fn render_detail(row: &CardRow, share: &Value, content: &Value) -> Result<St
     let created_day = mm_js::text::slice(created, 0, Some(10));
     let source = data.get("source");
     let visit = if source.get("url").truthy() { format!(r#"<a href="{}" target="_blank">Visit original source</a>"#, e(source.get("url"))) } else { String::new() };
-    let title = e(data.get("title"));
+    let title = if data.get("title").truthy() {
+        e(data.get("title"))
+    } else if extras.get("title").truthy() {
+        e(extras.get("title"))
+    } else {
+        e(source.get("url"))
+    };
     let shared = if share.truthy() { " shared" } else { "" };
     let card_data = json_text(&obj! { "id" => row.id.as_str(), "type" => kind.clone(), "share" => share.clone() }.into())?;
     let note = editor(&row.id, "note", data.get("note").get("prose"))?;
@@ -136,17 +160,7 @@ pub fn render_detail(row: &CardRow, share: &Value, content: &Value) -> Result<St
 /// An invalid-data error for malformed card JSON.
 pub fn render_share(row: &CardRow) -> Result<String> {
     let data = json::parse(&row.data)?;
-    let html = MEDIA_TAG.replace_all(&row.html, |found: &regex::Captures| {
-        let mut tag = found[0].to_owned();
-        for attribute in ["src", "srcset"] {
-            let lazy = format!(" data-{attribute}=");
-            if tag.contains(&lazy) {
-                let plain = Regex::new(&format!(r#" {attribute}="[^"]*""#)).expect("pattern");
-                tag = plain.replace_all(&tag, "").replacen(&lazy, &format!(" {attribute}="), 1);
-            }
-        }
-        tag
-    });
+    let html = eager_media(&row.html);
     let title = data.get("title");
     let title = if title.is_nullish() { "Shared card".to_owned() } else { escape_html(&title.to_js_string()) };
     Ok(format!(r#"<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title></head><body>{html}</body></html>"#))

@@ -424,3 +424,132 @@ fn shell_template_renders_all_page_routes_with_user_data_and_mirror_scripts() {
         assert_eq!(cfg.get("quotas").get("objects").get("count").as_f64(), Some(1.0), "quota count on {route}");
     }
 }
+
+#[test]
+fn detail_reader_and_pinned_card_render_from_database_for_old_and_new_cards() {
+    let (store, _api) = setup();
+    // Construct an API where has_replay is true, proving old cards no longer defer to recordings.
+    let api = block_on(Api::new(ApiOptions {
+        store: store.clone(),
+        media: Rc::new(Host),
+        upload_storage: Rc::new(Memory::default()),
+        screenshot: Rc::new(Host),
+        resource: Rc::new(Host),
+        fetch: Rc::new(Host),
+        readonly: false,
+        localize: str::to_owned,
+        push: Box::new(|_, _| {}),
+        has_replay: Box::new(|_| Ok(true)),
+        random: runtime::random_bytes,
+    }))
+    .unwrap();
+
+    let insert_old_card = |id: &str, kind: &str, data: Value, html: &str, extras: Value| {
+        store
+            .db()
+            .execute(
+                "INSERT INTO cards (id, user_id, type, flags, data, html, extras, created_ns, modified_ns, bumped_ns) VALUES (?, 'test', ?, 0, ?, ?, ?, 1700000000000000000, 1700000000000000000, 1700000000000000000)",
+                &[
+                    id.into(),
+                    kind.into(),
+                    json::to_string(&data).into(),
+                    html.into(),
+                    json::to_string(&extras).into(),
+                ],
+            )
+            .unwrap();
+    };
+
+    // 1. Old Article card with reader content in card_content and summary in extras.
+    insert_old_card(
+        "old-article",
+        "Article",
+        obj! {
+            "type" => "Article",
+            "title" => "Twelve Principles of Animation",
+            "created" => "2026-01-15T10:00:00Z",
+            "source" => obj! { "url" => "https://example.com/animation" }
+        }
+        .into(),
+        r#"<mymind-card class="article" data-id="old-article"><div class="hover"></div><div class="inner"><h3>Twelve Principles of Animation</h3><mymind-image><img class="lazy" data-src="/media/old-article/cover.webp"/></mymind-image></div></mymind-card>"#,
+        obj! { "summary" => "Imported TLDR for animation article" }.into(),
+    );
+    store
+        .db()
+        .execute(
+            "INSERT INTO card_content (card_id, body) VALUES ('old-article', ?)",
+            &[r#"{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Motion on the web is communication."}]}]}"#.into()],
+        )
+        .unwrap();
+
+    // 2. Old Image card
+    insert_old_card(
+        "old-image",
+        "Image",
+        obj! {
+            "type" => "Image",
+            "title" => "Mountain Sunrise",
+            "created" => "2026-01-16T10:00:00Z",
+            "blob" => obj! { "path" => "old-image/photo.webp", "width" => 1200, "height" => 800 }
+        }
+        .into(),
+        r#"<mymind-card class="image" data-id="old-image"><div class="hover"></div><mymind-image><img class="lazy" data-src="/media/old-image/photo.webp"/></mymind-image></mymind-card>"#,
+        obj! { "summary" => "A crisp mountain sunrise photo" }.into(),
+    );
+
+    // 3. Old PDF (Document) card
+    insert_old_card(
+        "old-pdf",
+        "Document",
+        obj! {
+            "type" => "Document",
+            "title" => "Architecture Spec.pdf",
+            "created" => "2026-01-17T10:00:00Z",
+            "blob" => obj! { "path" => "old-pdf/spec.pdf", "width" => 642, "height" => 840 }
+        }
+        .into(),
+        r#"<mymind-card class="document" data-id="old-pdf"><div class="hover"></div><mymind-image><img class="lazy" data-src="/media/old-pdf/spec.pdf;page(1)/642x840-t.webp"/></mymind-image></mymind-card>"#,
+        obj! {}.into(),
+    );
+
+    // 4. Old Link (WebPage) card
+    insert_old_card(
+        "old-link",
+        "WebPage",
+        obj! {
+            "type" => "WebPage",
+            "title" => "Example Docs",
+            "created" => "2026-01-18T10:00:00Z",
+            "source" => obj! { "url" => "https://docs.example.com" }
+        }
+        .into(),
+        r#"<mymind-card class="web-page" data-id="old-link"><div class="hover"></div><mymind-image><img class="lazy" data-src="/media/old-link/shot.webp"/></mymind-image><p class="title">Example Docs</p></mymind-card>"#,
+        obj! {}.into(),
+    );
+
+    let article_detail = text(send(&api, "GET", "/cards/old-article/detail", "", &[]));
+    assert!(article_detail.contains("data-action=\"/objects/old-article/content\""));
+    assert!(article_detail.contains("Motion on the web is communication."));
+    assert!(article_detail.contains("Imported TLDR for animation article"));
+
+    let article_reader = text(send(&api, "GET", "/cards/old-article/reader", "", &[]));
+    assert!(article_reader.contains("Motion on the web is communication."));
+
+    let image_detail = text(send(&api, "GET", "/cards/old-image/detail", "", &[]));
+    assert!(image_detail.contains("src=\"/media/old-image/photo.webp\""));
+    assert!(!image_detail.contains("class=\"lazy\""));
+    assert!(image_detail.contains("A crisp mountain sunrise photo"));
+
+    let pdf_detail = text(send(&api, "GET", "/cards/old-pdf/detail", "", &[]));
+    assert!(pdf_detail.contains("src=\"/media/old-pdf/spec.pdf;page(1)/642x840-t.webp\""));
+
+    let link_detail = text(send(&api, "GET", "/cards/old-link/detail", "", &[]));
+    assert!(link_detail.contains("src=\"/media/old-link/shot.webp\""));
+    assert!(link_detail.contains("https://docs.example.com"));
+
+    for id in ["old-article", "old-image", "old-pdf", "old-link"] {
+        let pinned = text(send(&api, "GET", &format!("/cards/{id}?template=PinnedCard"), "", &[]));
+        assert!(pinned.contains(&format!("class=\"tom__item draggable\" data-id=\"{id}\"")));
+        assert!(!pinned.contains("class=\"lazy\""));
+    }
+}
