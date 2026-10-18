@@ -267,7 +267,7 @@ async fn route(request: web_sys::Request, env: Env) -> Result<Reply> {
     Ok(Reply::Passed(stub.fetch_with_request(worker::Request::from(forwarded)).await.map_err(worker_error)?))
 }
 
-/// The Worker's entry point (`fetch` of `worker/index.mjs`).
+/// Route a Worker request through sign-in and its assigned library.
 ///
 /// # Arguments
 /// * `request` - The incoming request.

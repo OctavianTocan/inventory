@@ -1,4 +1,4 @@
-//! `store_write` against `lib/store-write.mjs`: scripted mutation scenarios on copies of the fixture libraries,
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! comparing step results, broadcast events and the resulting rows.
 
 mod common;
@@ -16,7 +16,8 @@ use mm_core::{Error, Result, Value, arr, obj};
 use mm_js::date;
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/store-write.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:store-write";
 const TABLES: [&str; 13] = ["embeddings", "cards", "changes", "annotations", "spaces", "space_cards", "pins", "shares", "revisions", "users", "tag_names", "card_content", "api_metadata"];
 
 static CLOCK: Mutex<()> = Mutex::new(());
@@ -269,25 +270,9 @@ fn analysis(size: usize, tag: &str) -> Value {
     .into()
 }
 
-fn narrow(rust: &Value, js: &Value, context: &str) {
-    for key in ["results", "events"] {
-        let (a, b) = (rust.get(key).as_array().unwrap(), js.get(key).as_array().unwrap());
-        for (at, (x, y)) in a.iter().zip(b).enumerate() {
-            assert_eq!(common::text(x), common::text(y), "{context}: {key}[{at}]");
-        }
-        assert_eq!(a.len(), b.len(), "{context}: {key} length");
-    }
-    for table in TABLES {
-        let (a, b) = (rust.get("state").get(table).as_array().unwrap(), js.get("state").get(table).as_array().unwrap());
-        assert_eq!(a.len(), b.len(), "{context}: {table} length");
-        for (at, (x, y)) in a.iter().zip(b).enumerate() {
-            assert_eq!(common::text(x), common::text(y), "{context}: {table}[{at}]");
-        }
-    }
-}
-
 #[test]
 fn mutations_match_node() {
+    let _goldens = common::test_guard();
     let _guard = CLOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let mut cases = 0;
     for fixture in [test_db(), hosted_db()] {
@@ -296,9 +281,6 @@ fn mutations_match_node() {
             let rust = scenario(&temp_copy(&fixture), &steps);
             date::set_fixed_now(None);
             let js = calls(DRIVER, &[("scenario", vec![Value::from(temp_copy(&fixture).to_str().unwrap()), Value::Array(steps.clone())])]).remove(0);
-            if let (Ok(rust), Ok(js)) = (&rust, &js) {
-                narrow(rust, js, &format!("{name} on {}", fixture.display()));
-            }
             assert_same(&rust, &js, &format!("{name} on {}", fixture.display()));
             cases += 1;
         }

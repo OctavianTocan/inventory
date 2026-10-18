@@ -1,4 +1,4 @@
-//! `app_api` against `lib/app-api.mjs`: every read endpoint, paged to the end, on both fixture libraries.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -20,7 +20,8 @@ use mm_core::{Error, Result, Value, arr, obj};
 use mm_js::{json, url};
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/app-api.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:app-api";
 
 struct TestRuntime;
 
@@ -132,18 +133,13 @@ fn requests(db: &dyn Sql) -> Vec<Value> {
 
 #[test]
 fn app_api_matches_node() {
+    let _goldens = common::test_guard();
     for fixture in [test_db(), hosted_db()] {
         let copy = temp_copy(&fixture);
         let db = Sqlite::open(&copy, false).unwrap();
         let requests = requests(&db);
         let js = calls(DRIVER, &[("run", vec![Value::from(copy.to_str().unwrap()), Value::Array(requests.clone())])]).remove(0);
         let rust = run(&copy, &requests);
-        if let (Ok(Value::Array(rust)), Ok(Value::Array(js))) = (&rust, &js) {
-            for (at, (a, b)) in rust.iter().zip(js).enumerate() {
-                assert_eq!(common::text(a), common::text(b), "entry {at}");
-            }
-            assert_eq!(rust.len(), js.len());
-        }
         assert_same(&rust, &js, &format!("app api on {}", fixture.display()));
     }
 }

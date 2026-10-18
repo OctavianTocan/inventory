@@ -1,4 +1,4 @@
-//! `mymind embed-library` against `tools/embed-library.mjs`, with a fake Gemini on 127.0.0.1: the same printed lines,
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! status, requests and database contents, for the estimate, `--limit`, `--run`, the guards and the failures.
 
 #[path = "../../core/tests/common/mod.rs"]
@@ -10,8 +10,9 @@ use std::path::Path;
 
 use mm_core::sql::Sql;
 
-use tools_common::{Out, ai_fake, assert_requests, db_state, request_lines, run_js, run_rust, tmproot};
+use tools_common::{Out, ai_fake, db_state, request_lines, run_js, run_rust, tmproot};
 
+#[derive(Debug)]
 struct Case {
     name: &'static str,
     args: Vec<&'static str>,
@@ -49,12 +50,12 @@ fn show(out: &Out) -> String {
 
 fn compare(case: Case) -> (Out, Vec<String>) {
     let (js_root, rust_root) = (tmproot("embed-library-js"), tmproot("embed-library"));
-    let js = side(&js_root, &case, true);
+    let js = tools_common::recording().then(|| side(&js_root, &case, true));
     let rust = side(&rust_root, &case, false);
-    assert_eq!(show(&rust.0), show(&js.0), "{}: output", case.name);
-    assert_requests(case.name, &rust.1, &js.1);
-    assert_eq!(rust.2, js.2, "{}: database", case.name);
-    (js.0, js.1)
+    let actual = format!("{}\nrequests {:?}\ndatabase {:?}", show(&rust.0), rust.1, rust.2);
+    let oracle = js.as_ref().map(|out| format!("{}\nrequests {:?}\ndatabase {:?}", show(&out.0), out.1, out.2));
+    tools_common::check(&format!("{}: {case:?}", case.name), actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+    (rust.0, rust.1)
 }
 
 fn key(case: Case) -> Case {
@@ -63,6 +64,7 @@ fn key(case: Case) -> Case {
 
 #[test]
 fn usage_errors() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_embed_library.rs")));
     for (name, args) in [("unknown flag", &["--bogus"][..]), ("limit without a value", &["--limit"]), ("limit not a number", &["--limit", "abc"]), ("limit fractional", &["--limit", "1.5"]), ("limit too large", &["--limit", "9007199254740993"]), ("stray word", &["run"])] {
         compare(case(name, args));
     }
@@ -70,6 +72,7 @@ fn usage_errors() {
 
 #[test]
 fn estimates_without_running() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_embed_library.rs")));
     let (out, _) = compare(case("estimate", &[]));
     assert!(out.stdout.contains("Estimate only. Add --run"), "{}", out.stdout);
     compare(case("estimate with a limit", &["--limit", "7"]));
@@ -78,6 +81,7 @@ fn estimates_without_running() {
 
 #[test]
 fn run_guards() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_embed_library.rs")));
     compare(with(case("readonly", &["--run", "--limit", "4"]), "STORE_READONLY", "1"));
     compare(case("no key", &["--run", "--limit", "4"]));
     compare(with(with(case("offline, remote endpoint", &["--run", "--limit", "4"]), "OFFLINE", "1"), "GEMINI_BASE_URL", "http://example.invalid/v1beta"));
@@ -86,6 +90,7 @@ fn run_guards() {
 
 #[test]
 fn embeds_pending_cards() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_embed_library.rs")));
     let (out, requests) = compare(key(case("run with a small limit", &["--run", "--limit", "4"])));
     assert!(out.stdout.contains("Embedded 4/4; API input tokens: 44"), "{}", out.stdout);
     assert_eq!(requests.len(), 1);
@@ -101,5 +106,6 @@ fn embeds_pending_cards() {
 
 #[test]
 fn a_failing_api_stops_the_run() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_embed_library.rs")));
     compare(with(key(case("dead endpoint", &["--run", "--limit", "2"])), "GEMINI_BASE_URL", &tools_common::closed_url()));
 }

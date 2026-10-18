@@ -2,4 +2,5 @@
 !rust/Cargo.toml
 !rust/Cargo.lock
 !rust/crates/
+!rust/test-support/
 !rust/fetch-libvips.sh

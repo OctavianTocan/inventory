@@ -1,18 +1,15 @@
-//! `ai` against `lib/ai.mjs`: the same scripted fake of the hosted APIs answers both, and the requests they send, the
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! sleeps they ask for and their results or errors must agree.
 
 mod common;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::io::Write;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use std::sync::{Mutex, Once};
 use std::task::Poll;
 
 use async_trait::async_trait;
-use common::{hosted_db, root, test_db, text};
+use common::{hosted_db, test_db, text};
 use futures_executor::block_on;
 use mm_core::ai::{Ai, AiError, AiImage, AiItem, EmbedInput, EmbedKind, VocabularyEntry, cosine, document_text};
 use mm_core::host::Fetch;
@@ -22,6 +19,7 @@ use mm_core::sql::Sql;
 use mm_core::{Error, Value, obj};
 use mm_js::{base64, json};
 use mm_sqlite::Sqlite;
+use mm_test_support::golden::Batch;
 
 const RANDOM: [f64; 4] = [0.1, 0.35, 0.6, 0.85];
 static LOCK: Mutex<()> = Mutex::new(());
@@ -305,45 +303,35 @@ fn grouped(log: &[Value]) -> String {
 fn compare(cases: Vec<Value>) {
     let _guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     install();
-    let request = Value::from(obj! { "cases" => cases.clone() });
-    let mut child = Command::new("node")
-        .arg(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/drivers/ai.mjs"))
-        .env("MYMIND_ROOT", root())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("node runs");
-    let mut stdin = child.stdin.take().unwrap();
-    let payload = json::to_string(&request);
-    let writer = std::thread::spawn(move || stdin.write_all(payload.as_bytes()).unwrap());
-    let output = child.wait_with_output().unwrap();
-    writer.join().unwrap();
-    assert!(output.status.success(), "driver failed");
-    let Value::Array(answers) = json::parse(std::str::from_utf8(&output.stdout).unwrap()).unwrap() else { panic!("no array") };
-    assert_eq!(answers.len(), cases.len());
-    for (index, (case, js)) in cases.iter().zip(&answers).enumerate() {
-        let name = case.get("name").as_str().unwrap_or("?");
-        let context = format!("case {index} {name} ({})", case.get("fn").to_js_string());
+    let requests: Vec<Vec<u8>> = cases.iter().map(|case| text(case).into_bytes()).collect();
+    let name = std::thread::current().name().unwrap_or("ai").to_owned();
+    let mut batch = Batch::new(env!("CARGO_MANIFEST_DIR"), "ai", &name, &requests);
+    let answers: Option<Vec<Value>> = if batch.recording() { panic!("Legacy recording requires the recorded pre-switch revision") } else { None };
+    for (index, case) in cases.iter().enumerate() {
         let (rust, rust_log) = run(case);
-        let js_log = match js.get("log") {
-            Value::Array(log) => log.clone(),
-            _ => Vec::new(),
-        };
-        match (&rust, js.get("error")) {
-            (Ok(rust), Value::Undefined) => assert_eq!(text(rust), text(js.get("result")), "{context}"),
-            (Err(rust), error @ Value::Object(_)) => assert_eq!(text(rust), text(error), "{context}"),
-            (rust, js) => panic!("{context}: Rust {rust:?}, JS {js:?}"),
-        }
         let concurrent = case.get("fn").as_str() == Some("analyze");
-        if concurrent && rust.is_err() {
-            continue;
-        }
-        if concurrent {
-            assert_eq!(grouped(&rust_log), grouped(&js_log), "{context}: requests");
-        } else {
-            assert_eq!(text(&Value::Array(rust_log)), text(&Value::Array(js_log)), "{context}: requests");
-        }
+        let logs = |log: &[Value], failed: bool| {
+            if concurrent && failed { Value::Null }
+            else if concurrent { Value::from(grouped(log)) }
+            else { Value::Array(log.to_vec()) }
+        };
+        let actual: Value = match &rust {
+            Ok(value) => obj! { "result" => value.clone(), "log" => logs(&rust_log, false) }.into(),
+            Err(error) => obj! { "error" => error.clone(), "log" => logs(&rust_log, true) }.into(),
+        };
+        let expected = answers.as_ref().map(|answers| {
+            let js = &answers[index];
+            let js_log = js.get("log").as_array().cloned().unwrap_or_default();
+            let expected: Value = if matches!(js.get("error"), Value::Undefined) {
+                obj! { "result" => js.get("result").clone(), "log" => logs(&js_log, false) }.into()
+            } else {
+                obj! { "error" => js.get("error").clone(), "log" => logs(&js_log, true) }.into()
+            };
+            text(&expected).into_bytes()
+        });
+        batch.check(index, text(&actual).as_bytes(), expected.as_deref());
     }
+    batch.finish();
     eprintln!("{} cases compared", cases.len());
 }
 
@@ -474,6 +462,7 @@ fn images() -> Vec<(&'static str, &'static str, Vec<u8>)> {
 
 #[test]
 fn embed_matches_node() {
+    let _goldens = common::test_guard();
     let doc = item("A title", "Some body text");
     let ok = || script("embedContent", vec![step(200, &single(1))]);
     let mut cases = vec![
@@ -567,6 +556,7 @@ fn embed_matches_node() {
 
 #[test]
 fn embed_texts_matches_node() {
+    let _goldens = common::test_guard();
     let ok = |count: usize| script("batchEmbedContents", vec![step(200, &batch(count))]);
     let texts = |names: &[&str]| -> Value { Value::Array(names.iter().map(|name| Value::from(*name)).collect()) };
     let many = |count: usize| -> Value { Value::Array((0..count).map(|i| Value::from(format!("tag {i}"))).collect()) };
@@ -616,6 +606,7 @@ fn good_chat() -> String {
 
 #[test]
 fn describe_matches_node() {
+    let _goldens = common::test_guard();
     let doc = item("A title", "Some body text");
     let args = |item: Value| -> Value { obj! { "item" => item }.into() };
     let ok = || script("chat", vec![step(200, &good_chat())]);
@@ -686,6 +677,7 @@ fn describe_matches_node() {
 
 #[test]
 fn pick_tags_matches_node() {
+    let _goldens = common::test_guard();
     let doc = item("A title", "Some body text");
     let answers = |count: usize, p: &dyn Fn(usize) -> Value| -> String {
         let entries: Vec<(String, Value)> = (0..count).map(|i| (format!("t{i}"), obj! { "noul" => p(i) }.into())).collect();
@@ -757,6 +749,7 @@ fn pick_tags_matches_node() {
 
 #[test]
 fn embed_vocabulary_matches_node() {
+    let _goldens = common::test_guard();
     let ok = |count: usize| script("batchEmbedContents", vec![step(200, &batch(count))]);
     let names = |names: &[&str]| -> Value { Value::Array(names.iter().map(|name| Value::from(*name)).collect()) };
     let args = |vocabulary: Value| -> Value { obj! { "vocabulary" => vocabulary }.into() };
@@ -786,6 +779,7 @@ fn embed_vocabulary_matches_node() {
 
 #[test]
 fn analyze_matches_node() {
+    let _goldens = common::test_guard();
     let doc = item("A title", "Some body text");
     let args = |item: Value, vocabulary: Value| -> Value { obj! { "item" => item, "vocabulary" => vocabulary }.into() };
     let names = |names: &[&str]| -> Value { Value::Array(names.iter().map(|name| Value::from(*name)).collect()) };
@@ -836,6 +830,7 @@ fn analyze_matches_node() {
 
 #[test]
 fn pure_functions_match_node() {
+    let _goldens = common::test_guard();
     let mut cases = Vec::new();
     let texts = [("", ""), ("t", ""), ("", "b"), ("  t \n u ", "\tb  c "), ("日本語 😀", "é\u{a0}x"), (&"T".repeat(501) as &str, &"b".repeat(6001) as &str)];
     for (title, text) in texts {

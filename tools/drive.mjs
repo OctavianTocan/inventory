@@ -3,7 +3,7 @@
 // a deterministic verifier Chromium, signed in with the session of the agent Chromium on :9222, so any
 // difference comes from the servers.
 // Usage: node tools/drive.mjs [--profile desktop-light|desktop-dark|iphone|android] [--suite ui|cards|...]
-//        [--sides live,replica] [--no-record]
+//        [--sides live,replica] [--no-record] [--server rust|hosted-rust|hosted-worker]
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -12,13 +12,19 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
 import { chromium, devices } from 'playwright-core';
-import { normalizationDigest, replicaDigest } from './digests.mjs';
-import { serverCommand, serverKind } from './server-command.mjs';
+import { normalizationDigest, verificationDigest, verificationMode } from './digests.mjs';
+import { serverCommand } from './server-command.mjs';
+import { assertReplicaServer } from './server-identity.mjs';
 import { reaRoot } from './rea-root.mjs';
 import { openStore } from './replay-store.mjs';
 import { Side } from './side.mjs';
 import { SUITES } from './suites.mjs';
 import { launchVerifier } from './verifier-browser.mjs';
+
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run drive -- [--profile desktop-light|desktop-dark|iphone|android] [--suite NAME] [--sides live,replica] [--no-record] [--server rust|hosted-rust|hosted-worker]\nRequires the signed-in browser on CDP :9222.');
+  process.exit(0);
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CDP = 'http://127.0.0.1:9222';
@@ -33,8 +39,10 @@ const { values: opts } = parseArgs({
     suite: { type: 'string', default: 'ui' },
     sides: { type: 'string', default: 'live,replica' },
     'no-record': { type: 'boolean', default: false },
+    server: { type: 'string', default: 'rust' },
   },
 });
+const mode = verificationMode(opts.server);
 
 const phone = (name) => {
   const { defaultBrowserType, ...descriptor } = devices[name];
@@ -67,14 +75,19 @@ if (existsSync(CLAIMS)) {
 const sides = opts.sides.split(',');
 
 
+// Reuse only the explicitly selected listener, and start a native server only in direct Rust mode.
 async function ensureReplica() {
+  if (mode !== 'rust') { await assertReplicaServer(Number(new URL(REPLICA).port), mode); return null; }
   const up = await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.ok, () => false);
-  if (up) return null;
+  if (up) { await assertReplicaServer(Number(new URL(REPLICA).port || 80), mode); return null; }
   const { command, args } = serverCommand();
   const child = spawn(command, args, { cwd: ROOT, stdio: ['ignore', 'inherit', 'inherit'] });
   for (let i = 0; i < 50; i++) {
     await new Promise((r) => setTimeout(r, 200));
-    if (await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.ok, () => false)) return child;
+    if (await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.ok, () => false)) {
+      await assertReplicaServer(Number(new URL(REPLICA).port || 80), mode);
+      return child;
+    }
   }
   throw new Error('replica server did not start');
 }
@@ -304,12 +317,15 @@ try {
       if (store) {
         media = await side.recordMedia().catch(() => 0);
         await store.save();
-        await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).catch(() => {});
+        if (mode !== 'hosted-worker') await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).catch(() => {});
       }
     }
     if (name === 'replica') {
-      report.replica = await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.json());
-      Object.assign(report.replica, { digest: await replicaDigest(), server: serverKind(), at: new Date().toISOString() });
+      const identity = await assertReplicaServer(Number(new URL(REPLICA).port), mode);
+      report.replica = mode === 'hosted-worker'
+        ? { offline: false, store: null, proxyTarget: identity.target }
+        : await fetch(`${REPLICA}/__replay/reload`, { method: 'POST' }).then((r) => r.json());
+      Object.assign(report.replica, { digest: await verificationDigest(mode), server: mode, at: new Date().toISOString() });
     }
     report.sides[name] = { errors, writesAnsweredLocally: side.writes, notes: side.log, mediaRecorded: media };
     console.log(`${name}: ${errors.length} step errors, ${side.writes.length} writes kept off the account, ${side.log.length} notes`);

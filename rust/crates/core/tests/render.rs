@@ -44,8 +44,9 @@ fn same<T: Into<Value>>(rust: mm_core::Result<T>, js: &common::Answer, context: 
 
 #[test]
 fn iphone_matches_node() {
+    let _goldens = common::test_guard();
     let cards = cards();
-    let js = calls("lib/render/iphone.mjs", &cards.iter().map(|card| ("iphoneCard", vec![Value::from(card.html.as_str()), Value::from(card.raw.as_str())])).collect::<Vec<_>>());
+    let js = calls("module:render/iphone", &cards.iter().map(|card| ("iphoneCard", vec![Value::from(card.html.as_str()), Value::from(card.raw.as_str())])).collect::<Vec<_>>());
     for (card, js) in cards.iter().zip(&js) {
         same(iphone_card(&card.html, &card.raw), js, &format!("iphoneCard {}", card.id));
     }
@@ -54,6 +55,7 @@ fn iphone_matches_node() {
 
 #[test]
 fn media_helpers_match_node() {
+    let _goldens = common::test_guard();
     let cards = cards();
     let mut inputs: Vec<Value> = Vec::new();
     for card in &cards {
@@ -80,7 +82,7 @@ fn media_helpers_match_node() {
             requests.push(("fit", vec![input.clone(), width.into(), height.into(), even.into()]));
         }
     }
-    let js = calls("lib/render/media.mjs", &requests);
+    let js = calls("module:render/media", &requests);
     let mut at = 0;
     for (index, input) in inputs.iter().enumerate() {
         let context = format!("input {index} {}", common::text(input));
@@ -141,10 +143,11 @@ fn prose_cases() -> Vec<Value> {
 
 #[test]
 fn prose_matches_node() {
+    let _goldens = common::test_guard();
     let mut docs: Vec<(String, Value)> = cards().into_iter().filter(|card| !card.data.get("prose").is_undefined()).map(|card| (card.id, card.data.get("prose").clone())).collect();
     assert!(docs.len() > 30);
     docs.extend(prose_cases().into_iter().enumerate().map(|(index, doc)| (format!("case {index}"), doc)));
-    let js = calls("lib/render/prose.mjs", &docs.iter().map(|(_, doc)| ("renderProse", vec![doc.clone()])).collect::<Vec<_>>());
+    let js = calls("module:render/prose", &docs.iter().map(|(_, doc)| ("renderProse", vec![doc.clone()])).collect::<Vec<_>>());
     for ((name, doc), js) in docs.iter().zip(&js) {
         same(render_prose(doc), js, &format!("renderProse {name}"));
     }
@@ -196,6 +199,7 @@ fn variants(card: &Card) -> Vec<(String, Value, Value)> {
 
 #[test]
 fn render_card_matches_node() {
+    let _goldens = common::test_guard();
     let cards = cards();
     let mut requests: Vec<(String, Value, Value)> = Vec::new();
     for (index, card) in cards.iter().enumerate() {
@@ -207,7 +211,7 @@ fn render_card_matches_node() {
             requests.push((format!("{} base", card.id), card.data.clone(), card.extras.clone()));
         }
     }
-    let js = calls("lib/render-card.mjs", &requests.iter().map(|(_, data, extras)| ("renderCard", vec![data.clone(), extras.clone()])).collect::<Vec<_>>());
+    let js = calls("module:render-card", &requests.iter().map(|(_, data, extras)| ("renderCard", vec![data.clone(), extras.clone()])).collect::<Vec<_>>());
     for ((name, data, extras), js) in requests.iter().zip(&js) {
         same(render_card(data, extras), js, &format!("renderCard {name}"));
     }

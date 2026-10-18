@@ -3,7 +3,7 @@
 The Kotlin app (`android/`, roadmap phase 9) uses the same server and library as the web front-end. It signs in for
 a bearer token, reads cards as typed JSON from `/app/v1/*`, and writes through the existing write API
 (`docs/write-api.md`) with the same token. The web keeps its HTML; this JSON comes from the same stored rows
-(`cards.data` and `cards.extras`, documented on `renderCard` in `lib/render-card.mjs`).
+(`cards.data` and `cards.extras`, documented on `render_card` in `rust/crates/core/src/render_card.rs`).
 
 Status (2026-10-16): contract written; server read and sign-in endpoints implemented and proved by `tools/check-app-api.mjs`; app being built on branch `android-app`.
 
@@ -12,7 +12,7 @@ Implementation notes: `note` is the note's plain text. Read errors are `400` wit
 ## Sign-in
 
 Only with `AUTH=google`. The same people the web admits: today `OWNER_EMAIL` by Google, and password users from
-`tools/auth-user.mjs`. One function decides who is allowed for both the web and the app, so widening it to verified
+`mymind auth-user`. One function decides who is allowed for both the web and the app, so widening it to verified
 `@octaviantocan.com` addresses (with per-person libraries, `docs/accounts-plan.md`) happens in one place.
 
 | Request | Body | Answer |

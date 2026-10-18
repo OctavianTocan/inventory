@@ -9,7 +9,8 @@ use mm_core::{Error, Value, obj};
 use mm_js::{base64, date};
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/auth_store.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:auth_store";
 const NOW: i64 = 1_760_000_000_000;
 
 fn s(text: &str) -> Value {
@@ -28,6 +29,7 @@ fn scratch(name: &str) -> std::path::PathBuf {
 
 #[test]
 fn scrypt_hashes_match() {
+    let _goldens = common::test_guard();
     let passwords = ["", "password", "correct horse battery staple", "pässwörd ✓ 日本語", "a\u{0}b", "\u{1F600}x", &"long".repeat(500)];
     let salts = ["", "00", "00112233445566778899aabbccddeeff", "ffffffffffffffffffffffffffffffff", &"ab".repeat(64)];
     let mut pairs = Vec::new();
@@ -36,11 +38,9 @@ fn scrypt_hashes_match() {
             pairs.push(Value::Array(vec![s(password), s(salt)]));
         }
     }
-    let Value::Array(js) = common::call(DRIVER, "hashes", vec![Value::Array(pairs.clone())]).unwrap() else { panic!("no hashes") };
-    for (pair, expected) in pairs.iter().zip(&js) {
-        let rust = base64::hex(&hash_password(&pair.at(0).to_js_string(), &hex(&pair.at(1).to_js_string())));
-        assert_eq!(rust, expected.to_js_string(), "{}", common::text(pair));
-    }
+    let js = common::call(DRIVER, "hashes", vec![Value::Array(pairs.clone())]);
+    let actual = Value::Array(pairs.iter().map(|pair| s(&base64::hex(&hash_password(&pair.at(0).to_js_string(), &hex(&pair.at(1).to_js_string()))))).collect());
+    common::assert_value(&actual, &js, "fixed-salt scrypt hashes");
     println!("auth_store: {} hashes compared", pairs.len());
 }
 
@@ -78,6 +78,7 @@ fn id_value(who: &Identity) -> Value {
 
 #[test]
 fn operations_match() {
+    let _goldens = common::test_guard();
     let ops: Vec<Vec<Value>> = vec![
         vec![s("subject"), s("  Alice ")],
         vec![s("set"), s("Alice"), s("correct horse battery")],
@@ -128,7 +129,7 @@ fn operations_match() {
     let rust_path = scratch("rust");
     let _ = std::fs::remove_file(&js_path);
     let _ = std::fs::remove_file(&rust_path);
-    let js = common::call(DRIVER, "run", vec![s(js_path.to_str().unwrap()), Value::Array(ops.iter().map(|op| Value::Array(op.clone())).collect()), Value::Number(NOW as f64)]).unwrap();
+    let js = common::call(DRIVER, "run", vec![s(js_path.to_str().unwrap()), Value::Array(ops.iter().map(|op| Value::Array(op.clone())).collect()), Value::Number(NOW as f64)]);
 
     date::set_fixed_now(Some(NOW));
     let db = Sqlite::open(&rust_path, false).unwrap();
@@ -167,17 +168,14 @@ fn operations_match() {
         "tokens" => rows(&db, "SELECT hash, sub FROM app_tokens ORDER BY hash"),
     }
     .into();
-    let js_answers = js.get("answers");
-    let Value::Array(rust_answers) = rust.get("answers").clone() else { unreachable!() };
-    let Value::Array(js_list) = js_answers.clone() else { panic!("no answers") };
-    for (index, (rust, js)) in rust_answers.iter().zip(&js_list).enumerate() {
-        assert_eq!(common::text(rust), common::text(js), "op {index}: {}", common::text(&Value::Array(ops[index].clone())));
-    }
-    for table in ["users", "libraries", "sessions", "tokens"] {
-        assert_eq!(common::text(rust.get(table)), common::text(js.get(table)), "{table}");
-    }
+    assert_eq!(rust.get("answers").as_array().unwrap().len(), ops.len(), "every auth operation answered");
+    common::assert_value(&rust, &js, "auth operations and every table snapshot");
 
-    let js_db = Sqlite::open(&js_path, false).unwrap();
+    let synthetic_path = scratch("synthetic-js");
+    let _ = std::fs::remove_file(&synthetic_path);
+    reconstruct_js_users(&synthetic_path, &js_path);
+    let compatibility_path = if common::recording() { &js_path } else { &synthetic_path };
+    let js_db = Sqlite::open(compatibility_path, false).unwrap();
     date::set_fixed_now(Some(NOW));
     for (user, password, expected) in [("bob.smith@x-y_z", "another long password!", true), ("alice", "a second password!!", false), ("emoji", "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀", true), ("emoji", "wrong", false)] {
         let found = auth_store::check_password(&js_db, user, password).unwrap().is_some();
@@ -185,10 +183,48 @@ fn operations_match() {
     }
     date::set_fixed_now(None);
     let checks: Vec<Value> = [("bob.smith@x-y_z", "another long password!"), ("emoji", "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"), ("emoji", "wrong")].iter().map(|(user, password)| Value::Array(vec![s("check"), s(user), s(password)])).collect();
-    let cross = common::call(DRIVER, "run", vec![s(rust_path.to_str().unwrap()), Value::Array(checks), Value::Number(NOW as f64)]).unwrap();
-    let Value::Array(cross) = cross.get("answers").clone() else { panic!("no answers") };
+    let cross = common::call(DRIVER, "run", vec![s(rust_path.to_str().unwrap()), Value::Array(checks), Value::Number(NOW as f64)]);
+    let cross_answers: Vec<Value> = [("bob.smith@x-y_z", "another long password!"), ("emoji", "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"), ("emoji", "wrong")].iter().map(|(user, password)| {
+        obj! { "ok" => auth_store::check_password(&db, user, password).unwrap().map_or(Value::Null, |name| s(&name)) }.into()
+    }).collect();
+    let cross_value: Value = obj! {
+        "answers" => cross_answers.clone(),
+        "users" => rust.get("users").clone(),
+        "libraries" => rust.get("libraries").clone(),
+        "sessions" => rust.get("sessions").clone(),
+        "tokens" => rust.get("tokens").clone(),
+    }.into();
+    common::assert_value(&cross_value, &cross, "JS-compatible checks against Rust database");
+    let cross = cross_answers;
     assert_eq!(common::text(&cross[0]), common::text(&obj! { "ok" => "bob.smith@x-y_z" }.into()), "JS checks the Rust database");
     assert_eq!(common::text(&cross[1]), common::text(&obj! { "ok" => "emoji" }.into()));
     assert_eq!(common::text(&cross[2]), common::text(&obj! { "ok" => Value::Null }.into()));
     println!("auth_store: {} operations compared", ops.len());
+}
+
+// Rebuild the synthetic JS-compatible password rows using frozen Node scrypt outputs, never the Rust hasher.
+fn reconstruct_js_users(path: &std::path::Path, legacy_path: &std::path::Path) {
+    let users = [
+        ("bob.smith@x-y_z".to_owned(), "another long password!", "00".repeat(16)),
+        ("upper".to_owned(), "long enough password 1", "11".repeat(16)),
+        ("x".repeat(64), "long enough password 1", "22".repeat(16)),
+        ("emoji".to_owned(), "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀", "33".repeat(16)),
+    ];
+    let pairs = Value::Array(users.iter().map(|(_, password, salt)| Value::Array(vec![s(password), s(salt)])).collect());
+    let (hash_values, expectation) = common::synthetic_call(DRIVER, "hashes", vec![pairs]);
+    let hashes = hash_values.as_array().expect("synthetic hashes");
+    assert_eq!(hashes.len(), users.len(), "every synthetic user has a Node-derived hash");
+    let db = Sqlite::open(path, false).unwrap();
+    db.exec_batch("CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, salt BLOB NOT NULL, hash BLOB NOT NULL,
+    created_ms INTEGER NOT NULL) STRICT").unwrap();
+    if common::recording() {
+        let legacy = Sqlite::open(legacy_path, true).unwrap();
+        assert_eq!(common::text(&rows(&db, "PRAGMA table_info(users)")), common::text(&rows(&legacy, "PRAGMA table_info(users)")), "frozen synthetic users schema matches the legacy installer");
+    }
+    for ((username, password, salt), hash) in users.iter().zip(hashes) {
+        db.execute("INSERT INTO users (username, salt, hash, created_ms) VALUES (?, ?, ?, ?)", mm_core::params![username.as_str(), hex(salt), hex(hash.as_str().unwrap()), NOW]).unwrap();
+        assert_eq!(auth_store::check_password(&db, username, password).unwrap().as_deref(), Some(username.as_str()), "Rust reads the frozen Node-derived synthetic row");
+        assert!(auth_store::check_password(&db, username, "wrong").unwrap().is_none(), "synthetic row refuses another password");
+    }
+    common::assert_value(&hash_values, &expectation, "Node-derived synthetic scrypt fixture");
 }

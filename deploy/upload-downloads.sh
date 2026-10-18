@@ -5,7 +5,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 site=https://mymind.octaviantocan.com
 worker="$root/rust/crates/worker"
-wrangler=${WRANGLER:-$root/worker/node_modules/wrangler/bin/wrangler.js}
+wrangler=${WRANGLER:-$root/rust/crates/worker/node_modules/wrangler/bin/wrangler.js}
 
 usage() {
   cat <<'EOF'

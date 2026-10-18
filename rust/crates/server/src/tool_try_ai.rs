@@ -12,7 +12,7 @@ use crate::env_file::{self, Loaded};
 use crate::fetch::NativeFetch;
 use crate::parse_args::{Kind, Opt, parse};
 
-const USAGE: &str = "Usage: node tools/try-ai.mjs [--cards N] [--vocab N] [--query \"text\"]...";
+const USAGE: &str = "Usage: mymind try-ai [--cards N] [--vocab N] [--query \"text\"]...";
 
 struct Cover {
     mime: &'static str,
@@ -278,7 +278,7 @@ async fn work(root: &Path, args: &[String]) -> Result<(), String> {
 /// # Returns
 /// The exit status: 0, or 1 after printing `error: <message>`.
 pub async fn run(root: &Path, args: &[String]) -> u8 {
-    let file = match env_file::load(&root.join(".env")) {
+    let file = match env_file::load(&env_file::path(root)) {
         Ok(Loaded::Vars(vars)) => vars,
         _ => HashMap::new(),
     };

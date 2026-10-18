@@ -1,5 +1,4 @@
-//! The directory bucket against `lib/bucket-fs.mjs`: the same operations on two fresh directories must give the same
-//! results and leave the same files.
+//! Frozen directory-bucket expectations retain all generated operation answers and the complete final file tree.
 
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
@@ -10,14 +9,18 @@ use mm_core::host::{Bucket, ByteSpan};
 use mm_core::http::{Body, Headers};
 use mm_core::{Error, Value, obj};
 use mm_js::base64;
+use mm_test_support::golden::Batch;
 use mymind::bucket_fs::DirectoryBucket;
 
-const DRIVER: &str = "rust/crates/server/tests/drivers/bucket.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:server:bucket";
 
+// Represent bucket headers with the same object order as the reference snapshots.
 fn headers_value(headers: Option<&Headers>) -> Value {
     headers.map_or(Value::Null, |headers| Value::Object(headers.iter().map(|(name, value)| (name.to_owned(), Value::from(value))).collect()))
 }
 
+// Execute one generated bucket operation without hiding errors or body bytes.
 async fn apply(bucket: &DirectoryBucket, op: &Value) -> Result<Value, Error> {
     let key = op.get("key").as_str().unwrap_or("");
     Ok(match op.get("op").as_str().unwrap() {
@@ -60,6 +63,7 @@ async fn apply(bucket: &DirectoryBucket, op: &Value) -> Result<Value, Error> {
     })
 }
 
+// Preserve the original status and invalid-input error distinctions.
 fn answer(result: Result<Value, Error>) -> Value {
     match result {
         Ok(value) => obj! { "ok" => value }.into(),
@@ -86,6 +90,7 @@ fn tree(root: &Path) -> Vec<(String, Vec<u8>)> {
     files
 }
 
+// Give each backend an empty directory below the test target.
 fn temp_root(name: &str) -> PathBuf {
     let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("bucket-{name}"));
     let _ = std::fs::remove_dir_all(&root);
@@ -123,7 +128,8 @@ fn directory_bucket_matches_node() {
     }
     let js_root = temp_root("js");
     let rust_root = temp_root("rust");
-    let js = common::call(DRIVER, "run", vec![js_root.to_string_lossy().as_ref().into(), Value::Array(ops.clone())]).unwrap();
+    assert_eq!(ops.len(), 600, "seeded bucket operation count");
+    let expected = common::call(DRIVER, "run", vec![js_root.to_string_lossy().as_ref().into(), Value::Array(ops.clone())]);
     let bucket = DirectoryBucket::new(&rust_root);
     let rust: Vec<Value> = mymind::runtime::run(async {
         let mut out = Vec::new();
@@ -132,11 +138,18 @@ fn directory_bucket_matches_node() {
         }
         out
     });
-    let Value::Array(js) = js else { panic!("driver answered no array") };
-    for ((op, rust), js) in ops.iter().zip(&rust).zip(&js) {
-        assert_eq!(common::text(rust), common::text(js), "{}", common::text(op));
-    }
-    assert_eq!(tree(&rust_root), tree(&js_root));
+    assert_eq!(rust.len(), ops.len(), "bucket answer count");
+    common::assert_value(&Value::Array(rust), &expected, "all bucket operation answers");
+    let request = common::text(&Value::Array(ops)).into_bytes();
+    let mut files = Batch::new(env!("CARGO_MANIFEST_DIR"), "bucket_fs", "directory-tree", &[request]);
+    let snapshot = |root: &Path| {
+        let files = tree(root).into_iter().map(|(path, bytes)| Value::Array(vec![path.into(), base64::encode(&bytes).into()])).collect();
+        common::text(&Value::Array(files)).into_bytes()
+    };
+    let rust_files = snapshot(&rust_root);
+    let oracle_files = common::recording().then(|| snapshot(&js_root));
+    files.check(0, &rust_files, oracle_files.as_deref());
+    files.finish();
     for root in [js_root, rust_root] {
         let _ = std::fs::remove_dir_all(root.parent().unwrap());
     }

@@ -21,9 +21,12 @@ process's user plus system time per request.
 - **Where Rust is slower or bigger:** the Worker bundle is 16 times larger (1.43 MB against 90 KB compressed),
   and in production the Rust Worker answers the small routes 1 to 14 ms later than the JS one did. In the container, `image()` costs the same.
 
+These are historical pre-switch comparisons. Future native measurements use `node tools/bench-backend.mjs`
+with the Rust binary; container comparisons require explicitly supplied historical and Rust images.
+
 ## Native server
 
-`node tools/bench-backend.mjs` (report in `evidence/bench-backend.json`): `node server.mjs` and `mymind serve` on
+Historical pre-switch command: `node tools/bench-backend.mjs` (report in `evidence/bench-backend.json`): `node server.mjs` and `mymind serve` on
 fresh copies of the same fixtures, 30 requests per route after a warm-up, in two modes: the replica's library mode
 (`STORE_DB` on the owner library, read-only) and hosted mode (`HOSTED=1` on the test library and a copy of its
 objects).

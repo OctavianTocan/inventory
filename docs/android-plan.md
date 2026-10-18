@@ -105,12 +105,12 @@ them.
 
 The same server and library as the web front-end and the desktop app (a window around the hosted site): cards,
 spaces, tags, search, writes, uploads, `/changes` and live updates on the `/hub` WebSocket (`docs/write-api.md`,
-`lib/`).
+`rust/crates/core/src/`).
 
 Card content is already stored as structured data: each card's JSON (`data`, prose as a document tree) plus its
-source metadata (`extras`, documented on `renderCard` in `lib/render-card.mjs`). The server turns that into HTML only
+source metadata (`extras`, documented on `render_card` in `rust/crates/core/src/render_card.rs`). The server turns that into HTML only
 because mymind's own web code, which the replica serves unchanged for pixel parity, understands nothing else
-(`lib/render-card.mjs`, `lib/render/views.mjs`). The app gets a typed JSON form of the same data from its own API
+(`rust/crates/core/src/render_card.rs`, `rust/crates/core/src/render/views.rs`). The app gets a typed JSON form of the same data from its own API
 (below) and draws it natively: one source, two renderers. Define that JSON once (for example `docs/app-api.md`) so
 the Kotlin models are generated or checked against it.
 
@@ -123,7 +123,7 @@ are planned in `docs/accounts-plan.md`, and the app builds on them.
 
 - **Who can sign in (the user):** "the test user, my main email, and then my domain. Anyone from those is completely
   welcome." Google for `OWNER_EMAIL` and any verified `@octaviantocan.com` address, passwords only for users made
-  with `tools/auth-user.mjs` (the `TEST_USER_*` account for automated tests). No sign-up form. Each person gets their
+  with `mymind auth-user` (the `TEST_USER_*` account for automated tests). No sign-up form. Each person gets their
   own library.
 - **In the app:** Android Credential Manager with Sign in with Google, `serverClientId` set to the existing Web client
   ID. Google also needs an Android OAuth client in the same Google Cloud project for the app's package name and the
@@ -133,7 +133,7 @@ are planned in `docs/accounts-plan.md`, and the app builds on them.
   `com.octaviantocan.mymind`, SHA-1 of mini-001's debug key (`~/.android/debug.keystore`). A release key, or a debug
   build from another machine, needs its own Android client.
 - **On the server:** a sign-in endpoint takes the Google ID token and verifies it against Google's published keys
-  (`aud` = Web client ID, issuer, expiry, `email_verified`, allowed email; `verifyIdToken` in `lib/auth.mjs` already
+  (`aud` = Web client ID, issuer, expiry, `email_verified`, allowed email; `verifyIdToken` in `rust/crates/core/src/auth.rs` already
   does all but the domain check), or takes a password user's name and password with rate limiting, and returns an
   opaque app token stored hashed and revocable like `sessions`. Every other route accepts `Authorization: Bearer
   <token>` as well as the session cookie, including media. The app keeps the token encrypted with an Android

@@ -1,7 +1,6 @@
-//! `Api` against `createApi` of `lib/api.mjs` over copies of the owner fixture. Scripted requests in three phases
-//! (writes with the hosted AI off, writes with a fake hosted AI, read-only) must answer alike, log and call the fakes
-//! alike, broadcast the same hub events, and leave the same rows and upload files. Background enrichment finishes
-//! after every request on both sides.
+//! Frozen API expectations over copies of the owner fixture. Scripted reads, writes with hosted AI off, writes
+//! with fake hosted AI and read-only requests retain responses, logs, fake requests, hub events, all table rows and
+//! upload files. Background enrichment finishes after every request before the phase snapshot.
 
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
@@ -28,7 +27,8 @@ use mm_sqlite::Sqlite;
 use mymind::uploads_fs::DirectoryUploads;
 use regex::Regex;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/api.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:server:api";
 const NOW: i64 = 1_787_000_000_000;
 const TABLES: [&str; 13] = ["cards", "changes", "annotations", "spaces", "space_cards", "pins", "shares", "revisions", "users", "tag_names", "card_content", "uploads", "embeddings"];
 const DESKTOP: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
@@ -630,43 +630,20 @@ fn untimed(answer: &Value) -> Value {
     copy
 }
 
-fn compare(name: &str, phase: &Value, rust: &Value, js: &Value) -> usize {
-    let steps = phase.get("steps").as_array().unwrap();
-    let (rust_answers, js_answers) = (rust.get("answers").as_array().unwrap(), js.get("answers").as_array().unwrap());
-    assert_eq!(rust_answers.len(), js_answers.len(), "{name}: answer count");
-    let mut handled = 0;
-    for (index, (rust_answer, js_answer)) in rust_answers.iter().zip(js_answers).enumerate() {
-        let (rust_answer, js_answer) = (&untimed(rust_answer), &untimed(js_answer));
-        let context = format!("{name} step {index}: {}", common::text(&steps[index]));
-        if rust_answer != js_answer {
-            let show = |answer: &Value| {
-                let other = if std::ptr::eq(answer, rust_answer) { js_answer } else { rust_answer };
-                let mut copy = answer.clone();
-                for (key, encoded) in [("body", true), ("shell", false)] {
-                    let Some(field) = answer.get(key).as_str() else { continue };
-                    let decode = |text: &str| if encoded { base64::decode(text) } else { text.as_bytes().to_vec() };
-                    let (mine, theirs) = (decode(field), decode(other.get(key).as_str().unwrap_or("")));
-                    let at = mine.iter().zip(&theirs).position(|(a, b)| a != b).unwrap_or(mine.len().min(theirs.len()));
-                    let window = &mine[at.saturating_sub(300)..(at + 300).min(mine.len())];
-                    copy.set(key, format!("[{} bytes, first difference at {at}] …{}", mine.len(), String::from_utf8_lossy(window)));
-                }
-                common::text(&copy)
-            };
-            panic!("{context}\nRust: {}\nJS:   {}", show(rust_answer), show(js_answer));
-        }
-        handled += usize::from(!rust_answer.get("status").is_undefined());
-    }
-    for key in ["events", "log", "fetches", "files"] {
-        assert_eq!(common::text(rust.get(key)), common::text(js.get(key)), "{name}: {key}");
-    }
-    for table in TABLES {
-        let (rust_rows, js_rows) = (rust.get("state").get(table).as_array().unwrap(), js.get("state").get(table).as_array().unwrap());
-        for (rust_row, js_row) in rust_rows.iter().zip(js_rows) {
-            assert_eq!(rust_row, js_row, "{name}: {table} row");
-        }
-        assert_eq!(rust_rows.len(), js_rows.len(), "{name}: {table} rows");
-    }
-    handled
+// Keep elapsed normalization limited to response bodies, preserving all other phase bytes.
+fn normalized_phase(value: &Value) -> Value {
+    let mut normalized = value.clone();
+    let answers = value.get("answers").as_array().expect("phase answers");
+    normalized.set("answers", Value::Array(answers.iter().map(untimed).collect()));
+    normalized
+}
+
+// Compare the complete phase so omitted answers, rows, files or fake calls cannot truncate a comparison.
+fn compare(name: &str, phase: &Value, rust: &Value, expected: &common::Answer) -> usize {
+    let answers = rust.get("answers").as_array().expect("phase answers");
+    assert_eq!(answers.len(), phase.get("steps").as_array().unwrap().len(), "{name}: answer count");
+    common::assert_value_map(rust, expected, name, normalized_phase);
+    answers.iter().filter(|answer| !answer.get("status").is_undefined()).count()
 }
 
 #[test]
@@ -691,7 +668,7 @@ fn api_matches_node() {
     for (name, phase) in &phases {
         let (js_copy, rust_copy) = (common::temp_copy(&common::test_db()), common::temp_copy(&common::test_db()));
         let (js_dir, rust_dir) = (scratch(&format!("{name}-js")), scratch(&format!("{name}-rust")));
-        let js = common::call(DRIVER, "run", vec![js_copy.to_string_lossy().as_ref().into(), js_dir.join("uploads").to_string_lossy().as_ref().into(), phase.clone()]).unwrap();
+        let js = common::call(DRIVER, "run", vec![js_copy.to_string_lossy().as_ref().into(), js_dir.join("uploads").to_string_lossy().as_ref().into(), phase.clone()]);
         let rust = mymind::runtime::run(rust_phase(&rust_copy, &rust_dir.join("uploads"), phase, &shell));
         let handled = compare(name, phase, &rust, &js);
         println!("{name}: {} steps, {handled} answered, {} log lines, {} fetches", phase.get("steps").as_array().unwrap().len(), rust.get("log").as_array().unwrap().len(), rust.get("fetches").as_array().unwrap().len());

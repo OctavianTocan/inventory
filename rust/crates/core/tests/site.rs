@@ -1,4 +1,4 @@
-//! `mm_core::site` against `lib/site.mjs`.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -6,7 +6,8 @@ use mm_core::http::Headers;
 use mm_core::site::{LOCAL_PREFIXES, localize, localize_value, replay_key_for, send_range};
 use mm_core::{Error, Object, Value, arr, obj};
 
-const DRIVER: &str = "rust/crates/core/tests/drivers/site.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:site";
 
 fn check(name: &str, cases: Vec<(Vec<Value>, Result<Value, Error>)>) {
     let calls: Vec<(&str, Vec<Value>)> = cases.iter().map(|(args, _)| (name, args.clone())).collect();
@@ -17,6 +18,7 @@ fn check(name: &str, cases: Vec<(Vec<Value>, Result<Value, Error>)>) {
 
 #[test]
 fn localize_matches_node() {
+    let _goldens = common::test_guard();
     let alphabet = [
         "https://", "access.mymind.com/", "static.accelerator.net/", "media.mymind.host/", "carbon-media.accelerator.net/",
         "https://access.mymind.com/", "https://media.mymind.host/", "http://", "x", "/", "é", "😀", "\"", "\n",
@@ -56,6 +58,7 @@ fn random_value(random: &mut common::Random, depth: u32) -> Value {
 
 #[test]
 fn localize_value_matches_node() {
+    let _goldens = common::test_guard();
     let mut random = common::Random(0x10ca_1173);
     let cases = (0..2_000)
         .map(|_| {
@@ -69,6 +72,7 @@ fn localize_value_matches_node() {
 
 #[test]
 fn send_range_matches_node() {
+    let _goldens = common::test_guard();
     let ranges = [
         None, Some("bytes=0-"), Some("bytes=-5"), Some("bytes=3-2"), Some("bytes=0-0"), Some("bytes=a-b"), Some("bytes=1-2,3-4"),
         Some("bytes= 1-2"), Some("bytes=99-"), Some("bytes=-0"), Some("bytes=00-01"), Some("bytes=1-999"), Some("bytes=-"),
@@ -116,6 +120,7 @@ fn local_target(live: &str) -> String {
 
 #[test]
 fn replay_key_for_matches_node() {
+    let _goldens = common::test_guard();
     let index = std::fs::read_to_string(common::root().join("replay/index.json")).unwrap();
     let Value::Object(index) = mm_js::json::parse(&index).unwrap() else { panic!("index is no object") };
     let mut targets: Vec<(String, String, Option<&str>)> = Vec::new();

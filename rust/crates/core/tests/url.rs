@@ -5,7 +5,8 @@ mod common;
 use mm_core::{Value, arr, obj};
 use mm_js::url;
 
-const DRIVER: &str = "rust/crates/core/tests/drivers/url.mjs";
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:url";
 
 fn parsed(input: &str, base: Option<&str>) -> Value {
     let Some(url) = url::parse(input, base) else { return Value::Null };
@@ -27,6 +28,7 @@ fn parsed(input: &str, base: Option<&str>) -> Value {
 
 #[test]
 fn urls_parse_as_node_parses_them() {
+    let _goldens = common::test_guard();
     let bases = [None, Some("http://localhost:4321"), Some("http://localhost:4321/a/b?c#d"), Some("https://access.mymind.com/"), Some("http://undefined"), Some("http://[::1]:80"), Some("http://Example.COM"), Some("http://a:b:c"), Some("http://localhost:99999")];
     let parts = [
         "/", "a", "%", "2", "F", "e9", "^", "|", "{", "}", "`", "\"", "'", "<", ">", " ", "?", "#", "&", "=", "+", ".", "..", "\\", "é",
@@ -42,18 +44,19 @@ fn urls_parse_as_node_parses_them() {
         cases.push((input, bases[random.below(bases.len() as u64) as usize]));
     }
     let calls: Vec<(&str, Vec<Value>)> = cases.iter().map(|(input, base)| ("parse", vec![Value::from(input.as_str()), base.map_or(Value::Null, Value::from)])).collect();
-    let mut differences = Vec::new();
     for ((input, base), answer) in cases.iter().zip(common::calls(DRIVER, &calls)) {
         let rust = parsed(input, *base);
-        let node = answer.as_ref().unwrap();
-        // Known difference: the `url` crate drops a `file:` path's leading empty segment (`file:////x`), which the
-        // backend never parses.
-        if input.starts_with("file:") && node.get("pathname").as_str().is_some_and(|path| path.starts_with("//")) {
-            continue;
-        }
-        if common::text(&rust) != common::text(node) {
-            differences.push(format!("{input:?} on {base:?}\n  node {}\n  rust {}", common::text(node), common::text(&rust)));
-        }
+        common::assert_value_map(&rust, &answer, &format!("URL {input:?} on {base:?}"), |value| {
+            let Value::Object(mut out) = value.clone() else { return value.clone() };
+            // Preserve the existing allowance for leading empty segments in file paths.
+            if input.starts_with("file:") && out.get("pathname").and_then(Value::as_str).is_some_and(|path| path.starts_with("//")) {
+                let pathname = format!("/{}", out.get("pathname").unwrap().as_str().unwrap().trim_start_matches('/'));
+                let href = out.get("href").unwrap().as_str().unwrap();
+                let href = format!("file:///{}", href.strip_prefix("file://").unwrap().trim_start_matches('/'));
+                out.insert("pathname", pathname);
+                out.insert("href", href);
+            }
+            Value::Object(out)
+        });
     }
-    assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.iter().take(25).cloned().collect::<Vec<_>>().join("\n"));
 }

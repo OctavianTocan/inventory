@@ -15,7 +15,7 @@ case "$(uname -s)-$(uname -m)" in
   *) default= ;;
 esac
 platform=${1:-$default}
-# sha512 of each npm tarball, as package-lock.json records it.
+# Pinned sha512 of each tarball, retained from the pre-switch npm lock.
 case "$platform" in
   linux-x64) sha512=b49c6288bb261dcf40c756f3de868e6015114d718844338306a86f7951e89eb1c9f7ffa4f3da9b2e5d1b7099ecf9ee2de2bbda341c5a119b05b527c076ab8faf ;;
   linux-arm64) sha512=7b17235fc0dfb08709d74c752b3af845c59ed5e742f4faae0d144fc776150af42ff94e69ed88a7dacdf67edce2917a236f53c815cffd32ddbcff2fa2464964af ;;

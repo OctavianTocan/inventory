@@ -991,6 +991,7 @@ dependencies = [
  "mm-js",
  "mm-msgpack",
  "mm-sqlite",
+ "mm-test-support",
  "regex",
  "rsa",
  "scrypt",
@@ -1007,6 +1008,8 @@ dependencies = [
  "icu_collator",
  "indexmap",
  "js-sys",
+ "mm-test-support",
+ "rusqlite",
  "ryu-js",
  "sha2",
  "url",
@@ -1017,6 +1020,8 @@ name = "mm-msgpack"
 version = "0.1.0"
 dependencies = [
  "mm-js",
+ "mm-test-support",
+ "rusqlite",
  "sha2",
 ]
 
@@ -1026,6 +1031,16 @@ version = "0.1.0"
 dependencies = [
  "mm-core",
  "rusqlite",
+]
+
+[[package]]
+name = "mm-test-support"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -1067,6 +1082,7 @@ dependencies = [
  "mm-js",
  "mm-msgpack",
  "mm-sqlite",
+ "mm-test-support",
  "regex",
  "reqwest",
  "rustls",

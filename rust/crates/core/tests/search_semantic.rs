@@ -1,4 +1,4 @@
-//! `search_semantic`'s pure helpers against `lib/search-semantic.mjs`.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -9,7 +9,8 @@ use mm_core::runtime;
 use mm_core::search_semantic::{decode_vector, embeddings_enabled};
 use mm_core::Value;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/search-semantic.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:search-semantic";
 
 fn vector_bytes(random: &mut Random, kind: u64) -> Vec<u8> {
     let mut bytes = Vec::new();
@@ -32,6 +33,7 @@ fn vector_bytes(random: &mut Random, kind: u64) -> Vec<u8> {
 
 #[test]
 fn helpers_match_node() {
+    let _goldens = common::test_guard();
     let keys = [None, Some(""), Some("k")];
     let bases = [None, Some("http://127.0.0.1:1/v1"), Some("http://localhost/x"), Some("http://[::1]:5/x"), Some("https://example.com"), Some("not a url"), Some("")];
     let mut cases = Vec::new();

@@ -134,7 +134,7 @@ pub fn table_digest(db: &dyn Sql, table: &str, columns: &[String]) -> Result<Tab
         select.push(format!("typeof({name}) AS t{index}, CASE WHEN typeof({name}) = 'integer' THEN CAST({name} AS TEXT) ELSE {name} END AS v{index}"));
     }
     let mut hashes = Vec::new();
-    for row in db.query(&format!("SELECT {} FROM {}", select.join(", "), quote(table)?), &[])? {
+    db.query_each(&format!("SELECT {} FROM {}", select.join(", "), quote(table)?), &[], &mut |row| {
         let mut hash = Sha256::new();
         for index in 0..columns.len() {
             let bytes: Vec<u8> = match row.get(&format!("v{index}")) {
@@ -148,7 +148,8 @@ pub fn table_digest(db: &dyn Sql, table: &str, columns: &[String]) -> Result<Tab
             hash.update(&bytes);
         }
         hashes.push(base64::hex(&hash.finalize()));
-    }
+        Ok(true)
+    })?;
     hashes.sort();
     Ok(TableDigest { rows: hashes.len(), sha256: base64::hex(&Sha256::digest(hashes.join("\n").as_bytes())) })
 }

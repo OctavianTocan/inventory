@@ -21,7 +21,7 @@ use crate::tools::embedding_item;
 
 const API: &str = "https://access.mymind.com";
 const TIE_STEP_NS: i128 = 1_000_000;
-const USAGE: &str = "Usage: node tools/seed-db.mjs [--db data/mymind.db]";
+const USAGE: &str = "Usage: mymind seed-db [--db data/mymind.db]";
 const SPACE: &str = r"[\t\n\x0B\x0C\r \x{A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]";
 
 static CARD_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(&format!(r#"^<mymind-card(?-u:\b)[^>]*{SPACE}data-id="([^"]+)""#)).unwrap());

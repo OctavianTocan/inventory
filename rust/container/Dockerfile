@@ -8,6 +8,7 @@ COPY rust/fetch-libvips.sh ./
 RUN ./fetch-libvips.sh linux-x64
 COPY rust/Cargo.toml rust/Cargo.lock ./
 COPY rust/crates ./crates
+COPY rust/test-support ./test-support
 RUN cargo build --release --locked -p mymind
 
 FROM debian:bookworm-slim

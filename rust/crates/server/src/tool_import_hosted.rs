@@ -19,7 +19,7 @@ use crate::bucket_fs::DirectoryBucket;
 use crate::node_path::{extname, join, resolve};
 use crate::read_metadata::import_read_metadata;
 
-const USAGE: &str = "Usage: node tools/import-hosted.mjs bucket | library <name> --db <file> [--recordings [--runs]] [--media <dir>] [--out <dir>]";
+const USAGE: &str = "Usage: mymind import-hosted bucket | library <name> --db <file> [--recordings [--runs]] [--media <dir>] [--out <dir>]";
 const MAX_BODY: usize = 1_900_000;
 
 static KEY: LazyLock<Regex> = LazyLock::new(|| {
@@ -170,7 +170,7 @@ fn number(value: usize) -> Value {
 }
 
 impl Importer {
-    // A recorded body as `server.mjs` serves it: MessagePack items and text with mymind's origins localized.
+    // Localize recorded MessagePack items and text to the replica origin.
     fn replay_body(&self, entry: &Value) -> Result<Vec<u8>> {
         let Some(file) = entry.get("file").as_str() else { return Err(Error::invalid("The \"path\" argument must be of type string")) };
         let path = join(&self.root, &format!("replay/bodies/{file}"));

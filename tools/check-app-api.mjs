@@ -2,15 +2,12 @@
 // sign-in, bearer tokens on API, media and hub, sign-out, user removal, the tunnel's reach, and the typed card reads.
 import { deepStrictEqual, ok, strictEqual } from 'node:assert';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
-import { EventEmitter } from 'node:events';
 import http from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { openAuthStore, removeUser, setPassword } from '../lib/auth-store.mjs';
-import { createHub } from '../lib/hub.mjs';
-import { imageCover } from '../lib/render/media.mjs';
+import { authFixture } from './lib/auth-fixture.mjs';
 import { msgpack, testServer } from './http-check.mjs';
 
 const OWNER = 'owner@example.com';
@@ -58,6 +55,16 @@ const get = (path, headers) => call(server.base, path, { headers });
 const post = (path, body, headers) => call(server.base, path, { method: 'POST', body: body ?? {}, headers });
 const local = (value) => (value === undefined ? undefined : JSON.parse(JSON.stringify(value).replaceAll('https://media.mymind.host/', '/_mediahost/')));
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
+const coverFixtures = JSON.parse(await readFile(new URL('./fixtures/app-image-covers.json', import.meta.url), 'utf8'));
+
+// Look up the exact frozen blob input so a changed fixture cannot silently change the expectation.
+function expectedImageCover(blob) {
+  const key = sha256(JSON.stringify(blob));
+  const entry = coverFixtures.covers[key];
+  ok(entry, `missing frozen image-cover fixture for blob hash ${key}`);
+  deepStrictEqual(blob, entry.blob, 'frozen image-cover input');
+  return entry.cover;
+}
 
 const nonce = async (headers) => (await (await post('/app/v1/auth/nonce', {}, headers)).json()).nonce;
 
@@ -128,7 +135,8 @@ const PASSWORD = 'correct horse battery staple';
 const form = (headers) => ({ 'content-type': 'application/x-www-form-urlencoded', ...headers });
 const webPassword = (username, password, headers) => fetch(`${server.base}/signin/password`, { method: 'POST', redirect: 'manual', headers: form(headers), body: new URLSearchParams({ username, password }) });
 
-const users = openAuthStore(authPath);
+const auth = await authFixture(authPath);
+const users = auth.db;
 const library = new DatabaseSync(server.dbPath, { readOnly: true });
 let owner;
 try {
@@ -247,6 +255,12 @@ try {
     strictEqual(await hubOpens(), false);
     strictEqual(await hubOpens(bearer('nope')), false);
     strictEqual(await hubOpens(bearer(owner)), true);
+    strictEqual(await hubOpens({ ...bearer(owner), origin: 'https://other-client.test' }), true);
+  });
+  await check('bearer-only cross-origin writes reach the authenticated API', async () => {
+    const token = (await (await googleSignIn()).json()).token;
+    strictEqual((await post('/app/v1/auth/signout', {}, { ...bearer(token), origin: 'https://other-client.test' })).status, 204);
+    strictEqual((await get('/app/v1/cards?limit=1', bearer(token))).status, 401);
   });
   await check('a bearer token after several spaces is accepted', async () => {
     strictEqual((await get('/app/v1/cards?limit=1', { authorization: `Bearer   ${owner}` })).status, 200);
@@ -261,27 +275,6 @@ try {
     strictEqual(await rawRequest('//'), 400);
     strictEqual(await rawRequest('//', { headers: { connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13', 'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==' } }), null);
     strictEqual((await get('/app/v1/cards?limit=1', bearer(owner))).status, 200);
-  });
-  await check('the hub disconnects a connection once its session ends', async () => {
-    let allowed = true;
-    const fakeServer = new EventEmitter(), socket = new EventEmitter(), sent = [];
-    const push = createHub(fakeServer, () => allowed);
-    socket.destroyed = false;
-    socket.write = (bytes) => { sent.push(bytes.toString()); };
-    socket.destroy = socket.end = () => { socket.destroyed = true; socket.emit('close'); };
-    try {
-      fakeServer.emit('upgrade', { url: '/hub', headers: { 'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==' } }, socket, Buffer.alloc(0));
-      const handshake = Buffer.from('{"protocol":"json","version":1}\x1e');
-      socket.emit('data', Buffer.concat([Buffer.from([0x81, 0x80 | handshake.length, 0, 0, 0, 0]), handshake]));
-      push('object:updated', { id: 'while-signed-in' });
-      ok(sent.some((text) => text.includes('while-signed-in')));
-      allowed = false;
-      push('object:updated', { id: 'after-sign-out' });
-      ok(socket.destroyed, 'socket closed');
-      ok(!sent.some((text) => text.includes('after-sign-out')), 'no event after sign-out');
-    } finally {
-      socket.end();
-    }
   });
   await check('a token expires 90 days after last use and is refreshed at most hourly', async () => {
     const hash = sha256(owner);
@@ -311,7 +304,7 @@ try {
     strictEqual((await get('/app/v1/cards?limit=1', bearer(owner))).status, 200, 'other tokens survive');
   });
 
-  await setPassword(users, 'Tester', PASSWORD);
+  await auth.setPassword('Tester', PASSWORD);
   let passwordToken;
   await check('password user signs in, in any case', async () => {
     const res = await post('/app/v1/auth/password', { username: 'TESTER', password: PASSWORD, device: 'Pixel' });
@@ -330,8 +323,8 @@ try {
     }
   });
   await check('failures at the app lock the web form, and the other way round', async () => {
-    await setPassword(users, 'applock', PASSWORD);
-    await setPassword(users, 'weblock', PASSWORD);
+    await auth.setPassword('applock', PASSWORD);
+    await auth.setPassword('weblock', PASSWORD);
     const appSide = { 'cf-connecting-ip': '203.0.113.10' };
     const webSide = { 'cf-connecting-ip': '203.0.113.11' };
     for (let i = 0; i < 10; i++) strictEqual((await post('/app/v1/auth/password', { username: 'applock', password: `wrong guess number ${i}` }, appSide)).status, 401);
@@ -343,7 +336,7 @@ try {
     strictEqual((await post('/app/v1/auth/password', { username: 'weblock', password: PASSWORD }, webSide)).status, 429);
   });
   await check('parallel wrong passwords stop at the lockout limit', async () => {
-    await setPassword(users, 'parallel', PASSWORD);
+    await auth.setPassword('parallel', PASSWORD);
     const from = { 'cf-connecting-ip': '203.0.113.12' };
     const statuses = await Promise.all(Array.from({ length: 20 }, (_, i) => post('/app/v1/auth/password', { username: 'parallel', password: `parallel guess ${i}` }, from).then((res) => res.status)));
     strictEqual(statuses.filter((status) => status === 401).length, 10, statuses.join(' '));
@@ -351,14 +344,14 @@ try {
   });
   await check('a password split mid-character across body chunks still signs in', async () => {
     const unicode = 'pässwörd é ünïcödé';
-    await setPassword(users, 'unicode', unicode);
+    await auth.setPassword('unicode', unicode);
     const body = Buffer.from(JSON.stringify({ username: 'unicode', password: unicode }));
     const cut = body.indexOf(Buffer.from('é')) + 1;
     strictEqual(await rawRequest('/app/v1/auth/password', { method: 'POST', headers: { 'content-type': 'application/json' }, parts: [body.subarray(0, cut), body.subarray(cut)] }), 200);
   });
   await check('removing a password user ends their app tokens', async () => {
     strictEqual((await get('/app/v1/cards?limit=1', bearer(passwordToken))).status, 200);
-    ok(removeUser(users, 'tester'));
+    ok(await auth.removeUser('tester'));
     strictEqual((await get('/app/v1/cards?limit=1', bearer(passwordToken))).status, 401);
     strictEqual(users.prepare('SELECT COUNT(*) AS n FROM app_tokens WHERE sub = ?').get('password:tester').n, 0);
     strictEqual((await post('/app/v1/auth/password', { username: 'tester', password: PASSWORD })).status, 401);
@@ -420,7 +413,7 @@ try {
         strictEqual(card.description, data.description);
         strictEqual(card.domain, data.domain);
         strictEqual(card.siteName, data.siteName);
-        deepStrictEqual(card.cover, local(extras.cover ?? (type === 'Image' && data.blob ? imageCover(data.blob) : undefined)));
+        deepStrictEqual(card.cover, local(extras.cover ?? (type === 'Image' && data.blob ? expectedImageCover(data.blob) : undefined)));
         deepStrictEqual(card.post, local(extras.post));
         deepStrictEqual(card.app, local(extras.app));
         deepStrictEqual(card.product, local(extras.product));
@@ -493,7 +486,7 @@ try {
   });
 } finally {
   library.close();
-  users.close();
+  auth.close();
   await server.close();
   idp.close();
   await rm(authDir, { recursive: true, force: true });

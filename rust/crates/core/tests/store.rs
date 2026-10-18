@@ -1,4 +1,4 @@
-//! `store`, `store_schema`, `search_index` and `search_document` against the JS store on both fixtures.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -11,7 +11,8 @@ use mm_core::store::{ChangesOptions, Cursor, IdKind, Store, ns_from_iso, iso_fro
 use mm_core::{Error, Result, Value, arr, obj};
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/store.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:store";
 
 fn open(file: &Path, drop_search: bool) -> Result<(Rc<Sqlite>, Store)> {
     let db = Rc::new(Sqlite::open(file, false)?);
@@ -120,11 +121,13 @@ fn check_dump(fixture: &Path) {
 
 #[test]
 fn reads_match_node_on_owner_fixture() {
+    let _goldens = common::test_guard();
     check_dump(&test_db());
 }
 
 #[test]
 fn reads_match_node_on_hosted_fixture() {
+    let _goldens = common::test_guard();
     check_dump(&hosted_db());
 }
 
@@ -158,6 +161,7 @@ fn new_ids(file: &Path) -> Result<Value> {
 
 #[test]
 fn new_id_matches_node() {
+    let _goldens = common::test_guard();
     for fixture in [test_db(), hosted_db()] {
         let js = calls(DRIVER, &[("newIds", vec![Value::from(temp_copy(&fixture).to_str().unwrap())])]).remove(0);
         assert_same(&new_ids(&temp_copy(&fixture)), &js, "newIds");
@@ -178,6 +182,7 @@ fn search_state(file: &Path, drop_search: bool) -> Result<Value> {
 
 #[test]
 fn search_index_matches_node() {
+    let _goldens = common::test_guard();
     for fixture in [test_db(), hosted_db()] {
         for drop_search in [false, true] {
             let js = calls(DRIVER, &[("searchState", vec![Value::from(temp_copy(&fixture).to_str().unwrap()), Value::from(drop_search)])]).remove(0);
@@ -236,6 +241,7 @@ fn transaction_cases(file: &Path) -> Result<Value> {
 
 #[test]
 fn transaction_matches_node() {
+    let _goldens = common::test_guard();
     for fixture in [test_db(), hosted_db()] {
         let js = calls(DRIVER, &[("transactionCases", vec![Value::from(temp_copy(&fixture).to_str().unwrap())])]).remove(0);
         assert_same(&transaction_cases(&temp_copy(&fixture)), &js, "transactionCases");
@@ -244,6 +250,7 @@ fn transaction_matches_node() {
 
 #[test]
 fn nanosecond_helpers_match_node() {
+    let _goldens = common::test_guard();
     let mut random = Random(77);
     let mut isos: Vec<String> = [
         "2026-10-15T09:35:08.050534Z", "2026-10-15T09:35:08Z", "1970-01-01T00:00:00Z", "1969-12-31T23:59:59.5Z", "0001-01-01T00:00:00Z", "9999-12-31T23:59:59.999999999Z",
@@ -263,7 +270,7 @@ fn nanosecond_helpers_match_node() {
         };
         isos.push(format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}{fraction}Z", random.below(10000), random.below(14), random.below(32), random.below(25), random.below(61), random.below(61)));
     }
-    let js = calls("lib/store.mjs", &isos.iter().map(|iso| ("nsFromIso", vec![Value::from(iso.as_str())])).collect::<Vec<_>>());
+    let js = calls("module:store", &isos.iter().map(|iso| ("nsFromIso", vec![Value::from(iso.as_str())])).collect::<Vec<_>>());
     let mut parsed = Vec::new();
     for (iso, answer) in isos.iter().zip(&js) {
         let result = ns_from_iso(iso);
@@ -281,7 +288,7 @@ fn nanosecond_helpers_match_node() {
             cases.push((*ns, digits));
         }
     }
-    let js = calls("lib/store.mjs", &cases.iter().map(|(ns, digits)| ("isoFromNs", vec![Value::BigInt(*ns), Value::from(*digits)])).collect::<Vec<_>>());
+    let js = calls("module:store", &cases.iter().map(|(ns, digits)| ("isoFromNs", vec![Value::BigInt(*ns), Value::from(*digits)])).collect::<Vec<_>>());
     for ((ns, digits), answer) in cases.iter().zip(&js) {
         assert_same(&iso_from_ns(*ns, *digits).map(Value::from), answer, &format!("isoFromNs({ns}, {digits})"));
     }

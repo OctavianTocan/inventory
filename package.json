@@ -8,7 +8,7 @@
   "scripts": {
     "capture": "node tools/capture.mjs",
     "mirror": "node tools/mirror-static.mjs",
-    "serve": "node server.mjs",
+    "serve": "node tools/serve.mjs",
     "verify": "node tools/verify-all.mjs",
     "drive": "node tools/drive.mjs",
     "coverage": "node tools/coverage.mjs",
@@ -16,9 +16,7 @@
     "bundle": "node tools/bundle-library.mjs"
   },
   "devDependencies": {
-    "playwright-core": "1.58.2"
-  },
-  "dependencies": {
+    "playwright-core": "1.58.2",
     "sharp": "^0.34.5"
   }
 }

@@ -267,13 +267,32 @@ fn has_highlight(data: &Value) -> Result<bool> {
 
 /// Render one grid card without reading recordings or touching the network (`renderCard`).
 ///
-/// The card JSON omits its ID and most scraped entity and media fields, so `extras` carries them: `id`, `linkUrl`,
-/// `title`, `cover`, `post`, `app`, `product`, `reddit`, `capturePending`, `captureFailed` and `screenshotPending`,
-/// as `lib/render-card.mjs` documents.
+/// Inputs are not mutated. Values are plain, unescaped strings unless described as trusted HTML.
+/// The card JSON omits its ID and most scraped entity/media fields. Persist these `extras` alongside
+/// new cards when collecting or importing them:
+/// * `id`: required object ID, unless `data.id` supplies it.
+/// * `linkUrl`: canonical entity URL after tracking removal, normalization or redirects; defaults to
+///   `data.source.url`.
+/// * `title`: full entity title when the captured JSON clipped `data.title` to 200 characters.
+/// * `cover`: `{src,width,height,dominantColor?,type?:'image'|'video',svg?:boolean}`. `src` names the
+///   prepared rendition and its dimensions describe that rendition. Scraped covers and screenshots
+///   require it; uploaded Image/Video use `data.blob`. `imageWidth`/`imageHeight` supply SVG intrinsic
+///   size; `isThumbnail` distinguishes an Instagram thumbnail from a reel poster. An explicit cover
+///   overrides blob media.
+/// * `post`: `{bodyHtml?,author?,gallery?:[{srcset?|src?,width,height}],hasVideo?:boolean}`.
+///   `bodyHtml` is trusted, sanitized source-post HTML absent from the lossy description; it contains
+///   no card layout HTML. Without it, the description becomes an escaped paragraph. `hasVideo`
+///   records a source video whose playable rendition may be unavailable.
+/// * `app`: `{distributor?,srcset,width,height}`, carrying store metadata and prepared icon
+///   renditions. The caller supplies signed CDN URLs; the renderer cannot sign them.
+/// * `product`: `{price}`, the formatted offer price absent from captured product JSON.
+/// * `reddit`: `{title,subreddit}`, the original headline and community absent from JSON.
+/// * `capturePending`/`captureFailed`: local capture status; a pending Placeholder uses the saving template.
+/// * `screenshotPending`: fetched WebPage screenshot template, retained after a textless screenshot failure.
 ///
 /// # Arguments
 /// * `data` - Parsed card JSON with a supported `type` and that type's content fields.
-/// * `extras` - Missing entity metadata; `undefined` stands for an empty object.
+/// * `extras` - Missing entity metadata described above, never a recorded card template; `undefined` is an empty object.
 ///
 /// # Returns
 /// Server-style grid HTML with the exact template whitespace and no trailing newline.

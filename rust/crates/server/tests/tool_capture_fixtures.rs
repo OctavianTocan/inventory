@@ -1,5 +1,8 @@
-//! `mymind capture-fixtures` against `tools/capture-fixtures.mjs`: every route in every control state, the
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 //! recorded requests, the synthetic media and the subcommand binary.
+
+#[path = "tools_common/mod.rs"]
+mod tools_common;
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
@@ -11,10 +14,6 @@ use mm_js::{Value, json, obj};
 use mymind::tool_capture_fixtures::{CASES, EmbeddingReply, Fixtures, fixture_media};
 use sha2::{Digest, Sha256};
 
-fn repo() -> PathBuf {
-    PathBuf::from(std::env::var("MYMIND_ROOT").expect("MYMIND_ROOT"))
-}
-
 fn work(name: &str) -> PathBuf {
     let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("tool-capture-fixtures-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
@@ -25,10 +24,7 @@ fn work(name: &str) -> PathBuf {
 fn js_root(directory: &Path) -> PathBuf {
     let root = directory.join("root");
     std::fs::create_dir_all(&root).unwrap();
-    assert!(Command::new("cp").arg("-r").arg(repo().join("tools")).arg(root.join("tools")).status().unwrap().success());
-    for name in ["lib", "mirror", "capture", "replay", "node_modules", "package.json"] {
-        std::os::unix::fs::symlink(repo().join(name), root.join(name)).unwrap();
-    }
+    tools_common::prepare_root(&root);
     root
 }
 
@@ -40,6 +36,18 @@ fn sha(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+// Preserve decoded pixel bytes and container format without storing another media copy.
+fn image_summary(bytes: &[u8]) -> String {
+    let image = mymind::vips::decode(bytes).unwrap();
+    let info = mymind::vips::metadata(bytes, 0).unwrap();
+    format!("{:?} {}x{} decoded={}x{} bands={} pixels={} sha256={}", info.format, info.width, info.height, image.width, image.height, image.bands, image.pixels.len(), sha(&image.pixels))
+}
+
+// Cover every synthetic media type using the same byte and pixel contracts as the original oracle.
+fn media_summary(pdf: &[u8], mp4: &[u8], png: &[u8], webp: &[u8]) -> String {
+    format!("pdf {} mp4 {} png {} webp {}", tools_common::summary(pdf), sha(mp4), image_summary(png), image_summary(webp))
+}
+
 struct Driver {
     child: Child,
     input: ChildStdin,
@@ -49,24 +57,8 @@ struct Driver {
 
 impl Driver {
     fn start(root: &Path, media: &Path) -> Self {
-        let mut child = Command::new("node")
-            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/drivers/tool-capture-fixtures.mjs"))
-            .arg(root)
-            .arg(media)
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap())
-            .env("HOME", std::env::var_os("HOME").unwrap())
-            .env("NODE_NO_WARNINGS", "1")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let input = child.stdin.take().unwrap();
-        let mut output = BufReader::new(child.stdout.take().unwrap());
-        let mut line = String::new();
-        output.read_line(&mut line).unwrap();
-        let hello = json::parse(&line).unwrap_or_else(|_| panic!("driver said {line:?}"));
-        Self { child, input, output, hello }
+        let _ = (root, media);
+        panic!("Legacy recording requires the recorded pre-switch revision")
     }
 
     fn send(&mut self, command: &str) {
@@ -81,7 +73,9 @@ impl Driver {
     }
 
     fn base(&self) -> String {
-        self.hello.get("base").to_js_string()
+        let base = self.hello.get("base").to_js_string();
+        register_base(&base);
+        base
     }
 }
 
@@ -98,6 +92,24 @@ struct Reply {
     content_type: String,
     location: String,
     body: Vec<u8>,
+}
+
+// Keep the route metadata plus normalized text, exact binary or decoded image expectations.
+fn reply_summary(reply: &Reply, base: &str) -> String {
+    let body = if reply.content_type.starts_with("image/") {
+        image_summary(&reply.body)
+    } else if reply.content_type == "application/pdf" {
+        format!("bytes={} sha256={}", reply.body.len(), sha(&reply.body))
+    } else {
+        tools_common::summary(String::from_utf8_lossy(&reply.body).replace(base, "<base>").as_bytes())
+    };
+    format!("status={} content-type={:?} location={:?} body={body}", reply.status, reply.content_type, reply.location)
+}
+
+// Register only dynamically assigned loopback ports, retaining literal URL regression cases.
+fn register_base(base: &str) {
+    let port = base.rsplit(':').next().unwrap().parse().unwrap();
+    mm_test_support::golden::register_loopback_port(port);
 }
 
 fn fetch(base: &str, method: &str, path: &str, body: Option<&str>) -> Reply {
@@ -192,13 +204,16 @@ fn probes() -> Vec<(&'static str, String, Option<&'static str>)> {
 
 #[test]
 fn every_route_in_every_control_state_matches() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_capture_fixtures.rs")));
     let directory = work("routes");
     let root = js_root(&directory);
     std::fs::create_dir_all(directory.join("js-media")).unwrap();
     std::fs::create_dir_all(directory.join("rust-media")).unwrap();
-    let mut driver = Driver::start(&root, &directory.join("js-media"));
+    let mut driver = tools_common::recording().then(|| Driver::start(&root, &directory.join("js-media")));
     let fixtures = Fixtures::start(fixture_media(&directory.join("rust-media")).unwrap()).unwrap();
-    let (js_base, rust_base) = (driver.base(), fixtures.base.clone());
+    let rust_base = fixtures.base.clone();
+    register_base(&rust_base);
+    let js_base = driver.as_ref().map(Driver::base);
     let states: [State; 7] = [
         ("default", "{}", Box::new(|_| {})),
         ("ai failure", r#"{"control":{"aiFailure":true}}"#, Box::new(|f| f.control(|c| c.ai_failure = true))),
@@ -212,42 +227,67 @@ fn every_route_in_every_control_state_matches() {
         ("delays", r#"{"control":{"imageDelay":150,"chatDelay":150}}"#, Box::new(|f| f.control(|c| { c.image_delay = 150; c.chat_delay = 150; }))),
     ];
     for (name, command, apply) in &states {
-        driver.send(command);
+        if let Some(driver) = &mut driver { driver.send(command); }
         apply(&fixtures);
         std::thread::sleep(Duration::from_millis(50));
         for (method, path, body) in probes() {
             let label = format!("{name}: {method} {path} {body:?}");
-            let (started, js) = (Instant::now(), fetch(&js_base, method, &path, body));
-            let js_time = started.elapsed();
-            let (started, rust) = (Instant::now(), fetch(&rust_base, method, &path, body));
+            let js = js_base.as_ref().map(|base| {
+                let started = Instant::now();
+                let reply = fetch(base, method, &path, body);
+                (reply, started.elapsed())
+            });
+            let started = Instant::now();
+            let rust = fetch(&rust_base, method, &path, body);
             let rust_time = started.elapsed();
-            same_reply(&label, &js, &js_base, &rust, &rust_base);
+            let actual = reply_summary(&rust, &rust_base);
+            let oracle = js.as_ref().map(|(reply, _)| reply_summary(reply, js_base.as_ref().unwrap()));
+            tools_common::check(&format!("{command}: {label}"), actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+            if let Some((js, _)) = &js { same_reply(&label, js, js_base.as_ref().unwrap(), &rust, &rust_base); }
             if *name == "delays" && (path == "/cover.webp" || path == "/chat/completions") {
-                assert!(js_time >= Duration::from_millis(140) && rust_time >= Duration::from_millis(140), "{label}: delay");
+                assert!(rust_time >= Duration::from_millis(140), "{label}: Rust delay");
+                if let Some((_, elapsed)) = js { assert!(elapsed >= Duration::from_millis(140), "{label}: legacy delay"); }
             }
         }
-        assert_eq!(driver.requests(), requests_json(&fixtures), "{name}: recorded requests");
+        let actual = requests_json(&fixtures);
+        let oracle = driver.as_mut().map(Driver::requests);
+        tools_common::check(&format!("{name}: cumulative recorded fixture requests"), actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
     }
     fixtures.close();
 }
 
 #[test]
 fn media_matches_the_js_fixtures() {
+    let _golden = tools_common::golden(file!(), include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/", "tool_capture_fixtures.rs")));
     let directory = work("media");
     let root = js_root(&directory);
     std::fs::create_dir_all(directory.join("js-media")).unwrap();
     std::fs::create_dir_all(directory.join("rust-media")).unwrap();
-    let driver = Driver::start(&root, &directory.join("js-media"));
+    let driver = tools_common::recording().then(|| Driver::start(&root, &directory.join("js-media")));
     let media = fixture_media(&directory.join("rust-media")).unwrap();
-    assert_eq!(media.pdf, hex(&driver.hello.get("pdf").to_js_string()), "pdf bytes");
-    assert_eq!(sha(&media.mp4), driver.hello.get("mp4").to_js_string(), "mp4 bytes");
-    for (name, ours) in [("png", &media.png), ("webp", &media.webp)] {
-        let theirs = hex(&driver.hello.get(name).to_js_string());
-        let (a, b) = (mymind::vips::decode(&theirs).unwrap(), mymind::vips::decode(ours).unwrap());
-        assert_eq!(a, b, "{name} pixels");
-        let (a, b) = (mymind::vips::metadata(&theirs, 0).unwrap(), mymind::vips::metadata(ours, 0).unwrap());
-        assert_eq!((a.format, a.width, a.height), (b.format, b.width, b.height), "{name} format and size");
-        assert_eq!((b.width, b.height), (640, 480));
+    let actual = media_summary(&media.pdf, &media.mp4, &media.png, &media.webp);
+    let oracle = driver.as_ref().map(|driver| {
+        let pdf = hex(&driver.hello.get("pdf").to_js_string());
+        let png = hex(&driver.hello.get("png").to_js_string());
+        let webp = hex(&driver.hello.get("webp").to_js_string());
+        format!("pdf {} mp4 {} png {} webp {}", tools_common::summary(&pdf), driver.hello.get("mp4").to_js_string(), image_summary(&png), image_summary(&webp))
+    });
+    tools_common::check("synthetic PDF, MP4, PNG and WebP", actual.as_bytes(), oracle.as_deref().map(str::as_bytes));
+    if let Some(driver) = &driver {
+        assert_eq!(media.pdf, hex(&driver.hello.get("pdf").to_js_string()), "pdf bytes");
+        assert_eq!(sha(&media.mp4), driver.hello.get("mp4").to_js_string(), "mp4 bytes");
+        let png = hex(&driver.hello.get("png").to_js_string());
+        let webp = hex(&driver.hello.get("webp").to_js_string());
+        for (name, ours, theirs) in [("png", &media.png, &png), ("webp", &media.webp, &webp)] {
+            let (a, b) = (mymind::vips::decode(theirs).unwrap(), mymind::vips::decode(ours).unwrap());
+            assert_eq!(a, b, "{name} pixels");
+            let (a, b) = (mymind::vips::metadata(theirs, 0).unwrap(), mymind::vips::metadata(ours, 0).unwrap());
+            assert_eq!((a.format, a.width, a.height), (b.format, b.width, b.height), "{name} format and size");
+        }
+    }
+    for bytes in [&media.png, &media.webp] {
+        let info = mymind::vips::metadata(bytes, 0).unwrap();
+        assert_eq!((info.width, info.height), (640, 480));
     }
     let pixels = mymind::vips::decode(&media.png).unwrap().pixels;
     assert_eq!(&pixels[..3], &[0xcc, 0x44, 0x22]);
@@ -259,9 +299,12 @@ fn the_subcommand_serves_the_fixtures() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_mymind"))
         .arg("capture-fixtures")
         .env_clear()
+        .env("TMPDIR", env!("CARGO_TARGET_TMPDIR"))
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", std::env::var_os("HOME").unwrap())
         .env("MYMIND_ROOT", &directory)
+        .env("MYMIND_ENV_FILE", "fixture-vars")
+        .env("STORE_LOAD_ENV", "0")
         .env("PORT", "0")
         .stdout(Stdio::piped())
         .spawn()

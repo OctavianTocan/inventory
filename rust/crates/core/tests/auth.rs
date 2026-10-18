@@ -18,8 +18,12 @@ use mm_core::{Error, Result, Value, obj};
 use mm_js::{base64, date, json};
 use mm_sqlite::Sqlite;
 use sha2::{Digest, Sha256};
+use rsa::{RsaPrivateKey, Pkcs1v15Sign, pkcs8::DecodePrivateKey, traits::PublicKeyParts};
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/auth.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:auth";
+// The fixed synthetic test key already used by the pre-switch oracle, never an account credential.
+const SYNTHETIC_KEY_PKCS8: &str = "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCM5G0cfsoMd1b8Fz+T4nzsg/B+Xk1yMv050rleRsVujX9TJc03CIUASWE69X2XVGan9JwZCfqdNggVhiASTTDQ9VPzJpm5Re+jecWaoBg4fD70EvOVFXvcOBs/VmUd2qV7iDWdx+C3FlIAYiXXPK+NVzfGGQtvd2QwW3ZY1yvT/F98O5yu/NPVnWU3BwefSkk4SQOxgwgv6BED6zqCCcg+ngU3D0+DjWyMc4k1A+Jy7qrtbuplJyG+Z/JXTiG0Ukk1ZgVSkDE7R7t/hN1riqeFSWI2IisvUldyWAPJaXflftYr0bxPohXaFHhzw09QYeJfKzY/YMb+0c9mSC5BoTetAgMBAAECggEAHhOzgUZFzsR5MsapwWGzxm/iGq/5+3uMGFh2TvxvsEqPmEn1FZ8BeY6wrXvzrCcN5SPwYN4C/KWosyOXXCDTX4BHxBwE7ArUfgMEXp53nTNU4xjanARilR/7HRnN60IeWpE41O5y99LRfZh2OI0RcuxgES+Og+SqZDJaQNvqVM310eTC5eUFBjKg0gGvp4zcjAYvlPhmjFqw78qGjt+TZ95DLbWMYBaunTwHf890G5VZYL4BLfFYZFj5lr0Y67fimonFwBfxP7duwUo8pZYmPHkgoD2WdxqFx+Oz1Pp21WDqihqqOeoIieiEnp9bFNxbvW3DkaC2oS8tT5/DFldygQKBgQDGFL2/CnX83Xk6drWx2bn4dCmySxRdhsuS5llptBOTIUB40xcp8ytX0eQUGhFuvdVlQ5woEd5lQBOvIEmo8ivLMK6J29ECFMAxpz1veE3N+itHpGXz5wWW8+1KR3zHQq6Lpi6+79LIZT518JBlOy8ocGO5bnzWoKzuGp2OME1mwQKBgQC2FtmuM7FbXt+TfL4a92Ol4ceDL71PyZOzG3KcZonLi29L9ps8hpCsZ0rHwG+tPsZPIYgkB3ciXWLD1nRvX/T9a6oOKZR/Xdm780AoOnUvDrhh9jvZzYwJwtoqVJqUn9qahWUi0ecsX9srXEnR5dpTgPHUWNl3uuRE+nCUaO3X7QKBgGczbTy4lYp+VWf5a2bTGkpxMzw6U8z6qtvJefJRqRUx8OZCjMIFeKKTr3IttsFs1F6jIBvcW3ODM/49I0OLkPeXUIhw529fIld8W8zU8CyN17jG1XuC9O2V/x6BKmiivE/z8Ez4pGhWH3nRMVocwNAf5kU5ZH9qTU7svQPU9K7BAoGAYZj3zgZI/rdoUI4g+yU0VPoiTO9uofBiaTLCCJBxNRckbWvdouBhdPbcPxqnAQ3PjyRi6yTRNyskv+EXgYbGMnrdqD+jJ21vQe1MqwNCQhm6vE8Vn1UrxSOaeevk+tp/eikbn0EwjjlGqQQLUSTJE87eT7nbve//X/V4GCPxr7UCgYBf0sB2wg3QP91gSy1s3J7DXMy1a/pAsFv/zBCt6oOiRbvsof2QLyUV0dnodO6FlfBH/1tuLkyWa/UYUW2dBldOX+kzeoHcj+I5MYML5ndLHuU8d2do061w1H6GZGtyOjsjrUnbkt9idUxJuYSYn3Bwqlkk2RQrXLCaGHIlRv5iug==";
 const NOW: f64 = 1_760_000_000_000.0;
 const HOUR: f64 = 3_600_000.0;
 const DAY: f64 = 24.0 * HOUR;
@@ -152,7 +156,13 @@ fn keys_reply(kids: &[&str], max_age: Option<u32>) -> Value {
     if let Some(age) = max_age {
         headers.insert("cache-control", format!("public, max-age={age}, must-revalidate"));
     }
-    let keys: Vec<Value> = kids.iter().map(|kid| common::call(DRIVER, "jwk", vec![s(kid)]).unwrap()).collect();
+    let key = synthetic_key();
+    let keys: Vec<Value> = kids.iter().map(|kid| {
+        let actual: Value = obj! { "kty" => "RSA", "n" => base64::encode_url(&key.n().to_bytes_be()), "e" => base64::encode_url(&key.e().to_bytes_be()), "kid" => *kid, "use" => "sig", "alg" => "RS256" }.into();
+        let expected = common::call(DRIVER, "jwk", vec![s(kid)]);
+        common::assert_value(&actual, &expected, "synthetic public JWK");
+        actual
+    }).collect();
     obj! { "status" => 200, "headers" => headers, "body" => json::to_string(&obj! { "keys" => keys }.into()) }.into()
 }
 
@@ -161,15 +171,27 @@ fn token_reply(status: u16, id_token: Option<&str>) -> Value {
     obj! { "status" => status as f64, "headers" => obj! { "content-type" => "application/json" }, "body" => body }.into()
 }
 
+// Decode the fixed signing fixture without reading any environment or credential files.
+fn synthetic_key() -> RsaPrivateKey {
+    RsaPrivateKey::from_pkcs8_der(&base64::decode(SYNTHETIC_KEY_PKCS8)).expect("synthetic RSA fixture")
+}
+
+// Sign a synthetic identity token and freeze its exact bytes without storing the token.
 fn sign(claims: Value, header: Option<Value>) -> String {
-    let mut args = vec![claims];
+    let mut args = vec![claims.clone()];
+    let mut head = obj! { "alg" => "RS256", "kid" => "test-key-1", "typ" => "JWT" };
     if let Some(header) = header {
-        args.push(header);
+        args.push(header.clone());
+        if let Value::Object(header) = header {
+            for (key, value) in header.iter() { head.insert(key.into_owned(), value.clone()); }
+        }
     }
-    match common::call(DRIVER, "sign", args).unwrap() {
-        Value::String(token) => token,
-        other => panic!("sign answered {other:?}"),
-    }
+    let message = format!("{}.{}", base64::encode_url(json::to_string(&head.into()).as_bytes()), base64::encode_url(json::to_string(&claims).as_bytes()));
+    let signature = synthetic_key().sign(Pkcs1v15Sign::new::<Sha256>(), &Sha256::digest(message.as_bytes())).expect("synthetic signature");
+    let token = format!("{message}.{}", base64::encode_url(&signature));
+    let expected = common::call(DRIVER, "sign", args);
+    common::assert_value(&s(&token), &expected, "synthetic RS256 factory");
+    token
 }
 
 fn claims(nonce: &str, edits: &[(&str, Value)]) -> Value {
@@ -403,15 +425,9 @@ fn sql_params(params: &Value) -> Vec<mm_core::sql::SqlValue> {
 
 fn compare(name: &str, scenario: &Value) -> Vec<Value> {
     let rust = futures_executor::block_on(run_rust(scenario));
-    let js = match common::call(DRIVER, "run", vec![scenario.clone()]) {
-        Ok(Value::Array(answers)) => answers,
-        other => panic!("{name}: the JS driver answered {other:?}"),
-    };
-    assert_eq!(rust.len(), js.len(), "{name}: step count");
-    for (index, (rust, js)) in rust.iter().zip(&js).enumerate() {
-        let context = if index == 0 { "create".to_owned() } else { format!("{name} step {index}: {}", common::text(&scenario.get("steps").at(index - 1).clone())) };
-        assert_eq!(common::text(rust), common::text(js), "{context}");
-    }
+    let js = common::call(DRIVER, "run", vec![scenario.clone()]);
+    assert_eq!(rust.len(), scenario.get("steps").as_array().unwrap().len() + 1, "{name}: step count");
+    common::assert_value(&Value::Array(rust.clone()), &js, name);
     rust
 }
 
@@ -522,6 +538,7 @@ fn pages_scenario() -> Value {
 
 #[test]
 fn auth_matches_js() {
+    let _goldens = common::test_guard();
     let mut cases = 0;
 
     let pages = compare("pages", &pages_scenario());

@@ -1,6 +1,6 @@
 use mm_js::Value;
 
-/// The replica's own encoder for recorded cards (`encodeMsgpack` in `server.mjs`), appended to `out`: fixints for
+/// The replica's own encoder for recorded cards (the historical JS `encodeMsgpack`), appended to `out`: fixints for
 /// 0 to 127 and float64 for every other number, str8 only for 32 to 255 bytes, and anything that is not JSON
 /// written as the map of its own enumerable properties, as `Object.entries` sees it.
 pub fn encode_recorded(out: &mut Vec<u8>, value: &Value) {

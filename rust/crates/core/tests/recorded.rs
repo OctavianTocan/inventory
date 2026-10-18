@@ -1,4 +1,4 @@
-//! `recorded` against `lib/recorded.mjs` on the hosted fixture: every recorded key across device and run headers.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -14,7 +14,8 @@ use mm_js::base64;
 use mm_sqlite::Sqlite;
 use sha2::{Digest, Sha256};
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/recorded.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:recorded";
 
 const AGENTS: [&str; 7] = [
     "",
@@ -66,6 +67,7 @@ fn lookups_value(lookups: &[(String, String, String)]) -> Value {
 
 #[test]
 fn recorded_matches_node_on_hosted_fixture() {
+    let _goldens = common::test_guard();
     let probe = Sqlite::open(hosted_db(), true).unwrap();
     let keys: Vec<String> = probe.query("SELECT key FROM recorded", &[]).unwrap().iter().map(|row| row.text("key").unwrap().to_owned()).collect();
     assert!(keys.len() > 2000);

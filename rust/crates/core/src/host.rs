@@ -42,8 +42,8 @@ pub struct ListedObject {
     pub size: u64,
 }
 
-/// An object store with the operations the hosted server uses: a directory (`lib/bucket-fs.mjs`) or R2
-/// (`worker/bucket-r2.mjs`). Keys are `/`-separated paths.
+/// An object store with the operations the hosted server uses: a directory (`rust/crates/server/src/bucket_fs.rs`) or R2
+/// (`rust/crates/worker/src/bucket_r2.rs`). Keys are `/`-separated paths.
 #[async_trait(?Send)]
 pub trait Bucket {
     /// What the store knows about an object, or `None` when there is no such object.
@@ -197,7 +197,7 @@ pub struct AnalysisImage {
 }
 
 /// The image, video and document work behind the hosted media: sharp, ffmpeg and pdftoppm on a native host, the media
-/// container on Cloudflare (`lib/media-processor.mjs`, `worker/media-client.mjs`).
+/// container on Cloudflare (`rust/crates/server/src/media_processor.rs`, `rust/crates/worker/src/media_client.rs`).
 #[async_trait(?Send)]
 pub trait MediaProcessor {
     /// Identify a new file and derive the card media fields; the caller stores the original at `data.blob.path`.
@@ -236,7 +236,7 @@ pub trait MediaProcessor {
     async fn image(&self, body: Body) -> Result<AnalysisImage>;
 }
 
-/// Where chunked uploads keep their chunks: a private directory (`directoryStorage` of `lib/uploads.mjs`) or an object
+/// Where chunked uploads keep their chunks: a private directory (`directoryStorage` of `rust/crates/server/src/uploads_fs.rs`) or an object
 /// store ([`crate::hosted_media::BucketUploads`]). Upload ids are 22 hex characters.
 #[async_trait(?Send)]
 pub trait UploadStorage {
@@ -323,7 +323,7 @@ impl MediaResult {
     }
 }
 
-/// A library's media handle, on disk (`createMedia`, `lib/local-media.mjs`) or in an object store
+/// A library's media handle, on disk (`createMedia`, `rust/crates/server/src/local_media.rs`) or in an object store
 /// (`createHostedMedia`): what uploads, writes, enrichment and the API call.
 #[async_trait(?Send)]
 pub trait Media {
@@ -430,7 +430,7 @@ impl FetchedResource {
     }
 }
 
-/// The validated HTTP transport behind link capture (`fetchResource` of `lib/capture-http.mjs`): the native transport
+/// The validated HTTP transport behind link capture (`fetchResource` of `rust/crates/server/src/capture_http.rs`): the native transport
 /// on a native host, the media container's `resource` operation on Cloudflare.
 #[async_trait(?Send)]
 pub trait Resource {
@@ -446,7 +446,7 @@ pub trait Resource {
     async fn fetch(&self, url: &str, options: ResourceOptions) -> Result<FetchedResource>;
 }
 
-/// Page screenshots behind link capture (`screenshotPage` of `lib/capture-link.mjs`): headless Chromium on a native
+/// Page screenshots behind link capture (`screenshotPage` of `rust/crates/server/src/screenshot.rs`): headless Chromium on a native
 /// host, the media container's `screenshot` operation on Cloudflare.
 #[async_trait(?Send)]
 pub trait Screenshot {

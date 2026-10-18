@@ -1,8 +1,7 @@
-//! `uploads` and `DirectoryUploads` against `lib/uploads.mjs`: generated programs of authorize, put, prepare, claim,
-//! cleanup, source and sweep calls must answer alike and leave the same rows and files.
+//! Frozen `uploads` and `DirectoryUploads` expectations: generated authorize, put, prepare, claim, cleanup, source
+//! and sweep programs retain all answers, rows and files.
 //!
-//! Ids, tokens and generated card ids are random, so both sides name them by position (`@u0`, `@t0`, `@new`) and
-//! replace the real values in every answer, row and file name before comparing. Time is fixed on both sides.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 #[path = "../../core/tests/common/mod.rs"]
 mod common;
@@ -22,7 +21,8 @@ use mm_js::{base64, json};
 use mm_sqlite::Sqlite;
 use mymind::uploads_fs::DirectoryUploads;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/uploads.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:server:uploads";
 const NOW: i64 = 1_800_000_000_000;
 
 struct FakeMedia {
@@ -484,24 +484,24 @@ fn uploads_match_node() {
             })
             .collect(),
     );
-    let js = common::call(DRIVER, "run", vec![js_copy.to_string_lossy().as_ref().into(), js_programs]).unwrap();
-    let Value::Array(js) = js else { panic!("driver answered no array") };
+    let expected = common::call(DRIVER, "run", vec![js_copy.to_string_lossy().as_ref().into(), js_programs]);
     let (mut oks, mut errors, mut sources) = (0usize, 0usize, 0usize);
-    for ((index, program), expected) in programs.iter().enumerate().zip(&js) {
+    let mut answers = Vec::with_capacity(programs.len());
+    assert_eq!(programs.len(), 60, "seeded upload program count");
+    for (index, program) in programs.iter().enumerate() {
         let dir = rust_root.join(format!("p{index}"));
         let rust = rust_program(&db, &store, program, &dir, &cards_rust);
-        let (rust_results, js_results) = (rust.get("results").as_array().unwrap(), expected.get("results").as_array().unwrap());
-        for (step, (rust_result, js_result)) in rust_results.iter().zip(js_results).enumerate() {
-            let context = format!("program {index} step {step}: {}", common::text(&program.get("ops").as_array().unwrap()[step]));
-            assert_eq!(common::text(rust_result), common::text(js_result), "{context}");
-            oks += usize::from(rust_result.get("ok") != &Value::Undefined);
-            errors += usize::from(rust_result.get("error") != &Value::Undefined);
-            sources += usize::from(common::text(&program.get("ops").as_array().unwrap()[step]).contains("\"source\"") && rust_result.get("ok") != &Value::Undefined);
+        let results = rust.get("results").as_array().expect("upload results");
+        let ops = program.get("ops").as_array().unwrap();
+        assert_eq!(results.len(), ops.len(), "program {index}: operation count");
+        for (step, result) in results.iter().enumerate() {
+            oks += usize::from(!result.get("ok").is_undefined());
+            errors += usize::from(!result.get("error").is_undefined());
+            sources += usize::from(common::text(&ops[step]).contains("\"source\"") && !result.get("ok").is_undefined());
         }
-        assert_eq!(rust_results.len(), js_results.len(), "program {index}");
-        assert_eq!(common::text(rust.get("rows")), common::text(expected.get("rows")), "program {index} rows");
-        assert_eq!(common::text(rust.get("files")), common::text(expected.get("files")), "program {index} files");
+        answers.push(rust);
     }
+    common::assert_value(&Value::Array(answers), &expected, "all upload programs, answers, rows and files");
     mm_js::date::set_fixed_now(None);
     assert!(oks > 400 && errors > 200 && sources >= 3, "ok {oks}, errors {errors}, sources {sources}");
     println!("uploads programs: {} ({oks} answers, {errors} errors, {sources} sources)", programs.len());

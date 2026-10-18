@@ -6,10 +6,15 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run bundle\nSnapshots the local library and moves unreferenced replay bodies into the local backup directory.');
+  process.exit(0);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bundle = path.join(ROOT, 'library');
 const source = path.join(ROOT, 'data', 'mymind.db');
-if (!existsSync(source)) throw new Error('No data/mymind.db to bundle; run node tools/seed-db.mjs first.');
+if (!existsSync(source)) throw new Error('No data/mymind.db to bundle; run rust/target/release/mymind seed-db first.');
 
 mkdirSync(bundle, { recursive: true });
 const target = path.join(bundle, 'mymind.db');

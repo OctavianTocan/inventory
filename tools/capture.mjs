@@ -1,5 +1,5 @@
 // Records the logged-in mymind app (shell, card stream, side endpoints, card details, media)
-// from an open Chrome tab, so server.mjs can replay it offline.
+// from an open Chrome tab, so the Rust replica can replay it offline.
 // --gets-only records just the side endpoints missing from an existing capture and leaves everything else as is.
 // --media-only records the media of every captured card that neither capture/ nor replay/ has yet.
 // --details-only records the detail view, article reader and detail media of every stored card that has none yet.
@@ -9,6 +9,11 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { connectToPage, loadThroughDevTools } from './cdp.mjs';
 import { replayKey, STORE } from './replay-store.mjs';
+
+if (process.argv.includes('--help')) {
+  console.log('Usage: npm run capture -- [--cdp URL] [--out capture] [--gets-only|--media-only|--details-only] [--videos]\nRequires the signed-in browser; captures live GETs with writes intercepted.');
+  process.exit(0);
+}
 
 const { values: opts } = parseArgs({
   options: {

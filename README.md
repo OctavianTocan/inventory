@@ -7,16 +7,17 @@ persist locally; unsupported reads still use the recordings. No write is forward
 ## Run it
 
 ```bash
-SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci   # once per clone
-npm run serve                          # http://localhost:4321/everything
-OFFLINE=1 npm run serve                # no network at all; static assets come from mirror/
+SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci   # Node developer tooling
+rust/fetch-libvips.sh                   # once per clone, platform libvips
+(cd rust && nice -n 19 cargo build --offline --release -j 2 -p mymind)
+rust/target/release/mymind serve        # http://localhost:4321/everything
+OFFLINE=1 rust/target/release/mymind serve # no network at all; static assets come from mirror/
 ```
 
-The recordings of your library and mymind's front-end are committed (see [Private data](#private-data)), so a fresh
-clone runs as is. The working database `data/mymind.db` is not: it stays on the computer that hosts the library,
+The recordings of your library and mymind's front-end are committed (see [Private data](#private-data)), so a clone can serve them after building the Rust executable. The working database `data/mymind.db` is not: it stays on the computer that hosts the library,
 which other machines reach over HTTPS (see [Hosting](#hosting)).
-`SHARP_IGNORE_GLOBAL_LIBVIPS=1` keeps sharp on its prebuilt binaries; without it, a machine with a system libvips
-makes `npm ci` try to compile sharp and fail.
+Node dependencies support developer tooling; runtime media uses the pinned libvips build, ffmpeg, ffprobe, Poppler and Chromium.
+`SHARP_IGNORE_GLOBAL_LIBVIPS=1` keeps the extension screenshot-diff dependency on prebuilt binaries.
 
 When `data/mymind.db` exists, desktop card grids, individual cards, trash, spaces, tags, changes and object quotas
 come from SQLite. `POST /cards/grid` also hydrates current SQLite cards. Phone requests keep their device-specific
@@ -30,7 +31,7 @@ recorded search/suggestion/query-check requests retain their device/run replay, 
 SQLite without persisting query-check membership changes. Normal writable mode always searches the store.
 Unrecorded API calls are logged as `[miss]`, media without a recording as `[placeholder]`.
 
-To build the initial database, run `node tools/seed-db.mjs`. Rebuilding replaces an existing database, including its
+To build the initial database, run `rust/target/release/mymind seed-db`. Rebuilding replaces an existing database, including its
 local edits. The seed also imports response metadata and the recorded space-detail query-check times; card and
 space bodies are generated from the stored rows. Older phase 1 databases import that metadata on first startup.
 
@@ -48,19 +49,19 @@ Screenshots use a fresh headless Chromium context with the default user agent; p
 readable "blocking us" card and skip AI, which would otherwise invent a summary from the bare URL. Original source
 URLs and user edits made during capture are preserved.
 Online capture permits public destinations only, including every redirect, media/oEmbed request and screenshot
-resource. Node HTTP validates DNS answers at socket lookup and limits streamed wire and decoded bodies. Screenshot
+resource. Rust capture validates every DNS answer before its pinned connection and limits streamed wire and decoded bodies. Screenshot
 resources share a 100 MiB wire-plus-decoded budget; native browser networking uses an unresolvable proxy with
 QUIC disabled, and WebRTC/WebTransport are removed from every frame. New links start as a `Placeholder` (flags 0).
 The 2026-10-15 APK save in `evidence/live-saves/2026-10-15-apk-link.jsonl` supplies the exact saving and screenshot
 templates: the fetched WebPage has flags 2097153; after AI reports no resource text and the screenshot fails,
 flags become 6291457 and the screenshot spinner remains. The hub uses the recorded event shapes and order.
-These stages are compared byte for byte by `check-render` and exercised offline by `check-capture`; success,
+These stages are compared byte for byte by Rust `check_render` and exercised offline by `check_capture`; success,
 early-failure and text-bearing screenshot-failure paths retain their previous behavior without claiming live parity.
 
 Uploads use `POST /uploads/authorize`, bearer-authorized chunked `PUT /uploads/:id`, then `POST /objects` with
 `{type:"Media",uploadId}`. PNG/JPEG/WebP and other decoded raster images, videos and PDFs become local cards.
 Originals live in `data/media/<account>/<card-tail>/<blob>.<ext>`; recorded-style rendition URLs are generated on
-demand with sharp, with cached resized/cropped WebP/JPEG/PNG, PDF pages and video posters/previews. Local files
+demand with libvips, with cached resized/cropped WebP/JPEG/PNG, PDF pages and video posters/previews. Local files
 take precedence over captured media; streaming originals and videos support byte ranges. Set `STORE_MEDIA` to
 override the media root (the default is beside `STORE_DB`). Clipboard multipart image/PDF paste and inline editor
 image attachments (raw bytes, completed upload IDs or public remote URLs) use the same local media storage.
@@ -69,8 +70,7 @@ by atomic rename after successful processing. Temporary uploads have a shared 1 
 24 hours, and are swept at writable startup and upload operations. Claiming an upload removes its temporary
 original after commit; its row retains idempotency until expiry and attachment reuse resolves permanent media.
 
-AI runs after capture, after saved notes and on `POST /cards/:id/analyze`. The server loads `.env` with
-`process.loadEnvFile` when present. Set `GEMINI_API_KEY` for hosted summaries and 768-dimension embeddings;
+AI runs after capture, after saved notes and on `POST /cards/:id/analyze`. The native environment loader reads `.env` when present. Set `GEMINI_API_KEY` for hosted summaries and 768-dimension embeddings;
 `TYPESAFE_API_KEY` optionally selects final tags with Jev. Cover images are converted to PNG for analysis. The
 library's tag vocabulary is passed to `analyze`; generic labels are filtered, manual tags are preserved, AI tags
 use flag `2`, summaries appear in the detail TL;DR and embeddings persist in the SQLite `embeddings` BLOB table.
@@ -89,10 +89,10 @@ their filters at creation and refresh memberships on query checks, retaining man
 an API call. Missing keys, disabled hosted calls offline and provider failures return text matches or empty
 semantic matches. See [search contracts and measured recording differences](docs/search.md).
 
-Backfill historical text embeddings with `node tools/embed-library.mjs` (estimate only), then explicitly add
+Backfill historical text embeddings with `rust/target/release/mymind embed-library` (estimate only), then explicitly add
 `--run`; `--db /path/to/library.db` chooses a database and `--limit 10` selects a trial. The tool does not load
-`.env`; on the host use `node --env-file=.env tools/embed-library.mjs --db /path/to/library.db --limit 10 --run`
-or supply `GEMINI_API_KEY` in the environment. It retries 429/5xx, commits each batch, skips existing vectors on
+`.env`; supply API keys in the process environment before using
+`rust/target/release/mymind embed-library --db /path/to/library.db --limit 10 --run`. It retries 429/5xx, commits each batch, skips existing vectors on
 resume, and reports provider token usage when available. Empty text-only documents are reported and skipped.
 In a worktree with shared read-only `data/`, always select a temporary database; never backfill the symlink target.
 
@@ -101,32 +101,32 @@ Page screenshots use `VERIFIER_CHROMIUM`, default `/usr/lib/chromium/chromium`, 
 running browser. New screenshot output still needs host/browser verification before making a parity claim.
 Permanent delete and empty trash have no captured client calls, so only trash and restore are implemented.
 
-Run the local data and HTTP checks without opening a browser:
+Run the local data and HTTP checks with the Rust binary built first:
 
 ```bash
 node tools/check-reads.mjs
-node tools/check-writes.mjs
-node tools/check-capture.mjs
-node tools/check-media.mjs --in-process
-node tools/check-store.mjs
-node tools/check-render.mjs
-node tools/check-search.mjs --in-process
 node tools/check-auth.mjs
+node tools/check-app-api.mjs
 node tools/check-download.mjs
+(cd rust && nice -n 19 cargo test --offline -j 2 -p mm-core --test check_store --test check_render -- --test-threads=2)
+(cd rust && nice -n 19 cargo test --offline -j 2 -p mymind --test check_writes --test check_search --test check_media -- --test-threads=2)
 ```
 
-The HTTP checks back up the verification database (`data/verify.db`, see [Verify against
-live](#verify-against-live-11)) to temporary files, start isolated offline servers on OS-assigned loopback ports,
-and clean them up. They never use port 4321. If a sandbox prohibits socket listeners, pass `--in-process` to the
-HTTP checks to exercise the real server request callbacks and hub framing in memory; that mode does not establish
-socket or browser parity. `check-capture` starts a temporary fixture HTTP server and local Gemini/TypeSafe stubs,
-generates synthetic PNG/MP4/PDF files and never contacts hosted services. Its `--in-process` mode runs those
-handlers in memory and injects a PNG at the screenshot seam; the real Chromium screenshot and native-network probe
-checks are explicitly skipped. The host browser probe uses local TCP/UDP sinks and an unguarded positive control to
-check preconnect/WebRTC isolation. `check-media` uses a synthetic database, real filesystem streams/Sharp and
-stubbed media executables. Tests use isolated databases/media roots and `STORE_LOAD_ENV=0`, so they never load the
-user's `.env`. `check-auth` runs a stand-in Google (its own keys, token endpoint and JWKS) and never contacts
-Google; `check-download` uses a scratch sign-in database.
+The HTTP checks copy the verification database (`data/verify.db`, see [Verify against
+live](#verify-against-live-11)) into temporary files and start isolated Rust servers on OS-assigned loopback
+ports. They never use port 4321. The HTTP harness requires loopback sockets; `--in-process` now reports the
+corresponding Rust test command. `check-auth` runs a stand-in Google with synthetic keys, token endpoint and
+JWKS; `check-download` uses scratch sign-in data. Neither contacts Google or loads the user's `.env`.
+
+Native capture assertions run with `cargo test -p mymind --test check_capture --test check_capture_http
+--test capture_browser --test check_hosted_media` from `rust/`, with the same offline/job/thread limits above. They use synthetic local
+HTTP and hosted-provider stubs, generated media and isolated databases. The browser target launches its own
+Chromium and tests local TCP/UDP sinks with an unguarded positive control. It needs Unix socket IPC as well as
+loopback TCP/UDP; an IPC-restricted sandbox fails the control rather than skipping it. Native media checks use
+real filesystem/media processing with stubbed media executables. Capture and browser assertions run entirely in Rust after the native Chromium gates passed. The capture fixture CLI is
+`mymind capture-fixtures`; the JS in-process fixture exports are retired. `sharp` remains a developer dependency
+for `extension/tests/diff.mjs`, which compares extension screenshots. Retirement dispositions are
+recorded in `evidence/r13/stage-b-report.md`. Browser/REA verification remains a separate host operation.
 
 ## Sign-in (remote access)
 
@@ -160,10 +160,10 @@ password session reaches the same library as the owner. Ten wrong passwords for 
 minutes.
 
 ```bash
-node tools/auth-user.mjs add tester --save-env TEST_USER   # generates a password into .env as TEST_USER_NAME/_PASSWORD
-read -rs pw && printf '%s\n' "$pw" | node tools/auth-user.mjs add alice   # your own password (16+ characters)
-node tools/auth-user.mjs list
-node tools/auth-user.mjs remove tester                     # also signs that user out everywhere
+rust/target/release/mymind auth-user add tester --save-env TEST_USER   # generates a password into .env as TEST_USER_NAME/_PASSWORD
+read -rs pw && printf '%s\n' "$pw" | rust/target/release/mymind auth-user add alice   # your own password (16+ characters)
+rust/target/release/mymind auth-user list
+rust/target/release/mymind auth-user remove tester                     # also signs that user out everywhere
 ```
 
 ### Hosting
@@ -171,10 +171,11 @@ node tools/auth-user.mjs remove tester                     # also signs that use
 Since 2026-10-17 `https://mymind.octaviantocan.com` is served by the Cloudflare Worker, written in Rust in
 `rust/crates/worker/`: each library lives in its own Durable Object with its media in R2, behind the library's own
 sign-in (`docs/cloudflare-plan.md` has the setup, the import and what was checked). Deploy a change, the Worker and
-the media container image together, from that directory:
+the media container image together, from the repository root.
+`npm ci --prefix rust/crates/worker` installs the pinned Wrangler 4.151.1 tooling:
 
 ```bash
-cd rust/crates/worker && node ../../../worker/node_modules/wrangler/bin/wrangler.js deploy
+npm --prefix rust/crates/worker run deploy
 ```
 
 Until 2026-10-24, **mini-002** (`mini-002-netcup` on Tailscale, a Debian server) keeps running the previous host from
@@ -233,7 +234,7 @@ default, so an app on the host and the hosted site share one library and its liv
 #### Downloading the desktop app
 
 `https://<hostname>/download` serves the desktop app, packaged to open the hosted library, to anyone signed in to
-the library (Google or password). The tunnel sends `/download` to `deploy/download-server.mjs`, which itself checks
+the library (Google or password). The tunnel sends `/download` to `mymind download-server`, which itself checks
 each request's session (`data/auth.db`), so the files stay private even if the tunnel's routing changes. Visitors
 without a session are sent to the sign-in page; open `/download` again after signing in. It logs why it refused a
 request (`journalctl --user -u mymind-download`). There is a Linux build only: `deploy/package-app.sh` builds for the
@@ -385,9 +386,9 @@ that mode before verifying; the verifier does not change the environment of an e
 
 The Rust backend (`rust/`) builds with `rust/fetch-libvips.sh` once (it downloads the libvips build sharp ships), then
 `cargo build --release` in `rust/`. It is verified the same way: set `MYMIND_SERVER=rust/target/release/mymind` and
-every tool that starts a server (`drive`, `verify`, the HTTP checks, `check-download`) starts the Rust binary instead
-of `node server.mjs`, and `npm run coverage` judges the runs against the Rust sources. An already running server is
-taken as the one `MYMIND_SERVER` names.
+every tool that starts a server (`drive`, `verify`, the HTTP checks, `check-download`) selects that Rust binary.
+By default all tools select `rust/target/release/mymind`, and `npm run coverage` judges the runs against the Rust sources. An already running listener must match the selected Rust executable; hosted modes also validate the
+proxy and backend digests.
 
 How a run makes live and replica comparable pixel for pixel (`tools/drive.mjs`, `tools/side.mjs`,
 `tools/page-determinism.js`, `tools/verifier-browser.mjs`):
@@ -438,7 +439,7 @@ serendipity, plus touch flows (swipe, pull to refresh) on phones.
 3. Export and statically analyse the scripts:
    `rea export-web-scripts evidence/page-capture.json evidence/scripts` then
    `rea analyze-javascript-application evidence/scripts`.
-4. Record the data the UI needs (`tools/capture.mjs`) and replay it (`server.mjs`).
+4. Record the data the UI needs (`tools/capture.mjs`) and replay it (`mymind serve`).
 5. Prove the result: `npm run verify` (REA `compare-web-screenshots` on every state), then
    `npm run coverage` (REA `evaluate-reconstruction-coverage`).
 
@@ -466,7 +467,7 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
   not found") and at 1440x900 differs in 1,505 edge pixels by at most 3 levels, the same noise as live against
   itself. The background runs mymind's own mirrored script, but its phase is not frozen.
 - New cards saved on live mymind reach the replica only through a re-capture and reseed (`npm run verify --
-  --reseed` for verification, `node tools/seed-db.mjs` for the working library, which replaces local edits).
+  --reseed` for verification, `rust/target/release/mymind seed-db` for the working library, which replaces local edits).
 - Local search approximates the live ranking engine; historical cards without vectors need an explicit hosted
   embedding backfill. Text-only backfill skips historical cards with no usable text; new visual analysis can
   embed their image. Browser and screenshot parity have not been claimed for generated search results.

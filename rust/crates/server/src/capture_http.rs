@@ -35,10 +35,31 @@ const SINGLE_VALUE: [&str; 18] = [
 /// The shared byte budget of one capture (`budget.remaining`); wire and decoded bytes are charged against it.
 pub type Budget = Rc<Cell<i64>>;
 
+/// A connection-time resolver returning every address for a hostname and port.
+///
+/// Callers supply the requested hostname and port; implementations return all candidate socket addresses or a
+/// lookup error. The transport validates every returned IP before connecting and pins the selected address.
+pub type Resolver = Rc<dyn Fn(&str, u16) -> Result<Vec<SocketAddr>>>;
+
+/// A socket connector that receives a checked address, without a hostname to resolve again.
+#[async_trait(?Send)]
+pub trait Connector {
+    /// Open the TCP socket selected from the fully validated DNS answer set.
+    ///
+    /// # Arguments
+    /// * `address` - Validated destination IP and port; no additional lookup is needed.
+    ///
+    /// # Errors
+    /// The socket connection error; the transport may try the next validated address.
+    async fn connect(&self, address: SocketAddr) -> std::io::Result<TcpStream>;
+}
+
 /// The capture transport; implements [`Resource`].
 pub struct CaptureTransport {
     timeout: Duration,
     tls: Arc<rustls::ClientConfig>,
+    resolver: Option<Resolver>,
+    connector: Option<Rc<dyn Connector>>,
 }
 
 impl Default for CaptureTransport {
@@ -162,6 +183,16 @@ fn attempt_order(answers: Vec<SocketAddr>) -> Vec<SocketAddr> {
     order
 }
 
+// Collect the complete DNS iterator before checking any address, as Node's `{ all: true }` lookup does.
+fn checked_addresses(answers: impl IntoIterator<Item = SocketAddr>, offline: bool) -> Result<Vec<SocketAddr>> {
+    let answers: Vec<_> = answers.into_iter().collect();
+    let allowed = |ip: IpAddr| if offline { ip.is_loopback() && !matches!(ip, IpAddr::V4(v4) if v4.octets() != [127, 0, 0, 1]) } else { public_address(&ip.to_string()) };
+    if answers.is_empty() || answers.iter().any(|answer| !allowed(answer.ip())) {
+        return Err(forbidden());
+    }
+    Ok(answers)
+}
+
 impl CaptureTransport {
     /// A transport with the 15 second per-request timeout and the bundled web roots.
     pub fn new() -> Self {
@@ -177,24 +208,52 @@ impl CaptureTransport {
             .expect("tls versions")
             .with_root_certificates(roots)
             .with_no_client_auth();
-        Self { timeout, tls: Arc::new(config) }
+        Self { timeout, tls: Arc::new(config), resolver: None, connector: None }
     }
 
+    /// A transport with an injected connection-time DNS resolver, preserving every destination-policy check.
+    ///
+    /// # Arguments
+    /// * `timeout` - Deadline for each redirect hop, including the complete response body.
+    /// * `resolver` - Returns every candidate address for a hostname and requested port on each connection.
+    ///
+    /// # Returns
+    /// A transport that validates all resolver answers and connects only to an address from that answer set.
+    /// Literal IP destinations still bypass DNS exactly as in the default transport.
+    pub fn with_resolver(timeout: Duration, resolver: Resolver) -> Self {
+        Self { resolver: Some(resolver), ..Self::with_timeout(timeout) }
+    }
+
+    /// Use a socket connector and TLS trust configuration while retaining DNS and redirect policy checks.
+    ///
+    /// # Arguments
+    /// * `self` - Transport whose resolver, timeout and destination policy are retained.
+    /// * `connector` - Opens only the selected checked socket address; it never receives the hostname.
+    /// * `tls` - TLS certificate validation configuration; HTTPS and hostname verification still run normally.
+    ///
+    /// # Returns
+    /// The configured transport, with the same complete-answer validation and TLS handshake as the default.
+    pub fn with_connector(mut self, connector: Rc<dyn Connector>, tls: Arc<rustls::ClientConfig>) -> Self {
+        self.connector = Some(connector);
+        self.tls = tls;
+        self
+    }
+
+    // Resolve once per hop and validate the complete answer set before opening any socket.
     async fn addresses(&self, target: &Url, offline: bool) -> Result<Vec<SocketAddr>> {
         let port = target.port_or_known_default().unwrap_or(80);
         let answers: Vec<SocketAddr> = match target.host() {
             Some(Host::Ipv4(ip)) => vec![SocketAddr::new(IpAddr::V4(ip), port)],
             Some(Host::Ipv6(ip)) => vec![SocketAddr::new(IpAddr::V6(ip), port)],
             Some(Host::Domain(name)) => {
-                tokio::net::lookup_host((name, port)).await.map_err(|error| Error::internal(error.to_string()))?.collect()
+                match &self.resolver {
+                    Some(resolve) => resolve(name, port)?,
+                    None => return checked_addresses(tokio::net::lookup_host((name, port)).await.map_err(|error| Error::internal(error.to_string()))?, offline),
+                }
             }
             None => return Err(forbidden()),
         };
-        let allowed = |ip: IpAddr| if offline { ip.is_loopback() && !matches!(ip, IpAddr::V4(v4) if v4.octets() != [127, 0, 0, 1]) } else { public_address(&ip.to_string()) };
-        if answers.is_empty() || answers.iter().any(|answer| !allowed(answer.ip())) {
-            return Err(forbidden());
-        }
-        Ok(answers)
+        checked_addresses(answers, offline)
     }
 
     async fn connect(&self, target: &Url, offline: bool) -> Result<Box<dyn Io>> {
@@ -202,7 +261,12 @@ impl CaptureTransport {
         let addresses = attempt_order(self.addresses(target, offline).await?);
         let count = addresses.len();
         for (index, address) in addresses.into_iter().enumerate() {
-            let attempt = TcpStream::connect(address);
+            let attempt = async {
+                match &self.connector {
+                    Some(connector) => connector.connect(address).await,
+                    None => TcpStream::connect(address).await,
+                }
+            };
             let connected = if index + 1 < count {
                 match tokio::time::timeout(ATTEMPT_TIMEOUT, attempt).await {
                     Ok(connected) => connected,
@@ -347,6 +411,21 @@ impl Resource for CaptureTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dns_collects_all_answers_before_validating_and_connecting() {
+        let collected = Cell::new(0);
+        let answers = ["8.8.8.8:443", "1.1.1.1:443", "[::ffff:127.0.0.1]:443", "9.9.9.9:443"]
+            .into_iter()
+            .map(|text| text.parse::<SocketAddr>().unwrap())
+            .inspect(|_| collected.set(collected.get() + 1));
+        assert!(checked_addresses(answers, false).as_ref().is_err_and(mm_core::capture_http::is_blocked));
+        assert_eq!(collected.get(), 4, "check-capture-http.mjs:14 options.all: true collects every DNS answer, including after a denial");
+        let answers = ["8.8.8.8:443", "[2606:4700:4700::1111]:443", "1.1.1.1:443"]
+            .map(|text| text.parse::<SocketAddr>().unwrap());
+        assert_eq!(checked_addresses(answers, false).unwrap(), answers, "all permitted IPv4 and IPv6 candidates reach the connection selector");
+        assert!(checked_addresses([], false).as_ref().is_err_and(mm_core::capture_http::is_blocked));
+    }
 
     #[test]
     fn attempts_interleave_families_like_node() {

@@ -26,19 +26,19 @@ now redirects to `/signin` there. The drive matrix against the Worker is running
 ## How it works
 
 ```
-browser / app ──> Worker (worker/index.mjs)
-                    ├─ Auth Durable Object "auth"          sign-in: lib/auth.mjs on its own SQLite
-                    ├─ Library Durable Object per library  the library: lib/hosted.mjs on its own SQLite, /hub sockets
+browser / app ──> Worker (rust/crates/worker/src/lib.rs)
+                    ├─ Auth Durable Object "auth"          sign-in: rust/crates/core/src/auth.rs on its own SQLite
+                    ├─ Library Durable Object per library  the library: rust/crates/core/src/hosted.rs on its own SQLite, /hub sockets
                     ├─ R2 bucket "mymind"                  website code, card media, each library's own files
-                    └─ Media Durable Object + container    sharp, ffmpeg, poppler, Chromium
+                    └─ Media Durable Object + container    libvips, ffmpeg, poppler, Chromium
 ```
 
 1. The Worker removes any `x-mymind-*` header a client sent, then asks the Auth object about the request.
-   `lib/auth.mjs` answers exactly as `server.mjs` does with `AUTH=google`: a signed-out visitor gets the plain
+   `rust/crates/core/src/auth.rs` answers exactly as `rust/crates/server/src/serve.rs` does with `AUTH=google`: a signed-out visitor gets the plain
    sign-in page (no mymind name or assets, `noindex`), an API call gets 401, and Google sign-in admits only
    `OWNER_EMAIL`. For a signed-in request it names the account's library.
 2. The Worker sends the request to that library's Durable Object, which serves it with the same code as
-   `HOSTED=1 node server.mjs`. An account without a library gets 403. A library reads only its own database, its own
+   `HOSTED=1 mymind serve`. An account without a library gets 403. A library reads only its own database, its own
    R2 folder `libraries/<name>/`, and `static/` (mymind's website code, the one shared folder).
 3. `/download` (the desktop app) is served from R2 to any signed-in visitor.
 4. `/_admin/` exists only while the `ADMIN_TOKEN` secret is set. It is how the import tool writes R2 objects,
@@ -46,56 +46,53 @@ browser / app ──> Worker (worker/index.mjs)
 
 | Piece | Where | Code |
 |---|---|---|
-| Sessions, app tokens, password users, which library each account reaches | Auth object's SQLite | `worker/auth-object.mjs`, `lib/auth.mjs`, `lib/auth-store.mjs` |
-| A library: cards, tags, spaces, search index, embeddings | That library's object | `worker/library-object.mjs`, `lib/hosted.mjs`, `lib/store.mjs` |
-| Recorded mymind answers the replica still serves (`recorded` table, 2,942 rows in the test library) | That library's object | `lib/recorded.mjs` |
-| Live updates (`/hub`) | WebSockets held by that library's object, so events reach only that library's sessions; a socket is closed within 60 s of its session ending or its account moving to another library | `worker/library-object.mjs` |
-| mymind's website code | R2 `static/`, shared | `lib/site.mjs` |
-| Captured card media from the recordings of the owner's library | R2 `libraries/<name>/capture/`, only in the libraries imported with `--recordings` (the owner's and the test library) | `lib/site.mjs` |
-| A library's own media and upload chunks | R2 `libraries/<name>/media/`, `renditions/`, `uploads/` | `lib/hosted-media.mjs` |
-| The desktop app | R2 `downloads/` | `lib/download-page.mjs` |
-| Image and video renditions, PDF previews, link screenshots, link fetches | One container, started on demand | `worker/media-object.mjs`, `worker/media-client.mjs`, `worker/container/` |
+| Sessions, app tokens, password users, which library each account reaches | Auth object's SQLite | `rust/crates/worker/src/auth_object.rs`, `rust/crates/core/src/auth.rs`, `rust/crates/core/src/auth_store.rs` |
+| A library: cards, tags, spaces, search index, embeddings | That library's object | `rust/crates/worker/src/library_object.rs`, `rust/crates/core/src/hosted.rs`, `rust/crates/core/src/store.rs` |
+| Recorded mymind answers the replica still serves (`recorded` table, 2,942 rows in the test library) | That library's object | `rust/crates/core/src/recorded.rs` |
+| Live updates (`/hub`) | WebSockets held by that library's object, so events reach only that library's sessions; a socket is closed within 60 s of its session ending or its account moving to another library | `rust/crates/worker/src/library_object.rs` |
+| mymind's website code | R2 `static/`, shared | `rust/crates/core/src/hosted.rs` |
+| Captured card media from the recordings of the owner's library | R2 `libraries/<name>/capture/`, only in the libraries imported with `--recordings` (the owner's and the test library) | `rust/crates/core/src/hosted.rs` |
+| A library's own media and upload chunks | R2 `libraries/<name>/media/`, `renditions/`, `uploads/` | `rust/crates/core/src/hosted_media.rs` |
+| The desktop app | R2 `downloads/` | `rust/crates/core/src/download_page.rs` |
+| Image and video renditions, PDF previews, link screenshots, link fetches | One container, started on demand | `rust/crates/worker/src/media_object.rs`, `rust/crates/worker/src/media_client.rs`, `rust/crates/server/src/container.rs` |
 
 Response headers recorded with a file (content type, `x-raw`) travel with it: `.headers/<key>.json` beside the file
 on disk, custom metadata on the R2 object.
 
-## Code shared with the Node server
+## Shared Rust core
 
-The Node server and the Worker run the same library code, so parity proven on one holds for the other:
-
-- `lib/sql-node.mjs` (`node:sqlite`) and `worker/sql-do.mjs` (Durable Object SQLite) give the store one synchronous
-  SQL interface. On a Durable Object, large integers are read back exactly with `CAST(... AS TEXT)`, and
-  transactions use `transactionSync`.
-- `lib/bucket-fs.mjs` (a folder) and `worker/bucket-r2.mjs` (R2) give one object store interface.
-- `worker/http.mjs` presents a Workers request as the Node `req` and `res` the library code handles.
-- `lib/media-processor.mjs` and `lib/capture-link.mjs` run in Node locally and in the container on Cloudflare. The
-  Worker stubs `sharp` and `playwright-core` (`worker/stubs/`), so nothing in the Worker loads them.
+The native server and Worker share `mm-core`. Native SQLite (`rust/crates/sqlite/`) and Durable Object SQL
+(`rust/crates/worker/src/sql_do.rs`) implement the core SQL trait. On a Durable Object, large integers are read
+exactly with `CAST(... AS TEXT)` and transactions use `transactionSync`. Directory and R2 adapters implement the
+bucket trait. Rust handles Worker HTTP and native container media through libvips, ffmpeg, Poppler and Chromium.
+The package, pinned Wrangler and sole production configuration live in `rust/crates/worker/`; deploy from the
+repository root with `npm --prefix rust/crates/worker run deploy`.
 
 ## Decisions that changed from the first proposal
 
 | Proposal | Built | Why |
 |---|---|---|
-| D1 for sign-in | One Auth Durable Object | `lib/auth.mjs` uses synchronous SQL; a Durable Object runs it unchanged with the same adapter as the libraries. D1's API is async |
-| Cloudflare Images for renditions, Browser Rendering for screenshots | One container with sharp, ffmpeg, poppler and Chromium | The same code as the Node server makes the same bytes. Browser Rendering always identifies itself as a bot. Images can't cut video frames or PDF pages |
+| D1 for sign-in | One Auth Durable Object | `rust/crates/core/src/auth.rs` uses synchronous SQL; a Durable Object runs it unchanged with the same adapter as the libraries. D1's API is async |
+| Cloudflare Images for renditions, Browser Rendering for screenshots | One container with libvips, ffmpeg, poppler and Chromium | The shared Rust media implementation preserves the frozen pre-switch bytes. Browser Rendering always identifies itself as a bot. Images can't cut video frames or PDF pages |
 | Recordings removed from the hosted server | Kept in each library's `recorded` table | The recorded answers the replica still needs are rows of that library, not files in R2 |
 
 ## Import
 
-1. `node tools/import-hosted.mjs bucket` copies mymind's website code into `data/hosted/bucket/static/` (368
+1. `rust/target/release/mymind import-hosted bucket` copies mymind's website code into `data/hosted/bucket/static/` (368
    objects, 18 MB).
-2. `node tools/import-hosted.mjs library <name> --db <file> [--recordings [--runs]] [--media <dir>]` builds
+2. `rust/target/release/mymind import-hosted library <name> --db <file> [--recordings [--runs]] [--media <dir>]` builds
    `data/hosted/<name>.db` and puts the library's own media under `libraries/<name>/`. `--recordings` adds this
    repository's recordings of the owner's library: the recorded answers, the page shell, and the captured card media
    under `libraries/<name>/capture/` (6,522 objects, 2.7 GB). Only the owner's and the test library take them; a
    library for anyone else is imported without them. The test library is built from `data/verify.db` with
    `--recordings --runs`.
-3. `node tools/upload-hosted.mjs <worker url> bucket|library <name>|user|account <account> <library>|summary`
+3. `rust/target/release/mymind upload-hosted <worker url> bucket|library <name>|user|account <account> <library>|summary`
    sends them through `/_admin/`. A library upload ends with a digest of every table on both sides (row count and a
    SHA-256 over every value and its storage class) and fails if any table differs. The test user's password is
    hashed on this computer; only the salt and hash are sent. Bucket objects already there with the same size are
    skipped, so an interrupted upload resumes.
 
-## Tested under wrangler dev (wrangler 4.128.0 with workerd 2026-08-31, then 4.151.1 with workerd 2026-10-12)
+## Historical pre-switch tests under wrangler dev (wrangler 4.128.0 with workerd 2026-08-31, then 4.151.1 with workerd 2026-10-12)
 
 1. The test library uploaded with every table matching (2,279 cards, 17,680 annotations, 2,165 embeddings, 2,942
    recorded answers), and all 6,890 bucket objects in 3 min 21 s.
@@ -127,7 +124,7 @@ The Node server and the Worker run the same library code, so parity proven on on
    the upload still worked and the link screenshot failed. With the local state restored after these writes, a
    comparison run gave the same 44 differences.
 
-Found and fixed during these tests: `lib/auth-store.mjs` made random bytes at module load, which Workers refuse;
+Historical pre-switch findings: the JS auth store made random bytes at module load, which Workers refuse;
 string bodies got a `text/plain` content type Node never sent; and the Worker followed sign-in redirects instead of
 passing them to the browser.
 
@@ -142,18 +139,18 @@ Under wrangler 4.128.0, `wrangler dev` exited with an empty error in 4 of 6 full
 serving media from its local R2, and workerd left no core dump. Through those runs the Worker's own JavaScript heap
 stayed between 20 and 43 MB in use (89 MB allocated; a Durable Object may use 128 MB), while the two workerd
 processes grew to 500 to 900 MB. Under wrangler 4.151.1 all three runs finished, in about 2 minutes instead of 7 to
-9, so `worker/package.json` pins 4.151.1. The same 17,616 requests against `HOSTED=1` in Node left the heap at
+9, so `rust/crates/worker/package.json` pins 4.151.1. The same 17,616 requests against `HOSTED=1` in Node left the heap at
 5.3 MB, the size it started at.
 
 ## Running it locally
 
 ```bash
-npm ci --prefix worker               # wrangler 4.151.1, pinned; kept out of the root package and the container image
-npm --prefix worker run dev          # http://127.0.0.1:8787, local state in data/hosted/wrangler-state
-npm --prefix worker run sidecars     # beside dev, only when the media container has to start (below)
+npm ci --prefix rust/crates/worker               # wrangler 4.151.1, pinned; kept out of the root package and the container image
+npm --prefix rust/crates/worker run dev          # http://127.0.0.1:8787, local state in data/hosted/wrangler-state
+npm --prefix rust/crates/worker run sidecars     # beside dev, only when the media container has to start (below)
 ```
 
-`worker/.dev.vars` sets `STORE_READONLY=1` and `OFFLINE=1`; `--var STORE_READONLY:0 --var OFFLINE:0` on the dev
+`rust/crates/worker/.dev.vars` sets `STORE_READONLY=1` and `OFFLINE=1`; `--var STORE_READONLY:0 --var OFFLINE:0` on the dev
 command turns writes and online capture on for one run.
 
 The container needs two things on this computer, both found while testing it:
@@ -162,7 +159,7 @@ The container needs two things on this computer, both found while testing it:
    incoming traffic, so this rule was added on 2026-10-16:
    `sudo ufw allow in on docker0 from 172.17.0.0/16 to 172.17.0.1 proto tcp comment wrangler-dev-containers`
    (`sudo ufw delete allow in on docker0 from 172.17.0.0/16 to 172.17.0.1 proto tcp` removes it).
-2. `npm --prefix worker run sidecars` (`worker/dev-sidecars.sh`). wrangler's networking sidecar inherits the host's
+2. `npm --prefix rust/crates/worker run sidecars` (`deploy/worker-dev-sidecars.sh`). wrangler's networking sidecar inherits the host's
    `net.ipv4.conf.all.src_valid_mark=1`, which makes the kernel drop the host's packets to the sidecar, so workerd
    never reaches it and the container never starts. The script turns that setting off inside each sidecar as it
    starts and leaves the host's own value alone, since something on the host set it at runtime and may rely on it.

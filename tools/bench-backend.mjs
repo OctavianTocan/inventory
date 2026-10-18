@@ -1,7 +1,8 @@
-// Measures the Node and the Rust backend on the same fixture copies: start time, latency, CPU time and memory per
+// Measures the Rust backend on immutable fixture copies: start time, latency, CPU time and memory per
 // heavy route, in the replica's library mode and in hosted mode. Writes JSON for docs/rust-benchmarks.md.
 //
-//   node tools/bench-backend.mjs [--rust rust/target/release/mymind] [--runs 30] [--out evidence/bench.json]
+// Compare with docs/rust-benchmarks.md for historical pre-switch measurements.
+//   node tools/bench-backend.mjs [--baseline <executable>] [--rust rust/target/release/mymind] [--runs 30] [--out evidence/bench.json]
 import { execFileSync, spawn } from 'node:child_process';
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -12,16 +13,18 @@ import { parseArgs } from 'node:util';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { values: opts } = parseArgs({ options: {
   rust: { type: 'string', default: 'rust/target/release/mymind' },
+  baseline: { type: 'string' },
   runs: { type: 'string', default: '30' },
   starts: { type: 'string', default: '5' },
   out: { type: 'string', default: 'evidence/bench-backend.json' },
 } });
 const RUNS = Number(opts.runs);
-const FIXTURES = path.join(ROOT, 'rust/target/fixtures');
+const FIXTURES = path.join(ROOT, 'rust/test-fixtures');
 const WORK = path.join(ROOT, 'rust/target/tmp', `bench-${process.pid}`);
 const TICK_MS = 10;
 const READY = /mymind replica on http:\/\/localhost:(\d+)\//;
-const BACKENDS = { node: [process.execPath, ['--no-warnings', 'server.mjs']], rust: [path.resolve(ROOT, opts.rust), ['serve']] };
+const BACKENDS = { rust: [path.resolve(ROOT, opts.rust), ['serve']] };
+if (opts.baseline) BACKENDS.baseline = [path.resolve(ROOT, opts.baseline), ['serve']];
 
 const ids = (file, sql) => { const db = new DatabaseSync(file, { readOnly: true }); try { return db.prepare(sql).all().map((row) => row.id); } finally { db.close(); } };
 
@@ -42,7 +45,7 @@ function start(backend, env) {
   const [command, args] = BACKENDS[backend];
   const began = performance.now();
   const child = spawn(command, args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { PATH: process.env.PATH, HOME: process.env.HOME, MYMIND_ROOT: ROOT, STORE_LOAD_ENV: '0', OFFLINE: '1', PORT: '0', ...env } });
+    env: { PATH: process.env.PATH, HOME: process.env.HOME, MYMIND_ROOT: ROOT, STORE_LOAD_ENV: '0', MYMIND_ENV_FILE: path.join(WORK, 'absent-env'), OFFLINE: '1', PORT: '0', ...env } });
   return new Promise((resolve, reject) => {
     let output = '';
     const timer = setTimeout(() => reject(new Error(`${backend} did not start: ${output}`)), 60000);
@@ -155,7 +158,7 @@ async function measure(backend, mode) {
 try {
   const report = { at: new Date().toISOString(), minimumRuns: RUNS, rust: opts.rust, results: [] };
   for (const mode of ['library', 'hosted']) {
-    for (const backend of ['node', 'rust']) {
+    for (const backend of Object.keys(BACKENDS)) {
       const result = await measure(backend, mode);
       report.results.push(result);
       console.log(`${mode} ${backend}: start ${result.startMs.toFixed(0)} ms, idle ${result.idleRssMb.toFixed(0)} MB, peak ${result.peakRssMb.toFixed(0)} MB`);

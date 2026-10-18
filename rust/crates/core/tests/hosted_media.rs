@@ -13,7 +13,7 @@ use std::rc::Rc;
 use std::task::{Context, Poll};
 
 use async_trait::async_trait;
-use common::{JsError, same_error, text};
+use common::{JsError, text};
 use futures_util::future::join_all;
 use futures_util::stream;
 use mm_core::host::{
@@ -424,15 +424,15 @@ fn run_rust(prefix: &str, objects: &[Stored], steps: &[Step]) -> Vec<Outcome> {
     })
 }
 
-fn run_js(prefix: &str, objects: &[Stored], steps: &[Step]) -> Vec<Value> {
-    let driver = format!("{}/tests/drivers/hosted-media.mjs", env!("CARGO_MANIFEST_DIR"));
+fn run_js(prefix: &str, objects: &[Stored], steps: &[Step]) -> common::Answer {
+    // Preserve the historical frozen namespace without opening a driver.
+    let driver = "driver:core:hosted-media";
     let spec = obj! {
         "prefix" => prefix,
         "objects" => Value::Array(objects.iter().map(Stored::spec).collect()),
         "steps" => Value::Array(steps.iter().map(Step::spec).collect()),
     };
-    let Value::Array(outputs) = common::call(&driver, "scenario", vec![spec.into()]).expect("scenario runs") else { panic!("no array") };
-    outputs
+    common::call(driver, "scenario", vec![spec.into()])
 }
 
 fn sorted(entries: &[Value]) -> Vec<String> {
@@ -445,37 +445,46 @@ fn sorted(entries: &[Value]) -> Vec<String> {
 fn compare(label: &str, prefix: &str, objects: &[Stored], steps: &[Step]) {
     let js = run_js(prefix, objects, steps);
     let rust = run_rust(prefix, objects, steps);
-    assert_eq!(js.len(), steps.len(), "{label}: JS ran every step");
+    assert_eq!(rust.len(), steps.len(), "{label}: Rust ran every step");
     let (mut errors, mut nulls) = (0, 0);
-    for (index, ((step, outcome), js)) in steps.iter().zip(&rust).zip(&js).enumerate() {
-        let context = format!("{label} step {index}: {}", text(&step.spec()));
-        match (&outcome.result, js.get("error")) {
-            (Ok(value), Value::Undefined | Value::Null) => {
-                assert_eq!(text(value), text(js.get("ok")), "{context}");
+    let mut actual = Vec::new();
+    for (step, outcome) in steps.iter().zip(&rust) {
+        let result = match &outcome.result {
+            Ok(value) => {
                 nulls += usize::from(matches!(value, Value::Null));
+                obj! { "ok" => value.clone() }
             }
-            (Err(error), Value::Object(thrown)) => {
+            Err(error) => {
+                errors += 1;
+                obj! { "error" => common::error_class(error) }
+            }
+        };
+        let processor = if step.unordered() { Value::Array(sorted(&outcome.processor).into_iter().map(Value::from).collect()) } else { Value::Array(outcome.processor.clone()) };
+        let bucket = if step.unordered() { Value::Array(sorted(&outcome.bucket).into_iter().map(Value::from).collect()) } else { Value::Array(outcome.bucket.clone()) };
+        actual.push(Value::from(obj! { "result" => result, "processor" => processor, "bucket" => bucket }));
+    }
+    let expected = js.oracle().map(|answer| {
+        let outputs = answer.as_ref().expect("hosted scenario runs").as_array().expect("hosted outcomes");
+        assert_eq!(outputs.len(), steps.len(), "{label}: JS ran every step");
+        let mut expected = Vec::new();
+        for (step, output) in steps.iter().zip(outputs) {
+            let result = if let Value::Object(error) = output.get("error") {
                 let thrown = JsError {
-                    name: thrown.get("name").and_then(Value::as_str).unwrap_or("Error").to_owned(),
-                    message: thrown.get("message").and_then(Value::as_str).unwrap_or("").to_owned(),
-                    status: thrown.get("status").and_then(Value::as_f64).map(|status| status as u16),
+                    name: error.get("name").and_then(Value::as_str).unwrap_or("Error").to_owned(),
+                    message: error.get("message").and_then(Value::as_str).unwrap_or("").to_owned(),
+                    status: error.get("status").and_then(Value::as_f64).map(|status| status as u16),
                     code: None,
                 };
-                assert!(same_error(error, &thrown), "{context}: Rust {error:?}, JS {thrown:?}");
-                errors += 1;
-            }
-            (rust, js) => panic!("{context}: Rust {rust:?}, JS {js:?}"),
+                obj! { "error" => common::js_error_class(&thrown) }
+            } else { obj! { "ok" => output.get("ok").clone() } };
+            let processor = if step.unordered() {
+                Value::Array(sorted(output.get("processor").as_array().expect("processor log")).into_iter().map(Value::from).collect())
+            } else { output.get("processor").clone() };
+            expected.push(Value::from(obj! { "result" => result, "processor" => processor, "bucket" => output.get("bucket").clone() }));
         }
-        if step.unordered() {
-            let calls: Vec<String> = js.get("processor").as_array().unwrap().iter().map(text).collect();
-            assert_eq!(sorted(&outcome.processor), { let mut calls = calls; calls.sort(); calls }, "{context}: processor calls");
-            let expected: Vec<String> = js.get("bucket").as_array().unwrap().iter().map(|entry| entry.as_str().unwrap().to_owned()).collect();
-            assert_eq!(sorted(&outcome.bucket), expected, "{context}: store operations");
-        } else {
-            assert_eq!(text(&Value::Array(outcome.processor.clone())), text(js.get("processor")), "{context}: processor calls");
-            assert_eq!(text(&Value::Array(outcome.bucket.clone())), text(js.get("bucket")), "{context}: store operations");
-        }
-    }
+        text(&Value::Array(expected)).into_bytes()
+    });
+    js.check(text(&Value::Array(actual)).as_bytes(), expected.as_deref());
     println!("{label}: {} steps compared ({errors} errors, {nulls} nulls)", steps.len());
 }
 
@@ -634,6 +643,7 @@ fn sends(relative: &str, ranges: &[Option<&str>], methods: &[&'static str]) -> V
 
 #[test]
 fn objects_ranges_and_missing_keys() {
+    let _goldens = common::test_guard();
     for prefix in ["", "libraries/owner/"] {
         let library = library(prefix);
         let mut steps = Vec::new();
@@ -721,6 +731,7 @@ const REJECTED: [&str; 24] = [
 
 #[test]
 fn renditions_cache_and_processor_failures() {
+    let _goldens = common::test_guard();
     let prefix = "libraries/owner/";
     let library = library(prefix);
     let mut steps = Vec::new();
@@ -763,6 +774,7 @@ fn renditions_cache_and_processor_failures() {
 
 #[test]
 fn prepare_image_cover_and_uploads() {
+    let _goldens = common::test_guard();
     let prefix = "lib/x/";
     let mut library = library(prefix);
     for (relative, body) in [

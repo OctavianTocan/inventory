@@ -1,4 +1,4 @@
-//! `store_query` against `lib/store-query.mjs` with a deterministic search service and recording writer hooks.
+//! Compare Rust with frozen pre-switch expectations and immutable synthetic fixtures.
 
 mod common;
 
@@ -13,7 +13,8 @@ use mm_core::store_query::{QueryCheck, QueryWriter, SpaceMatch, SpaceSearch, che
 use mm_core::{Error, Result, Value, arr, obj};
 use mm_sqlite::Sqlite;
 
-const DRIVER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/drivers/store-query.mjs");
+// Logical identity for a frozen pre-switch comparison.
+const DRIVER: &str = "driver:core:store-query";
 const PREPS: [&str; 3] = ["", "UPDATE space_cards SET excluded = 1 WHERE rowid % 7 = 0", "UPDATE space_cards SET query_id = NULL WHERE rowid % 5 = 0"];
 const QUERIES: [&str; 3] = ["00000002UnEiVcPRujmLEk", "00000002UnEiVcgCiecNqM", "nope"];
 
@@ -105,6 +106,7 @@ fn run(file: &Path, query_id: &str, persist: bool, seed: u64, prep: usize) -> Re
 
 #[test]
 fn check_query_matches_node() {
+    let _goldens = common::test_guard();
     let mut cases = 0;
     for fixture in [test_db(), hosted_db()] {
         for query_id in QUERIES {

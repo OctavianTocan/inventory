@@ -1,4 +1,4 @@
-// replay/: a content-addressed store of live responses that server.mjs answers from before falling
+// replay/: a content-addressed store of live responses that the Rust replica answers from before falling
 // back to capture/. Filled by tools/drive.mjs during live runs, or from a `rea capture-browser-scenario`
 // result recorded with response bodies.
 // Usage: node tools/replay-store.mjs <scenario.out.json> [...more] (later files win)
@@ -27,7 +27,7 @@ export function replayKey(method, url, isDocument, variant = '') {
   return variant ? `${variant}|${key}` : key;
 }
 
-export { deviceVariant } from '../lib/device.mjs';
+export { deviceVariant } from './lib/device.mjs';
 
 /**
  * Picks the response headers worth replaying.

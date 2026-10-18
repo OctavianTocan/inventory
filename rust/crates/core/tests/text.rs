@@ -25,9 +25,10 @@ fn generated(seed: u64, count: usize) -> Vec<String> {
 
 #[test]
 fn encoding_matches_node() {
+    let _goldens = common::test_guard();
     let texts = generated(7, 4000);
     let js = calls(
-        "lib/render/encoding.mjs",
+        "module:render/encoding",
         &texts.iter().flat_map(|text| [("escapeHtml", vec![Value::from(text)]), ("unescapeHtml", vec![Value::from(text)])]).collect::<Vec<_>>(),
     );
     for (index, text) in texts.iter().enumerate() {
@@ -38,8 +39,9 @@ fn encoding_matches_node() {
 
 #[test]
 fn entities_match_node() {
+    let _goldens = common::test_guard();
     let texts = generated(11, 4000);
-    let js = calls("lib/capture-entities.mjs", &texts.iter().map(|text| ("decodeEntities", vec![Value::from(text)])).collect::<Vec<_>>());
+    let js = calls("module:capture-entities", &texts.iter().map(|text| ("decodeEntities", vec![Value::from(text)])).collect::<Vec<_>>());
     for (text, js) in texts.iter().zip(&js) {
         assert_same(&Ok(decode_entities(text).into()), js, &format!("decodeEntities({text:?})"));
     }
@@ -47,12 +49,13 @@ fn entities_match_node() {
 
 #[test]
 fn device_variants_match_node() {
+    let _goldens = common::test_guard();
     let agents = [
         "", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", "iPod touch", "Mozilla/5.0 (iPad; CPU OS 17_0)",
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) Mobile Safari", "Mozilla/5.0 (Linux; Android 14; Tab)", "Android\nMobile",
         "Android\u{2028}Mobile", "Mobile Android", "Android Android\nMobile Mobile", "Mozilla/5.0 (X11; Linux x86_64)",
     ];
-    let js = calls("lib/device.mjs", &agents.iter().map(|agent| ("deviceVariant", vec![Value::from(*agent)])).collect::<Vec<_>>());
+    let js = calls("module:device", &agents.iter().map(|agent| ("deviceVariant", vec![Value::from(*agent)])).collect::<Vec<_>>());
     for (agent, js) in agents.iter().zip(&js) {
         assert_same(&Ok(device_variant(agent).into()), js, &format!("deviceVariant({agent:?})"));
     }

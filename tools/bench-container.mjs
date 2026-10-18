@@ -1,6 +1,6 @@
 // Measures the media container on two images (the JS one and the Rust one): image size, cold start to /health, idle
-// memory, and the median time of each media operation through the Worker's media client. Writes JSON for
-// docs/rust-benchmarks.md. Containers publish on 127.0.0.1 only; the two screenshots of example.com need the internet.
+// memory, and the median time of each media operation through its local HTTP API. Writes JSON for
+// docs/rust-benchmarks.md. Containers publish on 127.0.0.1 only and the HTTPS screenshot and resource workload need the internet.
 //
 //   node tools/bench-container.mjs --js <image> --rust <image> --jpeg <file> --mp4 <file> --pdf <file>
 //     [--runs 10] [--rounds 2] [--starts 5] [--out evidence/bench-container.json]
@@ -9,7 +9,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { mediaClient } from '../worker/media-client.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { values: opts } = parseArgs({ options: {
@@ -35,9 +34,36 @@ async function start(image) {
   }
 }
 
+// Exercise the container's documented byte-body operations through loopback HTTP.
+function containerClient(port) {
+  // Send one operation with the container wire arguments.
+  const call = async (operation, args, body) => {
+    const response = await fetch(`http://127.0.0.1:${port}/${operation}`, {
+      method: 'POST', headers: { 'x-media-args': Buffer.from(JSON.stringify(args)).toString('base64url') }, body,
+    });
+    if (!response.ok) throw new Error(`Container ${operation} answered ${response.status}`);
+    return response;
+  };
+  // Collect the complete binary response.
+  const bytes = async response => Buffer.from(await response.arrayBuffer());
+  return {
+    processor: {
+      prepare: async (body, type, name, user, id) => (await call('prepare', { type, name, user, id }, body)).json(),
+      async rendition(original, relative) {
+        const response = await call('rendition', { name: original.name, relative }, original.body);
+        if (response.status === 204) return null;
+        const body = await bytes(response);
+        return { body, size: body.length };
+      },
+      image: async body => ({ mime: 'image/png', data: await bytes(await call('image', {}, body)) }),
+    },
+    screenshot: async (url, options) => bytes(await call('screenshot', { url, ...options })),
+    resource: async (url, options) => bytes(await call('resource', { url, ...options })),
+  };
+}
+
 async function operations(port) {
-  const env = { MEDIA: { idFromName: (name) => name, get: () => ({ fetch: (url, init) => fetch(url.replace('http://media', `http://127.0.0.1:${port}`), { ...init, duplex: 'half' }) }) } };
-  const client = mediaClient(env);
+  const client = containerClient(port);
   const user = { accountUid: 'account', idPrefix: 'prefix-' };
   const rows = {};
   const time = async (name, run) => {
