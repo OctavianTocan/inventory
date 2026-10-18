@@ -221,6 +221,9 @@ then U10 and U11; then U12 to U15.
   texts of the deployed sources changed. Checked on production as the test user: `tools/check-hosted.mjs --browser`,
   `evidence/app-api/probe-prod.mjs`, `probe-gaps.mjs` and `evidence/extension/check-download.mjs` pass.
   `wrangler rollback 702332fd-e03f-4c12-b0f4-fa89d85c064c` reverts the Worker.
+- R7 after R13: the 8-run matrix against `mymind serve` built from `a850d9c` (read-only, offline, `data/verify.db`,
+  replica passes against the recorded live passes) matched 918 of 918 screenshots on 2026-10-18 with no step errors,
+  and `npm run coverage` with `MYMIND_SERVER` answers `ready` (918 surfaces, 0 open reasons).
 - R11: `docs/rust-benchmarks.md`, production numbers included.
 
 Decisions made while building:
