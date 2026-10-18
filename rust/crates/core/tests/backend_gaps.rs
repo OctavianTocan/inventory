@@ -553,3 +553,57 @@ fn detail_reader_and_pinned_card_render_from_database_for_old_and_new_cards() {
         assert!(!pinned.contains("class=\"lazy\""));
     }
 }
+
+#[test]
+fn remaining_routes_and_readonly_search_come_from_database_and_code() {
+    let (store, api) = setup();
+    let space_resp = send(
+        &api,
+        "POST",
+        "/spaces",
+        r##"{"name":"Smart","color":"#166ff4","query":{"filters":["Unique"],"matches":[]}}"##,
+        &[("content-type", "application/json")],
+    );
+    assert_eq!(space_resp.status, 200);
+    let query_id = json::parse(&text(space_resp)).unwrap().get("query").get("id").as_str().unwrap().to_owned();
+    let card_id = create(&api, obj! { "type" => "Note", "content" => "Unique serendipity note keyword" }.into());
+    let readonly = block_on(Api::new(ApiOptions {
+        store,
+        media: Rc::new(Host),
+        upload_storage: Rc::new(Memory::default()),
+        screenshot: Rc::new(Host),
+        resource: Rc::new(Host),
+        fetch: Rc::new(Host),
+        readonly: true,
+        localize: str::to_owned,
+        push: Box::new(|_, _| {}),
+        has_replay: Box::new(|_| Ok(true)),
+        random: runtime::random_bytes,
+    }))
+    .unwrap();
+
+    let search_res = json::parse(&text(send(&readonly, "GET", "/search?q=Unique", "", &[]))).unwrap();
+    assert_eq!(search_res.get("count").as_f64(), Some(1.0));
+
+    let sugg_res = json::parse(&text(send(&readonly, "GET", "/search/suggestions?q=", "", &[]))).unwrap();
+    assert!(sugg_res.is_array());
+
+    let check_res = json::parse(&text(send(&readonly, "GET", &format!("/queries/{query_id}/check"), "", &[]))).unwrap();
+    assert_eq!(check_res.get("added").as_array().map(|a| a.len()), Some(1));
+
+    assert_eq!(text(send(&readonly, "GET", "/news/unread", "", &[])), r#"{"count":0}"#);
+    assert!(text(send(&readonly, "GET", "/news", "", &[])).contains("news__wrap"));
+    assert_eq!(text(send(&readonly, "GET", "/achievements/unseen", "", &[])), "[]");
+    assert_eq!(
+        json::parse(&text(send(&readonly, "GET", "/ui", "", &[]))).unwrap().get("version").as_str(),
+        Some("0.109.0")
+    );
+    assert!(text(send(&readonly, "GET", "/manifest.webmanifest", "", &[])).contains("\"/everything\""));
+    assert!(text(send(&readonly, "GET", "/account/blocks/subscription", "", &[])).contains("subscription-block"));
+    assert!(text(send(&readonly, "GET", "/components/NewSpaceModal", "", &[])).contains("new-space-modal"));
+    assert!(text(send(&readonly, "GET", "/components/TomIntroductionModal", "", &[])).contains("tom-introduction-modal"));
+    assert!(text(send(&readonly, "GET", "/components/OnboardingChecklist", "", &[])).contains("onboarding-checklist"));
+    let serendipity_html = text(send(&readonly, "GET", "/serendipity", "", &[("x-partial", "1")]));
+    assert!(serendipity_html.contains("serendipity-outro"));
+    assert!(serendipity_html.contains(&card_id));
+}

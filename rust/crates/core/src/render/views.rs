@@ -165,3 +165,101 @@ pub fn render_share(row: &CardRow) -> Result<String> {
     let title = if title.is_nullish() { "Shared card".to_owned() } else { escape_html(&title.to_js_string()) };
     Ok(format!(r#"<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title></head><body>{html}</body></html>"#))
 }
+
+const NEW_SPACE_MODAL: &str = r##"<dialog class="new-space-modal modal animate-up" escapable backdrop-on-click="modal:close">
+  <button class="close big" on-click="modal:close"></button>
+  <div class="box">
+    <div class="step step-1">
+      <div class="inner">
+        <h2 class="static">Create new space</h2>
+        <h2 class="dynamic">Create smart space</h2>
+        <p class="dynamic description">This "smart space" is a dynamic collection of one or more search terms saved into one space.<mymind-tip><span class="content">A regular Space is static, meaning it only changes when you manually add cards to it. <br/> <br/>A Smart Space is dynamic. It grows automatically when any new card matches the search terms of your space.</span></mymind-tip></p>
+        <p class="static">A space is a collection of cards inside your mind. Upload directly into a space, or pick a card from the overview.</p>
+        <div class="new-space__filters dynamic"></div>
+        <form>
+          <div class="field"><input type="text" placeholder="Name your new space" required/></div>
+          <button class="button-m button-ggg" disabled>NEXT STEP</button>
+        </form>
+      </div>
+      <div class="static note tidbit"><p>Do you want to create a Smart Space instead?</p><p><a on-click="smartSpace:showIntro">Here is how it works.</a></p></div>
+    </div>
+    <div class="step step-2">
+      <div class="inner">
+        <h2>Pick a color</h2>
+        <p>Color coding your space helps you <br>to spot it a lot easier when you need it.</p>
+        <div class="color-chooser">
+          <div class="space-color-option" data-hex="#75ffc0"><mm-circle style="--color:#75ffc0"></mm-circle></div>
+          <div class="space-color-option" data-hex="#c0c2ce"><mm-circle style="--color:#c0c2ce"></mm-circle></div>
+          <div class="space-color-option" data-hex="#ff8fa4"><mm-circle style="--color:#ff8fa4"></mm-circle></div>
+          <div class="space-color-option" data-hex="#000"><mm-circle style="--color:#000"></mm-circle></div>
+          <div class="space-color-option" data-hex="#19aad1"><mm-circle style="--color:#19aad1"></mm-circle></div>
+          <div class="space-color-option" data-hex="#17c37b"><mm-circle style="--color:#17c37b"></mm-circle></div>
+          <div class="space-color-option" data-hex="#ffdcd0"><mm-circle style="--color:#ffdcd0"></mm-circle></div>
+          <div class="space-color-option" data-hex="#166ff4"><mm-circle style="--color:#166ff4"></mm-circle></div>
+          <div class="space-color-option" data-hex="#cdff06"><mm-circle style="--color:#cdff06"></mm-circle></div>
+          <div class="space-color-option" data-hex="#f96"><mm-circle style="--color:#f96"></mm-circle></div>
+          <div class="space-color-option" data-hex="#bfb5d7"><mm-circle style="--color:#bfb5d7"></mm-circle></div>
+          <div class="space-color-option" data-hex="#96cbd1"><mm-circle style="--color:#96cbd1"></mm-circle></div>
+          <div class="space-color-option" data-hex="#cba0aa"><mm-circle style="--color:#cba0aa"></mm-circle></div>
+          <div class="space-color-option" data-hex="#fdf06f"><mm-circle style="--color:#fdf06f"></mm-circle></div>
+          <div class="space-color-option" data-hex="#7a30cf"><mm-circle style="--color:#7a30cf"></mm-circle></div>
+          <div class="space-color-option" data-hex="#ef3e4a"><mm-circle style="--color:#ef3e4a"></mm-circle></div>
+        </div>
+        <button class="button-m button-orange" disabled>FINISH &amp; SAVE</button>
+      </div>
+    </div>
+  </div>
+</dialog>"##;
+
+const TOM_INTRODUCTION_MODAL: &str = r#"<dialog class="tom-introduction-modal modal animate-up" escapable data-name="tom-introduction-modal" on-closed="modal:destroy">
+  <div class="box">
+    <button class="close big" on-click="modal:close"></button>
+    <div class="lhs">
+      <span>NEW FEATURE</span>
+      <h3>Introducing<br>Top of Mind</h3>
+      <p>Keep important cards at the top of your mind as reminders or inspiration. Just drag &amp; drop to pin them, and drag to remove.</p>
+      <button class="orange" on-click="modal:close">GOT IT!</button>
+    </div>
+    <div class="rhs"></div>
+  </div>
+</dialog>"#;
+
+/// Render an HTML partial for `/components/<name>`.
+pub fn render_component(name: &str) -> String {
+    match name {
+        "NewSpaceModal" => NEW_SPACE_MODAL.to_owned(),
+        "TomIntroductionModal" => TOM_INTRODUCTION_MODAL.to_owned(),
+        "DeleteSpaceConfirmation" => r#"<dialog class="delete-space-confirmation modal" escapable data-name="delete-space-confirmation"><div class="box"><button class="close big" on-click="modal:close"></button><button class="delete button-danger">Delete</button><a class="cancel" on-click="modal:close">Cancel</a></div></dialog>"#.to_owned(),
+        "EmptySpace" => r#"<div class="empty-space"><div class="middle"><p>This space is empty.</p></div><div class="bottom-circle"></div></div>"#.to_owned(),
+        "EmptySpaceList" => r#"<div class="empty-space-list"><div class="top-circle"></div><div class="middle"><p>No spaces yet.</p></div><div class="bottom-circle"></div></div>"#.to_owned(),
+        "OnboardingChecklist" => r#"<div class="onboarding-checklist"></div>"#.to_owned(),
+        other => {
+            let slug = escape_html(other);
+            format!(r#"<dialog class="modal" escapable data-name="{slug}"><div class="box"><button class="close big" on-click="modal:close"></button></div></dialog>"#)
+        }
+    }
+}
+
+/// Render the `/serendipity` partial HTML for up to 18 cards from the library.
+pub fn render_serendipity(rows: &[CardRow], localize: fn(&str) -> String) -> String {
+    let wrap = |card_html: &str| {
+        format!(
+            r#"<div class="circle"><div class="card"><div class="card-rotate"><div class="card-anim">{card_html}<span class="button expand-button"><span class="icon"></span><span class="tooltip">Expand</span></span></div></div></div></div>"#
+        )
+    };
+    let items: Vec<String> = if rows.is_empty() {
+        vec![wrap("")]
+    } else {
+        rows.iter().take(18).map(|row| wrap(&localize(&row.html))).collect()
+    };
+    let c1 = items.iter().take(6).cloned().collect::<Vec<_>>().join("");
+    let c2 = items.iter().skip(6).take(7).cloned().collect::<Vec<_>>().join("");
+    let c3 = items.iter().skip(13).take(5).cloned().collect::<Vec<_>>().join("");
+    format!(
+        r#"<script id="sound-effects">{{"music":"/_static/134/0.26.0/serendipity/mp3/loop1.mp3;codec(aac)/96kbs.mp4","hover":"/_static/134/0.26.0/serendipity/mp3/hover.wav;codec(aac)/96kbs.mp4","movement":"/_static/134/0.26.0/serendipity/mp3/movement.wav;codec(aac)/96kbs.mp4"}}</script>
+<section class="serendipity-outro serendipity-panel"><div class="steps"><div class="step stepOutro"><div class="sentences"><p class="big-text big-text-2">Peace of mind.</p></div><button on-click="serendipity:restart" class="button-step toRestart"><span>Do it again?</span></button></div></div><a class="back-link" href="/everything">Please take me back to my mind</a></section>
+<div class="circles"><div class="circle-1"><div class="inner-circle">{c1}</div></div><div class="circle-2"><div class="inner-circle">{c2}</div></div><div class="circle-3"><div class="inner-circle">{c3}</div></div></div>
+<div class="btns"><button class="btn forget-button" on-click="serendipity:forget"><span class="designedBtn"><span>Forget</span></span><span class="back-btn"></span></button><button class="btn keep-button" on-click="serendipity:keep"><span class="designedBtn"><span>Keep</span></span><span class="back-btn"></span></button><div class="progress" aria-hidden="true"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div></div>
+<section class="bottom-ui"><button class="toggle-sound-button"><span>Sound</span><span class="strokes" aria-hidden="true"><span></span><span></span><span></span><span></span></span></button></section>"#
+    )
+}

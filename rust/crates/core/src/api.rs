@@ -19,7 +19,7 @@ use crate::http::{Headers, Request, Response, search_param};
 use crate::media_writes::{MediaWrites, bind_id, upload_id};
 use crate::render::iphone::iphone_card;
 use crate::render::markdown::card_markdown;
-use crate::render::views::{render_detail, render_pinned, render_share};
+use crate::render::views::{render_component, render_detail, render_pinned, render_serendipity, render_share};
 use crate::search::Search;
 use crate::site::LibraryApi;
 use crate::sql::{SqlExt, SqlValue};
@@ -121,7 +121,6 @@ pub struct Api {
     writes: MediaWrites,
     readonly: bool,
     localize: fn(&str) -> String,
-    has_replay: HasReplay,
 }
 
 enum Mutation {
@@ -427,7 +426,6 @@ impl Api {
             writes,
             readonly: options.readonly,
             localize: options.localize,
-            has_replay: options.has_replay,
         })
     }
 
@@ -807,12 +805,9 @@ impl Api {
                 && (matches!(path, "/" | "/everything" | "/trash" | "/account" | "/achievements" | "/bookshelf")
                     || path.starts_with("/things/")
                     || (request.header("accept").is_some_and(|accept| accept.contains("text/html"))
-                        && (path == "/spaces" || path.starts_with("/spaces/") || path == "/serendipity"))));
+                        && (path == "/spaces" || path.starts_with("/spaces/")))));
         if get && page_load {
             return Ok(Some(Response::send(200, self.shell()?, &type_header(HTML_TYPE))));
-        }
-        if get && (["/search", "/search/suggestions"].contains(&path) || QUERY_CHECK.is_match(path)) && self.readonly && (self.has_replay)(request)? {
-            return Ok(None);
         }
         let response = if get && path == "/search" {
             let mut options = search_object(url);
@@ -1003,6 +998,38 @@ impl Api {
             quotas.insert("objects", self.store.quota(None)?.to_value());
             account.set("quotas", quotas);
             self.reply(url, stringify(&account)?, 200, self.with_quota(json_headers())?)?
+        } else if get && path == "/news/unread" {
+            self.reply(url, r#"{"count":0}"#, 200, json_headers())?
+        } else if get && path == "/news" {
+            self.reply(
+                url,
+                r#"<div class="news__wrap"><h2 class="news__title">News &amp; updates<br>for your mind.</h2><div class="scrollable"><div class="scrollbar" autohide><div class="handle"></div></div><div class="content"></div></div></div>"#,
+                200,
+                type_header(HTML_TYPE),
+            )?
+        } else if get && path == "/achievements/unseen" {
+            self.reply(url, "[]", 200, json_headers())?
+        } else if get && path == "/ui" {
+            self.reply(url, r#"{"environmentName":"Production","version":"0.109.0"}"#, 200, json_headers())?
+        } else if get && path == "/manifest.webmanifest" {
+            self.reply(
+                url,
+                r##"{"name":"mymind","short_name":"mymind","start_url":"/everything","background_color":"#fff","description":"The extension for your mind","display":"fullscreen","icons":[{"src":"/_static/134/0.109.0/images/favicon.png","sizes":"144x144","type":"image/png"}]}"##,
+                200,
+                type_header("application/manifest+json; charset=utf-8"),
+            )?
+        } else if get && path.starts_with("/account/blocks/") {
+            self.reply(
+                url,
+                r#"<div class="subscription-block"><h2 class="header">Your subscription</h2><div class="lhs"><p class="renewal-note">Self-hosted library</p></div></div>"#,
+                200,
+                type_header(HTML_TYPE),
+            )?
+        } else if get && let Some(name) = path.strip_prefix("/components/") {
+            self.reply(url, render_component(name), 200, type_header(HTML_TYPE))?
+        } else if get && path == "/serendipity" {
+            let rows = self.store.grid_cards(None, 0, Some(18))?;
+            self.reply(url, render_serendipity(&rows, self.localize), 200, type_header(HTML_TYPE))?
         } else {
             if get || self.readonly {
                 return Ok(None);

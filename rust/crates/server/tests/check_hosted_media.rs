@@ -686,7 +686,7 @@ async fn site_fallbacks(fixture: &Fixture) {
         ask_hosted(&site, "GET", "/news/unread", Body::Empty, &[])
             .await
             .text(),
-        "[1]"
+        r#"{"count":0}"#
     );
     for route in [
         "/everything",
@@ -822,19 +822,6 @@ async fn site_fallbacks(fixture: &Fixture) {
             404
         );
     }
-    let recorded_range = ask_hosted(
-        &site,
-        "GET",
-        "/news/unread",
-        Body::Empty,
-        &[("range", "bytes=9-")],
-    )
-    .await;
-    assert_eq!(recorded_range.status, 416);
-    assert_eq!(
-        recorded_range.headers.get("content-range"),
-        Some("bytes */3")
-    );
     assert_eq!(
         ask_hosted(&site, "GET", "/media/none/x.webp", Body::Empty, &[])
             .await
