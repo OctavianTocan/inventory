@@ -52,7 +52,7 @@ pub struct Media {
 
 /// A request the server answered, as the JS `requests` list holds it.
 #[derive(Clone, Debug, PartialEq)]
-pub struct RecordedRequest {
+pub struct FixtureRequest {
     /// The URL path.
     pub path: String,
     /// The parsed JSON body, or `Undefined` for an empty one.
@@ -92,7 +92,7 @@ pub struct Control {
 
 #[derive(Default)]
 struct State {
-    requests: Vec<RecordedRequest>,
+    requests: Vec<FixtureRequest>,
     control: Control,
 }
 
@@ -289,7 +289,7 @@ async fn answer(state: &Arc<Mutex<State>>, media: &Media, base: &str, method: &s
     let body = if text.is_empty() { Value::Undefined } else { json::parse(text).map_err(|_| ())? };
     let control = {
         let mut state = state.lock().unwrap();
-        state.requests.push(RecordedRequest { path: path.clone(), body: body.clone(), method: method.to_owned() });
+        state.requests.push(FixtureRequest { path: path.clone(), body: body.clone(), method: method.to_owned() });
         state.control.clone()
     };
     if control.ai_redirect && method == "POST" {
@@ -460,7 +460,7 @@ impl Fixtures {
     }
 
     /// The requests answered so far, oldest first (`requests`).
-    pub fn requests(&self) -> Vec<RecordedRequest> {
+    pub fn requests(&self) -> Vec<FixtureRequest> {
         self.state.lock().unwrap().requests.clone()
     }
 

@@ -50,8 +50,8 @@ fn build_synthetic_library(root: &Path) -> PathBuf {
         ],
     )
     .unwrap();
-    write_file(&root.join("capture/media/acct/c1/b1;400x300.webp"), b"small-rendition-400x300");
-    write_file(&root.join("capture/media/acct/c1/b1;800x600.webp"), b"larger-rendition-800x600-bytes");
+    write_file(&root.join("capture").join("media/acct/c1/b1;400x300.webp"), b"small-rendition-400x300");
+    write_file(&root.join("capture").join("media/acct/c1/b1;800x600.webp"), b"larger-rendition-800x600-bytes");
     // Card 2: SoftwareApplication card with signed media.mymind.host links in html and extras.
     db.execute(
         "INSERT INTO cards (id, user_id, type, flags, data, html, extras, created_ns, bumped_ns, modified_ns)
@@ -63,10 +63,10 @@ fn build_synthetic_library(root: &Path) -> PathBuf {
         ],
     )
     .unwrap();
-    write_file(&root.join("capture/mediahost/acct/c2/b2;250x250.webp"), b"app-icon-250");
-    write_file(&root.join("capture/mediahost/acct/c2/b2;500x500.webp"), b"app-icon-500-largest");
+    write_file(&root.join("capture").join("mediahost/acct/c2/b2;250x250.webp"), b"app-icon-250");
+    write_file(&root.join("capture").join("mediahost/acct/c2/b2;500x500.webp"), b"app-icon-500-largest");
 
-    // Card 3: Image card whose media file is completely missing from capture/.
+    // Card 3: Image card whose media file is completely missing.
     db.execute(
         "INSERT INTO cards (id, user_id, type, flags, data, html, extras, created_ns, bumped_ns, modified_ns)
          VALUES ('0000c3', 'u1', 'Image', 0, ?, ?, ?, 300, 300, 300)",

@@ -21,7 +21,6 @@ pub mod tool_capture_fixtures;
 pub mod tool_embed_library;
 pub mod tool_import_hosted;
 pub mod tool_migrate_media;
-pub mod tool_search_recordings;
 pub mod tool_seed_db;
 pub mod tool_try_ai;
 pub mod tool_upload_hosted;

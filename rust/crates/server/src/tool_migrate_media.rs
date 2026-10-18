@@ -510,7 +510,7 @@ async fn run_inner(root: &Path, args: &[String]) -> std::result::Result<u8, Stri
         }
     }
 
-    // Also migrate any remaining non-marketing stems in capture/replay (such as reader view images).
+    // Also migrate any remaining non-marketing stems in the source folders (such as reader view images).
     for (stem, candidates) in &sources {
         if stem.starts_with("00000000001/") {
             continue;

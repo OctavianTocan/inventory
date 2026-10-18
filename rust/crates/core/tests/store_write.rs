@@ -18,7 +18,7 @@ use mm_sqlite::Sqlite;
 
 // Logical identity for a frozen pre-switch comparison.
 const DRIVER: &str = "driver:core:store-write";
-const TABLES: [&str; 13] = ["embeddings", "cards", "changes", "annotations", "spaces", "space_cards", "pins", "shares", "revisions", "users", "tag_names", "card_content", "api_metadata"];
+const TABLES: [&str; 12] = ["embeddings", "cards", "changes", "annotations", "spaces", "space_cards", "pins", "shares", "revisions", "users", "tag_names", "card_content"];
 
 static CLOCK: Mutex<()> = Mutex::new(());
 static COUNTER: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);

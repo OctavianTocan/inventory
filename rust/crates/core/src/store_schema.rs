@@ -78,9 +78,6 @@ CREATE TABLE IF NOT EXISTS changes (
 ) STRICT;
 CREATE INDEX IF NOT EXISTS changes_ts ON changes (user_id, ts_ns);
 
-DROP TABLE IF EXISTS api_metadata;
-DROP TABLE IF EXISTS recorded;
-
 CREATE TABLE IF NOT EXISTS card_content (
   card_id TEXT PRIMARY KEY REFERENCES cards (id) ON DELETE CASCADE,
   body TEXT NOT NULL CHECK (json_valid(body))

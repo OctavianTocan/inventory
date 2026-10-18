@@ -44,9 +44,7 @@ pub fn server_root() -> PathBuf {
                 Err(error) => panic!("cannot create isolated server root: {error}"),
             }
         };
-        for name in ["capture", "mirror", "replay"] {
-            std::os::unix::fs::symlink(repo().join(name), root.join(name)).unwrap();
-        }
+        std::os::unix::fs::symlink(repo().join("mirror"), root.join("mirror")).unwrap();
         assert!(!root.join(".env").exists() && !root.join(".dev.vars").exists());
         root
     })
@@ -424,71 +422,3 @@ fn read_answer(reader: &mut BufReader<TcpStream>, head: bool) -> Option<(Answer,
     Some((Answer { status, headers, body }, closes))
 }
 
-/// Load the immutable pre-switch request inventory without executing an enumerator.
-///
-/// # Returns
-/// Every replayed and recorded request and the original route edge cases in their frozen order.
-///
-/// # Panics
-/// If the inventory is missing, its enumeration inputs changed, or legacy recording is requested.
-pub fn replica_requests() -> Vec<Sent> {
-    let root = repo();
-    let frozen = root.join("rust/test-fixtures/http/replica-requests.json");
-    let inputs = enumeration_inputs();
-    let manifest = if recording() { panic!("Legacy recording requires the recorded pre-switch revision") } else {
-        let bytes = mm_test_support::golden::read_input(&frozen);
-        json::parse(std::str::from_utf8(&bytes).unwrap()).unwrap()
-    };
-    assert_eq!(manifest.get("version").as_f64(), Some(1.0), "unsupported HTTP request inventory");
-    assert_eq!(
-        json::to_string(manifest.get("inputs")),
-        json::to_string(&inputs),
-        "HTTP enumeration corpus changed; use the frozen recordings"
-    );
-    let list = manifest.get("requests").clone();
-    let Value::Array(list) = list else { panic!("requests are a list") };
-    let text = |value: &Value| value.as_str().unwrap_or_default().to_owned();
-    list.iter()
-        .map(|request| {
-            let headers = match request.get("headers") {
-                Value::Array(pairs) => pairs.iter().map(|pair| (text(pair.get("0")), text(pair.get("1")))).collect(),
-                _ => Vec::new(),
-            };
-            Sent {
-                method: text(request.get("method")),
-                target: text(request.get("target")),
-                headers,
-                body: text(request.get("body")),
-            }
-        })
-        .collect()
-}
-
-// Fingerprint all enumeration source documents and ordered directory entries, without copying file contents.
-fn enumeration_inputs() -> Value {
-    let root = repo();
-    let mut inputs: Vec<Value> = ["replay/index.json", "capture/responses.json", "capture/cards.json", "capture/details.json"]
-        .into_iter()
-        .map(|path| obj! { "path" => path, "file" => fixture_identity(&root.join(path)) }.into())
-        .collect();
-    for directory in ["mirror/static", "capture/media", "capture/mediahost"] {
-        let mut paths = Vec::new();
-        enumerate(&root.join(directory), &root, &mut paths);
-        paths.sort();
-        let names = json::to_string(&Value::Array(paths.into_iter().map(Value::from).collect()));
-        inputs.push(obj! { "directory" => directory, "entries_sha256" => digest(names.as_bytes()) }.into());
-    }
-    Value::Array(inputs)
-}
-
-// Enumerate required files without silently accepting missing directories or unreadable entries.
-fn enumerate(directory: &Path, root: &Path, paths: &mut Vec<String>) {
-    for entry in std::fs::read_dir(directory).unwrap() {
-        let entry = entry.unwrap();
-        if entry.file_type().unwrap().is_dir() {
-            enumerate(&entry.path(), root, paths);
-        } else if entry.file_type().unwrap().is_file() {
-            paths.push(entry.path().strip_prefix(root).unwrap().to_string_lossy().into_owned());
-        }
-    }
-}

@@ -569,11 +569,6 @@ async fn site_fallbacks(fixture: &Fixture) {
         &[r#"{"onboardFlags":128}"#.into()],
     )
     .unwrap();
-    db.exec_batch(
-        "CREATE TABLE IF NOT EXISTS recorded (key TEXT PRIMARY KEY, status INTEGER NOT NULL, headers TEXT NOT NULL, body BLOB NOT NULL);
-         CREATE TABLE IF NOT EXISTS api_metadata (path TEXT PRIMARY KEY, status INTEGER NOT NULL, headers TEXT NOT NULL, attributes TEXT NOT NULL);",
-    )
-    .unwrap();
     bucket
         .write(
             "static/app.js",

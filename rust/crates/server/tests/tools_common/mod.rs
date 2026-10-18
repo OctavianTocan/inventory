@@ -153,11 +153,9 @@ pub fn tmproot(label: &str) -> PathBuf {
 /// # Arguments
 /// * `root` - An existing empty temporary directory, never the repository root.
 pub fn prepare_root(root: &Path) {
-    for name in ["mirror", "capture", "replay"] {
-        let from = repo().join(name);
-        assert!(from.is_dir(), "required immutable recording directory {name} is missing");
-        std::os::unix::fs::symlink(from, root.join(name)).unwrap();
-    }
+    let from = repo().join("mirror");
+    assert!(from.is_dir(), "required immutable mirror directory is missing");
+    std::os::unix::fs::symlink(from, root.join("mirror")).unwrap();
 }
 
 fn collect(mut command: Command, env: &[(&str, &str)], stdin: Option<&str>) -> Out {

@@ -121,12 +121,17 @@ fn local_target(live: &str) -> String {
 #[test]
 fn replay_key_for_matches_node() {
     let _goldens = common::test_guard();
-    let index = std::fs::read_to_string(common::root().join("replay/index.json")).unwrap();
-    let Value::Object(index) = mm_js::json::parse(&index).unwrap() else { panic!("index is no object") };
     let mut targets: Vec<(String, String, Option<&str>)> = Vec::new();
-    for (key, _) in index.iter() {
-        let key = key.rsplit('|').next().unwrap();
-        let Some((kind, live)) = key.split_once(' ') else { continue };
+    for (kind, live) in [
+        ("DOC", "https://access.mymind.com/everything"),
+        ("DOC", "https://access.mymind.com/spaces"),
+        ("GET", "https://access.mymind.com/cards"),
+        ("GET", "https://access.mymind.com/cards/trash"),
+        ("GET", "https://access.mymind.com/search?q=design&wildcard=true"),
+        ("GET", "https://static.accelerator.net/134/0.109.0/scripts/app.js"),
+        ("GET", "https://media.mymind.host/acct/card/image.webp?Expires=1&Signature=a"),
+        ("GET", "https://carbon-media.accelerator.net/00000000001/clip.mp4"),
+    ] {
         let (method, dest) = if kind == "DOC" { ("GET", Some("document")) } else { (kind, None) };
         targets.push((method.to_owned(), local_target(live), dest));
     }

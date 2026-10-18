@@ -927,7 +927,7 @@ fn fixture_snapshot(rust_dir: &Path, record_mode: bool) -> FixtureSnapshot {
     }
     let base = rust_dir.join("test-fixtures");
     let mut files = BTreeMap::new();
-    for name in ["mymind.db", "hosted-test.db", "hosted-bucket"] {
+    for name in ["mymind.db", "hosted-test.db"] {
         collect_files(&base, &base.join(name), &mut files);
     }
     let manifest = FixtureManifest {
@@ -1004,34 +1004,6 @@ fn file_stamp(path: &Path) -> FileStamp {
     }
 }
 
-// Enumerate file identities cheaply, leaving unchanged content hashes cached.
-fn collect_stamps(base: &Path, current: &Path, stamps: &mut BTreeMap<String, FileStamp>) {
-    let metadata = fs::symlink_metadata(current).unwrap_or_else(|error| {
-        panic!(
-            "frozen input {} is missing: {error}. {REGENERATE}",
-            current.display()
-        )
-    });
-    assert!(
-        !metadata.file_type().is_symlink(),
-        "frozen input {} must not be a symlink",
-        current.display()
-    );
-    if metadata.is_dir() {
-        for entry in fs::read_dir(current).expect("read frozen directory") {
-            collect_stamps(base, &entry.expect("frozen entry").path(), stamps);
-        }
-    } else {
-        stamps.insert(
-            current
-                .strip_prefix(base)
-                .unwrap()
-                .to_string_lossy()
-                .replace('\\', "/"),
-            file_stamp(current),
-        );
-    }
-}
 
 // Rehash changed files only; inspect databases per batch and the complete bucket at test completion.
 fn refresh_fixtures(snapshot: &FixtureSnapshot, all: bool) {
@@ -1040,11 +1012,6 @@ fn refresh_fixtures(snapshot: &FixtureSnapshot, all: bool) {
         actual.insert(name.to_owned(), file_stamp(&snapshot.base.join(name)));
     }
     if all {
-        collect_stamps(
-            &snapshot.base,
-            &snapshot.base.join("hosted-bucket"),
-            &mut actual,
-        );
         assert_eq!(
             actual.keys().collect::<Vec<_>>(),
             snapshot.manifest.files.keys().collect::<Vec<_>>(),
@@ -1072,7 +1039,6 @@ fn verify_fixture_environment(rust_dir: &Path) {
     for (name, file) in [
         ("MYMIND_TEST_DB", "mymind.db"),
         ("MYMIND_TEST_HOSTED_DB", "hosted-test.db"),
-        ("MYMIND_TEST_HOSTED_BUCKET", "hosted-bucket"),
     ] {
         if let Some(actual) = std::env::var_os(name) {
             let actual = PathBuf::from(actual)
@@ -1114,7 +1080,6 @@ fn normalize_with_aliases(
     for (variable, placeholder) in [
         ("MYMIND_TEST_DB", "<fixture:owner-db>"),
         ("MYMIND_TEST_HOSTED_DB", "<fixture:hosted-db>"),
-        ("MYMIND_TEST_HOSTED_BUCKET", "<fixture:hosted-bucket>"),
     ] {
         if let Some(path) = std::env::var_os(variable) {
             let path = PathBuf::from(path);
@@ -1657,17 +1622,12 @@ mod tests {
                 "fn frozen_case_recipe() {}\n",
             )
             .unwrap();
-            fs::create_dir_all(root.join("test-fixtures/hosted-bucket")).unwrap();
+            fs::create_dir_all(root.join("test-fixtures")).unwrap();
             let source = root.join("synthetic-source.db");
             fs::write(&source, b"immutable synthetic database source").unwrap();
             for name in ["mymind.db", "hosted-test.db"] {
                 fs::copy(&source, root.join("test-fixtures").join(name)).unwrap();
             }
-            fs::write(
-                root.join("test-fixtures/hosted-bucket/object"),
-                b"synthetic object",
-            )
-            .unwrap();
             let fixtures = fixture_snapshot(&root, true);
             Self {
                 root,
@@ -2056,11 +2016,11 @@ mod tests {
         assert_eq!(normalize(literal, &harness.root), literal);
         register_loopback_port(54321);
         register_loopback_port(54322);
-        let path = harness.crate_dir.join("../../..").join("capture/body");
+        let path = harness.crate_dir.join("../../..").join("mirror/body");
         let text = format!("{} http://localhost:54321/path", path.display());
         assert_eq!(
             String::from_utf8(normalize(text.as_bytes(), &harness.root)).unwrap(),
-            "<repository>/capture/body http://localhost:<loopback-port:0>/path"
+            "<repository>/mirror/body http://localhost:<loopback-port:0>/path"
         );
         let first = format!(
             "{}/target/tmp/fixture-copies/123-4/mymind.db",

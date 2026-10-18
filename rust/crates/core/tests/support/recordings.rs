@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::LazyLock;
 
@@ -12,8 +12,8 @@ use mm_core::sql::{Sql, SqlValue};
 use mm_core::store::{Store, ns_from_iso};
 use mm_core::{Error, Result};
 use mm_js::number::string_to_number;
-use mm_js::{Object, Value, json, obj, text};
-use mm_msgpack::{DecodeOptions, decode_multi};
+use mm_core::render_card::render_card;
+use mm_js::{Object, Value, arr, json, obj, text};
 use mm_sqlite::Sqlite;
 use regex::Regex;
 
@@ -377,19 +377,19 @@ impl Recording {
 
 /// The original store check's independent recording expectations.
 pub struct Recordings {
-    /// Complete captured card set.
+    /// Complete synthetic card set.
     pub capture: Vec<Recording>,
-    /// Newest recorded desktop grid response.
+    /// Newest desktop grid response.
     pub stream: Vec<Recording>,
-    /// Recorded trash response.
+    /// Trash response.
     pub trash: Vec<Recording>,
-    /// Recorded spaces with ranked members.
+    /// Spaces with ranked members.
     pub spaces: Value,
-    /// Recorded individual space responses.
+    /// Individual space responses.
     pub space_details: Vec<(String, Value)>,
-    /// Recorded manual tag response, retaining MessagePack dates.
+    /// Manual tag response, retaining MessagePack dates.
     pub manual: Value,
-    /// Recorded recent tag response.
+    /// Recent tag response.
     pub recent: Value,
     /// Grid response headers.
     pub grid_headers: Value,
@@ -397,97 +397,140 @@ pub struct Recordings {
     pub config: Value,
 }
 
-/// Resolve this checkout's committed recordings without loading any credential files.
-///
-/// # Returns
-/// The repository containing this test crate.
-pub fn root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
-}
+const TYPES: &[&str] = &[
+    "WebPage",
+    "XPost",
+    "Article",
+    "YouTubeVideo",
+    "Repository",
+    "Video",
+    "Note",
+    "Image",
+    "Screenshot",
+    "InstagramReel",
+    "SoftwareApplication",
+    "Product",
+    "Document",
+    "ThreadsPost",
+    "Placeholder",
+    "SubstackNote",
+    "Content",
+    "RedditPost",
+];
 
-// Decode committed JSON without executing a recording or reading environment files.
-fn read_json(path: &Path) -> Value {
-    json::parse(&std::fs::read_to_string(path).expect("read committed recording"))
-        .expect("recording JSON")
-}
-
-/// Read all captured card responses directly from the committed corpus.
-///
-/// # Returns
-/// Every captured card in recorded order.
-///
-/// # Panics
-/// On a missing or malformed capture file.
-pub fn captured_cards() -> Vec<Recording> {
-    read_json(&root().join("capture/cards.json"))
-        .as_array()
-        .expect("captured card array")
-        .iter()
-        .map(Recording::from_value)
-        .collect()
-}
-
-/// Read the exact original check-store expectations from committed capture and replay files.
-///
-/// # Returns
-/// The independent expected corpus, including every per-space response.
-///
-/// # Panics
-/// On missing recordings or invalid JSON/MessagePack.
-pub fn read_recordings() -> Recordings {
-    let root = root();
-    let index = read_json(&root.join("replay/index.json"));
-    let body = |key: &str| {
-        let file = index
-            .get(key)
-            .get("file")
-            .as_str()
-            .expect("replay entry file");
-        std::fs::read(root.join("replay/bodies").join(file)).expect("replay response body")
+fn synthetic_recording(index: usize, kind: &str, deleted: Option<&str>) -> Recording {
+    let id = format!("00000002UnE0O{index:09}");
+    let iso = format!("2026-10-16T00:00:{index:02}.000Z");
+    let tag_name = ["design", "architecture", "rust"][(index - 1) % 3];
+    let tag_id = format!("00000002UnE0y{index:09}");
+    let mut data = obj! {
+        "type" => kind,
+        "flags" => 0.0,
+        "created" => iso.as_str(),
+        "bumped" => iso.as_str(),
+        "modified" => deleted.unwrap_or(iso.as_str()),
+        "tags" => arr![obj! { "id" => tag_id.as_str(), "name" => tag_name, "flags" => 8.0 }],
     };
-    let decoded = |key: &str| {
-        decode_multi(&body(key), DecodeOptions::default()).expect("recorded MessagePack")
-    };
-    let response = |key: &str| {
-        json::parse(&String::from_utf8(body(key)).expect("response UTF-8")).expect("response JSON")
-    };
-    let stream = |key: &str| decoded(key).iter().map(Recording::from_value).collect();
-    let prefix = "GET https://access.mymind.com/spaces/";
-    let mut space_details = Vec::new();
-    for key in index.as_object().expect("replay index object").keys() {
-        if let Some(id) = key
-            .strip_prefix(prefix)
-            .filter(|id| !id.is_empty() && !id.contains(['/', '?']))
-        {
-            space_details.push((id.to_owned(), response(&key)));
-        }
+    if matches!(kind, "Image" | "Video" | "Document") {
+        data.insert("blob", obj! { "path" => format!("acct/{id}/file"), "width" => 800.0, "height" => 600.0 });
     }
-    let shell = std::fs::read_to_string(root.join("capture/shell.html")).expect("recorded shell");
-    let full_config = json::parse(&capture(&CONFIG, &shell, 1).expect("shell config"))
-        .expect("shell config JSON");
+    if let Some(del) = deleted {
+        data.insert("deleted", del);
+    }
+    let data_val: Value = data.into();
+    let json_text = json::to_string(&data_val);
+    let html = render_card(&data_val, &obj! { "id" => id.as_str() }.into()).expect("render synthetic card");
+    Recording { html, json: json_text }
+}
+
+/// Build synthetic card responses covering all 18 card types.
+pub fn captured_cards() -> Vec<Recording> {
+    let mut cards = Vec::with_capacity(TYPES.len() * 2);
+    for index in (1..=TYPES.len() * 2).rev() {
+        let kind = TYPES[(index - 1) % TYPES.len()];
+        cards.push(synthetic_recording(index, kind, None));
+    }
+    cards
+}
+
+/// Build synthetic check-store expectations covering grid, trash, spaces, tags, quota and config.
+pub fn read_recordings() -> Recordings {
+    let stream = captured_cards();
+    let capture = stream.clone();
+    let trash = vec![
+        synthetic_recording(38, "Note", Some("2026-10-16T00:00:38.000Z")),
+        synthetic_recording(37, "Article", Some("2026-10-16T00:00:37.000Z")),
+    ];
+    let space_one: Value = obj! {
+        "id" => "00000002UnEgl000000001",
+        "name" => "Design Systems",
+        "color" => "#166ff4",
+        "position" => 0.0,
+        "objects" => arr![
+            obj! { "id" => "00000002UnE0O000000036", "score" => 1.0 },
+            obj! { "id" => "00000002UnE0O000000035", "score" => 0.9 }
+        ],
+        "created" => "2026-10-15T10:00:00.000Z",
+    }
+    .into();
+    let space_two: Value = obj! {
+        "id" => "00000002UnEgl000000002",
+        "name" => "Smart Articles",
+        "color" => "#17c37b",
+        "position" => 1.0,
+        "objects" => arr![
+            obj! { "id" => "00000002UnE0O000000021", "score" => 1.0, "queryId" => "00000002UnEiV000000001" }
+        ],
+        "created" => "2026-10-15T11:00:00.000Z",
+        "query" => obj! {
+            "id" => "00000002UnEiV000000001",
+            "filters" => arr!["type:article"],
+            "checked" => "2026-10-16T00:00:00.000Z",
+        },
+    }
+    .into();
+    let spaces = arr![space_one.clone(), space_two.clone()];
+    let space_details = vec![
+        ("00000002UnEgl000000001".to_owned(), space_one),
+        ("00000002UnEgl000000002".to_owned(), space_two),
+    ];
+    let manual = arr![
+        obj! { "name" => "design", "count" => 12.0, "flags" => 0.0, "modified" => Value::Date(1_780_000_000_000.0) },
+        obj! { "name" => "architecture", "count" => 12.0, "flags" => 0.0, "modified" => Value::Date(1_780_000_001_000.0) },
+        obj! { "name" => "rust", "count" => 12.0, "flags" => 0.0, "modified" => Value::Date(1_780_000_002_000.0) }
+    ];
+    let recent = arr![
+        obj! { "name" => "rust" },
+        obj! { "name" => "architecture" },
+        obj! { "name" => "design" }
+    ];
+    let checkpoint = ns_from_iso("2026-10-16T00:00:36.000Z").expect("checkpoint").to_string();
+    let grid_headers = obj! {
+        "x-checkpoint" => checkpoint.as_str(),
+        "x-object-quota" => "{\"count\":36,\"limit\":50000}",
+    }
+    .into();
     let config = obj! {
-        "user" => obj! { "uid" => full_config.get("user").get("uid").clone(), "flags" => full_config.get("user").get("flags").clone() },
-        "account" => obj! { "uid" => full_config.get("account").get("uid").clone() },
-        "colorScheme" => full_config.get("colorScheme").clone(), "timeZoneId" => full_config.get("timeZoneId").clone(),
-        "locale" => full_config.get("locale").clone(), "currency" => full_config.get("currency").clone(),
-        "aiLevel" => full_config.get("aiLevel").clone(), "onboardFlags" => full_config.get("onboardFlags").clone(),
-        "quotas" => obj! { "objects" => obj! { "limit" => full_config.get("quotas").get("objects").get("limit").clone() } },
-    }.into();
+        "user" => obj! { "uid" => "00000002UnE0z1M1aBCb", "flags" => 0.0 },
+        "account" => obj! { "uid" => "00000002UnE00z1M1aBCb" },
+        "colorScheme" => "dark",
+        "timeZoneId" => "Europe/Madrid",
+        "locale" => "en-US",
+        "currency" => "USD",
+        "aiLevel" => 3.0,
+        "onboardFlags" => 128.0,
+        "quotas" => obj! { "objects" => obj! { "limit" => 50_000.0 } },
+    }
+    .into();
     Recordings {
-        capture: captured_cards(),
-        stream: stream("GET https://access.mymind.com/cards"),
-        trash: stream("GET https://access.mymind.com/cards/trash"),
-        spaces: response("GET https://access.mymind.com/spaces"),
+        capture,
+        stream,
+        trash,
+        spaces,
         space_details,
-        manual: decoded("GET https://access.mymind.com/tags/manual")
-            .into_iter()
-            .next()
-            .expect("manual tag response"),
-        recent: response("GET https://access.mymind.com/tags/recent?take=10"),
-        grid_headers: index
-            .get("GET https://access.mymind.com/cards")
-            .get("headers")
-            .clone(),
+        manual,
+        recent,
+        grid_headers,
         config,
     }
 }

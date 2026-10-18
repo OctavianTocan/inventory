@@ -83,10 +83,10 @@ pub fn is_text_extension(extension: &str) -> bool {
     matches!(extension, ".js" | ".mjs" | ".css" | ".html" | ".json" | ".svg")
 }
 
-/// Rewrite mymind's origins in recorded text to the replica's local paths (`localize`).
+/// Rewrite mymind's origins in text to local paths (`localize`).
 ///
 /// # Arguments
-/// * `text` - Recorded text.
+/// * `text` - Input text.
 pub fn localize(text: &str) -> String {
     let mut out = text.to_owned();
     for (local, origin) in LOCAL_PREFIXES {
