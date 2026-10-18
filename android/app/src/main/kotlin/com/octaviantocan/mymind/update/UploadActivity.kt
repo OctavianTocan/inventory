@@ -1,27 +1,29 @@
 package com.octaviantocan.mymind.update
 
-import java.util.Collections
-import java.util.WeakHashMap
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.update
 
-/** Something that can have an upload in flight. */
-interface UploadWork {
-    /** True while a file or a shared item is still being sent or saved. */
-    val busy: Boolean
-}
+/**
+ * Counts the app's uploads in flight, so an update does not interrupt them and the app stays running for them.
+ *
+ * @param onStart Called when an upload starts while none was in flight.
+ */
+class UploadActivity(private val onStart: () -> Unit = {}) {
+    private val mutableCount = MutableStateFlow(0)
 
-/** Tells whether any upload of the app is in flight, so an update does not interrupt it. */
-class UploadActivity {
-    private val works: MutableSet<UploadWork> = Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap()))
+    /** Number of uploads in flight. */
+    val count: StateFlow<Int> = mutableCount
 
-    /**
-     * Starts counting [work]; it is dropped when nothing else holds it.
-     *
-     * @param work The queue or controller to watch.
-     */
-    fun register(work: UploadWork) {
-        works.add(work)
+    /** Counts one more upload in flight; every call is paired with one [end]. */
+    fun begin() {
+        if (mutableCount.getAndUpdate { it + 1 } == 0) onStart()
     }
 
-    /** @return True when any registered work is busy. */
-    fun busy(): Boolean = synchronized(works) { works.any { it.busy } }
+    /** Counts one upload as finished, failed or cancelled. */
+    fun end() = mutableCount.update { maxOf(0, it - 1) }
+
+    /** @return True when any upload is in flight. */
+    fun busy(): Boolean = mutableCount.value > 0
 }

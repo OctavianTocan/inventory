@@ -6,7 +6,6 @@ import com.octaviantocan.mymind.data.Library
 import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.ui.library.UploadQueue
 import com.octaviantocan.mymind.update.UploadActivity
-import com.octaviantocan.mymind.update.UploadWork
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +15,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * What the user added in the sheet.
@@ -33,29 +31,22 @@ data class ShareDetails(val tags: List<String> = emptyList(), val note: String =
  * @param scope Scope the saving runs in.
  * @param library Target of the calls.
  * @param io Dispatcher the files are read on.
- * @param activity Registry that learns whether a share is still being saved, or null.
+ * @param activity Counter of the uploads in flight, which counts a share until it is saved, or null.
  * @param open Turns a shared address into a file, or null when it cannot be read.
  */
 class ShareController(
     private val scope: CoroutineScope,
     private val library: Library,
     io: CoroutineDispatcher = Dispatchers.IO,
-    activity: UploadActivity? = null,
+    private val activity: UploadActivity? = null,
     private val open: suspend (String) -> UploadFile?,
-) : UploadWork {
+) {
     private val savedIds = MutableStateFlow<List<String>>(emptyList())
     private val failures = MutableStateFlow(0)
     private var expected = 0
-    private val working = AtomicInteger(0)
 
     /** Upload queue of the shared files. */
-    val queue = UploadQueue(scope, library, onUploaded = { id, _ -> savedIds.update { it + id } }, io = io)
-
-    override val busy: Boolean get() = working.get() > 0 || queue.busy
-
-    init {
-        activity?.register(this)
-    }
+    val queue = UploadQueue(scope, library, onUploaded = { id, _ -> savedIds.update { it + id } }, io = io, activity = activity)
 
     /** Cards saved so far. */
     val cards: StateFlow<List<String>> = savedIds
@@ -67,14 +58,8 @@ class ShareController(
      */
     fun start(items: List<ShareItem>) {
         expected = items.size
-        working.incrementAndGet()
-        scope.launch {
-            try {
-                save(items)
-            } finally {
-                working.decrementAndGet()
-            }
-        }
+        activity?.begin()
+        scope.launch { save(items) }.invokeOnCompletion { activity?.end() }
     }
 
     private suspend fun save(items: List<ShareItem>) {
@@ -98,11 +83,11 @@ class ShareController(
      * @return Success, or the first failure; with nothing saved, a network failure.
      */
     suspend fun finish(details: ShareDetails): ApiResult<Unit> {
-        working.incrementAndGet()
+        activity?.begin()
         try {
             return applyDetails(details)
         } finally {
-            working.decrementAndGet()
+            activity?.end()
         }
     }
 

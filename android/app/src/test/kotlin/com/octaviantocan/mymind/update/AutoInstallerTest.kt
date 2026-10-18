@@ -31,7 +31,7 @@ class AutoInstallerTest {
     private val installed = mutableListOf<File>()
     private val asked = mutableListOf<String>()
     private var allowed = true
-    private var uploading = false
+    private val uploads = UploadActivity()
     private lateinit var updater: Updater
     private lateinit var installer: AutoInstaller
 
@@ -46,8 +46,7 @@ class AutoInstallerTest {
         server.start()
         val prefs = UpdatePrefs(ApplicationProvider.getApplicationContext<Context>().getSharedPreferences("auto-install-test", Context.MODE_PRIVATE).also { it.edit().clear().commit() })
         updater = Updater(OkHttpClient(), server.url("/").toString(), 2, File(folder.newFolder(), "updates"), installerFake, prefs, { 0L }, Dispatchers.Unconfined)
-        val activity = UploadActivity().apply { register(object : UploadWork { override val busy get() = uploading }) }
-        installer = AutoInstaller(updater, { allowed }, activity) { asked += it.versionName }
+        installer = AutoInstaller(updater, { allowed }, uploads) { asked += it.versionName }
     }
 
     @After
@@ -82,10 +81,10 @@ class AutoInstallerTest {
     @Test
     fun anUploadHoldsTheInstallBackUntilItEnds() = runBlocking {
         ready()
-        uploading = true
+        uploads.begin()
         assertEquals(AutoInstallResult.Uploading, installer.installIfIdle())
         assertTrue(installed.isEmpty())
-        uploading = false
+        uploads.end()
         assertEquals(AutoInstallResult.Started, installer.installIfIdle())
         assertEquals(1, installed.size)
     }
@@ -108,9 +107,9 @@ class AutoInstallerTest {
     @Test
     fun aTapInstallsOnlyWhenAllowedAndIdle() = runBlocking {
         ready()
-        uploading = true
+        uploads.begin()
         assertFalse(installer.installNow())
-        uploading = false
+        uploads.end()
         allowed = false
         assertFalse(installer.installNow())
         allowed = true

@@ -4,6 +4,7 @@ import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.ui.library.FakeLibrary
+import com.octaviantocan.mymind.update.UploadActivity
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -67,22 +68,33 @@ class ShareControllerTest {
     }
 
     @Test
-    fun theControllerIsBusyUntilEverythingIsSaved() = runTest(dispatcher) {
-        val controller = ShareController(this, FakeLibrary(), dispatcher) { uri -> file(uri) }
-        assertEquals(false, controller.busy)
-        controller.start(listOf(ShareItem.Stream("a.jpg")))
-        assertEquals(true, controller.busy)
+    fun aSharedFileCountsAsAnUploadUntilItIsSaved() = runTest(dispatcher) {
+        val starts = mutableListOf<Unit>()
+        val activity = UploadActivity { starts += Unit }
+        ShareController(this, FakeLibrary(), dispatcher, activity) { uri -> file(uri) }.start(listOf(ShareItem.Stream("a.jpg")))
+        assertEquals(true, activity.busy())
         advanceUntilIdle()
-        assertEquals(false, controller.busy)
+        assertEquals(false, activity.busy())
+        assertEquals(1, starts.size)
     }
 
     @Test
-    fun theActivityRegistrySeesABusyController() = runTest(dispatcher) {
-        val activity = com.octaviantocan.mymind.update.UploadActivity()
-        val controller = ShareController(this, FakeLibrary(), dispatcher, activity) { uri -> file(uri) }
-        controller.start(listOf(ShareItem.Text("https://example.com")))
+    fun aSharedLinkCountsAsAnUploadUntilItIsSaved() = runTest(dispatcher) {
+        val activity = UploadActivity()
+        ShareController(this, FakeLibrary(), dispatcher, activity) { uri -> file(uri) }.start(listOf(ShareItem.Text("https://example.com")))
         assertEquals(true, activity.busy())
         advanceUntilIdle()
+        assertEquals(false, activity.busy())
+    }
+
+    @Test
+    fun aFailedUploadStopsCounting() = runTest(dispatcher) {
+        val activity = UploadActivity()
+        val library = FakeLibrary().apply { chunkFailure = ApiFailure.Network }
+        val controller = ShareController(this, library, dispatcher, activity) { uri -> file(uri) }
+        controller.start(listOf(ShareItem.Stream("a.jpg")))
+        advanceUntilIdle()
+        assertEquals(ApiResult.Failed(ApiFailure.Network), controller.finish(ShareDetails()))
         assertEquals(false, activity.busy())
     }
 }

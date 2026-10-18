@@ -2,6 +2,8 @@
 
 ## 0.3.1 (4), 2026-10-18
 - Pictures and videos no longer fail to upload on a slow connection.
+- A shared file keeps uploading after you close the share sheet or leave the app, with a notification while it uploads.
+- An update waits for every upload to finish before it installs.
 
 ## 0.3.0 (3), 2026-10-18
 - Share a link, picture, video, PDF or text from any app to save it to your library.
