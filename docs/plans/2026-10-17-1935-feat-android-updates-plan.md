@@ -138,6 +138,15 @@ Starts after Android round 3 (haptics, pull to refresh, uploads, Top of Mind, Se
   through the 0.2.0 sheet's Install tap; from 0.3.0 on, updates install by themselves. Not proven on the emulator: an
   install held back by a running upload (unit tests only), a share from Chrome's own menu, and Back right after a
   picture share.
+- 2026-10-18: published `mymind-0.3.1.apk` (0.3.1 (4), 37,596,396 bytes, sha256 `b55e7ebe…`), read back as the
+  test user; `/download` lists it. It fixes what the emulator found in 0.3.0: pictures failed to upload on a slow
+  connection (OkHttp's 10 s wait for the answer; a piece now waits up to 5 minutes), a slow share died about 5 s after
+  Back (Android cut the network of the app once it left the screen; `update/UploadService.kt` now keeps it running as
+  a `dataSync` foreground service with a notification), and an update installed in the middle of an upload (uploads
+  are now counted with `UploadActivity.begin` and `end`). Proven on the emulator (Pixel 9, API 36, a proxy at
+  100 KB/s): Back during a share, twice; Home during a share with 0.3.2 waiting, where the install job retried during
+  the upload and 0.3.2 installed 35 s after the card appeared; Chrome's own share menu; quick shares at full speed
+  with no crash. Not proven on the phone.
 
 ## Order
 

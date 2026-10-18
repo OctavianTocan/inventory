@@ -834,7 +834,9 @@ in round 3: the user wanted haptics, and the code settles where the real app has
   `ShareIntent.kt` (parsing, 25 MB and 20 item limits, the error states), `ShareController.kt` (saves on open,
   applies tags, note and spaces to every card on Save) and `ui/share/ShareSheet.kt` (the sheet and the error cards).
   Shared files are copied into the app's cache when the sheet opens and saving runs outside the sheet, so leaving
-  the sheet early still saves everything (the tags, note and spaces need Save).
+  the sheet early still saves everything (the tags, note and spaces need Save). While anything uploads,
+  `update/UploadService.kt` (a `dataSync` foreground service with a "Saving to your mind" notification) keeps the app
+  running, so Back or Home does not cut a slow upload off, and an update waits until the upload ends.
   Not wired: the email and help actions of the error cards (they only close), and mymind's http and https VIEW filter.
 - **Facts:**
   - Background picture `share_background.png` (1290 x 1934, `drawable-xxxhdpi`). Title Louize 38 sp.
