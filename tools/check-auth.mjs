@@ -122,13 +122,18 @@ try {
     strictEqual(res.headers.get('location'), '/signin');
   });
   await check('signed-out API request is refused', async () => strictEqual((await get('/cards', { accept: 'application/msgpack' })).status, 401));
-  await check('sign-in page is mymind\'s, wired to this server', async () => {
+  await check('local sign-in page is plain, not mymind\'s', async () => {
     const res = await get('/signin', { accept: 'text/html' });
     strictEqual(res.status, 200);
     const html = await res.text();
-    ok(html.includes('signin-button-google') && html.includes('/_auth/signin.js') && !html.includes('appleid.cdn-apple.com'));
+    ok(!/mymind/i.test(html), 'no mymind name');
+    ok(html.includes('href="/google/oauth2-redirect"') && html.includes('noindex') && html.includes('rel="icon" href="data:,"'));
+    ok(!html.includes('/signin/password'), 'no password link before a password user exists');
   });
-  await check('sign-in error page shows mymind\'s message', async () => ok((await (await get('/signin?error=AccountNotFound&identityProvider=Google')).text()).includes('could not find an account')));
+  await check('local sign-in error page shows our message', async () => {
+    const html = await (await get('/signin?error=AccountNotFound&identityProvider=Google')).text();
+    ok(html.includes('does not have access') && !/mymind/i.test(html));
+  });
   await check('through the tunnel, the sign-in page is plain, not mymind\'s', async () => {
     const res = await get('/signin', { accept: 'text/html', ...TUNNELLED });
     strictEqual(res.status, 200);
@@ -202,7 +207,7 @@ try {
     const html = await res.text();
     ok(html.includes('action="/signin/password"') && html.includes('type="password"'));
   });
-  await check('mymind\'s sign-in page is unchanged by password users', async () => ok(!(await (await get('/signin')).text()).includes('/signin/password')));
+  await check('local sign-in page offers the password form once a password user exists', async () => ok((await (await get('/signin')).text()).includes('href="/signin/password"')));
   await check('through the tunnel, the plain page offers the password form', async () => {
     ok((await (await get('/signin', TUNNELLED)).text()).includes('href="/signin/password"'));
     ok(!/mymind/i.test(await (await get('/signin/password', TUNNELLED)).text()));

@@ -28,7 +28,7 @@ use mymind::node_path::{listen_error, resolve};
 use mymind::read_metadata::import_read_metadata;
 use mymind::replica::{Options, Replica};
 use mymind::screenshot::ChromiumScreenshot;
-use mymind::serve::{FilePages, Listener, Server};
+use mymind::serve::{Listener, Server};
 use mymind::uploads_fs::DirectoryUploads;
 use tokio::net::TcpListener;
 
@@ -76,7 +76,7 @@ async fn start(root: PathBuf) -> Result<(), String> {
     let auth = if mm_core::auth::enabled(&env).map_err(|error| format!("Error: {error}"))? {
         let file = var("AUTH_DB").map_or_else(|| root.join("data").join("auth.db"), PathBuf::from);
         let db = Rc::new(mm_sqlite::Sqlite::open(&file, false).map_err(|error| error.to_string())?);
-        let options = AuthOptions::new(env.clone(), main_port, db, Rc::clone(&fetch), Rc::new(FilePages::new(&root)));
+        let options = AuthOptions::new(env.clone(), main_port, db, Rc::clone(&fetch));
         Auth::new(options).map_err(|error| format!("Error: {error}"))?.map(Rc::new)
     } else {
         None

@@ -26,7 +26,7 @@ host `crates/server/src/`, behind core host traits also implemented by the Worke
   `Ok(None)`.
 - `mm_core::host`: the async host traits (`#[async_trait(?Send)]`): `Bucket`, `Fetch` (`fetch` follows redirects
   as Node's `fetch` does; `fetch_unfollowed` is `redirect: 'manual'`), `Media`, `UploadStorage`, `Resource` (the
-  capture transport) and `Screenshot`. `mm_core::auth::SigninPages` reads the recorded sign-in pages.
+  capture transport) and `Screenshot`.
 - `mm_core::runtime`: `spawn`, `sleep`, `timeout` (`AbortSignal.timeout`), `log` (`console.log`), `env`
   (`process.env`), `random_bytes`, `random_uuid`, `now_ms` (`Date.now()`).
 - `mm_core::{Error, Result}`: `Error::status(400, "message")` where JS threw an error with a `status`;

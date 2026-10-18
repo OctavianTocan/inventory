@@ -1,44 +1,19 @@
 //! `handle` of `server.mjs`: sign-in, the tunnel refusal and the framed-media redirect, then a hosted library, or the
 //! library API in front of the replay replica; and each listener's `/hub` WebSocket.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use async_trait::async_trait;
-use mm_core::auth::{Auth, SigninPages};
+use mm_core::auth::Auth;
 use mm_core::http::{Body, Headers, Request, Response};
 use mm_core::hub::{Allows, Hub, accept_key};
 use mm_core::site::{LibraryApi, Site};
-use mm_core::{Error, Value, obj};
+use mm_core::{Value, obj};
 use mm_js::json;
 
 use crate::http::{Handler, Upgrade};
-use crate::node_path::read_file;
 use crate::replica::Replica;
-
-/// mymind's recorded sign-in pages from `capture/signin/`.
-pub struct FilePages {
-    directory: PathBuf,
-}
-
-impl FilePages {
-    /// The pages of the repository at `root`.
-    ///
-    /// # Arguments
-    /// * `root` - Repository root.
-    pub fn new(root: &Path) -> Self {
-        Self { directory: root.join("capture").join("signin") }
-    }
-}
-
-#[async_trait(?Send)]
-impl SigninPages for FilePages {
-    async fn page(&self, name: &str) -> mm_core::Result<String> {
-        let bytes = read_file(&self.directory.join(format!("{name}.html"))).await.map_err(Error::Internal)?;
-        Ok(mm_core::site::localize(&String::from_utf8_lossy(&bytes)))
-    }
-}
-
 /// What one server answers with, shared by its listeners.
 pub struct Server {
     /// The recordings.

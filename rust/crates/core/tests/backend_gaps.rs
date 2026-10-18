@@ -8,7 +8,7 @@ use std::sync::Once;
 use async_trait::async_trait;
 use futures_executor::block_on;
 use mm_core::api::{Api, ApiOptions};
-use mm_core::auth::{Auth, AuthOptions, SigninPages};
+use mm_core::auth::{Auth, AuthOptions};
 use mm_core::auth_store::install_auth_schema;
 use mm_core::host::{AnalysisImage, Fetch, FetchedResource, Media, MediaInput, MediaResult, MediaUser, PreparedMedia, Resource, ResourceOptions, Screenshot, UploadStorage};
 use mm_core::http::{Body, Request, Response};
@@ -103,12 +103,6 @@ impl Resource for Host {
 impl Screenshot for Host {
     async fn capture(&self, _url: &str, _offline: bool) -> Result<Vec<u8>> {
         panic!("no browser in synthetic tests")
-    }
-}
-#[async_trait(?Send)]
-impl SigninPages for Host {
-    async fn page(&self, _name: &str) -> Result<String> {
-        Ok("sign in".into())
     }
 }
 
@@ -243,7 +237,7 @@ fn auth() -> Auth {
         ("GOOGLE_CLIENT_SECRET".into(), "synthetic".into()),
         ("OWNER_EMAIL".into(), "test@example.test".into()),
     ]);
-    Auth::new(AuthOptions::new(env, 3000, db, Rc::new(Host), Rc::new(Host))).unwrap().unwrap()
+    Auth::new(AuthOptions::new(env, 3000, db, Rc::new(Host))).unwrap().unwrap()
 }
 
 #[test]

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use async_trait::async_trait;
-use mm_core::auth::{Auth, AuthOptions, SigninPages};
+use mm_core::auth::{Auth, AuthOptions};
 use mm_core::auth_store::install_auth_schema;
 use mm_core::host::Fetch;
 use mm_core::http::{Request, Response};
@@ -19,15 +19,6 @@ use sha2::{Digest, Sha256};
 const NOW: f64 = 1_760_000_000_000.0;
 const HOUR: f64 = 3_600_000.0;
 const DAY: f64 = 24.0 * HOUR;
-
-struct Pages;
-
-#[async_trait(?Send)]
-impl SigninPages for Pages {
-    async fn page(&self, _name: &str) -> Result<String> {
-        Ok("<html></html>".to_owned())
-    }
-}
 
 struct NoFetch;
 
@@ -53,7 +44,7 @@ fn setup() -> (Auth, Rc<dyn Sql>) {
         .into_iter()
         .map(|(name, value)| (name.to_owned(), value.to_owned()))
         .collect();
-    let auth = Auth::new(AuthOptions::new(env, 3000, db.clone(), Rc::new(NoFetch), Rc::new(Pages))).unwrap().unwrap();
+    let auth = Auth::new(AuthOptions::new(env, 3000, db.clone(), Rc::new(NoFetch))).unwrap().unwrap();
     (auth, db)
 }
 

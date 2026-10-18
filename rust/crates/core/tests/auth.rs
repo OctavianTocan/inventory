@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_trait::async_trait;
-use mm_core::auth::{Auth, AuthOptions, SigninPages};
+use mm_core::auth::{Auth, AuthOptions};
 use mm_core::auth_store::{hash_password, install_auth_schema};
 use mm_core::host::Fetch;
 use mm_core::http::{Body, Headers, Request, Response};
@@ -45,17 +45,6 @@ fn deterministic(size: usize) -> Vec<u8> {
 
 fn draw(counter: u64, size: usize) -> String {
     base64::encode_url(&Sha256::digest(format!("r{size}:{counter}").as_bytes())[..size])
-}
-
-struct Pages;
-
-#[async_trait(?Send)]
-impl SigninPages for Pages {
-    async fn page(&self, name: &str) -> Result<String> {
-        let path = common::root().join("capture/signin").join(format!("{name}.html"));
-        let text = std::fs::read_to_string(path).map_err(|error| Error::internal(error.to_string()))?;
-        Ok(text.replace("https://static.accelerator.net", "/_static"))
-    }
 }
 
 #[derive(Default)]
@@ -329,7 +318,7 @@ async fn run_rust(scenario: &Value) -> Vec<Value> {
         Value::Object(object) => object.iter().map(|(name, value)| (name.into_owned(), value.to_js_string())).collect(),
         _ => HashMap::new(),
     };
-    let mut options = AuthOptions::new(env, scenario.get("port").to_number() as u16, db.clone(), Rc::new(MockFetch(mocks.clone())), Rc::new(Pages));
+    let mut options = AuthOptions::new(env, scenario.get("port").to_number() as u16, db.clone(), Rc::new(MockFetch(mocks.clone())));
     options.random = deterministic;
     let mut answers = Vec::new();
     let auth = match Auth::new(options) {
@@ -544,9 +533,17 @@ fn auth_matches_js() {
     let pages = compare("pages", &pages_scenario());
     expect_status(&pages, 1, 200);
     expect_status(&pages, 2, 401);
+    expect_status(&pages, 3, 200);
+    assert!(field(&pages, 3, "body").as_str().unwrap().contains("Continue with Google"));
+    assert!(field(&pages, 3, "body").as_str().unwrap().contains("/signin/password"));
+    assert!(!field(&pages, 3, "body").as_str().unwrap().to_lowercase().contains("mymind"));
+    expect_status(&pages, 4, 200);
+    assert!(field(&pages, 4, "body").as_str().unwrap().contains("That Google account does not have access."));
     expect_status(&pages, 19, 405);
     expect_status(&pages, 23, 403);
     expect_status(&pages, 31, 302);
+    expect_status(&pages, 58, 302);
+    assert_eq!(header(&pages, 58, "location"), "/signin");
     cases += pages.len();
 
     let no_users = compare(

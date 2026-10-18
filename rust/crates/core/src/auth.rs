@@ -5,7 +5,6 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use async_trait::async_trait;
 use futures_util::future::{FutureExt, LocalBoxFuture, Shared};
 use mm_js::{Object, Value, base64, date, json, number, obj, text, uri};
 use rsa::pkcs1v15::{Signature, VerifyingKey};
@@ -32,7 +31,6 @@ const FAILURES_PER_ADDRESS: f64 = 30.0;
 const KEY_REFRESH_MS: f64 = 60_000.0;
 const CERTS_TIMEOUT_MS: u64 = 10_000;
 const HOUR_MS: f64 = 3_600_000.0;
-const APPLE_SCRIPT: &str = "https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js";
 const NOT_FOUND: &str = "{\"type\":\"about:blank\",\"status\":401,\"title\":\"Unauthorized\"}";
 const SIGNIN_SCRIPT: &str = "new BroadcastChannel('replica-auth').onmessage = (event) => location.assign(event.data);\ndocument.addEventListener('click', (event) => { if (event.target.closest?.('#appleid-signin')) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);\n";
 
@@ -53,19 +51,6 @@ fn signin_error(key: &str) -> Option<&'static str> {
     }
 }
 
-/// Where the host gets mymind's recorded sign-in pages (`capture/signin/`), which the Worker has no file system for.
-#[async_trait(?Send)]
-pub trait SigninPages {
-    /// A recorded sign-in page with recorded origins rewritten to local paths (`localize`).
-    ///
-    /// # Arguments
-    /// * `name` - `signin` or `AccountNotFound`.
-    ///
-    /// # Errors
-    /// The host's error when the page cannot be read.
-    async fn page(&self, name: &str) -> Result<String>;
-}
-
 /// What [`Auth::new`] needs from its host.
 pub struct AuthOptions {
     /// Configuration source (`process.env` or the Worker's variables and secrets).
@@ -76,8 +61,6 @@ pub struct AuthOptions {
     pub db: Rc<dyn Sql>,
     /// Outbound HTTP for Google's token and key endpoints.
     pub fetch: Rc<dyn Fetch>,
-    /// The recorded sign-in pages.
-    pub pages: Rc<dyn SigninPages>,
     /// Source of random bytes for session ids and tokens.
     pub random: fn(usize) -> Vec<u8>,
 }
@@ -90,9 +73,8 @@ impl AuthOptions {
     /// * `port` - Port the server listens on.
     /// * `db` - Sign-in database.
     /// * `fetch` - Outbound HTTP.
-    /// * `pages` - The recorded sign-in pages.
-    pub fn new(env: HashMap<String, String>, port: u16, db: Rc<dyn Sql>, fetch: Rc<dyn Fetch>, pages: Rc<dyn SigninPages>) -> Self {
-        Self { env, port, db, fetch, pages, random: runtime::random_bytes }
+    pub fn new(env: HashMap<String, String>, port: u16, db: Rc<dyn Sql>, fetch: Rc<dyn Fetch>) -> Self {
+        Self { env, port, db, fetch, random: runtime::random_bytes }
     }
 }
 
@@ -165,7 +147,6 @@ struct Inner {
     cfg: Config,
     db: Rc<dyn Sql>,
     fetch: Rc<dyn Fetch>,
-    pages: Rc<dyn SigninPages>,
     random: fn(usize) -> Vec<u8>,
     keys: RefCell<Keys>,
     keys_attempted: Cell<f64>,
@@ -798,7 +779,6 @@ impl Auth {
             cfg,
             db: options.db,
             fetch: options.fetch,
-            pages: options.pages,
             random: options.random,
             keys: RefCell::new(Keys::default()),
             keys_attempted: Cell::new(0.0),
@@ -843,13 +823,7 @@ impl Auth {
                 return Ok(Some(redirect("/everything")));
             }
             let error = search_param(&url, "error");
-            let body = if tunnelled {
-                plain_signin_page(error.as_deref(), me.passwords()?)
-            } else {
-                let name = if error.as_deref() == Some("AccountNotFound") { "AccountNotFound" } else { "signin" };
-                me.pages.page(name).await?.replacen(APPLE_SCRIPT, "/_auth/appleid.js", 1).replacen("</body>", "<script src=\"/_auth/signin.js\"></script></body>", 1)
-            };
-            return Ok(Some(html(body, &[])));
+            return Ok(Some(html(plain_signin_page(error.as_deref(), me.passwords()?), &[])));
         }
         if pathname == "/signin/password" {
             if !me.passwords()? {
