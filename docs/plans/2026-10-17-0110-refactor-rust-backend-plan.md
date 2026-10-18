@@ -215,6 +215,12 @@ then U10 and U11; then U12 to U15.
   `application/zip` for `/download/<name>.zip`. `deploy/publish-extension.sh` published `mymind-extension-1.0.0.zip`;
   `evidence/extension/check-download.mjs` downloaded it as the test user, matched its checksum, and loaded the
   unzipped folder in a headless Chromium. `wrangler rollback 9d442edf-6b22-4bee-95a2-58a625c65cab` reverts the Worker.
+- R13, the JS backend deleted, since 2026-10-18 (Worker version `2f9f43c8`, media image `sha256:a0923485`): `server.mjs`,
+  `lib/`, `worker/` and the oracle drivers are gone (merge `a850d9c`); the Worker deploys with
+  `npm --prefix rust/crates/worker run deploy` after `npm ci --prefix rust/crates/worker`. Only comments and help
+  texts of the deployed sources changed. Checked on production as the test user: `tools/check-hosted.mjs --browser`,
+  `evidence/app-api/probe-prod.mjs`, `probe-gaps.mjs` and `evidence/extension/check-download.mjs` pass.
+  `wrangler rollback 702332fd-e03f-4c12-b0f4-fa89d85c064c` reverts the Worker.
 - R11: `docs/rust-benchmarks.md`, production numbers included.
 
 Decisions made while building:
