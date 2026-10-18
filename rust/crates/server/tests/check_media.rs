@@ -660,7 +660,7 @@ async fn api_claims(fixture: &Fixture) {
     let alias = ask_api(
         &api,
         "GET",
-        &format!("/_mediahost/{path}"),
+        &format!("/media/{path}"),
         Body::Empty,
         &[("range", "bytes=2-8")],
     )

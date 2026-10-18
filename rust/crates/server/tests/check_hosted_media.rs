@@ -20,7 +20,6 @@ use mm_core::hosted::{Hosted, HostedOptions};
 use mm_core::hosted_media::{BucketUploads, HostedMedia};
 use mm_core::http::{Body, Headers};
 use mm_core::recorded::Recorded;
-use mm_core::site::IMAGE_PLACEHOLDER;
 use mm_core::sql::Sql;
 use mm_core::uploads::{UploadOptions, UploadRequest, Uploads};
 use mm_core::{Result, Value, obj};
@@ -672,14 +671,12 @@ async fn site_fallbacks(fixture: &Fixture) {
         .unwrap();
     for (key, bytes) in [
         ("static/plain.css", &b"css"[..]),
-        ("libraries/one/capture/media/a/b;100x100.webp", &b"wide"[..]),
-        ("libraries/one/capture/media/a/b;10x10.webp", &b"small"[..]),
-        ("libraries/one/capture/media/a/clip.mp4", &b"0123456789"[..]),
-        (
-            "libraries/two/capture/media/a/other.webp",
-            &b"other library"[..],
-        ),
-        ("capture/media/a/shared.webp", &b"shared"[..]),
+        ("libraries/one/media/a/b.webp", &b"wide"[..]),
+        ("libraries/one/renditions/a_b;50x50.webp", &b"wide"[..]),
+        ("libraries/one/renditions/a_b;10x10.webp", &b"small"[..]),
+        ("libraries/one/media/a/clip.mp4", &b"0123456789"[..]),
+        ("libraries/two/media/a/other.webp", &b"other library"[..]),
+        ("media/a/shared.webp", &b"shared"[..]),
     ] {
         bucket
             .write(key, Body::Bytes(bytes.to_vec()), None, None)
@@ -759,7 +756,7 @@ async fn site_fallbacks(fixture: &Fixture) {
         "wide"
     );
     assert_eq!(
-        ask_hosted(&site, "GET", "/_mediahost/a/b;10x10.webp", Body::Empty, &[])
+        ask_hosted(&site, "GET", "/media/a/b;10x10.webp", Body::Empty, &[])
             .await
             .text(),
         "small"
@@ -808,7 +805,7 @@ async fn site_fallbacks(fixture: &Fixture) {
         )
         .await
         .status,
-        200
+        416
     );
     let head = ask_hosted(&site, "HEAD", "/media/a/clip.mp4", Body::Empty, &[]).await;
     assert_eq!(head.status, 200);
@@ -817,13 +814,13 @@ async fn site_fallbacks(fixture: &Fixture) {
     for path in [
         "/media/a/other.webp",
         "/media/a/shared.webp",
-        "/media/..%2F..%2Ftwo%2Fcapture%2Fmedia%2Fa%2Fother.webp",
+        "/media/..%2F..%2Ftwo%2Fmedia%2Fa%2Fother.webp",
     ] {
         assert_eq!(
             ask_hosted(&site, "GET", path, Body::Empty, &[])
                 .await
-                .text(),
-            IMAGE_PLACEHOLDER
+                .status,
+            404
         );
     }
     let recorded_range = ask_hosted(
@@ -842,8 +839,8 @@ async fn site_fallbacks(fixture: &Fixture) {
     assert_eq!(
         ask_hosted(&site, "GET", "/media/none/x.webp", Body::Empty, &[])
             .await
-            .text(),
-        IMAGE_PLACEHOLDER
+            .status,
+        404
     );
     assert_eq!(
         ask_hosted(&site, "GET", "/media/none/x.mp4", Body::Empty, &[])
@@ -962,7 +959,7 @@ async fn hosted_uploads_and_attachments(fixture: &Fixture) {
     let alias = ask_hosted(
         &site,
         "GET",
-        &format!("/_mediahost/{path}"),
+        &format!("/media/{path}"),
         Body::Empty,
         &[("range", "bytes=2-8")],
     )

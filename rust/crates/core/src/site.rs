@@ -17,10 +17,6 @@ pub const LOCAL_PREFIXES: [(&str, &str); 3] = [
     ("/_carbon/", "https://carbon-media.accelerator.net/"),
 ];
 
-/// Grey image served for card media that was never captured (`IMAGE_PLACEHOLDER`).
-pub const IMAGE_PLACEHOLDER: &str =
-    r##"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="100%" height="100%" fill="#e9e7e3"/></svg>"##;
-
 /// The library API as the servers call it (`createApi`): it answers the routes it owns and leaves the rest to the
 /// recordings.
 #[async_trait(?Send)]

@@ -10,7 +10,7 @@ use std::time::Duration;
 use mm_core::device::device_variant;
 use mm_core::host::Fetch;
 use mm_core::http::{Headers, Request, Response};
-use mm_core::site::{IMAGE_PLACEHOLDER, LOCAL_PREFIXES, LibraryApi, content_type, is_text_extension, localize, localize_value, replay_key_for, send_range, single_range};
+use mm_core::site::{LOCAL_PREFIXES, LibraryApi, content_type, is_text_extension, localize, localize_value, replay_key_for, send_range, single_range};
 use mm_core::{Error, Object, Result, Value};
 use mm_js::json;
 use url::Url;
@@ -128,34 +128,6 @@ fn file_inside(root: &Path, relative: &str) -> Result<Option<PathBuf>> {
     let decoded = mm_js::uri::decode_uri_component(relative).map_err(|error| js_failure(format!("URIError: {error}")))?;
     let target = resolve(root, &decoded);
     Ok((target.starts_with(root) && target != root).then_some(target))
-}
-
-// `/\.(mp4|mov|webm)$/i`.
-fn is_video(relative: &str) -> bool {
-    let lower = relative.to_ascii_lowercase();
-    [".mp4", ".mov", ".webm"].iter().any(|ending| lower.ends_with(ending))
-}
-
-// `name.match(/(\d+)x(\d+)/)?.slice(1).reduce((a, b) => a * b) ?? 0`.
-fn area(name: &str) -> f64 {
-    let bytes = name.as_bytes();
-    for start in 0..bytes.len() {
-        if !bytes[start].is_ascii_digit() || (start > 0 && bytes[start - 1].is_ascii_digit()) {
-            continue;
-        }
-        // Backtracking can end the width before any of its digits, so every split of the run is tried in turn.
-        let run = bytes[start..].iter().take_while(|byte| byte.is_ascii_digit()).count();
-        for width_end in (start + 1..=start + run).rev() {
-            if bytes.get(width_end) == Some(&b'x') {
-                let height = bytes[width_end + 1..].iter().take_while(|byte| byte.is_ascii_digit()).count();
-                if height > 0 {
-                    let number = |digits: &str| digits.parse::<f64>().unwrap_or(f64::NAN);
-                    return number(&name[start..width_end]) * number(&name[width_end + 1..width_end + 1 + height]);
-                }
-            }
-        }
-    }
-    0.0
 }
 
 /// How a replica is set up.
@@ -365,44 +337,6 @@ impl Replica {
         self.serve_file(&file, true, None).await
     }
 
-    // The largest recorded rendition of the same transformed media, such as the 1x of a srcset's 2x
-    // (`siblingRendition`).
-    async fn sibling_rendition(&self, file: Option<&Path>, relative: &str) -> Result<Option<PathBuf>> {
-        let decoded = mm_js::uri::decode_uri_component(relative).map_err(|error| js_failure(format!("URIError: {error}")))?;
-        let stem = decoded.rfind(['/', ';']).map_or("", |index| &decoded[..=index]);
-        let Some(file) = file.filter(|_| stem.contains(';')) else { return Ok(None) };
-        let prefix = if stem.ends_with('/') { "" } else { stem.rsplit('/').next().unwrap_or("") };
-        let Some(directory) = file.parent() else { return Ok(None) };
-        let mut names: Vec<String> = match std::fs::read_dir(directory) {
-            Ok(entries) => entries.flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).collect(),
-            Err(_) => Vec::new(),
-        };
-        // libuv lists a directory sorted by `strcmp`.
-        names.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
-        names.retain(|name| name.starts_with(prefix));
-        names.sort_by(|a, b| (area(b) - area(a)).partial_cmp(&0.0).unwrap_or(std::cmp::Ordering::Equal));
-        Ok(names.first().map(|best| directory.join(best)))
-    }
-
-    // Captured card media, falling back to another size of the same image, then to a placeholder (`serveMedia`).
-    async fn serve_media(&self, request: &Request, root: &Path, relative: &str) -> Result<Response> {
-        let file = file_inside(root, relative)?;
-        if let Some(file) = &file
-            && let Ok(response) = self.serve_file(file, false, Some(&request.headers)).await
-        {
-            return Ok(response);
-        }
-        if let Some(sibling) = self.sibling_rendition(file.as_deref(), relative).await? {
-            return self.serve_file(&sibling, false, Some(&request.headers)).await;
-        }
-        let folder = root.strip_prefix(&self.capture).map_or_else(|_| String::new(), |folder| format!("/{}", folder.display()));
-        mm_core::runtime::log(&format!("[placeholder] {folder}/{relative}"));
-        if is_video(relative) {
-            return Ok(send(404, "video not captured", &[]));
-        }
-        Ok(send(200, IMAGE_PLACEHOLDER, &[("content-type", "image/svg+xml")]))
-    }
-
     // A captured response of `capture/responses.json` (`serveRecorded`).
     async fn serve_recorded(&self, entry: &Value) -> Result<Response> {
         let body = read_file(&self.capture.join(header_text(entry.get("file")))).await.map_err(js_failure)?;
@@ -478,7 +412,8 @@ impl Replica {
         let search = mm_js::url::search(&url);
         let key = format!("{} {pathname}{search}", request.method);
         let document = request.header("sec-fetch-dest") == Some("document");
-        if let Some(entry) = self.replayed_for(request, &url) {
+        let local = LOCAL_PREFIXES.iter().any(|(prefix, _)| pathname.starts_with(prefix)) || pathname.starts_with("/media/");
+        if !local && let Some(entry) = self.replayed_for(request, &url) {
             let body = self.replay_body(&entry).await?;
             let headers = entry_headers(&entry);
             let status = entry_status(&entry);
@@ -489,20 +424,6 @@ impl Replica {
         }
         if let Some(relative) = pathname.strip_prefix("/_static/") {
             return self.serve_static(relative, &search).await;
-        }
-        if let Some(relative) = pathname.strip_prefix("/media/") {
-            return self.serve_media(request, &self.capture.join("media"), relative).await;
-        }
-        if let Some(relative) = pathname.strip_prefix("/_mediahost/") {
-            let hosted = file_inside(&self.capture.join("mediahost"), relative)?;
-            let found = match hosted {
-                Some(hosted) => read_file(&hosted).await.is_ok(),
-                None => false,
-            };
-            return self.serve_media(request, &self.capture.join(if found { "mediahost" } else { "media" }), relative).await;
-        }
-        if let Some(relative) = pathname.strip_prefix("/_carbon/") {
-            return self.serve_media(request, &self.capture.join("carbon"), relative).await;
         }
         if request.method == "GET" && document {
             let everything = mm_js::url::parse("/everything", Some(url.as_str())).expect("a path parses against an http URL");

@@ -1,7 +1,6 @@
 //! Port of `lib/hosted.mjs` and `createSite` of `lib/site.mjs`: one person's library served from its own database and
 //! its own part of the object store, as the Cloudflare Worker and `HOSTED=1` serve it.
 
-use std::cmp::Ordering;
 use std::rc::Rc;
 use std::sync::LazyLock;
 
@@ -11,20 +10,17 @@ use regex::Regex;
 
 use crate::api::{Api, ApiOptions, Push};
 use crate::device::device_variant;
-use crate::host::{Bucket, ByteSpan, Fetch, ListedObject, MediaProcessor, ObjectInfo, Resource, Screenshot};
+use crate::host::{Bucket, Fetch, MediaProcessor, Resource, Screenshot};
 use crate::hosted_media::{BucketUploads, HostedMedia};
 use crate::http::{Body, Headers, Request, Response};
-use crate::media_files::byte_range;
 use crate::recorded::Recorded;
-use crate::site::{IMAGE_PLACEHOLDER, LOCAL_PREFIXES, LibraryApi, Site, content_type, is_text_extension, localize, replay_key_for, send_range, single_range};
+use crate::site::{LOCAL_PREFIXES, LibraryApi, Site, content_type, is_text_extension, localize, replay_key_for, send_range};
 use crate::sql::Sql;
 use crate::store::Store;
 use crate::{Error, Result, runtime};
 
 static LIBRARY: LazyLock<Regex> = LazyLock::new(|| Regex::new("^[a-z0-9-]+$").expect("pattern"));
 static EXTENSION: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\.[^./;]*$").expect("pattern"));
-static AREA: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+)x(\d+)").expect("pattern"));
-static VIDEO: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\.(mp4|mov|webm)$").expect("pattern"));
 static DETAIL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^/cards/([^/]+)/detail$").expect("pattern"));
 static NOT_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[^A-Za-z0-9_.-]").expect("pattern"));
 
@@ -59,7 +55,6 @@ pub struct Hosted {
     api: Rc<Api>,
     recorded: Rc<Recorded>,
     bucket: Rc<dyn Bucket>,
-    capture: String,
     offline: bool,
     upstream: Rc<dyn Fetch>,
 }
@@ -108,11 +103,6 @@ fn key_for(folder: &str, relative: &str) -> Result<Option<String>> {
     Ok(Some(format!("{folder}{decoded}")))
 }
 
-// `name.match(/(\d+)x(\d+)/)?.slice(1).reduce((a, b) => a * b) ?? 0`.
-fn area(name: &str) -> f64 {
-    AREA.captures(name).map_or(0.0, |found| found[1].parse::<f64>().unwrap_or(f64::INFINITY) * found[2].parse::<f64>().unwrap_or(f64::INFINITY))
-}
-
 impl Hosted {
     /// Open a library's server (`createHosted`).
     ///
@@ -143,7 +133,7 @@ impl Hosted {
             random: options.random,
         })
         .await?;
-        Ok(Self { api: Rc::new(api), recorded, bucket: options.bucket, capture: format!("{prefix}capture/"), offline: options.offline, upstream: options.fetch })
+        Ok(Self { api: Rc::new(api), recorded, bucket: options.bucket, offline: options.offline, upstream: options.fetch })
     }
 
     /// The library API, whose `shell` builds page shells.
@@ -183,66 +173,6 @@ impl Hosted {
         Ok(send(200, body, &[("content-type", text_type(&key))]))
     }
 
-    // The largest captured rendition of the same transformed media (e.g. the 1x of a srcset's 2x), or `None`.
-    async fn sibling(&self, key: &str) -> Result<Option<ListedObject>> {
-        let stem = &key[..key.rfind(['/', ';']).map_or(0, |at| at + 1)];
-        if !stem.contains(';') {
-            return Ok(None);
-        }
-        let folder = &stem[..stem.rfind('/').map_or(0, |at| at + 1)];
-        let mut names: Vec<ListedObject> = self.bucket.list(stem).await?.into_iter().filter(|object| !object.key[folder.len()..].contains('/')).collect();
-        names.sort_by(|a, b| area(&b.key[folder.len()..]).partial_cmp(&area(&a.key[folder.len()..])).unwrap_or(Ordering::Equal));
-        Ok(names.into_iter().next())
-    }
-
-    // Stream a stored object, or the span of it a Range header asks for.
-    async fn serve_object(&self, request: &Request, key: &str, found: &ObjectInfo) -> Result<Response> {
-        let size = found.size;
-        let mut headers = Headers::from([("content-type", text_type(key))]);
-        if let Some(stored) = &found.headers {
-            headers.extend(stored);
-        }
-        let span = byte_range(single_range(&request.headers), size as f64);
-        if span.status == 416 {
-            headers.set("accept-ranges", "bytes");
-            headers.set("content-range", format!("bytes */{size}"));
-            return Ok(Response::send(416, "", &headers));
-        }
-        let length = (span.end - span.start + 1.0).max(0.0) as u64;
-        let object = if length > 0 && request.method != "HEAD" {
-            self.bucket.read(key, Some(ByteSpan { offset: span.start as u64, length })).await?
-        } else {
-            None
-        };
-        let mut all = Headers::from([("cache-control", "no-store")]);
-        all.extend(&headers);
-        all.set("content-length", length.to_string());
-        if span.status == 206 {
-            all.set("accept-ranges", "bytes");
-            all.set("content-range", format!("bytes {}-{}/{size}", span.start, span.end));
-        }
-        Ok(Response::new(span.status, all, object.map_or(Body::Empty, |object| Body::Stream(object.body))))
-    }
-
-    // Captured card media, falling back to another size of the same image, then to a placeholder.
-    async fn serve_media(&self, request: &Request, folder: &str, relative: &str) -> Result<Response> {
-        let key = key_for(folder, relative)?;
-        if let Some(key) = &key {
-            if let Some(found) = self.bucket.head(key).await? {
-                return self.serve_object(request, key, &found).await;
-            }
-            if let Some(near) = self.sibling(key).await? {
-                let found = self.bucket.head(&near.key).await?.ok_or_else(|| Error::invalid("Cannot destructure property 'size' of 'object null' as it is null."))?;
-                return self.serve_object(request, &near.key, &found).await;
-            }
-        }
-        runtime::log(&format!("[placeholder] /{}{relative}", &folder[self.capture.len()..]));
-        if VIDEO.is_match(relative) {
-            return Ok(send(404, "video not captured", &[]));
-        }
-        Ok(send(200, IMAGE_PLACEHOLDER, &[("content-type", "image/svg+xml")]))
-    }
-
     async fn files(&self, request: &mut Request) -> Result<Response> {
         let url = request.url.clone();
         let pathname = request.pathname().to_owned();
@@ -258,21 +188,6 @@ impl Hosted {
         }
         if let Some(relative) = pathname.strip_prefix("/_static/") {
             return self.serve_static(relative, &search).await;
-        }
-        if let Some(relative) = pathname.strip_prefix("/media/") {
-            return self.serve_media(request, &format!("{}media/", self.capture), relative).await;
-        }
-        if let Some(relative) = pathname.strip_prefix("/_mediahost/") {
-            let hosted = format!("{}mediahost/", self.capture);
-            let stored = match key_for(&hosted, relative)? {
-                Some(key) => self.bucket.head(&key).await?.is_some(),
-                None => false,
-            };
-            let folder = if stored { hosted } else { format!("{}media/", self.capture) };
-            return self.serve_media(request, &folder, relative).await;
-        }
-        if let Some(relative) = pathname.strip_prefix("/_carbon/") {
-            return self.serve_media(request, &format!("{}carbon/", self.capture), relative).await;
         }
         if document(request) {
             let everything = url.join("/everything").map_err(|error| Error::internal(error.to_string()))?;

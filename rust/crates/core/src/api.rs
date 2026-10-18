@@ -753,9 +753,10 @@ impl Api {
         if let Some(response) = self.app.handle(method, url).await? {
             return Ok(Some(response));
         }
-        if (get || method == "HEAD") && (path.starts_with("/media/") || path.starts_with("/_mediahost/")) {
-            let relative = path.strip_prefix("/media/").or_else(|| path.strip_prefix("/_mediahost/")).unwrap_or(path);
-            let Some(result) = self.media.response(relative).await? else { return Ok(None) };
+        if (get || method == "HEAD") && let Some(relative) = path.strip_prefix("/media/") {
+            let Some(result) = self.media.response(relative).await? else {
+                return Ok(Some(Response::send(404, "", &type_header("text/plain"))));
+            };
             return Ok(Some(self.media.send(&result, method, request.header("range")).await?));
         }
         if !self.readonly && method == "POST" && path == "/uploads/authorize" {
