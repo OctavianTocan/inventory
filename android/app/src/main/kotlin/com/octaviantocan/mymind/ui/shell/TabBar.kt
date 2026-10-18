@@ -10,11 +10,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.BottomNavigation
 import androidx.compose.material.BottomNavigationItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,13 +23,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.airbnb.lottie.compose.LottieAnimation
-import com.airbnb.lottie.compose.LottieCompositionSpec
-import com.airbnb.lottie.compose.rememberLottieAnimatable
-import com.airbnb.lottie.compose.rememberLottieComposition
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
 /**
@@ -92,14 +90,11 @@ private fun RowScope.TabBarItem(tab: Tab, selected: Boolean, onClick: () -> Unit
 
 @Composable
 private fun TabIcon(tab: Tab, selected: Boolean) {
-    val icon = if (MymindTheme.colors.dark) tab.darkIcon else tab.lightIcon
-    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(icon))
-    val animatable = rememberLottieAnimatable()
-    LaunchedEffect(composition, selected) {
-        if (selected) animatable.animate(composition) else animatable.snapTo(composition, 0f)
-    }
+    val colors = MymindTheme.colors
+    val icon = if (colors.dark) tab.darkIcon else tab.lightIcon
+    val tint by animateColorAsState(if (selected) colors.tabSelected else colors.tabUnselected)
     Column {
         Spacer(Modifier.height(16.dp))
-        LottieAnimation(composition, { animatable.progress })
+        Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(24.dp), tint = tint)
     }
 }

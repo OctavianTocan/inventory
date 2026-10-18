@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -44,7 +45,7 @@ class OfflinePictures(val background: Painter, val notice: Painter)
  */
 @Composable
 fun defaultOfflinePictures() = OfflinePictures(
-    background = painterResource(if (MymindTheme.colors.dark) R.drawable.offline_bg_dark else R.drawable.offline_bg),
+    background = ColorPainter(MymindTheme.colors.page),
     notice = painterResource(R.drawable.offline_notice),
 )
 
@@ -73,7 +74,7 @@ fun OfflineScreen(modifier: Modifier = Modifier, pictures: OfflinePictures = def
                 style = TextStyle(
                     color = Color.White,
                     fontSize = 18.sp,
-                    fontFamily = MymindTheme.fonts.avenir,
+                    fontFamily = MymindTheme.fonts.nunito,
                     letterSpacing = (-0.01).em,
                     textAlign = TextAlign.Center,
                     lineHeight = 24.sp,

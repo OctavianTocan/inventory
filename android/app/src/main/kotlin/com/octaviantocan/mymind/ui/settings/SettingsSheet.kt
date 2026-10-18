@@ -3,7 +3,7 @@ package com.octaviantocan.mymind.ui.settings
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,9 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.SpanStyle
@@ -44,7 +42,6 @@ private const val NIGHT_ZOOM = 1.15f
 private const val DAY_ZOOM = 1.5f
 private const val HINT_FADE_PX = 100f
 private val SIDE = 32.dp
-private val ICON_PILE_SHAPE = RoundedCornerShape(16.dp)
 
 /**
  * Body of the settings drawer: greeting, account, icon picker, scroll hint, then the rows, the danger zone and the
@@ -76,16 +73,14 @@ fun SettingsSheet(
     val zoom = animateFloatAsState(if (dark) NIGHT_ZOOM else DAY_ZOOM)
     val backdrop = rememberGlassBackdrop(zoom)
     Box(modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().glassSource(backdrop)) {
-            Image(pictures.background, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        }
+        Box(Modifier.fillMaxSize().glassSource(backdrop).background(MymindTheme.colors.settingsSheet))
         Column(Modifier.fillMaxSize().verticalScroll(scrollState)) {
             FirstScreenful(account, plan, greetingName, pictures, scrollState.value)
             Spacer(Modifier.height(20.dp))
             Rows(backdrop, pictures, onSignOut, updates)
             DangerZone(onClick = {}, modifier = Modifier.padding(horizontal = SIDE))
             Spacer(Modifier.height(16.dp))
-            SettingsFooter(version, pictures.badge, Modifier.padding(horizontal = SIDE))
+            SettingsFooter(version, Modifier.padding(horizontal = SIDE))
             Spacer(Modifier.height(16.dp))
         }
     }
@@ -109,12 +104,6 @@ private fun FirstScreenful(account: String?, plan: String?, greetingName: String
             Spacer(Modifier.height(20.dp))
         }
         Spacer(Modifier.weight(1f))
-        Image(
-            pictures.iconPile,
-            contentDescription = null,
-            modifier = Modifier.padding(horizontal = SIDE).fillMaxWidth().clip(ICON_PILE_SHAPE).clickable {},
-            contentScale = ContentScale.FillWidth,
-        )
         ScrollHint(pictures, scrolled)
     }
 }

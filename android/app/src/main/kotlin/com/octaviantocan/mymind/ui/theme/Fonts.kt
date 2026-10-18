@@ -15,7 +15,6 @@ import com.octaviantocan.mymind.R
  * @property nunitoMedium Nunito at weight 500.
  * @property nunitoSemiBold Nunito at weight 600.
  * @property nunitoBold Nunito at weight 700.
- * @property avenir Avenir Roman.
  */
 @Immutable
 class MymindFonts(
@@ -24,7 +23,6 @@ class MymindFonts(
     val nunitoMedium: FontFamily,
     val nunitoSemiBold: FontFamily,
     val nunitoBold: FontFamily,
-    val avenir: FontFamily,
 )
 
 private fun nunitoAt(weight: Int) = FontFamily(
@@ -33,10 +31,9 @@ private fun nunitoAt(weight: Int) = FontFamily(
 
 /** Fonts used by [MymindTheme]. */
 val MymindDefaultFonts = MymindFonts(
-    louize = FontFamily(Font(R.font.louize_regular)),
+    louize = FontFamily(Font(R.font.instrument_serif_regular)),
     nunito = nunitoAt(400),
     nunitoMedium = nunitoAt(500),
     nunitoSemiBold = nunitoAt(600),
     nunitoBold = nunitoAt(700),
-    avenir = FontFamily(Font(R.font.avenir_roman)),
 )

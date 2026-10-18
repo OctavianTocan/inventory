@@ -52,14 +52,6 @@ fun flatOfflinePictures(dark: Boolean) = OfflinePictures(
 
 /** Settings pictures with the pixel sizes of the shipped images and none of their artwork. */
 fun flatSettingsPictures(dark: Boolean) = SettingsPictures(
-    background = BandPainter(
-        if (dark) Color(0xFF3A2E5E) else Color(0xFFE9A9C4),
-        if (dark) Color(0xFF0E1B3A) else Color(0xFFB7C7EE),
-        if (dark) Size(518f, 1218f) else Size(464f, 1027f),
-        bands = 24,
-    ),
-    iconPile = BlockPainter(if (dark) Color(0xFF27283A) else Color(0xFFE4E7EE), scaled(596, 253, MDPI_TO_DEVICE)),
-    badge = BlockPainter(Color(0xFF8493A9), scaled(80, 98, MDPI_TO_DEVICE)),
     hand = BlockPainter(Color(0xFF8493A9), Size(22f * 2.8125f, 16f * 2.8125f)),
     help = BlockPainter(Color(0xFF8493A9), Size(19f * 2.8125f, 19f * 2.8125f)),
     signOut = BlockPainter(Color(0xFF8493A9), Size(19f * 2.8125f, 19f * 2.8125f)),

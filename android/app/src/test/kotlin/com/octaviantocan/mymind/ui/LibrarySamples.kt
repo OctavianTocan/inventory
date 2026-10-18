@@ -134,7 +134,6 @@ private val Grey = Color(0xFF8B99AF)
 /** Menu icons as flat blocks with the shipped drawables' sizes in dp. */
 fun flatCardMenuIcons() = CardMenuIcons(
     icon = { BlockPainter(if (it.danger) Color(0xFFFF002E) else Grey, Size(21f * 2.8125f, 21f * 2.8125f)) },
-    lock = BlockPainter(Grey, Size(24f * 2.8125f, 24f * 2.8125f)),
 )
 
 /** Card header icons as flat blocks with the shipped drawables' sizes in dp (caret 16 x 11, dots 16 x 4). */

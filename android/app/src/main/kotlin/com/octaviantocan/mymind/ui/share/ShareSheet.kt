@@ -33,11 +33,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -128,12 +126,6 @@ fun ShareSheet(
     onDismissUpload: (Long) -> Unit,
 ) {
     Box(Modifier.fillMaxSize().background(ShareColors.sheet)) {
-        Image(
-            painterResource(R.drawable.share_background),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().scale(1.3f),
-        )
         Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().navigationBarsPadding()) {
             Text(
                 titleOf(state.phase),

@@ -102,15 +102,13 @@ val LightMenuColors = MenuColors(Scrim, Color.White, Color(0xFFF4F6F9), Color(0x
  * @property lock Lock drawn at the end of locked rows.
  */
 @Immutable
-class CardMenuIcons(val icon: @Composable (CardMenuAction) -> Painter, val lock: Painter)
+class CardMenuIcons(val icon: @Composable (CardMenuAction) -> Painter)
 
-/** @return The pictures that ship with the app resources; the lock follows the system appearance. */
+/** @return The pictures that ship with the app resources. */
 @Composable
 fun defaultCardMenuIcons() = CardMenuIcons(
     icon = { painterResource(it.icon) },
-    lock = painterResource(if (MymindTheme.colors.dark) R.drawable.upgrade_dark else R.drawable.upgrade_light),
 )
-
 /**
  * The card menu sheet: a Material 3 modal bottom sheet without its own scrim or surface, holding [CardMenuContent],
  * or a submenu in the same card. The caller draws the scrim and blur behind it from [sheetState].
@@ -221,6 +219,5 @@ private fun CardMenuRow(item: CardMenuItem, colors: MenuColors, icons: CardMenuI
             Modifier.weight(1f),
             style = TextStyle(color = if (danger) colors.dangerText else colors.rowText, fontSize = 17.sp, fontFamily = MymindTheme.fonts.nunito),
         )
-        if (item.locked) Image(icons.lock, contentDescription = "")
     }
 }

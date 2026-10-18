@@ -152,12 +152,11 @@ fun DangerZone(onClick: () -> Unit, modifier: Modifier = Modifier) {
  * @param modifier Modifier for the footer.
  */
 @Composable
-fun SettingsFooter(version: String, badge: Painter, modifier: Modifier = Modifier) {
+fun SettingsFooter(version: String, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         BasicText(
             "mymind® v$version",
             style = TextStyle(color = MymindTheme.colors.settingsHint, fontSize = 12.sp, fontFamily = MymindTheme.fonts.nunito, textAlign = TextAlign.Center),
         )
-        Image(badge, contentDescription = null, modifier = Modifier.height(24.dp))
     }
 }
