@@ -12,18 +12,24 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.ui.card.CardSheetDialog
+import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.ui.menu.CardMenuSheet
 import com.octaviantocan.mymind.ui.menu.cardMenuItems
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,13 +50,13 @@ class CardSheetWindowTest {
     private val panel get() = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Card details"))
 
     @OptIn(ExperimentalMaterial3Api::class)
-    private fun show() {
+    private fun show(card: Card = LibrarySamples.article) {
         compose.setPhoneContent(false) {
             PageTheme(PageScheme.Dark) {
                 Box(Modifier.fillMaxSize())
                 menuState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-                if (opened.value) CardSheetDialog(LibrarySamples.article, onClose = { closed++; opened.value = false }, onMenu = { actions.value = true }, actionsVisible = actions.value)
-                if (actions.value) CardMenuSheet(cardMenuItems(LibrarySamples.article, null), onSelect = { actions.value = false }, onDismiss = { actions.value = false }, sheetState = menuState)
+                if (opened.value) CardSheetDialog(card, onClose = { closed++; opened.value = false }, onMenu = { actions.value = true }, actionsVisible = actions.value)
+                if (actions.value) CardMenuSheet(cardMenuItems(card, null), onSelect = { actions.value = false }, onDismiss = { actions.value = false }, sheetState = menuState)
             }
         }
         compose.mainClock.advanceTimeBy(1500)
@@ -68,6 +74,33 @@ class CardSheetWindowTest {
         compose.waitForIdle()
         assertEquals(1, closed)
         panel.assertDoesNotExist()
+    }
+
+    @Test
+    @Config(fontScale = 2f)
+    fun exceptionallyLongTitlesRemainScrollableWithControlsAndBodyVisible() {
+        val title = (1..20).joinToString("\n") { "Heading line $it" }
+        show(LibrarySamples.article.copy(title = title))
+        val header = compose.onNode(hasText(title) and hasScrollAction()).assertIsDisplayed()
+        val body = compose.onNode(hasScrollAction() and !hasText(title)).assertIsDisplayed()
+        assertTrue(header.fetchSemanticsNode().boundsInRoot.height <= PHONE_HEIGHT_PX / 4f + 1f)
+        assertTrue(body.fetchSemanticsNode().boundsInRoot.height > with(compose.density) { 100.dp.toPx() })
+        panel.performSemanticsAction(SemanticsActions.Expand) { it() }
+        compose.mainClock.advanceTimeBy(1500)
+        val range = header.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+        assertTrue(range.maxValue() > 0f)
+        val expandedTop = panel.fetchSemanticsNode().boundsInRoot.top
+        header.performTouchInput { swipeUp(durationMillis = 500) }
+        compose.mainClock.advanceTimeBy(1500)
+        assertTrue("A swipe scrolls the heading", range.value() > 0f)
+        assertEquals(expandedTop, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
+        assertEquals(0f, body.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), 1f)
+        header.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, range.maxValue()) }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertEquals(range.maxValue(), range.value(), 1f)
+        compose.onNodeWithContentDescription("Close card").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
+        compose.onNodeWithContentDescription("Card actions").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
     }
 
     @Test

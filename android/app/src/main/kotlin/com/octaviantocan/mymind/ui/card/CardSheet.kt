@@ -149,7 +149,7 @@ internal fun CardSheet(
                     .draggable(drag, Orientation.Vertical, enabled = !sheet.closing, onDragStopped = { velocity -> sheet.settle(scope, velocity, speed, latestMotion, requestDismiss) }),
             ) {
                 Column(Modifier.fillMaxWidth().heightIn(max = tall).imePadding().onSizeChanged { sheet.measuredContent(it.height, scope, motion) }) {
-                    Box(Modifier.padding(top = 10.dp, bottom = 14.dp).align(Alignment.CenterHorizontally).size(36.dp, 4.dp).clip(CircleShape).background(colors.grabber))
+                    Box(Modifier.padding(top = 10.dp, bottom = 20.dp).align(Alignment.CenterHorizontally).size(36.dp, 4.dp).clip(CircleShape).background(colors.grabber))
                     CardHeader(cardHeading(card), onClose = requestDismiss, onMenu = onMenu, icons = headerIcons, enabled = !sheet.closing)
                     val fade = with(density) { 20.dp.toPx() }
                     Column(Modifier.fillMaxWidth().weight(1f, fill = false)
