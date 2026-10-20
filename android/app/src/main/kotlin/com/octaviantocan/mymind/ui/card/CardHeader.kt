@@ -1,201 +1,93 @@
 package com.octaviantocan.mymind.ui.card
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.ripple
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.octaviantocan.mymind.R
-import com.octaviantocan.mymind.ui.theme.MymindTheme
-import kotlin.math.abs
 
-/** Height of the card header and of its buttons. */
-val CARD_HEADER_HEIGHT = 64.dp
+/** Pully's paper and floating control colors, following the card's light or dark appearance. */
+@Immutable
+internal class CardSheetColors(val paper: Color, val raised: Color, val text: Color, val grabber: Color, val scrim: Color, val active: Color, val shadow: Color)
 
-private const val HIDDEN_OFFSET = -64f
-private const val AT_TOP_POSITION = 50
-private const val MIN_SCROLL_STEP = 5
-private const val FADE_DISTANCE = 12f
-private const val ANIMATION_MS = 200
-private const val BACKGROUND_BLUR_DP = 20
+internal val LightCardSheetColors = CardSheetColors(Color(0xFFF4F2EF), Color.White, Color(0xFF0E333A), Color(0xFFD9D9D6), Color(0x610E333A), Color(0x1A0E333A), Color(0xFF0E333A))
+internal val DarkCardSheetColors = CardSheetColors(Color(0xFF1B1B1B), Color(0xFF1D1D1D), Color(0xFFE3E3E3), Color(0xFF3A3A3A), Color(0x99000000), Color(0x1FFFFFFF), Color.Black)
+internal val LocalCardSheetColors = compositionLocalOf { LightCardSheetColors }
 
-/**
- * Where the card header sits for the latest scroll movement.
- *
- * @property offset Vertical shift of the title row in dp; 0 is fully visible, negative moves it up.
- * @property backgroundAlpha Opacity of the header's coloured backdrop, 0 to 1.
- */
-@Stable
-class HeaderPose internal constructor(val offset: Float, val backgroundAlpha: Float) {
-    internal val contentAlpha: Float
-        get() = when {
-            offset == 0f -> 1f
-            offset < -FADE_DISTANCE -> 0f
-            else -> 1f - abs(offset) / FADE_DISTANCE
-        }
-}
-
-/** Tracks the scroll position of a card page and decides whether its header shows. */
-@Stable
-class CardHeaderState {
-    /** The pose the header animates towards. */
-    var pose by mutableStateOf(HeaderPose(0f, 0f))
-        private set
-
-    private var lastPosition = 0
-
-    /**
-     * Feeds the scroll position of the card page.
-     *
-     * @param position Distance scrolled from the top of the page, in dp.
-     */
-    fun onScroll(position: Int) {
-        val step = position - lastPosition
-        pose = when {
-            position <= AT_TOP_POSITION -> HeaderPose(0f, 0f)
-            abs(step) > MIN_SCROLL_STEP -> if (step < 0) HeaderPose(0f, 1f) else HeaderPose(HIDDEN_OFFSET, 0f)
-            else -> pose
-        }
-        lastPosition = position
-    }
-}
-
-/**
- * @param background Colour the header sits on.
- * @return White or black, whichever differs more in luminance from [background]; white when they tie.
- */
-fun readableOn(background: Color): Color {
-    val target = background.luminance()
-    val whiteGap = abs(target - Color.White.luminance())
-    val blackGap = abs(target - Color.Black.luminance())
-    return if (blackGap > whiteGap) Color.Black else Color.White
-}
-
-/**
- * The two icons of the card header.
- *
- * @property close Caret on the left button.
- * @property menu Dots on the right button.
- */
+/** Close and overflow glyphs; their 24-unit paths match Pully's Lu.close and Lu.more. */
 @Immutable
 class CardHeaderIcons(val close: Painter, val menu: Painter)
 
-/**
- * @return The icons that ship with the app resources.
- */
 @Composable
-fun defaultCardHeaderIcons() = CardHeaderIcons(
-    close = painterResource(R.drawable.ic_caret_down),
-    menu = painterResource(R.drawable.ic_horizontal_menu),
-)
+fun defaultCardHeaderIcons() = CardHeaderIcons(painterResource(R.drawable.ic_sheet_close), painterResource(R.drawable.ic_sheet_more))
 
-/**
- * The 64 dp header of the card view: a close caret, the card title and a menu button.
- *
- * @param title Card title shown centred between the buttons; read-only.
- * @param color Colour of the backdrop; the icons and title contrast with it while the backdrop shows.
- * @param state Scroll tracking that decides whether the header is shown.
- * @param onClose Called when the caret is tapped.
- * @param modifier Modifier for the header box.
- * @param page Colour of the page under the header; the icons and title contrast with it while the backdrop is hidden.
- * @param onMenu Called when the menu button is tapped; null leaves the button out.
- * @param icons Pictures of the two buttons.
- */
+/** Pully's fixed header: 44 dp floating controls flanking a centered, single-line 18/26 title. */
 @Composable
-fun CardHeader(
-    title: String,
-    color: Color,
-    state: CardHeaderState,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-    page: Color = color,
-    onMenu: (() -> Unit)? = null,
-    icons: CardHeaderIcons = defaultCardHeaderIcons(),
-) {
-    val pose = state.pose
-    val spec = tween<Float>(ANIMATION_MS, easing = FastOutSlowInEasing)
-    val offset by animateFloatAsState(pose.offset, spec, label = "headerOffset")
-    val alpha by animateFloatAsState(pose.contentAlpha, spec, label = "headerAlpha")
-    val backgroundAlpha by animateFloatAsState(pose.backgroundAlpha, spec, label = "headerBgAlpha")
-    val ink = lerp(readableOn(page), readableOn(color), backgroundAlpha)
-
-    Box(modifier.fillMaxWidth().height(CARD_HEADER_HEIGHT)) {
-        if (backgroundAlpha > 0f) {
-            Surface(Modifier.fillMaxSize().blur(BACKGROUND_BLUR_DP.dp).alpha(backgroundAlpha), color = color) {}
+fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier, onMenu: (() -> Unit)? = null, icons: CardHeaderIcons = defaultCardHeaderIcons(), enabled: Boolean = true) {
+    val colors = LocalCardSheetColors.current
+    Row(modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        CardHeaderButton(icons.close, "Close card", onClose, enabled)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Text(title, style = TextStyle(fontFamily = FontFamily(Font(R.font.geist_semibold, FontWeight.SemiBold)), fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 26.sp, textAlign = TextAlign.Center), color = colors.text, maxLines = 1)
         }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(CARD_HEADER_HEIGHT)
-                .graphicsLayer {
-                    translationY = offset * density
-                    this.alpha = alpha
-                },
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            HeaderButton(icons.close, ink, onClose)
-            BasicTextField(
-                value = title,
-                onValueChange = {},
-                modifier = Modifier.weight(1f),
-                readOnly = true,
-                textStyle = TextStyle(
-                    color = ink,
-                    fontSize = 18.sp,
-                    fontFamily = MymindTheme.fonts.nunito,
-                    textAlign = TextAlign.Center,
-                ),
-                singleLine = true,
-                cursorBrush = SolidColor(ink),
-            )
-            if (onMenu != null) HeaderButton(icons.menu, ink, onMenu)
-        }
+        if (onMenu != null) CardHeaderButton(icons.menu, "Card actions", onMenu, enabled) else Spacer(Modifier.size(44.dp))
     }
 }
 
+/** Pully's two-layer canvas shadow and flat press tint, with no ripple or press scaling. */
 @Composable
-private fun HeaderButton(icon: Painter, tint: Color, onClick: () -> Unit) {
+private fun CardHeaderButton(icon: Painter, label: String, onClick: () -> Unit, enabled: Boolean) {
+    val colors = LocalCardSheetColors.current
+    val tint = colors.shadow.copy(alpha = if (colors === DarkCardSheetColors) 0.08f * 2.7f else 0.08f)
+    val fill = colors.raised
+    val haptic = rememberSheetHaptics()
     Box(
-        Modifier
-            .size(CARD_HEADER_HEIGHT)
-            .clickable(remember { MutableInteractionSource() }, ripple(bounded = false), onClick = onClick),
+        Modifier.size(44.dp).drawBehind {
+            val outline = CircleShape.createOutline(size, layoutDirection, this)
+            val edge = Paint().apply { color = fill }
+            edge.asFrameworkPaint().setShadowLayer(1f, 0f, 1.dp.toPx(), tint.copy(alpha = tint.alpha * 0.5f).toArgb())
+            val drop = Paint().apply { color = fill }
+            drop.asFrameworkPaint().setShadowLayer(((10.dp.toPx() / 2f - 0.5f) / 0.57735f).coerceAtLeast(0.5f), 0f, 2.dp.toPx(), tint.toArgb())
+            drawIntoCanvas { it.drawOutline(outline, edge); it.drawOutline(outline, drop) }
+        }.clip(CircleShape).background(fill).semantics { contentDescription = label }
+            .clickable(remember { MutableInteractionSource() }, CardSheetIndication, enabled = enabled, role = Role.Button, onClickLabel = label, onClick = { haptic.tick(); onClick() }),
         contentAlignment = Alignment.Center,
     ) {
-        Image(icon, contentDescription = "", colorFilter = ColorFilter.tint(tint))
+        Image(icon, contentDescription = null, modifier = Modifier.size(20.dp), colorFilter = ColorFilter.tint(colors.text))
     }
 }

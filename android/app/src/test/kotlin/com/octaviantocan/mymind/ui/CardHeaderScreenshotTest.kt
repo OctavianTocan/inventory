@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
@@ -17,7 +18,9 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.ui.card.CardHeader
-import com.octaviantocan.mymind.ui.card.CardHeaderState
+import com.octaviantocan.mymind.ui.card.LocalCardSheetColors
+import com.octaviantocan.mymind.ui.card.LightCardSheetColors
+import com.octaviantocan.mymind.ui.card.DarkCardSheetColors
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,33 +34,27 @@ class CardHeaderScreenshotTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val state = CardHeaderState()
 
     private fun start(dark: Boolean) {
         compose.setPhoneContent(dark) {
-            val card = Color(0xFF7FA3D6)
-            Box(Modifier.fillMaxSize().background(card)) {
-                Image(
-                    remember { BandPainter(Color(0xFFD9534F), Color(0xFFF7C94B), Size(100f, 400f), bands = 8) },
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxWidth().height(160.dp),
-                    contentScale = ContentScale.FillBounds,
-                )
-                CardHeader(
-                    title = "A card with a title",
-                    color = card,
-                    state = state,
-                    onClose = {},
-                    onMenu = {},
-                    icons = flatCardHeaderIcons(),
-                )
+            CompositionLocalProvider(LocalCardSheetColors provides if (dark) DarkCardSheetColors else LightCardSheetColors) {
+                val card = Color(0xFF7FA3D6)
+                Box(Modifier.fillMaxSize().background(card)) {
+                    Image(
+                        remember { BandPainter(Color(0xFFD9534F), Color(0xFFF7C94B), Size(100f, 400f), bands = 8) },
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxWidth().height(160.dp),
+                        contentScale = ContentScale.FillBounds,
+                    )
+                    CardHeader(
+                        title = "A card with a title",
+                        onClose = {},
+                        onMenu = {},
+                        icons = flatCardHeaderIcons(),
+                    )
+                }
             }
         }
-        compose.mainClock.advanceTimeBy(SETTLE_MS)
-    }
-
-    private fun scrollTo(vararg positions: Int) {
-        compose.change { positions.forEach(state::onScroll) }
         compose.mainClock.advanceTimeBy(SETTLE_MS)
     }
 
@@ -66,10 +63,6 @@ class CardHeaderScreenshotTest {
     private fun sequence(dark: Boolean, suffix: String) {
         start(dark)
         capture("card_header_rest_$suffix")
-        scrollTo(300)
-        capture("card_header_hidden_$suffix")
-        scrollTo(240)
-        capture("card_header_shown_$suffix")
     }
 
     @Test

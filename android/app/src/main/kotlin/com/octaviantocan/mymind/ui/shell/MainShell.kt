@@ -45,7 +45,7 @@ import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.uploadFileOf
-import com.octaviantocan.mymind.ui.card.CardSheet
+import com.octaviantocan.mymind.ui.card.CardSheetDialog
 import com.octaviantocan.mymind.ui.describe
 import com.octaviantocan.mymind.ui.errors.ApiErrorDialog
 import com.octaviantocan.mymind.ui.library.EverythingScreen
@@ -175,10 +175,11 @@ fun MainShell(
                 opened?.let { open ->
                     key(open.card.id) {
                         PageTheme(scheme) {
-                            CardSheet(
+                            CardSheetDialog(
                                 open.card,
                                 onClose = { opened = null },
                                 onMenu = { openMenu(open.card, open.spaceId) },
+                                actionsVisible = menuOpen,
                                 onRemoveTag = { tag ->
                                     scope.launch {
                                         when (val answer = viewModel.removeTag(open.card, tag)) {
