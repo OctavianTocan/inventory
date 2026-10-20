@@ -24,6 +24,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -172,21 +173,22 @@ fun MainShell(
             underStatusBar = tab == Tab.Serendipity,
             overlay = {
                 opened?.let { open ->
-                    BackHandler { opened = null }
-                    PageTheme(scheme) {
-                        CardSheet(
-                            open.card,
-                            onClose = { opened = null },
-                            onMenu = { openMenu(open.card, open.spaceId) },
-                            onRemoveTag = { tag ->
-                                scope.launch {
-                                    when (val answer = viewModel.removeTag(open.card, tag)) {
-                                        is ApiResult.Ok -> updateCard(answer.value)
-                                        is ApiResult.Failed -> failure = answer.failure
+                    key(open.card.id) {
+                        PageTheme(scheme) {
+                            CardSheet(
+                                open.card,
+                                onClose = { opened = null },
+                                onMenu = { openMenu(open.card, open.spaceId) },
+                                onRemoveTag = { tag ->
+                                    scope.launch {
+                                        when (val answer = viewModel.removeTag(open.card, tag)) {
+                                            is ApiResult.Ok -> updateCard(answer.value)
+                                            is ApiResult.Failed -> failure = answer.failure
+                                        }
                                     }
-                                }
-                            },
-                        )
+                                },
+                            )
+                        }
                     }
                 }
                 UploadQueueStrip(

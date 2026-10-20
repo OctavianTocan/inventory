@@ -1,0 +1,36 @@
+name: Android verify
+
+on:
+  pull_request:
+    paths:
+      - android/**
+      - .github/workflows/android-verify.yml
+  push:
+    branches: [main]
+    paths:
+      - android/**
+      - .github/workflows/android-verify.yml
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
+        with:
+          packages: ''
+      - name: Install the project SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+      - name: Test and build the Android app
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --max-workers=2
