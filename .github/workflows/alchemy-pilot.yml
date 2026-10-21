@@ -120,7 +120,7 @@ jobs:
             stop) npm run probe:stop ;;
             *) exit 1 ;;
           esac
-      - name: Read private scheduled smoke evidence (up to 11 minutes)
+      - name: Read private scheduled smoke evidence (up to 26 minutes)
         if: inputs.operation == 'probe'
         run: npm run probe:result
       - name: Disarm scheduled probe after success or failure

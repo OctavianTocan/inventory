@@ -78,5 +78,14 @@ export default Alchemy.Stack(pilot.stack, {
       PILOT_RUN: process.env.MYMIND_ALCHEMY_RUN ?? 'manual',
     },
   });
-  return { workerName: worker.workerName, probeName: probe.workerName, bucketName: bucket.bucketName };
+  const container = yield* media.Application;
+  return {
+    workerName: worker.workerName,
+    workerId: worker.workerId,
+    probeName: probe.workerName,
+    probeId: probe.workerId,
+    bucketName: bucket.bucketName,
+    durableObjectNamespaces: worker.durableObjectNamespaces,
+    containerApplicationId: container.applicationId,
+  };
 }));

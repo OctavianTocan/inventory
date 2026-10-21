@@ -43,9 +43,15 @@ export function Worker(id, props) { return Effect.succeed(record('worker', id, p
 /** Record a container binding without building an image.
  * @param {string} id Logical resource identity.
  * @param {object} props Actual container properties.
- * @returns {object} Opaque container binding.
+ * @returns {object} Container binding with synthetic application outputs.
  */
-export function Container(id, props) { return record('container', id, props); }
+export function Container(id, props) {
+  const container = record('container', id, props);
+  container.Application = Effect.succeed({
+    applicationId: 'synthetic-application',
+  });
+  return container;
+}
 
 /** Record the raw Rust Durable Object mapping.
  * @param {string} id Logical namespace identity.
