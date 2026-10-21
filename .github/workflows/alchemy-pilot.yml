@@ -11,12 +11,21 @@ on:
       operation:
         type: choice
         description: Staging-only operation; verify needs no cloud credentials
-        options: [verify, plan, deploy, probe, stop, destroy]
+        options: [verify, plan, deploy, probe, stop, destroy, audit, cleanup-images]
         default: verify
       initialize:
         type: boolean
         description: First deployment only; forbidden after any pilot state history
         default: false
+      expected_state:
+        type: choice
+        description: Required live state for audit; cleanup-images requires absent
+        options: [present, absent]
+        default: present
+      expected_identities:
+        type: string
+        description: Safe deployment output JSON, required for audit and cleanup-images; never credentials
+        default: ''
 
 permissions:
   contents: read
@@ -85,6 +94,8 @@ jobs:
       MYMIND_ALCHEMY_ADMIN_TOKEN: ${{ secrets.MYMIND_ALCHEMY_ADMIN_TOKEN }}
       MYMIND_ALCHEMY_PASSWORD: ${{ secrets.MYMIND_ALCHEMY_PASSWORD }}
       MYMIND_ALCHEMY_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+      MYMIND_ALCHEMY_EXPECTED_STATE: ${{ inputs.expected_state }}
+      MYMIND_ALCHEMY_EXPECTED_IDENTITIES: ${{ inputs.expected_identities }}
       NO_TRACK: '1'
       CI: 'true'
     steps:
@@ -116,7 +127,7 @@ jobs:
           OPERATION: ${{ inputs.operation }}
         run: |
           case "$OPERATION" in
-            plan|deploy|probe|destroy) npm run "$OPERATION" ;;
+            plan|deploy|probe|destroy|audit|cleanup-images) npm run "$OPERATION" ;;
             stop) npm run probe:stop ;;
             *) exit 1 ;;
           esac
