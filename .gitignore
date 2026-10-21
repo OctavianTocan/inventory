@@ -40,6 +40,12 @@ rust/crates/worker/.dev.vars
 rust/crates/worker/.wrangler/
 rust/crates/worker/build/
 
+infra/alchemy/.env*
+infra/alchemy/.dev.vars*
+infra/alchemy/.alchemy/
+infra/alchemy/.artifacts/
+infra/alchemy/.wrangler/
+
 # Rust build output
 rust/target/
 rust/libvips/

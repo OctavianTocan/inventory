@@ -1,0 +1,138 @@
+name: Alchemy staging pilot
+
+on:
+  pull_request:
+    paths:
+      - infra/alchemy/**
+      - rust/**
+      - .github/workflows/alchemy-pilot.yml
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        description: Staging-only operation; verify needs no cloud credentials
+        options: [verify, plan, deploy, probe, stop, destroy]
+        default: verify
+      initialize:
+        type: boolean
+        description: First deployment only; forbidden after any pilot state history
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mymind-alchemy-staging
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event.repository.private
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: infra/alchemy
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: infra/alchemy/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test && npm run typecheck
+      - name: Install pinned Rust Worker build tools
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
+          cargo +1.99.0 install worker-build --version 0.8.7 --locked --root "$PWD/.artifacts/toolchain"
+      - name: Build existing Rust Worker and verify upload artifacts
+        env:
+          RUSTUP_TOOLCHAIN: 1.99.0
+        run: |
+          export PATH="$PWD/.artifacts/toolchain/bin:$PATH"
+          npm run build:worker
+          npm run check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mymind-alchemy-staging-worker-build
+          path: infra/alchemy/.artifacts/rust/crates/worker/build
+          retention-days: 7
+
+  cloud:
+    if: github.event.repository.private && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.operation != 'verify'
+    needs: verify
+    environment: alchemy-staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
+    defaults:
+      run:
+        working-directory: infra/alchemy
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MYMIND_ALCHEMY_INITIALIZE: ${{ inputs.initialize }}
+      MYMIND_ALCHEMY_STATE_KEY: ${{ secrets.MYMIND_ALCHEMY_STATE_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.ALCHEMY_CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.ALCHEMY_CLOUDFLARE_API_TOKEN }}
+      MYMIND_ALCHEMY_GOOGLE_CLIENT_ID: ${{ secrets.MYMIND_ALCHEMY_GOOGLE_CLIENT_ID }}
+      MYMIND_ALCHEMY_GOOGLE_CLIENT_SECRET: ${{ secrets.MYMIND_ALCHEMY_GOOGLE_CLIENT_SECRET }}
+      MYMIND_ALCHEMY_ADMIN_TOKEN: ${{ secrets.MYMIND_ALCHEMY_ADMIN_TOKEN }}
+      MYMIND_ALCHEMY_PASSWORD: ${{ secrets.MYMIND_ALCHEMY_PASSWORD }}
+      MYMIND_ALCHEMY_RUN: ${{ github.run_id }}-${{ github.run_attempt }}
+      NO_TRACK: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - name: Require explicit initialization only for first deploy
+        env:
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          if [ "$MYMIND_ALCHEMY_INITIALIZE" = true ] && [ "$OPERATION" != deploy ]; then
+            echo 'initialize is supported only for the first deploy'
+            exit 1
+          fi
+      - name: Restore exact latest private infrastructure state
+        id: restore
+        run: node scripts/state.mjs restore
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: mymind-alchemy-staging-worker-build
+          path: infra/alchemy/.artifacts/rust/crates/worker/build
+      - run: npm run check
+      - name: Run requested staging operation
+        env:
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          case "$OPERATION" in
+            plan|deploy|probe|destroy) npm run "$OPERATION" ;;
+            stop) npm run probe:stop ;;
+            *) exit 1 ;;
+          esac
+      - name: Read private scheduled smoke evidence (up to 11 minutes)
+        if: inputs.operation == 'probe'
+        run: npm run probe:result
+      - name: Disarm scheduled probe after success or failure
+        if: always() && inputs.operation == 'probe' && steps.restore.outcome == 'success'
+        run: npm run probe:stop
+      - name: Encrypt final checkpoint even when a cloud operation fails
+        if: always() && steps.restore.outcome == 'success'
+        run: node scripts/state.mjs seal
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.restore.outcome == 'success'
+        with:
+          name: mymind-alchemy-staging-state-v1
+          path: infra/alchemy/.artifacts/state/state.enc
+          if-no-files-found: error
+          retention-days: 90

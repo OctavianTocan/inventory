@@ -1,0 +1,29 @@
+{
+  "name": "mymind-alchemy-staging-pilot",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.11.1" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "node scripts/check.mjs",
+    "build:worker": "node scripts/build-worker.mjs",
+    "local:config": "node scripts/local-config.mjs",
+    "plan": "node scripts/run.mjs plan",
+    "deploy": "node scripts/run.mjs deploy",
+    "probe": "node scripts/run.mjs probe",
+    "probe:result": "node scripts/probe-result.mjs",
+    "probe:stop": "node scripts/run.mjs stop",
+    "destroy": "node scripts/run.mjs destroy"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.5",
+    "alchemy": "2.0.0-beta.83",
+    "effect": "4.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.0",
+    "typescript": "7.0.2",
+    "wrangler": "4.151.1"
+  }
+}
