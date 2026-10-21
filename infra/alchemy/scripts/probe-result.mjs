@@ -11,14 +11,19 @@ if (!account || !token) throw new Error('Cloudflare account and API token are re
 const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/r2/buckets/${pilot.r2_buckets[0].bucket_name}/objects/pilot/results/${encodeURIComponent(run)}.json`;
 const deadline = Date.now() + 11 * 60_000;
 for (;;) {
-  const response = await fetch(endpoint, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
-  if (response.ok) {
-    const result = await response.json();
-    if (result.run !== run || typeof result.passed !== 'boolean') throw new Error('Unexpected private probe result');
-    console.log(JSON.stringify(result));
-    if (result.passed) break;
-    if (result.attempts >= 2) throw new Error('Private smoke failed; stop the probe and inspect its status-only result');
-  } else if (response.status !== 404) throw new Error(`Private R2 result read failed with HTTP ${response.status}`);
+  try {
+    const response = await fetch(endpoint, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
+    if (response.ok) {
+      const result = await response.json();
+      if (result.run !== run || typeof result.passed !== 'boolean') throw new Error('Unexpected private probe result');
+      console.log(JSON.stringify(result));
+      if (result.passed) break;
+      if (result.attempts >= 2) throw new Error('Private smoke failed; stop the probe and inspect its status-only result');
+    } else if (response.status !== 404) throw new Error(`Private R2 result read failed with HTTP ${response.status}`);
+  } catch (error) {
+    // One request timeout must not end the bounded polling window.
+    if (error?.name !== 'TimeoutError') throw error;
+  }
   if (Date.now() >= deadline) throw new Error('No successful private smoke result within 11 minutes; stop the probe');
   await setTimeout(15_000);
 }
