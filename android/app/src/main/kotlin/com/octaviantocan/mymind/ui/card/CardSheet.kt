@@ -37,7 +37,6 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -194,7 +193,7 @@ private fun TagChips(tags: List<Tag>, style: TextStyle, onRemove: (Tag) -> Unit)
     }
 }
 
-/** The card's own content: picture, centred title, text and tags. */
+/** The card's own content: picture, text and tags. The sheet header supplies the title. */
 @Composable
 private fun CardBody(card: Card, onRemoveTag: ((Tag) -> Unit)?) {
     val page = MymindTheme.page
@@ -205,14 +204,6 @@ private fun CardBody(card: Card, onRemoveTag: ((Tag) -> Unit)?) {
         if (kind == TileKind.Media || kind == TileKind.Video) {
             CardPicture(card, play = kind == TileKind.Video)
             Spacer(Modifier.height(24.dp))
-        }
-        if (kind != TileKind.Note) {
-            Text(
-                cardHeading(card),
-                Modifier.fillMaxWidth(),
-                style = TextStyle(color = LocalCardSheetColors.current.text, fontSize = 31.sp, lineHeight = 1.06.em, fontFamily = fonts.louize, textAlign = TextAlign.Center),
-            )
-            Spacer(Modifier.height(30.dp))
         }
         val text = if (kind == TileKind.Note) noteText(card) else listOfNotNull(card.description, card.note).joinToString("\n\n")
         if (text.isNotBlank()) Text(text, style = body)
