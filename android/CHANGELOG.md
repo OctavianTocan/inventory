@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 (6), 2026-10-21
+- Read cards in a full-screen view with one clear title and close and action controls.
+- Card action, tag and space sheets use the accent of the card they belong to.
+
 ## 0.4.0 (5), 2026-10-21
 - Open cards in Pully-style sheets that expand, scroll and close with a drag.
 - Close and action controls sit inside the card sheet header.

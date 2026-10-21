@@ -29,11 +29,14 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -95,6 +98,17 @@ val DarkMenuColors = MenuColors(Scrim, Color(0xFF14161E), Color(0xFF1C1E26), Col
 /** Card menu colours when the system is light. */
 val LightMenuColors = MenuColors(Scrim, Color.White, Color(0xFFF4F6F9), Color(0xFF353643), Danger.copy(alpha = 0.1f), Danger, Handle)
 
+internal val LocalCardMenuAccent = staticCompositionLocalOf<Color?> { null }
+
+/** Tint the contextual menu surface and handle while preserving action and danger colours. */
+@Composable
+internal fun menuColors(): MenuColors {
+    val base = if (MymindTheme.colors.dark) DarkMenuColors else LightMenuColors
+    val accent = LocalCardMenuAccent.current ?: return base
+    return MenuColors(base.scrim, lerp(base.sheet, accent, 0.12f), base.row, base.rowText,
+        base.dangerRow, base.dangerText, accent)
+}
+
 /**
  * Pictures of the menu rows.
  *
@@ -119,6 +133,7 @@ fun defaultCardMenuIcons() = CardMenuIcons(
  * @param sheetState State of the sheet.
  * @param icons Pictures of the rows.
  * @param submenu Page shown instead of the rows, or null for the rows.
+ * @param accent Colour already used by this card, or null to retain the neutral menu.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,6 +144,7 @@ fun CardMenuSheet(
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     icons: CardMenuIcons = defaultCardMenuIcons(),
     submenu: (@Composable () -> Unit)? = null,
+    accent: Color? = null,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -141,7 +157,9 @@ fun CardMenuSheet(
         dragHandle = null,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
     ) {
-        if (submenu == null) CardMenuContent(items, onSelect, icons = icons) else MenuCard { submenu() }
+        CompositionLocalProvider(LocalCardMenuAccent provides accent) {
+            if (submenu == null) CardMenuContent(items, onSelect, icons = icons) else MenuCard { submenu() }
+        }
     }
 }
 
@@ -162,7 +180,7 @@ fun CardMenuContent(
     modifier: Modifier = Modifier,
     icons: CardMenuIcons = defaultCardMenuIcons(),
 ) {
-    val colors = if (MymindTheme.colors.dark) DarkMenuColors else LightMenuColors
+    val colors = menuColors()
     MenuCard(modifier) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             BottomSheetDefaults.DragHandle(color = colors.handle)
@@ -185,7 +203,7 @@ fun CardMenuContent(
  */
 @Composable
 fun MenuCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    val colors = if (MymindTheme.colors.dark) DarkMenuColors else LightMenuColors
+    val colors = menuColors()
     Column(
         modifier
             .fillMaxWidth()

@@ -1,8 +1,6 @@
 package com.octaviantocan.mymind.ui.card
 
-import android.provider.Settings
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -19,17 +17,10 @@ import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
-
-@Composable
-internal fun rememberSheetMotionEnabled(): Boolean {
-    val resolver = LocalContext.current.contentResolver
-    return remember(resolver) { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
-}
 
 /** Pully's progressively blurred fade under a stationary sheet header. */
 @Composable

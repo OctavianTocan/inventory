@@ -54,6 +54,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -84,6 +85,7 @@ import java.util.Locale
  * @property chipText Text of an added tag.
  * @property spaceRow Fill of a space row.
  * @property spaceLabel Name of a space row.
+ * @property buttonText Label colour that contrasts with the button fill.
  */
 @Immutable
 class SubmenuColors(
@@ -99,6 +101,7 @@ class SubmenuColors(
     val chipText: Color,
     val spaceRow: Color,
     val spaceLabel: Color,
+    val buttonText: Color = Color.White,
 )
 
 private val Slate = Color(0xFF748297)
@@ -136,8 +139,17 @@ val LightSubmenuColors = SubmenuColors(
     spaceLabel = Color(0xFF353643),
 )
 
+/** Carry the selected card's accent into submenu controls without recolouring their content. */
 @Composable
-private fun submenuColors() = if (MymindTheme.colors.dark) DarkSubmenuColors else LightSubmenuColors
+private fun submenuColors(): SubmenuColors {
+    val base = if (MymindTheme.colors.dark) DarkSubmenuColors else LightSubmenuColors
+    val accent = LocalCardMenuAccent.current ?: return base
+    return SubmenuColors(
+        base.title, base.close, base.fieldText, base.field, base.chevron, base.recentLabel,
+        base.help, accent, base.chip, base.chipText, base.spaceRow, base.spaceLabel,
+        buttonText = if (accent.luminance() > 0.179f) Color.Black else Color.White,
+    )
+}
 
 private const val SUGGESTION_LIMIT = 5
 private const val ADD_TAGS_HELP = "Hit next to add separate tags.\nTap on added tags to remove them."
@@ -274,7 +286,7 @@ fun AddTagsPage(
             )
             AnimatedVisibility(expanded && choices.isNotEmpty(), Modifier.fillMaxWidth(), enter = expandVertically(), exit = shrinkVertically()) {
                 Column {
-                    HorizontalDivider(thickness = 1.dp, color = (if (MymindTheme.colors.dark) DarkMenuColors else LightMenuColors).sheet)
+                    HorizontalDivider(thickness = 1.dp, color = menuColors().sheet)
                     Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (text.isEmpty()) {
                             Text(
@@ -453,7 +465,7 @@ private fun HelpText(text: String, colors: SubmenuColors) {
     )
 }
 
-/** The 44 dp orange pill at the bottom of a submenu. */
+/** The 44 dp action pill at the bottom of a submenu. */
 @Composable
 private fun SubmenuButton(label: String, colors: SubmenuColors, onClick: () -> Unit) {
     Row(
@@ -469,6 +481,6 @@ private fun SubmenuButton(label: String, colors: SubmenuColors, onClick: () -> U
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = TextStyle(color = Color.White, fontSize = 16.sp, letterSpacing = (-0.02).em, fontFamily = MymindTheme.fonts.nunito))
+        Text(label, style = TextStyle(color = colors.buttonText, fontSize = 16.sp, letterSpacing = (-0.02).em, fontFamily = MymindTheme.fonts.nunito))
     }
 }
