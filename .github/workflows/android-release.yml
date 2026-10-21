@@ -1,0 +1,116 @@
+name: Android release
+
+on:
+  workflow_run:
+    workflows: [Android verify]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-production-release
+  cancel-in-progress: false
+
+jobs:
+  revision:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.revision.outputs.sha }}
+      base: ${{ steps.revision.outputs.base }}
+    steps:
+      - name: Restrict manual releases to main
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          SELECTED_REF: ${{ github.ref }}
+        run: |
+          [[ "$SELECTED_REF" == refs/heads/main ]] || { echo 'Select main for an Android release.' >&2; exit 1; }
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select the exact verified main revision
+        id: revision
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "base=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+
+  manual-verify:
+    needs: revision
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/android-verify.yml
+    with:
+      revision: ${{ needs.revision.outputs.sha }}
+      base: ${{ needs.revision.outputs.base }}
+
+  publish:
+    needs: [revision, manual-verify]
+    if: >-
+      always() && needs.revision.result == 'success' &&
+      (github.event_name == 'workflow_run' || needs.manual-verify.result == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+      ANDROID_RELEASE_PASSWORD: ${{ secrets.ANDROID_RELEASE_PASSWORD }}
+      ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+      MYMIND_RELEASE_ALIAS: ${{ vars.ANDROID_RELEASE_ALIAS || 'mymind' }}
+      ANDROID_GOOGLE_WEB_CLIENT_ID: ${{ vars.ANDROID_GOOGLE_WEB_CLIENT_ID }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TEST_USER_NAME: ${{ secrets.TEST_USER_NAME }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      ANDROID_RELEASE_REVISION: ${{ needs.revision.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.revision.outputs.sha }}
+          persist-credentials: false
+      - name: Require release configuration
+        run: |
+          for name in ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_PASSWORD ANDROID_RELEASE_CERT_SHA256 ANDROID_GOOGLE_WEB_CLIENT_ID CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN TEST_USER_NAME TEST_USER_PASSWORD; do
+            [[ -n "${!name}" ]] || { echo "$name is required; see docs/android-releases.md" >&2; exit 1; }
+          done
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Install pinned R2 uploader
+        run: npm ci --prefix rust/crates/worker --ignore-scripts
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          packages: ''
+      - name: Install the project SDK
+        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+      - name: Publish and verify the signed Android release
+        run: |
+          umask 077
+          MYMIND_RELEASE_STORE=$(mktemp "$RUNNER_TEMP/android-release-key.XXXXXX")
+          export MYMIND_RELEASE_STORE
+          trap 'rm -f "$MYMIND_RELEASE_STORE"' EXIT
+          python3 -I - <<'PY'
+          import base64, os
+          from pathlib import Path
+          try:
+              data = base64.b64decode(os.environ['ANDROID_RELEASE_KEYSTORE_BASE64'], validate=True)
+              if not data:
+                  raise ValueError('empty keystore')
+              Path(os.environ['MYMIND_RELEASE_STORE']).write_bytes(data)
+          except ValueError:
+              raise SystemExit('ANDROID_RELEASE_KEYSTORE_BASE64 must contain the existing release keystore in base64')
+          PY
+          bash deploy/publish-android.sh --if-needed
