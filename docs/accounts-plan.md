@@ -1,7 +1,10 @@
 # Accounts (roadmap phase 8)
 
 Status: owner-only Google sign-in is built (`rust/crates/core/src/auth.rs`, proven by `tools/check-auth.mjs`), and Cloudflare Access
-is gone (2026-10-16). A library per person is decided and planned below, not built.
+is gone (2026-10-16). On the Worker, an account the gate already admits gets an empty library at its first library
+request when it has none (`library_for_session` in `rust/crates/core/src/auth_store.rs`). Google admits `OWNER_EMAIL`
+and, unless `ALLOWED_GOOGLE_DOMAIN` is set empty, a verified address whose host is exactly that domain (default
+`octaviantocan.com`). The local-server plan below is not built.
 
 ## What is built
 
@@ -14,11 +17,20 @@ is gone (2026-10-16). A library per person is decided and planned below, not bui
 3. **Google sign-in, hand-rolled OIDC.** mymind's button opens `/google/oauth2-redirect` in a popup; the server
    redirects to Google with PKCE (S256), `state` (bound to a cookie) and `nonce`. `/google/oauth2-callback`
    exchanges the code, verifies the ID token (RS256 against Google's cached JWKS; `iss`, `aud`, `exp`/`iat`,
-   `nonce`, `email_verified`) and lets in only `OWNER_EMAIL`.
+   `nonce`, `email_verified`) and lets in `OWNER_EMAIL` plus a verified address at `ALLOWED_GOOGLE_DOMAIN`. Unset, that
+   domain is `octaviantocan.com`. An empty value, or one that is not a hostname, admits only the owner. The host
+   must match exactly: no subdomain, and no longer or lookalike suffix.
 4. **Sessions in SQLite** (`AUTH_DB`, default `data/auth.db`). A random 256-bit id in an HttpOnly, SameSite=Lax
    cookie (`Secure` when `PUBLIC_URL` is https); only its SHA-256 is stored, for 30 days. `/signout` deletes it.
 5. **The gate.** Signed-out page loads redirect to `/signin`; API calls and `/hub` upgrades get 401; cross-origin
    writes get 403.
+6. **An empty library at first sign-in, on the Worker.** A signed-in account with no `libraries` row gets one on the
+   first request that needs a library (`library_for_session` in `rust/crates/core/src/auth_store.rs`). The Auth
+   object routes that request to a new Durable Object, and that object inserts one user row so the grid and a card
+   save work (`rust/crates/core/src/store_member.rs`). An account that already has a library keeps it. The name is
+   `u-<slug>-<sha256 of the account>`, lower-case letters, digits and dashes. If that name is already another
+   account's library, the suffix is `-2`, `-3`, and so on. Password accounts and Google accounts
+   both get one. A domain account gets its own library; the owner's existing mapping stays.
 
 ## Hosting
 
@@ -97,14 +109,19 @@ desktop app and verification use today.
 
 ### Stage 2: domain accounts
 
-- A verified `@octaviantocan.com` Google sign-in without a library gets a new empty one; the access rule in
-  `rust/crates/core/src/auth.rs` widens in its one place.
-- A library without recordings gets a shell page generated from its own settings, pins and spaces, with nothing
-  from the owner's recorded page in it.
-- Google Cloud: add the domain accounts as test users on the consent screen, or publish it (the agent does this in
-  the agent browser).
-- Proof: a domain account signs in on the web and in the app, sees an empty library, saves a card, and neither
-  library can read the other's.
+The access rule and the empty library are built. A verified Google address at `ALLOWED_GOOGLE_DOMAIN` (default
+`octaviantocan.com`) signs in on the web and at `/app/v1/auth/google`, then gets its own library on the first
+request that needs one. `OWNER_EMAIL` keeps the library it already has.
+
+Still open: the Google Cloud OAuth consent screen has to allow those accounts. That is a manual step for the owner.
+For a Workspace domain, set the screen to Internal. Otherwise add each address as a test user, or publish the app.
+The code cannot do that.
+
+- A library without recordings uses the shared shell from its own settings, pins and spaces. The owner's recorded
+  page is not copied.
+- Proof in `google_domain`: a verified domain account is admitted and gets a new library; an unverified domain
+  email, another domain, and lookalike suffixes are rejected; the owner's library name stays the same. A card save
+  on a new library is covered by `library_claim`.
 
 ## Done: removing Cloudflare Access (2026-10-16)
 

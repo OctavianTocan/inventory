@@ -78,6 +78,9 @@ impl AuthOptions {
     }
 }
 
+/// Domain admitted beside the owner when `ALLOWED_GOOGLE_DOMAIN` is unset.
+const DEFAULT_GOOGLE_DOMAIN: &str = "octaviantocan.com";
+
 // The Google client and the owner `AUTH=google` needs.
 fn credentials(env: &HashMap<String, String>) -> Result<(String, String, String)> {
     let client_id = env.get("GOOGLE_CLIENT_ID").cloned().unwrap_or_default();
@@ -87,6 +90,28 @@ fn credentials(env: &HashMap<String, String>) -> Result<(String, String, String)
         return Err(Error::internal("AUTH=google needs GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and OWNER_EMAIL"));
     }
     Ok((client_id, client_secret, owner))
+}
+
+// `ALLOWED_GOOGLE_DOMAIN` when it is a hostname. Unset uses [`DEFAULT_GOOGLE_DOMAIN`]. Empty or not a hostname means
+// the owner is the only Google account.
+fn allowed_domain(env: &HashMap<String, String>) -> Option<String> {
+    match env.get("ALLOWED_GOOGLE_DOMAIN") {
+        None => normalize_domain(DEFAULT_GOOGLE_DOMAIN),
+        Some(value) => normalize_domain(value),
+    }
+}
+
+fn normalize_domain(value: &str) -> Option<String> {
+    let trimmed = text::to_lower(text::trim(value));
+    let domain = trimmed.strip_prefix('@').unwrap_or(&trimmed);
+    let ok = !domain.is_empty()
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && !domain.starts_with('-')
+        && !domain.ends_with('-')
+        && !domain.contains("..")
+        && domain.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'.' || byte == b'-');
+    ok.then(|| domain.to_owned())
 }
 
 /// Whether `env` turns sign-in on, checked before the host opens the sign-in database.
@@ -121,6 +146,7 @@ struct Config {
     client_id: String,
     client_secret: String,
     owner: String,
+    allowed_domain: Option<String>,
     public_url: String,
     secure: bool,
     redirect_uri: String,
@@ -448,9 +474,19 @@ impl Inner {
         }
     }
 
+    // The owner, or a verified address whose host is exactly `allowed_domain`. `email_verified` must be boolean true.
+    // A subdomain, a longer suffix, or a different character that only looks like the domain does not match.
     fn google_access(&self, claims: &Value) -> Option<String> {
-        let verified = matches!(claims.get("email_verified"), Value::Bool(true));
-        (verified && text::to_lower(&claims.get("email").to_js_string()) == self.cfg.owner).then(|| self.cfg.owner.clone())
+        if !matches!(claims.get("email_verified"), Value::Bool(true)) {
+            return None;
+        }
+        let email = text::to_lower(text::trim(&claims.get("email").to_js_string()));
+        if email == self.cfg.owner {
+            return Some(self.cfg.owner.clone());
+        }
+        let domain = self.cfg.allowed_domain.as_deref()?;
+        let (local, host) = email.split_once('@')?;
+        (host == domain && !local.is_empty()).then_some(email)
     }
 
     fn start_app_token(&self, sub: &Value, email: &str, kind: &str, device: &Value) -> Result<Object> {
@@ -755,6 +791,7 @@ impl Auth {
             return Ok(None);
         }
         let (client_id, client_secret, owner) = credentials(env)?;
+        let allowed_domain = allowed_domain(env);
         let configured = env.get("PUBLIC_URL").cloned().unwrap_or_else(|| format!("http://localhost:{}", options.port));
         let public_url = configured.strip_suffix('/').unwrap_or(&configured).to_owned();
         let var = |name: &str, default: &str| env.get(name).cloned().unwrap_or_else(|| default.to_owned());
@@ -770,6 +807,7 @@ impl Auth {
             client_id,
             client_secret,
             owner,
+            allowed_domain,
         };
         install_auth_schema(&*options.db)?;
         let now = runtime::now_ms();

@@ -12,7 +12,8 @@
   "routes": [{ "pattern": "mymind.octaviantocan.com/*", "zone_name": "octaviantocan.com" }],
   "vars": {
     "AUTH": "google",
-    "PUBLIC_URL": "https://mymind.octaviantocan.com"
+    "PUBLIC_URL": "https://mymind.octaviantocan.com",
+    "ALLOWED_GOOGLE_DOMAIN": "octaviantocan.com"
   },
   "durable_objects": {
     "bindings": [

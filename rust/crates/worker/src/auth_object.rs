@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use mm_core::auth::{Auth as Gate, AuthOptions};
-use mm_core::auth_store::{Identity, library_of, list_users, set_library};
+use mm_core::auth_store::{Identity, library_for_session, library_of, list_users, set_library};
 use mm_core::http::{Body, Headers, Response};
 use mm_core::sql::{Sql, SqlExt, SqlValue};
 use mm_core::{Error, Result, params};
@@ -48,10 +48,14 @@ impl Auth {
         let Some(identity) = gate.identity(&req)? else {
             return Ok(Response::new(401, Headers::from([("content-type", "application/json"), ("cache-control", "no-store")]), UNAUTHORIZED));
         };
-        let Some(library) = library_of(&**db, &Identity { sub: identity.sub.clone(), email: identity.email.clone() })? else {
-            return Ok(crate::http::text(403, "This account has no library yet.", &Headers::new()));
-        };
-        let headers = Headers::from([("x-mymind-library", library), ("x-mymind-credential", identity.credential), ("x-mymind-email", identity.email)]);
+        let signed_in = Identity { sub: identity.sub.clone(), email: identity.email.clone() };
+        let library = library_for_session(&**db, &signed_in)?;
+        let headers = Headers::from([
+            ("x-mymind-library", library),
+            ("x-mymind-credential", identity.credential),
+            ("x-mymind-email", identity.email),
+            ("x-mymind-sub", identity.sub),
+        ]);
         Ok(Response::new(204, headers, Body::Empty))
     }
 }

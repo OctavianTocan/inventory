@@ -36,6 +36,7 @@ pub mod site;
 pub mod sql;
 pub mod store;
 pub mod store_enrich;
+pub mod store_member;
 pub mod store_query;
 pub mod store_schema;
 pub mod store_write;

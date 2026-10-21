@@ -35,10 +35,17 @@ browser / app ──> Worker (rust/crates/worker/src/lib.rs)
 
 1. The Worker removes any `x-mymind-*` header a client sent, then asks the Auth object about the request.
    `rust/crates/core/src/auth.rs` answers exactly as `rust/crates/server/src/serve.rs` does with `AUTH=google`: a signed-out visitor gets the plain
-   sign-in page (no mymind name or assets, `noindex`), an API call gets 401, and Google sign-in admits only
-   `OWNER_EMAIL`. For a signed-in request it names the account's library.
+   sign-in page (no mymind name or assets, `noindex`), an API call gets 401, and Google sign-in admits
+   `OWNER_EMAIL` plus a verified address whose host is exactly `ALLOWED_GOOGLE_DOMAIN`. Unset, that domain is
+   `octaviantocan.com` (also set in `wrangler.jsonc`). An empty value admits only the owner. For a signed-in
+   request it names the account's library. An account with no row gets a new library
+   instead of 403: `u-<slug>-<sha256 of the account>`, lower-case letters, digits and dashes
+   (`library_for_session` in `rust/crates/core/src/auth_store.rs`). If that name is already another account's
+   library, the suffix is `-2`, `-3`, and so on. A row that already exists is left as it is.
+   Password accounts and Google accounts both get one.
 2. The Worker sends the request to that library's Durable Object, which serves it with the same code as
-   `HOSTED=1 mymind serve`. An account without a library gets 403. A library reads only its own database, its own
+   `HOSTED=1 mymind serve`. A new library starts empty, with one user row (name, email and an id prefix) so the grid
+   and a card save work. A library reads only its own database, its own
    R2 folder `libraries/<name>/`, and `static/` (mymind's website code, the one shared folder).
 3. `/download` (the desktop app) is served from R2 to any signed-in visitor.
 4. `/_admin/` exists only while the `ADMIN_TOKEN` secret is set. It is how the import tool writes R2 objects,
@@ -200,8 +207,9 @@ secret once the imports were done (`.env` still holds the old value, which nothi
    between runs. `WebAssembly is not defined` also shows in the local runs, so it wasn't a cause.
 2. The owner signs in with Google on the Worker once.
 3. Keep mini-002 and the tunnel until 2026-10-24, then remove them.
-4. Domain accounts: an empty library at the first sign-in of a verified `@octaviantocan.com` address, a page shell
-   built from that person's own data, and the Google consent screen opened to them. Approved, not built; it will be
-   built in Rust (`docs/plans/2026-10-17-0110-refactor-rust-backend-plan.md`).
+4. Domain accounts: a verified `@octaviantocan.com` address is admitted and gets an empty library at first sign-in.
+   Still open, and only as a manual step: the Google Cloud OAuth consent screen must allow those users (Internal
+   for a Workspace domain, or test users, or publish). The page is the shared shell from that person's own settings.
+   Recordings are not copied.
 
 The Android app and the desktop app keep the same URL and API, so neither changes.

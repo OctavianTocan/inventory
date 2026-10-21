@@ -11,9 +11,10 @@ Implementation notes: `note` is the note's plain text. Read errors are `400` wit
 
 ## Sign-in
 
-Only with `AUTH=google`. The same people the web admits: today `OWNER_EMAIL` by Google, and password users from
-`mymind auth-user`. One function decides who is allowed for both the web and the app, so widening it to verified
-`@octaviantocan.com` addresses (with per-person libraries, `docs/accounts-plan.md`) happens in one place.
+Only with `AUTH=google`. The same people the web admits: `OWNER_EMAIL`, a verified address whose host is exactly
+`ALLOWED_GOOGLE_DOMAIN` (unset means `octaviantocan.com`; empty means the owner only), and password users from
+`mymind auth-user`. One function, `google_access` in `rust/crates/core/src/auth.rs`, decides for both the web callback
+and `/app/v1/auth/google`. `email_verified` has to be boolean true. A subdomain or a lookalike suffix is rejected.
 
 | Request | Body | Answer |
 |---|---|---|

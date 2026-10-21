@@ -262,6 +262,8 @@ async fn route(request: web_sys::Request, env: Env) -> Result<Reply> {
     }
     headers.set("x-mymind-library", &library);
     headers.set("x-mymind-credential", gate.headers.get("x-mymind-credential").unwrap_or_default());
+    headers.set("x-mymind-email", gate.headers.get("x-mymind-email").unwrap_or_default());
+    headers.set("x-mymind-sub", gate.headers.get("x-mymind-sub").unwrap_or_default());
     let stub = env.durable_object("LIBRARY").map_err(worker_error)?.get_by_name(&library).map_err(worker_error)?;
     let forwarded = forward(url.as_str(), &method, &headers, request.body())?;
     Ok(Reply::Passed(stub.fetch_with_request(worker::Request::from(forwarded)).await.map_err(worker_error)?))

@@ -129,7 +129,8 @@ To reach the library from other computers, run the server with Google sign-in an
 |---|---|
 | `AUTH=google` | Turns sign-in on. Requires the three below. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | A Google OAuth "Web application" client whose redirect URI is `{PUBLIC_URL}/google/oauth2-callback`. |
-| `OWNER_EMAIL` | The only Google account let in; any other gets an "account not found" message. |
+| `OWNER_EMAIL` | Google account that is always let in. Its library mapping is left as it is. |
+| `ALLOWED_GOOGLE_DOMAIN` | Also admit a verified address whose host is exactly this domain. Unset means `octaviantocan.com`. Empty means only `OWNER_EMAIL`. A subdomain or a longer suffix is not a match. |
 | `PUBLIC_URL` | The address browsers use, default `http://localhost:PORT`. An `https://` URL makes cookies `Secure`. |
 | `AUTH_DB` | Sessions and password users, default `data/auth.db`. |
 | `LOCAL_PORT` | Also serves this computer without sign-in on `127.0.0.1:LOCAL_PORT`; tunnelled requests there get 403. |
@@ -195,7 +196,8 @@ the tunnel's traffic, and the database must have one writer), copy `data/`, `.en
 `deploy/install.sh` runs the replica as systemd user services that start at boot: the server with sign-in on
 `127.0.0.1:4330`, the desktop app downloads on `127.0.0.1:4332`, and a Cloudflare tunnel that publishes both at your
 hostname. There is no Cloudflare Access in front (the user's decision, 2026-10-16): every request meets the library's
-own sign-in, which admits only `OWNER_EMAIL` through Google and the password users. It needs `cloudflared` logged in
+own sign-in, which admits `OWNER_EMAIL` and a verified address at `ALLOWED_GOOGLE_DOMAIN` through Google, and the
+password users. It needs `cloudflared` logged in
 (`cloudflared tunnel login`), the sign-in variables in `.env`, and a Google client whose redirect URIs include
 `https://<hostname>/google/oauth2-callback`.
 

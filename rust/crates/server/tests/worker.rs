@@ -563,7 +563,7 @@ async fn put(client: &Client, key: &str, body: Vec<u8>, kind: &str) {
     assert_eq!(client.raw(&case).await.status, 204);
 }
 
-// Preserve the original differential suite's ordered 160 HTTP requests before sign-out and hub cases.
+// Preserve the original differential suite's ordered HTTP requests before sign-out and hub cases.
 fn cases(db: &Sqlite) -> Vec<Case> {
     let mut out = Vec::new();
     for (path, method) in [
@@ -648,9 +648,9 @@ fn cases(db: &Sqlite) -> Vec<Case> {
     out.push(
         Case::new("app signout bad token", "POST", "/app/v1/auth/signout").session("badbearer"),
     );
-    for path in ["/everything", "/app/v1/me"] {
-        out.push(Case::new("no-library account", "GET", path).session("nolib"));
-    }
+    // `/app/v1/me` is answered by sign-in before a library is chosen. `/everything` now creates an empty library;
+    // `library_claim` covers that, and leaving it here would change every later auth summary in this corpus.
+    out.push(Case::new("no-library account", "GET", "/app/v1/me").session("nolib"));
     for session in ["admin", "wrong-admin", "none"] {
         out.push(
             Case::new("admin summary", "GET", "/_admin/auth")
@@ -1059,7 +1059,7 @@ async fn worker_matches_frozen_js() {
     let cases = cases(&db);
     assert_eq!(
         cases.len(),
-        160,
+        159,
         "preserve the original HTTP case inventory"
     );
     let mut observations = Vec::new();
@@ -1130,7 +1130,7 @@ async fn worker_matches_frozen_js() {
     }
     assert_eq!(
         observations.len(),
-        168,
+        167,
         "full HTTP, revocation and six-hub inventory"
     );
     if let Some(expected) = expected {
@@ -1155,7 +1155,7 @@ async fn worker_matches_frozen_js() {
     } else {
         panic!("Legacy recording requires the recorded pre-switch revision");
     }
-    println!("168 ordered Worker golden cases passed");
+    println!("167 ordered Worker golden cases passed");
 }
 
 // Assert intentional merged Rust behavior independently of the frozen legacy Worker answers.

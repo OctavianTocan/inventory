@@ -35,8 +35,9 @@ It is its own product: nothing checks it against mymind any more.
    Cloudflare (the user, 2026-10-16): no Cloudflare Access, only the tunnel; Access was removed the same day. The
    hostname is public, so signed-out tunnel visitors get the replica's own plain sign-in page (no mymind name, logo
    or assets, `noindex`), never mymind's recorded one; keep it that way. `node tools/check-hosted.mjs` tests the
-   hosted site as the test user. Google sign-in admits only `OWNER_EMAIL` until per-user libraries exist
-   (`docs/accounts-plan.md`).
+   hosted site as the test user. Google sign-in admits `OWNER_EMAIL` and a verified address at
+   `ALLOWED_GOOGLE_DOMAIN` (default `octaviantocan.com`; set it empty for owner-only). Do not widen that gate
+   further (`docs/accounts-plan.md`).
 
 ## Long-running processes
 

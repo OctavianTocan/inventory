@@ -7,12 +7,14 @@ use std::rc::{Rc, Weak};
 use futures_util::FutureExt;
 use futures_util::future::{LocalBoxFuture, Shared};
 use js_sys::{Object, Reflect};
+use mm_core::auth_store::generated_library;
 use mm_core::hosted::{Hosted, HostedOptions};
 use mm_core::http::{Headers, Response};
 use mm_core::library_rows::{insert_rows, table_digest};
 use mm_core::site::Site;
 use mm_core::sql::{Sql, SqlExt, SqlValue};
 use mm_core::store::Store;
+use mm_core::store_member::{self, profile_from_session};
 use mm_core::{Error, Result};
 use mm_js::{Value, json, obj};
 use wasm_bindgen::JsValue;
@@ -284,6 +286,7 @@ fn push(inner: &Weak<Inner>, target: &str, payload: &Value) {
 impl Library {
     // A signed-in request to the library's server; its own failures answer 500 as `send(res, 500, String(error))`.
     async fn hosted_site(&self, request: &web_sys::Request, library: &str) -> Result<Response> {
+        self.prepare_member(request, library)?;
         let site = self.inner.site(library).await?;
         let mut incoming = request_from(request)?;
         match site.handle(&mut incoming).await {
@@ -295,6 +298,26 @@ impl Library {
                 Ok(Response::send(500, text, &Headers::new()))
             }
         }
+    }
+
+    // Insert the user row of a library created at first sign-in. An imported library, and any library that already
+    // has a user, is left unchanged.
+    fn prepare_member(&self, request: &web_sys::Request, library: &str) -> Result<()> {
+        let header = |name: &str| request.headers().get(name).ok().flatten().unwrap_or_default();
+        let sub = header("x-mymind-sub");
+        let email = header("x-mymind-email");
+        if sub.is_empty() && email.is_empty() {
+            return Ok(());
+        }
+        let profile = profile_from_session(&sub, &email);
+        if !generated_library(&profile.account, library) {
+            return Ok(());
+        }
+        let db = self.inner.db()?.clone();
+        let sql: Rc<dyn Sql> = db;
+        let store = Store::new(sql)?;
+        store_member::ensure_member(&store, &profile)?;
+        Ok(())
     }
 
     fn accept_hub(&self, request: &web_sys::Request, library: &str) -> worker::Result<worker::Response> {
