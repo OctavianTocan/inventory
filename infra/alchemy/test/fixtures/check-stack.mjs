@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import * as Effect from 'effect/Effect';
 
 const fixture = new URL('./record-stack.mjs', import.meta.url).href;
@@ -26,7 +27,7 @@ if (process.env.STACK_FIXTURE_STAGE === 'production') {
   const container = resources.find((resource) => resource.kind === 'container');
   assert.equal(container.props.name, 'mymind-alchemy-staging-media');
   assert.equal(container.props.className, 'Media');
-  assert.equal(container.props.dockerfile, 'rust/container/Dockerfile');
+  assert.equal(container.props.dockerfile, fileURLToPath(new URL('../../../../rust/container/Dockerfile', import.meta.url)));
   assert.equal(container.props.maxInstances, 1);
   const workers = resources.filter((resource) => resource.kind === 'worker');
   assert.deepEqual(workers.map((resource) => resource.props.name), ['mymind-alchemy-staging-worker', 'mymind-alchemy-staging-probe']);

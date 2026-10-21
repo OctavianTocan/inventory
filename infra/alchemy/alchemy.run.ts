@@ -32,7 +32,7 @@ export default Alchemy.Stack(pilot.stack, {
     name: pilot.container_name,
     className: 'Media',
     context: fileURLToPath(ROOT),
-    dockerfile: pilot.containers[0].image,
+    dockerfile: fileURLToPath(new URL(pilot.containers[0].image, ROOT)),
     instanceType: pilot.containers[0].instance_type,
     maxInstances: pilot.containers[0].max_instances,
     publish: { repository: pilot.container_name },
