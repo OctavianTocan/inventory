@@ -59,7 +59,6 @@ private val POST_EDGE = 5.dp
 private val REPOSITORY_EDGE = 4.dp
 private val REPOSITORY_NARROW = 194.dp
 private val REPOSITORY_LABEL = Color(0xFF909CAE)
-private val REPOSITORY_GREEN = Color(0xFF2DBA4E)
 private const val REPOSITORY_RATIO = 164f / 154f
 private const val ARTICLE_COVER_RATIO = 162f / 64f
 private const val POST_MAX_LINES = 25
@@ -318,7 +317,7 @@ private fun RepositoryTile(card: Card) {
                 .fillMaxWidth()
                 .height(maxWidth / REPOSITORY_RATIO + REPOSITORY_EDGE)
                 .clip(shape)
-                .background(REPOSITORY_GREEN)
+                .background(REPOSITORY_ACCENT)
                 .padding(top = REPOSITORY_EDGE)
                 .clip(shape)
                 .background(page.surface)

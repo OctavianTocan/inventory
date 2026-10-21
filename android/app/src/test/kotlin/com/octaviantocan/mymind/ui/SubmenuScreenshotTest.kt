@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -12,9 +13,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.Tag
-import com.octaviantocan.mymind.ui.card.CardSheet
+import com.octaviantocan.mymind.ui.card.CardDetail
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.NewSpaceContent
 import com.octaviantocan.mymind.ui.library.SAME_VIBE_LABEL
@@ -22,8 +25,10 @@ import com.octaviantocan.mymind.ui.library.SPACE_COLORS
 import com.octaviantocan.mymind.ui.library.SearchFilter
 import com.octaviantocan.mymind.ui.library.SpaceListContent
 import com.octaviantocan.mymind.ui.library.testCard
+import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.menu.AddTagsPage
 import com.octaviantocan.mymind.ui.menu.DarkMenuColors
+import com.octaviantocan.mymind.ui.menu.LocalCardMenuAccent
 import com.octaviantocan.mymind.ui.menu.MenuCard
 import com.octaviantocan.mymind.ui.menu.SelectSpacePage
 import com.octaviantocan.mymind.ui.shell.ShellFrame
@@ -54,7 +59,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
         compose.mainClock.advanceTimeBy(SETTLE_MS)
     }
 
-    private fun submenu(name: String, content: @Composable () -> Unit) {
+    private fun submenu(name: String, card: Card = LibrarySamples.grid[1], content: @Composable () -> Unit) {
         render {
             Box(Modifier.fillMaxSize()) {
                 ShellFrame(
@@ -64,12 +69,14 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
                     modifier = Modifier.blur(8.dp),
                     overlay = {
                         PageTheme(PageScheme.Dark) {
-                            CardSheet(LibrarySamples.article, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
+                            CardDetail(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
                         }
                         Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim))
                     },
                 ) { SampleEverything() }
-                MenuCard(Modifier.align(Alignment.BottomCenter)) { content() }
+                CompositionLocalProvider(LocalCardMenuAccent provides cardAccent(card)) {
+                    MenuCard(Modifier.align(Alignment.BottomCenter)) { content() }
+                }
             }
         }
         capture(name)
@@ -93,6 +100,12 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
     @Test
     fun addTagsAdded() = submenu("S12_add_tags_added") {
         AddTagsPage(TAGS, RECENT, onClose = {}, onSave = {}, initialTags = listOf("recipes", "weekend", "to try"), focusOnOpen = false)
+    }
+
+    @Test
+    fun addTagsPaleCardAccent() = submenu("S12_add_tags_pale_accent",
+        LibrarySamples.video.copy(cover = Cover(width = 1280, height = 720, dominantColor = "#ffe3b5"))) {
+        AddTagsPage(TAGS, RECENT, onClose = {}, onSave = {}, focusOnOpen = false)
     }
 
     @Test
@@ -164,7 +177,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
         render {
             ShellFrame(Tab.Everything, onSelectTab = {}, scheme = PageScheme.Dark, overlay = {
                 PageTheme(PageScheme.Dark) {
-                    CardSheet(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons(), onRemoveTag = {})
+                    CardDetail(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons(), onRemoveTag = {})
                 }
             }) { SampleEverything() }
         }

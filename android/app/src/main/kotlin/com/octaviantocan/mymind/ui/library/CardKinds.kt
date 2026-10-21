@@ -34,6 +34,7 @@ enum class TileKind {
 
 private const val PINNED_FLAG = 512
 private const val READABLE_FLAG = 1 shl 1
+internal val REPOSITORY_ACCENT = Color(0xFF2DBA4E)
 
 /** @return How [card] is drawn in the grid. */
 fun tileKind(card: Card): TileKind = when (card.type) {
@@ -97,6 +98,20 @@ fun postColor(type: String): Color = when (type) {
     "MastodonPost" -> Color(0xFF6364FF)
     "BlueskyPost" -> Color(0xFF1185FE)
     else -> Color(0xFF626C7A)
+}
+
+/**
+ * Reuses the colour already shown on a card's tile for its related controls.
+ *
+ * @param card Card whose contextual sheet is opening.
+ * @return Its platform edge, repository edge or picture colour; null for an uncoloured tile.
+ */
+fun cardAccent(card: Card): Color? = when (tileKind(card)) {
+    TileKind.Post -> postColor(card.type)
+    TileKind.Repository -> REPOSITORY_ACCENT
+    TileKind.Article -> if (card.cover != null) parseHexColor(card.cover.dominantColor ?: card.blob?.dominantColor) else null
+    TileKind.Media, TileKind.Video -> parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor)
+    else -> null
 }
 
 /**

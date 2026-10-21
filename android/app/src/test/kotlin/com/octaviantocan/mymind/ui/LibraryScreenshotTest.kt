@@ -6,19 +6,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.SemanticsMatcher
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.data.Card
-import com.octaviantocan.mymind.ui.card.CardSheet
+import com.octaviantocan.mymind.ui.card.CardDetail
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.SearchType
 import com.octaviantocan.mymind.ui.library.SerendipityContent
@@ -27,9 +24,11 @@ import com.octaviantocan.mymind.ui.library.SpaceContent
 import com.octaviantocan.mymind.ui.library.SpaceListContent
 import com.octaviantocan.mymind.ui.library.SpacesState
 import com.octaviantocan.mymind.ui.library.testCard
+import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.menu.CardMenuContent
 import com.octaviantocan.mymind.ui.menu.CardMenuIcons
 import com.octaviantocan.mymind.ui.menu.DarkMenuColors
+import com.octaviantocan.mymind.ui.menu.LocalCardMenuAccent
 import com.octaviantocan.mymind.ui.menu.cardMenuItems
 import com.octaviantocan.mymind.ui.menu.defaultCardMenuIcons
 import com.octaviantocan.mymind.ui.shell.ShellFrame
@@ -150,7 +149,7 @@ class LibraryScreenshotTest(private val dark: Boolean) {
         val scroll = ScrollState(0)
         shell(overlay = {
             PageTheme(PageScheme.Dark) {
-                CardSheet(LibrarySamples.article, onClose = {}, onMenu = {}, scrollState = scroll, headerIcons = flatSizedCardHeaderIcons())
+                CardDetail(LibrarySamples.article, onClose = {}, onMenu = {}, scrollState = scroll, headerIcons = flatSizedCardHeaderIcons())
             }
         }) { SampleEverything() }
         capture("S10_card_rest")
@@ -163,18 +162,14 @@ class LibraryScreenshotTest(private val dark: Boolean) {
     }
 
     @Test
-    fun pullyCardSheetHeights() {
+    fun fullScreenCardDetail() {
         val scheme = if (dark) PageScheme.Dark else PageScheme.Light
         render {
             ShellFrame(Tab.Everything, onSelectTab = {}, scheme = scheme, overlay = {
-                PageTheme(scheme) { CardSheet(LibrarySamples.article, onClose = {}, onMenu = {}) }
+                PageTheme(scheme) { CardDetail(LibrarySamples.article, onClose = {}, onMenu = {}) }
             }) { SampleEverything() }
         }
-        capture("pully_card_half")
-        compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Card details"))
-            .performSemanticsAction(SemanticsActions.Expand) { it() }
-        compose.mainClock.advanceTimeBy(SETTLE_MS)
-        capture("pully_card_expanded")
+        capture("card_detail")
     }
 
     private fun menu(card: Card, name: String, icons: @Composable () -> CardMenuIcons = { flatCardMenuIcons() }) {
@@ -187,12 +182,14 @@ class LibraryScreenshotTest(private val dark: Boolean) {
                     modifier = Modifier.blur(8.dp),
                     overlay = {
                         PageTheme(PageScheme.Dark) {
-                            CardSheet(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
+                            CardDetail(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
                         }
                         Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim))
                     },
                 ) { SampleEverything() }
-                CardMenuContent(cardMenuItems(card, null), onSelect = {}, modifier = Modifier.align(Alignment.BottomCenter), icons = icons())
+                CompositionLocalProvider(LocalCardMenuAccent provides cardAccent(card)) {
+                    CardMenuContent(cardMenuItems(card, null), onSelect = {}, modifier = Modifier.align(Alignment.BottomCenter), icons = icons())
+                }
             }
         }
         capture(name)
@@ -206,6 +203,12 @@ class LibraryScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun cardMenuVideo() = menu(LibrarySamples.video, "S11_card_menu_video")
+
+    @Test
+    fun cardMenuPost() = menu(LibrarySamples.grid[1], "S11_card_menu_post") { defaultCardMenuIcons() }
+
+    @Test
+    fun cardMenuRepository() = menu(LibrarySamples.grid[5], "S11_card_menu_repository") { defaultCardMenuIcons() }
 
     /** Renders the shipped icons; the files are written for the machine's owner and are never looked at by the agent. */
     @Test

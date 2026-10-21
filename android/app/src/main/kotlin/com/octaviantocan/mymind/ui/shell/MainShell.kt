@@ -45,9 +45,10 @@ import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.uploadFileOf
-import com.octaviantocan.mymind.ui.card.CardSheetDialog
+import com.octaviantocan.mymind.ui.card.CardDetailDialog
 import com.octaviantocan.mymind.ui.describe
 import com.octaviantocan.mymind.ui.errors.ApiErrorDialog
+import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.library.EverythingScreen
 import com.octaviantocan.mymind.ui.library.LibraryViewModel
 import com.octaviantocan.mymind.ui.library.NewSpaceDialog
@@ -175,7 +176,7 @@ fun MainShell(
                 opened?.let { open ->
                     key(open.card.id) {
                         PageTheme(scheme) {
-                            CardSheetDialog(
+                            CardDetailDialog(
                                 open.card,
                                 onClose = { opened = null },
                                 onMenu = { openMenu(open.card, open.spaceId) },
@@ -251,6 +252,7 @@ fun MainShell(
     if (menuOpen && target != null) {
         CardMenuSheet(
             items = cardMenuItems(target.card, target.spaceId, features),
+            accent = cardAccent(target.card),
             onSelect = { item ->
                 scope.launch {
                     val opensSubmenu = !item.locked && (item.action == CardMenuAction.AddTags || item.action == CardMenuAction.AddToSpace)

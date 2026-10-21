@@ -8,13 +8,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.click
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
-import com.octaviantocan.mymind.ui.card.CardSheet
+import androidx.compose.ui.test.swipeDown
+import com.octaviantocan.mymind.ui.card.CardDetail
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
 import kotlinx.coroutines.runBlocking
@@ -30,7 +35,7 @@ import org.robolectric.annotation.GraphicsMode
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = PHONE_QUALIFIERS, fontScale = PHONE_FONT_SCALE)
-class CardSheetInteractionTest {
+class CardDetailInteractionTest {
     @get:Rule val compose = createComposeRule()
     private val opened = mutableStateOf(true)
     private var closed = 0
@@ -42,7 +47,7 @@ class CardSheetInteractionTest {
         compose.setPhoneContent(false) {
             back = checkNotNull(LocalOnBackPressedDispatcherOwner.current).onBackPressedDispatcher
             PageTheme(PageScheme.Dark) {
-                if (opened.value) CardSheet(
+                if (opened.value) CardDetail(
                     LibrarySamples.article.copy(description = "Long synthetic card content.\n".repeat(100)),
                     onClose = { closed++; opened.value = false },
                     onMenu = {},
@@ -56,83 +61,65 @@ class CardSheetInteractionTest {
     }
 
     @Test
-    fun opensAtHalfHeightAndCanExpandAndCollapse() {
+    fun readerUsesTheFullWindowWithoutSheetStops() {
         open()
-        val normal = panel.fetchSemanticsNode().boundsInRoot.top
-        assertTrue(normal > PHONE_HEIGHT_PX * 0.4f)
-        assertTrue(normal < PHONE_HEIGHT_PX * 0.65f)
-        panel.performSemanticsAction(SemanticsActions.Expand) { it() }
-        compose.mainClock.advanceTimeBy(1500)
-        assertTrue(panel.fetchSemanticsNode().boundsInRoot.top < normal / 2f)
-        panel.performSemanticsAction(SemanticsActions.Collapse) { it() }
-        compose.mainClock.advanceTimeBy(1500)
-        assertEquals(normal, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
+        val node = panel.fetchSemanticsNode()
+        assertEquals(0f, node.boundsInRoot.top, 2f)
+        assertEquals(PHONE_HEIGHT_PX.toFloat(), node.boundsInRoot.bottom, 2f)
+        assertTrue(SemanticsActions.Expand !in node.config)
+        assertTrue(SemanticsActions.Collapse !in node.config)
         assertEquals(0, closed)
     }
 
     @Test
-    fun dismissNotifiesTheShellOnlyAfterAnimatingOutAndOnlyOnce() {
+    fun accessibilityDismissClosesTheCard() {
         open()
         panel.performSemanticsAction(SemanticsActions.Dismiss) { it() }
-        panel.performSemanticsAction(SemanticsActions.Dismiss) { it() }
-        assertEquals(0, closed)
-        compose.mainClock.advanceTimeBy(500)
+        compose.change {}
+        compose.mainClock.advanceTimeBy(100)
         compose.waitForIdle()
         assertEquals(1, closed)
         panel.assertDoesNotExist()
     }
 
     @Test
-    fun swipingTheGrabberDownDismissesTheCard() {
+    fun pullingDownOnTheHeaderDoesNotMoveOrDismissTheReader() {
         open()
         panel.performTouchInput {
             swipe(Offset(centerX, 30f), Offset(centerX, 600f), durationMillis = 300)
         }
         compose.mainClock.advanceTimeBy(1500)
         compose.waitForIdle()
-        assertEquals(1, closed)
-        panel.assertDoesNotExist()
+        assertEquals(0, closed)
+        assertEquals(0f, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
+        compose.onNodeWithContentDescription("Close card").assertIsDisplayed()
     }
 
     @Test
-    fun scrollingContentToItsTopDoesNotDragTheSheetUntilTheNextSwipe() {
+    fun scrollingContentBackToItsTopKeepsTheReaderInPlace() {
         open()
-        panel.performSemanticsAction(SemanticsActions.Expand) { it() }
-        compose.mainClock.advanceTimeBy(1500)
-        val expanded = panel.fetchSemanticsNode().boundsInRoot.top
+        val body = compose.onNode(hasScrollAction() and !hasText(LibrarySamples.article.title!!))
         compose.runOnIdle { runBlocking { scroll.scrollTo(100) } }
-        panel.performTouchInput {
-            swipe(Offset(centerX, 500f), Offset(centerX, 1000f), durationMillis = 1000)
-        }
+        body.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, -1000f) }
+        compose.mainClock.advanceTimeBy(1500)
+        body.performTouchInput { swipeDown(durationMillis = 500) }
         compose.mainClock.advanceTimeBy(1500)
         assertEquals(0, scroll.value)
-        assertEquals(expanded, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
-
-        panel.performTouchInput {
-            swipe(Offset(centerX, 500f), Offset(centerX, 1200f), durationMillis = 500)
-        }
-        compose.mainClock.advanceTimeBy(1500)
-        assertTrue(panel.fetchSemanticsNode().boundsInRoot.top > expanded + 200f)
+        assertEquals(0f, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
         assertEquals(0, closed)
     }
 
     @Test
-    fun tappingOutsideSlidesTheCardOut() {
+    fun theReaderShowsOneTitle() {
         open()
-        compose.onRoot().performTouchInput { click(Offset(centerX, 300f)) }
-        assertEquals(0, closed)
-        compose.mainClock.advanceTimeBy(500)
-        compose.waitForIdle()
-        assertEquals(1, closed)
-        panel.assertDoesNotExist()
+        compose.onAllNodesWithText(LibrarySamples.article.title!!).assertCountEquals(1)
     }
 
     @Test
-    fun systemBackSlidesTheCardOut() {
+    fun systemBackClosesTheCard() {
         open()
-        compose.runOnUiThread { back.onBackPressed() }
-        assertEquals(0, closed)
-        compose.mainClock.advanceTimeBy(500)
+        compose.change { back.onBackPressed() }
+        compose.mainClock.advanceTimeBy(100)
         compose.waitForIdle()
         assertEquals(1, closed)
         panel.assertDoesNotExist()
