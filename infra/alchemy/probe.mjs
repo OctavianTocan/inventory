@@ -61,7 +61,8 @@ export async function smoke(env) {
     if (prepared.status === 200) expect(await call(`/objects/${encodeURIComponent(card)}/restore`, { method: 'POST', headers }), 200, 'repeat synthetic object restore');
     expect(await call(`/objects/${encodeURIComponent(card)}`, { headers }), 200, 'persisted Library read');
     const markerKey = 'pilot/repeatability.json';
-    const previous = await env.RESULTS.get(markerKey, 'json');
+    const previousObject = await env.RESULTS.get(markerKey);
+    const previous = previousObject ? await previousObject.json() : null;
     await env.RESULTS.put(markerKey, JSON.stringify({ runs: (previous?.runs ?? 0) + 1, lastRun: env.PILOT_RUN }));
     return { passed: true, checks: ['signed-out-denied', 'admin-denied', 'password-session', 'authenticated-read', 'r2-upload', 'media-container', 'library-read'], completedRuns: (previous?.runs ?? 0) + 1 };
   } finally {
@@ -78,7 +79,8 @@ export default {
   fetch() { return new Response('Private scheduled probe', { status: 404 }); },
   async scheduled(_event, env) {
     const key = `pilot/results/${env.PILOT_RUN}.json`;
-    const previous = await env.RESULTS.get(key, 'json');
+    const previousObject = await env.RESULTS.get(key);
+    const previous = previousObject ? await previousObject.json() : null;
     if (previous?.passed || previous?.attempts >= 2) return;
     const result = { run: env.PILOT_RUN, attempts: (previous?.attempts ?? 0) + 1, timestamp: new Date().toISOString() };
     try {

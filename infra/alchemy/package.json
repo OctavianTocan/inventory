@@ -14,7 +14,9 @@
     "probe": "node scripts/run.mjs probe",
     "probe:result": "node scripts/probe-result.mjs",
     "probe:stop": "node scripts/run.mjs stop",
-    "destroy": "node scripts/run.mjs destroy"
+    "destroy": "node scripts/run.mjs destroy",
+    "audit": "node scripts/live-audit.mjs audit",
+    "cleanup-images": "node scripts/live-audit.mjs cleanup-images"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.5",
