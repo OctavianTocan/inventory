@@ -10,7 +10,10 @@ function fixture({ mediaStatus = 201, readStatus = 200 } = {}) {
   const env = {
     ADMIN_TOKEN: 'synthetic-admin', PILOT_PASSWORD: 'synthetic-password', PILOT_HASH: 'synthetic-hash', PILOT_RUN: 'synthetic-first',
     RESULTS: {
-      async get(key) { return objects.has(key) ? JSON.parse(objects.get(key)) : null; },
+      async get(key, options) {
+        assert.ok(options === undefined || (options !== null && typeof options === 'object'), 'R2 get expects an options object');
+        return objects.has(key) ? { json: async () => JSON.parse(objects.get(key)) } : null;
+      },
       async put(key, value) { objects.set(key, value); },
     },
     TARGET: {
