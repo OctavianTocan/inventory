@@ -94,12 +94,25 @@ test('R2 authentication failures still abort without retrying', () => {
   assert.match(result.stderr, /Private R2 result read failed with HTTP 403/);
 });
 
+test('private results can arrive after the former eleven-minute deadline', () => {
+  const result = runReader(`
+    if (requests === 1) {
+      now = 12 * 60_000;
+      return new Response(null, { status: 404 });
+    }
+    assert.equal(requests, 2);
+    return Response.json({ run: 'synthetic-run', passed: true, attempts: 1 });
+  `);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { run: 'synthetic-run', passed: true, attempts: 1 });
+});
+
 test('request timeouts do not extend the private result polling deadline', () => {
   const result = runReader(`
     assert.equal(requests, 1);
-    now = 11 * 60_000;
+    now = 26 * 60_000;
     throw new DOMException('Synthetic request timed out', 'TimeoutError');
   `);
   assert.equal(result.status, 1, result.stderr);
-  assert.match(result.stderr, /No successful private smoke result within 11 minutes/);
+  assert.match(result.stderr, /No successful private smoke result within 26 minutes; R2 reads: 0 not found, 1 timed out/);
 });
