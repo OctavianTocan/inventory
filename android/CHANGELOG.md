@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 (5), 2026-10-21
+- Open cards in Pully-style sheets that expand, scroll and close with a drag.
+- Close and action controls sit inside the card sheet header.
+- Read one clear title without a second overlapping copy.
+
 ## 0.3.1 (4), 2026-10-18
 - Pictures and videos no longer fail to upload on a slow connection.
 - A shared file keeps uploading after you close the share sheet or leave the app, with a notification while it uploads.
