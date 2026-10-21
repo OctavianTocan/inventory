@@ -11,10 +11,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.data.Card
-import com.octaviantocan.mymind.ui.card.CardHeaderState
 import com.octaviantocan.mymind.ui.card.CardSheet
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.SearchType
@@ -143,25 +146,38 @@ class LibraryScreenshotTest(private val dark: Boolean) {
     }
 
     @Test
-    fun cardHeaderStates() {
-        val header = CardHeaderState()
+    fun cardHeaderRemainsWhileScrolling() {
         val scroll = ScrollState(0)
         shell(overlay = {
             PageTheme(PageScheme.Dark) {
-                CardSheet(LibrarySamples.article, onClose = {}, onMenu = {}, headerState = header, scrollState = scroll, headerIcons = flatSizedCardHeaderIcons())
+                CardSheet(LibrarySamples.article, onClose = {}, onMenu = {}, scrollState = scroll, headerIcons = flatSizedCardHeaderIcons())
             }
         }) { SampleEverything() }
         capture("S10_card_rest")
         compose.change { runBlocking { scroll.scrollTo(SCROLL_DOWN_PX) } }
         compose.mainClock.advanceTimeBy(SETTLE_MS)
-        capture("S10_card_hidden")
+        capture("S10_card_scrolled_down")
         compose.change { runBlocking { scroll.scrollTo(SCROLL_UP_PX) } }
         compose.mainClock.advanceTimeBy(SETTLE_MS)
-        capture("S10_card_shown")
+        capture("S10_card_scrolled_up")
+    }
+
+    @Test
+    fun pullyCardSheetHeights() {
+        val scheme = if (dark) PageScheme.Dark else PageScheme.Light
+        render {
+            ShellFrame(Tab.Everything, onSelectTab = {}, scheme = scheme, overlay = {
+                PageTheme(scheme) { CardSheet(LibrarySamples.article, onClose = {}, onMenu = {}) }
+            }) { SampleEverything() }
+        }
+        capture("pully_card_half")
+        compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Card details"))
+            .performSemanticsAction(SemanticsActions.Expand) { it() }
+        compose.mainClock.advanceTimeBy(SETTLE_MS)
+        capture("pully_card_expanded")
     }
 
     private fun menu(card: Card, name: String, icons: @Composable () -> CardMenuIcons = { flatCardMenuIcons() }) {
-        val header = CardHeaderState()
         render {
             Box(Modifier.fillMaxSize()) {
                 ShellFrame(
@@ -171,7 +187,7 @@ class LibraryScreenshotTest(private val dark: Boolean) {
                     modifier = Modifier.blur(8.dp),
                     overlay = {
                         PageTheme(PageScheme.Dark) {
-                            CardSheet(card, onClose = {}, onMenu = {}, headerState = header, headerIcons = flatSizedCardHeaderIcons())
+                            CardSheet(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
                         }
                         Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim))
                     },

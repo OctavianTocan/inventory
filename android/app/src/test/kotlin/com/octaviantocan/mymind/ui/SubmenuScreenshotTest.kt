@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.Tag
-import com.octaviantocan.mymind.ui.card.CardHeaderState
 import com.octaviantocan.mymind.ui.card.CardSheet
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.NewSpaceContent
@@ -56,7 +55,6 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
     }
 
     private fun submenu(name: String, content: @Composable () -> Unit) {
-        val header = CardHeaderState()
         render {
             Box(Modifier.fillMaxSize()) {
                 ShellFrame(
@@ -66,7 +64,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
                     modifier = Modifier.blur(8.dp),
                     overlay = {
                         PageTheme(PageScheme.Dark) {
-                            CardSheet(LibrarySamples.article, onClose = {}, onMenu = {}, headerState = header, headerIcons = flatSizedCardHeaderIcons())
+                            CardSheet(LibrarySamples.article, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
                         }
                         Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim))
                     },
@@ -166,7 +164,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
         render {
             ShellFrame(Tab.Everything, onSelectTab = {}, scheme = PageScheme.Dark, overlay = {
                 PageTheme(PageScheme.Dark) {
-                    CardSheet(card, onClose = {}, onMenu = {}, headerState = CardHeaderState(), headerIcons = flatSizedCardHeaderIcons(), onRemoveTag = {})
+                    CardSheet(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons(), onRemoveTag = {})
                 }
             }) { SampleEverything() }
         }

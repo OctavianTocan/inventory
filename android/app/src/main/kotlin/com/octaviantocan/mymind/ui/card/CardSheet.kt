@@ -1,44 +1,49 @@
 package com.octaviantocan.mymind.ui.card
 
+import android.view.WindowManager
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.library.CardPicture
@@ -47,64 +52,113 @@ import com.octaviantocan.mymind.ui.library.cardHeading
 import com.octaviantocan.mymind.ui.library.noteText
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 
-/** Gap between the status bar and the top of an opened card. */
-val CARD_SHEET_TOP_GAP = 24.dp
+private val BODY_SIDE = 16.dp
 
-private val SHEET_RADIUS = 10.dp
-private val BODY_SIDE = 30.dp
-
-/**
- * An opened card: a sheet over the library and the tab bar, starting 24 dp under the status bar, with the card
- * header over the card's content. The header's backdrop takes the native chrome colour; at rest its icons contrast
- * with the card page instead.
- *
- * @param card Card to show.
- * @param onClose Called when the caret is tapped.
- * @param onMenu Called when the menu button is tapped.
- * @param modifier Modifier for the full-screen box holding the sheet.
- * @param headerState Scroll tracking that decides whether the header shows.
- * @param scrollState Scroll position of the card's content.
- * @param headerIcons Pictures of the header buttons.
- * @param onRemoveTag Called with a tag whose chip was tapped; null draws the tags as one line of text.
- */
+/** Pully's edge-to-edge modal window; card menus opened afterward remain above it. */
 @Composable
-fun CardSheet(
+fun CardSheetDialog(card: Card, onClose: () -> Unit, onMenu: () -> Unit, onRemoveTag: ((Tag) -> Unit)? = null, actionsVisible: Boolean = false) {
+    val scope = rememberCoroutineScope()
+    val motion = rememberSheetMotionEnabled()
+    val haptic = rememberSheetHaptics()
+    val position = remember { CardSheetPosition(haptic::land, haptic::tick) }
+    val latestClose by rememberUpdatedState(onClose)
+    val actionsProgress by animateFloatAsState(if (actionsVisible) 1f else 0f, label = "cardActions")
+    Dialog(
+        onDismissRequest = { position.dismiss(scope, motion) { latestClose() } },
+        properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        val view = LocalView.current
+        val light = MymindTheme.page.document.luminance() > 0.5f
+        SideEffect {
+            val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
+            window.setDimAmount(0f)
+            window.setWindowAnimations(0)
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            window.isNavigationBarContrastEnforced = false
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = light
+        }
+        Box(Modifier.fillMaxSize()) {
+            CardSheet(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress), onRemoveTag = onRemoveTag, position = position)
+            if (actionsProgress > 0f) Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim.copy(alpha = DarkMenuColors.scrim.alpha * actionsProgress)))
+        }
+    }
+}
+
+/** Pully's sheet panel: content-sized up to half the window, a fixed header, then a scrollable page. */
+@Composable
+internal fun CardSheet(
     card: Card,
     onClose: () -> Unit,
     onMenu: () -> Unit,
     modifier: Modifier = Modifier,
-    headerState: CardHeaderState = remember(card.id) { CardHeaderState() },
     scrollState: ScrollState = rememberScrollState(),
     headerIcons: CardHeaderIcons = defaultCardHeaderIcons(),
     onRemoveTag: ((Tag) -> Unit)? = null,
+    position: CardSheetPosition? = null,
 ) {
-    val page = MymindTheme.page
-    val density = LocalDensity.current.density
-    LaunchedEffect(scrollState, headerState, density) {
-        snapshotFlow { (scrollState.value / density).toInt() }.collect(headerState::onScroll)
-    }
-    Box(
-        modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(top = CARD_SHEET_TOP_GAP)
-            .clip(RoundedCornerShape(topStart = SHEET_RADIUS, topEnd = SHEET_RADIUS))
-            .background(page.document),
-    ) {
-        Column(Modifier.fillMaxSize().verticalScroll(scrollState).navigationBarsPadding()) {
-            Spacer(Modifier.height(CARD_HEADER_HEIGHT))
-            CardBody(card, onRemoveTag)
+    val colors = if (MymindTheme.page.document.luminance() < 0.5f) DarkCardSheetColors else LightCardSheetColors
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val motion = rememberSheetMotionEnabled()
+    val haptic = rememberSheetHaptics()
+    val sheet = position ?: remember { CardSheetPosition(haptic::land, haptic::tick) }
+    val latestClose by rememberUpdatedState(onClose)
+    val requestDismiss = { sheet.dismiss(scope, motion) { latestClose() } }
+    val latestDismiss by rememberUpdatedState(requestDismiss)
+    val latestMotion by rememberUpdatedState(motion)
+    val speed = with(density) { 200.dp.toPx() }
+    val connection = remember(sheet, scope, speed) { CardSheetScroll(sheet, scope, speed, { latestMotion }, { latestDismiss() }) }
+    val drag = rememberDraggableState { sheet.dragBy(it) }
+    val top = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
+    val screen = LocalConfiguration.current.screenHeightDp.dp
+    val tall = (screen - maxOf(top, 16.dp) - 44.dp).coerceAtLeast(1.dp)
+    val window = LocalWindowInfo.current.containerSize.height
+    sheet.window = if (window > 0) window.toFloat() else with(density) { screen.toPx() }
+    sheet.updateHalf(sheet.window / 2f)
+    LaunchedEffect(sheet.half) { sheet.follow(scope, motion) }
+    val keyboard = WindowInsets.ime.getBottom(density) > 0
+    val latestKeyboard by rememberUpdatedState(keyboard)
+    val focus = LocalFocusManager.current
+    LaunchedEffect(keyboard) { if (keyboard) sheet.lift(scope, latestMotion) }
+    LaunchedEffect(sheet.tall) { if (!sheet.tall && latestKeyboard) focus.clearFocus() }
+    BackHandler { requestDismiss() }
+    CompositionLocalProvider(LocalCardSheetColors provides colors) {
+        Box(modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = sheet.scrim }.background(colors.scrim)
+                .clickable(remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClickLabel = "Close card", onClick = { haptic.tick(); requestDismiss() }))
+            Box(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(tall)
+                    .onSizeChanged { sheet.measured(it.height, scope, motion) }
+                    .graphicsLayer {
+                        translationY = sheet.shift(size.height)
+                        alpha = sheet.reveal
+                        val radius = 2.dp.toPx() * (1f - sheet.reveal)
+                        renderEffect = if (radius > 0f) BlurEffect(radius, radius, TileMode.Decal) else null
+                    }
+                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).background(colors.paper)
+                    .semantics {
+                        paneTitle = "Card details"
+                        dismiss { requestDismiss(); true }
+                        expand { sheet.expand(scope, true, latestMotion); true }
+                        collapse { sheet.expand(scope, false, latestMotion); true }
+                    }
+                    .nestedScroll(connection)
+                    .draggable(drag, Orientation.Vertical, enabled = !sheet.closing, onDragStopped = { velocity -> sheet.settle(scope, velocity, speed, latestMotion, requestDismiss) }),
+            ) {
+                Column(Modifier.fillMaxWidth().heightIn(max = tall).imePadding().onSizeChanged { sheet.measuredContent(it.height, scope, motion) }) {
+                    Box(Modifier.padding(top = 10.dp, bottom = 20.dp).align(Alignment.CenterHorizontally).size(36.dp, 4.dp).clip(CircleShape).background(colors.grabber))
+                    CardHeader(cardHeading(card), onClose = requestDismiss, onMenu = onMenu, icons = headerIcons, enabled = !sheet.closing)
+                    val fade = with(density) { 20.dp.toPx() }
+                    Column(Modifier.fillMaxWidth().weight(1f, fill = false)
+                        .sheetEdgeFade(color = colors.paper, topStrength = { (scrollState.value / fade).coerceIn(0f, 1f) })
+                        .verticalScroll(scrollState).navigationBarsPadding()) {
+                        CardBody(card, onRemoveTag)
+                    }
+                }
+            }
         }
-        CardHeader(
-            title = cardHeading(card),
-            color = MymindTheme.chrome.page,
-            state = headerState,
-            onClose = onClose,
-            page = page.document,
-            onMenu = onMenu,
-            icons = headerIcons,
-        )
     }
 }
 
@@ -139,25 +193,17 @@ private fun TagChips(tags: List<Tag>, style: TextStyle, onRemove: (Tag) -> Unit)
     }
 }
 
-/** The card's own content: picture, centred title, text and tags. */
+/** The card's own content: picture, text and tags. The sheet header supplies the title. */
 @Composable
 private fun CardBody(card: Card, onRemoveTag: ((Tag) -> Unit)?) {
     val page = MymindTheme.page
     val fonts = MymindTheme.fonts
-    val body = TextStyle(color = page.text, fontSize = 19.sp, lineHeight = 1.5.em, fontFamily = FontFamily.Serif)
+    val body = TextStyle(color = LocalCardSheetColors.current.text, fontSize = 19.sp, lineHeight = 1.5.em, fontFamily = FontFamily.Serif)
     Column(Modifier.fillMaxWidth().padding(horizontal = BODY_SIDE, vertical = 30.dp)) {
         val kind = tileKind(card)
         if (kind == TileKind.Media || kind == TileKind.Video) {
             CardPicture(card, play = kind == TileKind.Video)
             Spacer(Modifier.height(24.dp))
-        }
-        if (kind != TileKind.Note) {
-            Text(
-                cardHeading(card),
-                Modifier.fillMaxWidth(),
-                style = TextStyle(color = page.text, fontSize = 31.sp, lineHeight = 1.06.em, fontFamily = fonts.louize, textAlign = TextAlign.Center),
-            )
-            Spacer(Modifier.height(30.dp))
         }
         val text = if (kind == TileKind.Note) noteText(card) else listOfNotNull(card.description, card.note).joinToString("\n\n")
         if (text.isNotBlank()) Text(text, style = body)
