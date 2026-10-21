@@ -19,6 +19,7 @@ pub mod parse_args;
 pub mod tool_auth_user;
 pub mod tool_capture_fixtures;
 pub mod tool_embed_library;
+pub mod tool_enrich_library;
 pub mod tool_import_hosted;
 pub mod tool_migrate_media;
 pub mod tool_seed_db;

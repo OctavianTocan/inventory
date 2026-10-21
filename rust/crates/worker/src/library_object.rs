@@ -341,6 +341,7 @@ impl Library {
 impl worker::DurableObject for Library {
     fn new(state: State, env: worker::Env) -> Self {
         crate::runtime::configure(&env);
+        crate::runtime::bind_keepalive(&state);
         let db = DoSql::open(&state);
         if let Ok(pair) = WebSocketRequestResponsePair::new(PING, PING) {
             state.set_websocket_auto_response(&pair);

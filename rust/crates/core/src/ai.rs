@@ -96,12 +96,14 @@ pub struct AiError {
     pub service: Option<Service>,
     /// The final HTTP status, when there was one.
     pub status: Option<u16>,
+    /// `Retry-After` on a final 429, in milliseconds, capped at 30 seconds.
+    pub retry_after_ms: Option<u64>,
     invalid: bool,
 }
 
 impl AiError {
     fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into(), service: None, status: None, invalid: false }
+        Self { message: message.into(), service: None, status: None, retry_after_ms: None, invalid: false }
     }
 
     fn service(message: impl Into<String>, service: Service) -> Self {
@@ -403,6 +405,12 @@ fn status_text(status: u16) -> &'static str {
 fn header_ci(headers: &Headers, name: &str) -> Option<String> {
     let values: Vec<&str> = headers.iter().filter(|(key, _)| key.eq_ignore_ascii_case(name)).map(|(_, value)| value).collect();
     (!values.is_empty()).then(|| values.join(", "))
+}
+
+// `Retry-After` as milliseconds, capped at 30s, matching the retry delay.
+fn retry_after_ms(headers: &Headers) -> Option<u64> {
+    let seconds = string_to_number(&header_ci(headers, "retry-after")?);
+    (seconds.is_finite() && seconds >= 0.0).then(|| (seconds.min(30.0) * 1000.0) as u64)
 }
 
 struct Deadline {
@@ -738,10 +746,11 @@ impl<'a> Ai<'a> {
                 attempt += 1;
                 continue;
             }
+            let retry_after_ms = (status == 429).then(|| retry_after_ms(&response.headers)).flatten();
             let raw = read_text(&mut deadline, response.body).await.unwrap_or_default();
             let detail = clip(Some(&redact(&error_detail_text(&raw).unwrap_or_else(|| "undefined".into()))), 300);
             let detail = if detail.is_empty() { status_text(status).to_owned() } else { detail };
-            return Err(AiError { status: Some(status), ..AiError::service(format!("{name} {status}: {detail}"), service) });
+            return Err(AiError { status: Some(status), retry_after_ms, ..AiError::service(format!("{name} {status}: {detail}"), service) });
         }
     }
 

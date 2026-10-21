@@ -222,7 +222,7 @@ enum Reply {
 
 async fn route(request: web_sys::Request, env: Env) -> Result<Reply> {
     runtime::configure(&env);
-    let vars = runtime::strings(env.as_ref());
+    let vars = runtime::bindings(&env);
     if vars.get("AUTH").map(String::as_str) != Some("google") {
         return Ok(Reply::Built(text(503, "This server has no sign-in configured.", &Headers::new())));
     }

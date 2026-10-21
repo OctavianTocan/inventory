@@ -8,6 +8,7 @@ use mm_js::{Value, json, obj};
 
 use crate::ai::{Ai, AiImage, AiItem, VocabularyEntry};
 use crate::ai_tags::relevant_tag;
+use crate::backfill::{self, Estimate, MediaImages, Report};
 use crate::capture_link::{CaptureOptions, capture_link};
 use crate::host::{Fetch, Media, MediaUser, Resource, Screenshot};
 use crate::search_document::analysis_item;
@@ -57,6 +58,23 @@ fn env_set(name: &str) -> bool {
 fn loopback(name: &str) -> bool {
     let Some(address) = runtime::env(name) else { return false };
     mm_js::url::parse(&address, None).is_some_and(|parsed| ["127.0.0.1", "localhost", "[::1]"].contains(&parsed.host_str().unwrap_or("")))
+}
+
+/// Whether hosted AI may run: `GEMINI_API_KEY` is set, and in offline mode every AI base URL is a loopback address.
+///
+/// # Arguments
+/// * `offline` - Allow only loopback AI endpoints.
+pub fn ai_configured(offline: bool) -> bool {
+    if !env_set("GEMINI_API_KEY") {
+        return false;
+    }
+    let typesafe = if env_set("TYPESAFE_API_KEY") { &["TYPESAFE_BASE_URL"][..] } else { &[] };
+    !offline || ["GEMINI_BASE_URL", "AI_CHAT_BASE_URL"].iter().chain(typesafe).all(|name| loopback(name))
+}
+
+// A summary the user wrote, or one imported from their library, is not replaced by a later analysis.
+fn summary_owned(data: &Value, extras: &Value) -> bool {
+    extras.get("summaryEdited").truthy() || (data.get("summary").truthy() && extras.get("summarySource").as_str() != Some("ai"))
 }
 
 fn parse(text: &str) -> Result<Value> {
@@ -115,11 +133,31 @@ impl Enrichment {
     /// loopback address.
     pub fn enabled(&self) -> bool {
         let options = &self.0.options;
-        if !env_set("GEMINI_API_KEY") || options.readonly {
-            return false;
+        !options.readonly && ai_configured(options.offline)
+    }
+
+    /// How many stored cards still need a summary, tags or an embedding, and a rough token cost.
+    ///
+    /// # Errors
+    /// The database's error, or malformed card JSON.
+    pub fn estimate(&self) -> Result<Estimate> {
+        backfill::estimate(&self.0.options.store)
+    }
+
+    /// Fill gaps on up to `limit` stored cards. Hand-written summaries and tags are left in place.
+    ///
+    /// # Arguments
+    /// * `limit` - Maximum cards to attempt on this call.
+    ///
+    /// # Errors
+    /// The library is read-only, hosted AI is not configured, or [`backfill::run`] fails on the database.
+    pub async fn backfill(&self, limit: usize) -> Result<Report> {
+        let options = &self.0.options;
+        if options.readonly {
+            return Err(Error::status(403, "Backfill is disabled while the library is read-only"));
         }
-        let typesafe = if env_set("TYPESAFE_API_KEY") { &["TYPESAFE_BASE_URL"][..] } else { &[] };
-        !options.offline || ["GEMINI_BASE_URL", "AI_CHAT_BASE_URL"].iter().chain(typesafe).all(|name| loopback(name))
+        let images = MediaImages(Rc::clone(&options.media));
+        backfill::run(&options.store, &options.writer, &*options.fetch, &images, limit).await
     }
 
     /// Queue a card for enrichment on a later turn of the event loop, after the save's response (`schedule`).
@@ -138,7 +176,7 @@ impl Enrichment {
             return;
         }
         let queue = self.clone();
-        runtime::spawn(async move {
+        runtime::defer(async move {
             runtime::sleep(0).await;
             while !queue.0.closed.get() {
                 let Some((id, capture)) = queue.0.pending.borrow_mut().shift_remove_index(0) else { break };
@@ -272,6 +310,12 @@ impl Enrichment {
             self.schedule(&row.id, false);
             return Ok(());
         }
-        options.writer.run(|writer| writer.analysis(&row.id, &result.to_value()))
+        let mut value = result.to_value();
+        // A summary already stored, and not one this backfill marked as its own, is left in place. The result
+        // otherwise matches the historical analysis write, including cards that receive their first summary.
+        if summary_owned(&data, &extras) {
+            value.set("preserveSummary", true);
+        }
+        options.writer.run(|writer| writer.analysis(&row.id, &value))
     }
 }

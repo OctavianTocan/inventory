@@ -108,11 +108,16 @@ impl Listener {
 
     async fn answer(&self, request: &mut Request) -> mm_core::Result<Response> {
         let server = &self.server;
+        // The client cannot choose this header. Sign-in stamps the session email the library uses for the owner check.
+        request.headers.remove("x-mymind-email");
         let gate = server.auth.as_ref().filter(|_| self.gated);
-        if let Some(gate) = gate
-            && let Some(response) = gate.handle(request).await?
-        {
-            return Ok(response);
+        if let Some(gate) = gate {
+            if let Some(response) = gate.handle(request).await? {
+                return Ok(response);
+            }
+            if let Some(identity) = gate.identity(request)? {
+                request.headers.set("x-mymind-email", &identity.email);
+            }
         }
         if gate.is_none() && tunnelled(request) {
             return Ok(Response::send(403, "This server has no sign-in configured.", &Headers::new()));

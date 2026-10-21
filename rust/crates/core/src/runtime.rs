@@ -28,6 +28,15 @@ pub trait Runtime: Sync {
     /// # Arguments
     /// * `line` - The line, without its newline.
     fn log(&self, line: &str);
+
+    /// Run `task` after the current response is sent. Hosts that cancel `spawn` when the response
+    /// returns (a Durable Object) must keep the task alive; other hosts spawn it.
+    ///
+    /// # Arguments
+    /// * `task` - Work that must finish even though the HTTP response was already sent.
+    fn defer(&self, task: Task) {
+        self.spawn(task);
+    }
 }
 
 static RUNTIME: OnceLock<&'static dyn Runtime> = OnceLock::new();
@@ -51,6 +60,14 @@ fn runtime() -> &'static dyn Runtime {
 /// * `task` - Work to run to completion.
 pub fn spawn(task: impl Future<Output = ()> + 'static) {
     runtime().spawn(Box::pin(task));
+}
+
+/// Run `task` after the current response, as [`Runtime::defer`].
+///
+/// # Arguments
+/// * `task` - Work that must finish even though the HTTP response was already sent.
+pub fn defer(task: impl Future<Output = ()> + 'static) {
+    runtime().defer(Box::pin(task));
 }
 
 /// Wait `ms` milliseconds.

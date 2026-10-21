@@ -12,8 +12,9 @@ use regex::Regex;
 use url::Url;
 
 use crate::app_api::AppApi;
+use crate::backfill::{HOSTED_BATCH, HOSTED_BATCH_MAX};
 use crate::device::device_variant;
-use crate::enrichment::{Enrichment, EnrichmentOptions};
+use crate::enrichment::{self, Enrichment, EnrichmentOptions};
 use crate::host::{Fetch, Media, Resource, Screenshot, UploadStorage};
 use crate::http::{Headers, Request, Response, search_param};
 use crate::media_writes::{MediaWrites, bind_id, upload_id};
@@ -161,6 +162,17 @@ fn captures(pattern: &Regex, path: &str) -> Option<Vec<String>> {
 
 fn json_headers() -> Headers {
     Headers::from([("content-type", JSON_TYPE)])
+}
+
+// The signed-in owner, from the email the host stamped. A missing or different address is refused.
+fn owner_request(request: &Request) -> bool {
+    let Some(owner) = runtime::env("OWNER_EMAIL") else { return false };
+    let owner = text_lower(&owner);
+    !owner.is_empty() && request.header("x-mymind-email").is_some_and(|email| text_lower(email) == owner)
+}
+
+fn text_lower(value: &str) -> String {
+    mm_js::text::to_lower(mm_js::text::trim(value))
 }
 
 fn type_header(content_type: &str) -> Headers {
@@ -731,6 +743,41 @@ impl Api {
         Ok(())
     }
 
+    // Owner-only gap fill. GET estimates; POST enriches one small batch and commits before returning.
+    async fn backfill_route(&self, request: &Request, method: &str, url: &Url) -> Result<Option<Response>> {
+        if !owner_request(request) {
+            return Err(Error::status(403, "Only the library owner can run the AI backfill"));
+        }
+        if method == "GET" {
+            let body = stringify(&self.jobs.estimate()?.to_value())?;
+            return Ok(Some(Response::send(200, body, &json_headers())));
+        }
+        if self.readonly {
+            return Err(Error::status(403, "Backfill is disabled while the library is read-only"));
+        }
+        let offline = runtime::env("OFFLINE").as_deref() == Some("1");
+        if !enrichment::ai_configured(offline) {
+            return Err(Error::status(503, "GEMINI_API_KEY is not set"));
+        }
+        let limit = match search_param(url, "limit") {
+            None => HOSTED_BATCH,
+            Some(raw) => {
+                let number = number::string_to_number(&raw);
+                if !raw.bytes().all(|byte| byte.is_ascii_digit()) || !number::is_safe_integer(number) || !(1.0..=HOSTED_BATCH_MAX as f64).contains(&number) {
+                    return Err(Error::status(400, "limit must be an integer from 1 to 20"));
+                }
+                number as usize
+            }
+        };
+        let report = self.jobs.backfill(limit).await?;
+        let status = if report.retry_after_ms.is_some() { 429 } else if report.error.is_some() { 502 } else { 200 };
+        let mut headers = json_headers();
+        if let Some(ms) = report.retry_after_ms {
+            headers.set("retry-after", ((ms as f64) / 1000.0).ceil().to_string());
+        }
+        Ok(Some(Response::send(status, stringify(&report.to_value())?, &headers)))
+    }
+
     async fn route(&self, request: &mut Request, url: &Url, path: &str) -> Result<Option<Response>> {
         let method = request.method.clone();
         let method = method.as_str();
@@ -739,6 +786,9 @@ impl Api {
         let get = method == "GET";
         if let Some(response) = self.app.handle(method, url).await? {
             return Ok(Some(response));
+        }
+        if path == "/ai/backfill" && (get || method == "POST") {
+            return self.backfill_route(request, method, url).await;
         }
         if (get || method == "HEAD") && let Some(relative) = path.strip_prefix("/media/") {
             let Some(result) = self.media.response(relative).await? else {

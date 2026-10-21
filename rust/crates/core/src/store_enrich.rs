@@ -234,7 +234,13 @@ impl<'a> Enricher<'a> {
             return Ok(());
         }
         let vector = embedding(member(result, "embedding")?)?;
-        row.data.set("summary", text::slice(&member(result, "summary")?.to_js_string(), 0, Some(600)));
+        let keep_summary = result.get("preserveSummary").truthy() || row.extras.get("summaryEdited").truthy();
+        if !keep_summary {
+            row.data.set("summary", text::slice(&member(result, "summary")?.to_js_string(), 0, Some(600)));
+            if result.get("summarySource").as_str() == Some("ai") {
+                row.extras.set("summarySource", "ai");
+            }
+        }
         let kind = row.data.get("type").clone();
         let retitle = ["XPost", "ThreadsPost", "SubstackNote"].iter().any(|name| kind.as_str() == Some(name))
             && !row.extras.get("titleEdited").truthy()
@@ -290,6 +296,110 @@ impl<'a> Enricher<'a> {
         )?;
         hooks.save(&mut row, Some("object:analyzed"))
     }
+
+    /// Fill only the AI fields a card still lacks. Manual tags and a summary the user wrote stay as they are.
+    ///
+    /// # Arguments
+    /// * `id` - Card id.
+    /// * `fill` - Summary, tags and embedding the model produced. Empty pieces are left untouched. An embedding is
+    ///   written only when the card has none. Tags are added beside names already on the card, never replacing them.
+    ///
+    /// # Errors
+    /// Status 404 `Card not found`, an invalid embedding when one is supplied, or the writer's or database's error.
+    pub fn fill_gaps(&self, id: &str, fill: &GapFill) -> Result<GapApplied> {
+        let hooks = self.hooks;
+        let db = self.store.db();
+        let mut row = hooks.card(id)?;
+        if row.data.get("deleted").truthy() {
+            return Ok(GapApplied::default());
+        }
+        let mut applied = GapApplied::default();
+        let owned = row.extras.get("summaryEdited").truthy() || row.data.get("summary").truthy();
+        if let Some(summary) = fill.summary.as_ref().filter(|_| !owned) {
+            row.data.set("summary", text::slice(summary, 0, Some(600)));
+            row.extras.set("summarySource", "ai");
+            applied.summarized = true;
+        }
+        update_flags(&mut row.data, |flags| flags & !PROCESSING);
+        if fill.mark_tags_done {
+            row.extras.set("aiTagsDone", true);
+        }
+        let existing = self.store.card_tags(id)?;
+        let names: Vec<String> = existing.iter().map(|tag| tag.name.clone()).collect();
+        if !fill.tags.is_empty() {
+            let vocabulary: Vec<String> = db
+                .query("SELECT name FROM annotations WHERE user_id = ? GROUP BY name ORDER BY COUNT(*) DESC, name", &[self.user.id.as_str().into()])?
+                .iter()
+                .map(|tag| tag.text("name").unwrap_or("").to_owned())
+                .collect();
+            let kind = match row.data.get("type") {
+                Value::String(name) => name.clone(),
+                other => other.to_js_string(),
+            };
+            let mut position = db
+                .one("SELECT COALESCE(MAX(position), -1) + 1 AS n FROM annotations WHERE card_id = ?", &[id.into()])?
+                .and_then(|found| found.number("n"))
+                .unwrap_or(0.0);
+            for tag in curate_tags(&fill.tags, &kind, &vocabulary, &names)? {
+                let name = text::trim(&tag.get("name").to_js_string()).to_owned();
+                let tag_id = self.store.new_id(IdKind::Tag, None)?;
+                db.execute(
+                    "INSERT INTO annotations VALUES (?, ?, ?, ?, 2, ?)",
+                    &[tag_id.as_str().into(), self.user.id.as_str().into(), id.into(), name.as_str().into(), position.into()],
+                )?;
+                position += 1.0;
+                db.execute(
+                    "INSERT INTO tag_names (user_id, name, modified_ms) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+                    &[self.user.id.as_str().into(), name.as_str().into(), ((hooks.now()? / 1_000_000) as f64).into()],
+                )?;
+                hooks.emit("tag:created", obj! { "id" => tag_id, "name" => name, "objectId" => id, "flags" => 2 }.into());
+                applied.tagged += 1;
+            }
+        }
+        if let Some(vector) = &fill.embedding {
+            let numbers = embedding(&Value::Array(vector.iter().map(|value| Value::from(*value as f64)).collect()))?;
+            let missing = db.one("SELECT 1 AS n FROM embeddings WHERE card_id = ?", &[id.into()])?.is_none();
+            if missing {
+                let mut bytes = Vec::with_capacity(EMBEDDING_DIMENSIONS * 4);
+                for value in &numbers {
+                    bytes.extend_from_slice(&value.to_le_bytes());
+                }
+                db.execute("INSERT INTO embeddings VALUES (?, ?, 768, ?)", &[id.into(), SqlValue::from(self.user.id.as_str()), bytes.into()])?;
+                applied.embedded = true;
+            }
+        }
+        if !row.extras.get("id").truthy() && !row.data.get("id").truthy() {
+            row.extras.set("id", id);
+        }
+        let changed = applied.summarized || applied.tagged > 0 || applied.embedded || fill.mark_tags_done;
+        if changed {
+            hooks.save(&mut row, Some(if applied.summarized || applied.tagged > 0 || applied.embedded { "object:analyzed" } else { "object:updated" }))?;
+        }
+        Ok(applied)
+    }
+}
+
+/// Pieces of an AI result that [`Enricher::fill_gaps`] may write.
+pub struct GapFill {
+    /// Summary to store when the card has none and the user has not edited one.
+    pub summary: Option<String>,
+    /// Candidate tag records (`name`, and optional `p` and `source`).
+    pub tags: Vec<Value>,
+    /// Document vector to store when the card has none.
+    pub embedding: Option<Vec<f32>>,
+    /// Record that tag generation was attempted, including when it added nothing.
+    pub mark_tags_done: bool,
+}
+
+/// What [`Enricher::fill_gaps`] wrote.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GapApplied {
+    /// A summary was written.
+    pub summarized: bool,
+    /// AI tags inserted.
+    pub tagged: usize,
+    /// An embedding was inserted.
+    pub embedded: bool,
 }
 
 fn set_member(root: &mut Value, group: &str, key: &str, value: Value) {

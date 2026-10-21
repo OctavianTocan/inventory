@@ -193,7 +193,7 @@ async fn container() -> Result<(), String> {
     Ok(())
 }
 
-const USAGE: &str = "Usage: mymind [serve | download-server | container | capture-fixtures | seed-db | import-hosted | auth-user | upload-hosted | migrate-media | embed-library | try-ai] [options]
+const USAGE: &str = "Usage: mymind [serve | download-server | container | capture-fixtures | seed-db | import-hosted | auth-user | upload-hosted | migrate-media | embed-library | enrich-library | try-ai] [options]
   serve            the replica (default; PORT, AUTH, STORE_DB, OFFLINE and others from the environment and .env)
   download-server  signed-in downloads (DOWNLOAD_PORT, DOWNLOAD_DIR, AUTH_DB)
   container        the media container (PORT)
@@ -210,6 +210,7 @@ fn main() -> ExitCode {
         Some("upload-hosted") => return ExitCode::from(mymind::runtime::run(mymind::tool_upload_hosted::run(&root, &arguments))),
         Some("migrate-media") => return ExitCode::from(mymind::runtime::run(mymind::tool_migrate_media::run(&root, &arguments))),
         Some("embed-library") => return ExitCode::from(mymind::runtime::run(mymind::tool_embed_library::run(&root, &arguments))),
+        Some("enrich-library") => return ExitCode::from(mymind::runtime::run(mymind::tool_enrich_library::run(&root, &arguments))),
         Some("try-ai") => return ExitCode::from(mymind::runtime::run(mymind::tool_try_ai::run(&root, &arguments))),
         None | Some("serve" | "download-server" | "container") if arguments.iter().any(|a| a == "--help" || a == "-h") => {
             println!("{USAGE}");

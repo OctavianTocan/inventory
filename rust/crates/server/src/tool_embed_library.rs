@@ -1,6 +1,7 @@
 //! `mymind embed-library`: the port of `tools/embed-library.mjs`, which estimates or runs resumable text-only Gemini
 //! embeddings for cards without vectors.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -12,6 +13,7 @@ use mm_core::{Error, Result, Value};
 use mm_js::{number, text};
 use mm_sqlite::Sqlite;
 
+use crate::env_file::{self, Loaded};
 use crate::fetch::NativeFetch;
 use crate::node_path::resolve;
 use crate::tools::embedding_item;
@@ -173,13 +175,17 @@ async fn work(args: &[String]) -> Result<()> {
 /// Estimate or run the vector backfill (`embedLibrary`, as the command line runs it).
 ///
 /// # Arguments
-/// * `_root` - The repository root; unused, the default database follows the current directory as in the JS.
+/// * `root` - The repository root. `.env` there fills keys the process has not set. The default database still follows the current directory.
 /// * `args` - The arguments after the subcommand name: `[--db path] [--limit N] [--run]`.
 ///
 /// # Returns
 /// The exit status: 0, or 1 after printing the single failure line.
-pub async fn run(_root: &Path, args: &[String]) -> u8 {
-    mm_core::runtime::set_env(std::env::vars().collect());
+pub async fn run(root: &Path, args: &[String]) -> u8 {
+    let file = match env_file::load(&env_file::path(root)) {
+        Ok(Loaded::Vars(vars)) => vars,
+        _ => HashMap::new(),
+    };
+    mm_core::runtime::set_env(env_file::merged(std::env::vars(), file));
     match work(args).await {
         Ok(()) => 0,
         Err(_) => {

@@ -115,7 +115,7 @@ impl worker::DurableObject for Auth {
         let db = DoSql::open(&state);
         let gate = db.clone().and_then(|db| {
             let sql: Rc<dyn Sql> = db;
-            Gate::new(AuthOptions::new(crate::runtime::strings(env.as_ref()), 443, sql, Rc::new(WorkerFetch)))
+            Gate::new(AuthOptions::new(crate::runtime::bindings(&env), 443, sql, Rc::new(WorkerFetch)))
         });
         Self { db: db.ok(), gate }
     }

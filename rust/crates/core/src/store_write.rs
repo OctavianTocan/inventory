@@ -367,12 +367,24 @@ impl Writer {
     ///
     /// # Arguments
     /// * `id` - Card id.
-    /// * `result` - The analysis `{title, tags, embedding, ...}`.
+    /// * `result` - The analysis `{title, tags, embedding, ...}`. `preserveSummary` keeps the card's summary.
     ///
     /// # Errors
     /// The enricher's error.
     pub fn analysis(&self, id: &str, result: &Value) -> Result<()> {
         Enricher::new(&self.store, self)?.analysis(id, result)
+    }
+
+    /// Fill missing AI fields without replacing a summary or tags already on the card.
+    ///
+    /// # Arguments
+    /// * `id` - Card id.
+    /// * `fill` - The pieces to add.
+    ///
+    /// # Errors
+    /// The enricher's error.
+    pub fn fill_gaps(&self, id: &str, fill: &crate::store_enrich::GapFill) -> Result<crate::store_enrich::GapApplied> {
+        Enricher::new(&self.store, self)?.fill_gaps(id, fill)
     }
 
     /// Save a note, plain text or URL, bumping an existing URL when present (`create`).
@@ -519,7 +531,7 @@ impl Writer {
     ///
     /// # Arguments
     /// * `id` - Card id.
-    /// * `body` - Fields among `title`, `description`, `flags`, `prose`, `source`, `siteName`, `domain`, `ocr`, `author`, `brand`, `format`, `objectNames`.
+    /// * `body` - Fields among `title`, `summary`, `description`, `flags`, `prose`, `source`, `siteName`, `domain`, `ocr`, `author`, `brand`, `format`, `objectNames`. A `summary` is kept as the user's own.
     ///
     /// # Returns
     /// An empty object.
@@ -543,10 +555,14 @@ impl Writer {
                 self.store.db().execute("UPDATE card_content SET body = ? WHERE card_id = ?", &[stringify(body.get("prose"))?.into(), id.into()])?;
             }
         }
-        for key in ["title", "description", "flags", "prose", "source", "siteName", "domain", "ocr", "author", "brand", "format", "objectNames"] {
+        for key in ["title", "summary", "description", "flags", "prose", "source", "siteName", "domain", "ocr", "author", "brand", "format", "objectNames"] {
             if has(body, key)? {
                 row.data.set(key, body.get(key).clone());
             }
+        }
+        if has(body, "summary")? {
+            row.extras.set("summaryEdited", true);
+            row.extras.remove("summarySource");
         }
         if has(body, "title")? {
             row.extras.set("titleEdited", true);

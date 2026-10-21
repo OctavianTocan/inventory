@@ -6,6 +6,7 @@ pub mod ai_tags;
 pub mod api;
 pub mod app_api;
 pub mod auth;
+pub mod backfill;
 pub mod auth_store;
 pub mod capture_entities;
 pub mod capture_html;
