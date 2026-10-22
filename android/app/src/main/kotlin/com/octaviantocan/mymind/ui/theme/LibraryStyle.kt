@@ -35,7 +35,7 @@ object LibraryStyle {
         @Composable @ReadOnlyComposable get() = if (MymindTheme.colors.dark) DarkLibraryColors else LightLibraryColors
 
     val font = GeistFontFamily
-    val label = TextStyle(fontFamily = font, fontSize = 15.sp, lineHeight = 21.sp)
-    val body = TextStyle(fontFamily = font, fontSize = 17.sp, lineHeight = 24.sp)
-    val title = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp)
+    val label = TextStyle(fontFamily = font, fontSize = 13.sp, lineHeight = 18.sp)
+    val body = TextStyle(fontFamily = font, fontSize = 15.sp, lineHeight = 21.sp)
+    val title = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 26.sp)
 }

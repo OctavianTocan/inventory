@@ -91,7 +91,10 @@ internal fun GalleryTile(
                     Text(
                         card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card),
                         Modifier.align(Alignment.BottomStart).padding(if (highlight) 18.dp else 12.dp).clearAndSetSemantics {},
-                        color = Color.White, style = if (highlight) LibraryStyle.title else LibraryStyle.body,
+                        color = Color.White, style = LibraryStyle.body.copy(
+                            fontSize = if (highlight) 18.sp else 14.sp,
+                            lineHeight = if (highlight) 24.sp else 20.sp,
+                        ),
                         maxLines = if (highlight) 3 else 2, overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -120,22 +123,22 @@ internal fun GalleryTile(
 private fun GalleryTextPreview(card: Card, text: String, highlight: Boolean, modifier: Modifier) {
     val colors = LibraryStyle.colors
     BoxWithConstraints(modifier) {
-        val inset = if (highlight) 18.dp else if (maxWidth < 110.dp) 8.dp else 14.dp
-        val textSize = if (highlight) 22.sp else if (maxWidth < 110.dp) 15.sp else 17.sp
-        val lineHeight = if (highlight) 29.sp else if (maxWidth < 110.dp) 21.sp else 24.sp
+        val inset = if (highlight) 16.dp else if (maxWidth < 110.dp) 6.dp else 12.dp
+        val textSize = if (highlight) 18.sp else if (maxWidth < 110.dp) 12.sp else 14.sp
+        val lineHeight = if (highlight) 24.sp else if (maxWidth < 110.dp) 17.sp else 20.sp
         val showKind = maxWidth >= 110.dp && maxHeight >= 112.dp
         val lineDp = with(LocalDensity.current) { lineHeight.toDp() }
-        val availableLines = ((maxHeight - inset * 2 - if (showKind) 31.dp else 0.dp) / lineDp).toInt().coerceIn(1, 12)
+        val availableLines = ((maxHeight - inset * 2 - if (showKind) 22.dp else 0.dp) / lineDp).toInt().coerceIn(1, 12)
         Column(Modifier.fillMaxSize().padding(inset)) {
             if (showKind) {
                 Text(galleryKind(card), Modifier.clearAndSetSemantics {}, color = colors.muted,
-                    style = LibraryStyle.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(10.dp))
+                    style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(6.dp))
             }
             Text(
                 text.ifBlank { cardHeading(card) }, Modifier.weight(1f),
                 color = colors.text, style = LibraryStyle.body.copy(fontSize = textSize, lineHeight = lineHeight),
-                fontWeight = if (tileKind(card) in setOf(TileKind.Repository, TileKind.Article, TileKind.Plain)) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (tileKind(card) in setOf(TileKind.Repository, TileKind.Article, TileKind.Plain)) FontWeight.Medium else FontWeight.Normal,
                 maxLines = availableLines, overflow = TextOverflow.Ellipsis,
             )
         }
