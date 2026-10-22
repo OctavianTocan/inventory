@@ -2,7 +2,6 @@ package com.octaviantocan.mymind.ui.card
 
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,7 +22,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -39,7 +38,6 @@ import com.octaviantocan.mymind.ui.library.cardHeading
 import com.octaviantocan.mymind.ui.library.noteText
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.MymindTheme
-import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 
 private val BODY_SIDE = 16.dp
 
@@ -50,10 +48,9 @@ fun CardDetailDialog(
     onClose: () -> Unit,
     onMenu: () -> Unit,
     onRemoveTag: ((Tag) -> Unit)? = null,
-    actionsVisible: Boolean = false,
+    actionsProgress: Float = 0f,
     scrollState: ScrollState = rememberScrollState(),
 ) {
-    val actionsProgress by animateFloatAsState(if (actionsVisible) 1f else 0f, label = "cardActions")
     Dialog(
         onDismissRequest = onClose,
         properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -73,7 +70,6 @@ fun CardDetailDialog(
         }
         Box(Modifier.fillMaxSize()) {
             CardDetail(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress), onRemoveTag = onRemoveTag, scrollState = scrollState)
-            if (actionsProgress > 0f) Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim.copy(alpha = DarkMenuColors.scrim.alpha * actionsProgress)))
         }
     }
 }
@@ -147,7 +143,7 @@ private fun TagChips(tags: List<Tag>, style: TextStyle, onRemove: (Tag) -> Unit)
 private fun CardBody(card: Card, onRemoveTag: ((Tag) -> Unit)?) {
     val page = MymindTheme.page
     val fonts = MymindTheme.fonts
-    val body = TextStyle(color = LocalCardSheetColors.current.text, fontSize = 19.sp, lineHeight = 1.5.em, fontFamily = FontFamily.Serif)
+    val body = TextStyle(color = LocalCardSheetColors.current.text, fontSize = 19.sp, lineHeight = 1.5.em, fontFamily = MymindTheme.fonts.body)
     Column(Modifier.fillMaxWidth().padding(horizontal = BODY_SIDE, vertical = 30.dp)) {
         val kind = tileKind(card)
         if (kind == TileKind.Media || kind == TileKind.Video) {
@@ -159,7 +155,7 @@ private fun CardBody(card: Card, onRemoveTag: ((Tag) -> Unit)?) {
         val tags = card.tags.orEmpty().filter { !it.name.isNullOrEmpty() }
         if (tags.isNotEmpty()) {
             Spacer(Modifier.height(24.dp))
-            val style = TextStyle(color = page.muted, fontSize = 15.sp, fontFamily = fonts.nunitoSemiBold)
+            val style = TextStyle(color = page.muted, fontSize = 15.sp, fontFamily = fonts.body, fontWeight = FontWeight.SemiBold)
             if (onRemoveTag == null) {
                 Text(tags.joinToString("  ") { it.name.orEmpty() }, style = style)
             } else {

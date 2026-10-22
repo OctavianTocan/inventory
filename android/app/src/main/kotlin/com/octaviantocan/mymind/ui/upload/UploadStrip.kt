@@ -203,7 +203,7 @@ private fun queueTextStyle(color: Color) = TextStyle(
     fontSize = 16.sp,
     lineHeight = 20.sp,
     letterSpacing = (-0.01).em,
-    fontFamily = MymindTheme.fonts.nunito,
+    fontFamily = MymindTheme.fonts.body,
 )
 
 /** Label of a file's kind. */

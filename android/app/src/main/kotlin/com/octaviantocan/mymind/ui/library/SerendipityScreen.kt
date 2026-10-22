@@ -131,7 +131,7 @@ fun SerendipityContent(
 @Composable
 private fun DeckMessage(text: String, onDeal: () -> Unit) {
     Box(Modifier.fillMaxSize().clickable(onClick = onDeal), contentAlignment = Alignment.Center) {
-        Text(text, style = TextStyle(color = Color.White, fontSize = 16.sp, fontFamily = MymindTheme.fonts.nunito))
+        Text(text, style = TextStyle(color = Color.White, fontSize = 16.sp, fontFamily = MymindTheme.fonts.body))
     }
 }
 
@@ -153,7 +153,7 @@ private fun DeckButton(label: String, onClick: () -> Unit) {
             val stroke = 2.dp.toPx()
             drawCircle(outline, radius = size.minDimension / 2 - stroke / 2, style = Stroke(stroke))
         }
-        Text(label, style = TextStyle(color = Color.White, fontSize = 16.sp, fontFamily = MymindTheme.fonts.nunito))
+        Text(label, style = TextStyle(color = Color.White, fontSize = 16.sp, fontFamily = MymindTheme.fonts.body))
     }
 }
 

@@ -104,7 +104,7 @@ private fun GridFooter(feed: FeedState, onRetry: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         if (feed.loading) LoadingSpinner(color = MymindTheme.chrome.tabUnselected)
         feed.error?.let {
-            Text(it, style = TextStyle(color = MymindTheme.page.muted, fontSize = 14.sp, fontFamily = MymindTheme.fonts.nunito))
+            Text(it, style = TextStyle(color = MymindTheme.page.muted, fontSize = 14.sp, fontFamily = MymindTheme.fonts.body))
             TextButton(onClick = onRetry) { Text("Retry") }
         }
     }

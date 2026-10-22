@@ -1,13 +1,13 @@
 package com.octaviantocan.mymind.ui
 
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SheetState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
+import com.octaviantocan.mymind.ui.card.CardSheetPosition
+import com.octaviantocan.mymind.ui.menu.rememberCardMenuPosition
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -48,18 +48,16 @@ class CardDetailWindowTest {
     private val actions = mutableStateOf(false)
     private var closed = 0
     private val scroll = ScrollState(0)
-    @OptIn(ExperimentalMaterial3Api::class)
-    private lateinit var menuState: SheetState
+    private lateinit var menuState: CardSheetPosition
     private val panel get() = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Card details"))
 
-    @OptIn(ExperimentalMaterial3Api::class)
     private fun show(card: Card = LibrarySamples.article) {
         compose.setPhoneContent(false) {
             PageTheme(PageScheme.Dark) {
                 Box(Modifier.fillMaxSize())
-                menuState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-                if (opened.value) CardDetailDialog(card, onClose = { closed++; opened.value = false }, onMenu = { actions.value = true }, actionsVisible = actions.value, scrollState = scroll)
-                if (actions.value) CardMenuSheet(cardMenuItems(card, null), onSelect = { actions.value = false }, onDismiss = { actions.value = false }, sheetState = menuState, accent = cardAccent(card))
+                menuState = key(actions.value) { rememberCardMenuPosition() }
+                if (opened.value) CardDetailDialog(card, onClose = { closed++; opened.value = false }, onMenu = { actions.value = true }, actionsProgress = if (actions.value) menuState.scrim else 0f, scrollState = scroll)
+                if (actions.value) CardMenuSheet(cardMenuItems(card, null), onSelect = { actions.value = false }, onDismiss = { actions.value = false }, position = menuState, accent = cardAccent(card))
             }
         }
         compose.mainClock.advanceTimeBy(1500)
@@ -104,7 +102,6 @@ class CardDetailWindowTest {
     }
 
     @Test
-    @OptIn(ExperimentalMaterial3Api::class)
     fun actionsOpenAboveTheReaderAndReturnToTheSameScrollPosition() {
         show()
         // The two windows have independent layout passes before their entrance animations can run.

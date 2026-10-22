@@ -77,7 +77,7 @@ private fun SourceRow(label: String, @DrawableRes icon: Int, onClick: () -> Unit
         Text(
             label,
             Modifier.weight(1f),
-            style = TextStyle(color = ink, fontSize = 16.sp, fontWeight = FontWeight.Medium, fontFamily = MymindTheme.fonts.nunito),
+            style = TextStyle(color = ink, fontSize = 16.sp, fontWeight = FontWeight.Medium, fontFamily = MymindTheme.fonts.body),
         )
         Icon(painterResource(icon), contentDescription = null, tint = ink)
     }

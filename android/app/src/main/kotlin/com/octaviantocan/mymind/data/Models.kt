@@ -115,9 +115,17 @@ data class TagList(val tags: List<TagCount> = emptyList())
  * @property kind How the account signs in: `google` or `password`.
  * @property colorScheme Appearance the account picked for library pages: `light`, `dark` or `system`; `/app/v1/me`
  *   does not send it, so the app reads it from [PageConfig].
+ * @property photoUrl Google credential photo cached for this accepted session, or null.
+ * @property displayName Google credential name cached for this accepted session, or null.
  */
 @Serializable
-data class User(val email: String? = null, val kind: String? = null, val colorScheme: String? = null)
+data class User(
+    val email: String? = null,
+    val kind: String? = null,
+    val colorScheme: String? = null,
+    val photoUrl: String? = null,
+    val displayName: String? = null,
+)
 
 /**
  * Account settings and feature switches from the config script of a web page.

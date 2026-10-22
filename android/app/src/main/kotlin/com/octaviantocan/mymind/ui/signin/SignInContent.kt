@@ -67,7 +67,7 @@ fun SignInContent(
             style = TextStyle(
                 color = Color.Black,
                 fontSize = 64.sp,
-                fontFamily = MymindTheme.fonts.louize,
+                fontFamily = MymindTheme.fonts.heading,
                 letterSpacing = (-0.05).em,
                 textAlign = TextAlign.Center,
                 lineHeight = 50.sp,
@@ -110,6 +110,6 @@ private fun GoogleButton(onClick: () -> Unit, logo: Painter) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(logo, contentDescription = null, modifier = Modifier.size(24.dp))
-        Text(GOOGLE_LABEL, style = TextStyle(color = Color.Black, fontSize = 18.sp, fontFamily = MymindTheme.fonts.nunito))
+        Text(GOOGLE_LABEL, style = TextStyle(color = Color.Black, fontSize = 18.sp, fontFamily = MymindTheme.fonts.body))
     }
 }

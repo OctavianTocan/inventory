@@ -15,7 +15,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -31,6 +33,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
@@ -40,8 +43,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -49,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.ui.theme.MymindTheme
 
 /** Pully's paper and floating control colors, following the card's light or dark appearance. */
 @Immutable
@@ -58,16 +60,16 @@ internal val LightCardSheetColors = CardSheetColors(Color(0xFFF4F2EF), Color.Whi
 internal val DarkCardSheetColors = CardSheetColors(Color(0xFF1B1B1B), Color(0xFF1D1D1D), Color(0xFFE3E3E3), Color(0xFF3A3A3A), Color(0x99000000), Color(0x1FFFFFFF), Color.Black)
 internal val LocalCardSheetColors = compositionLocalOf { LightCardSheetColors }
 
-/** Close and overflow glyphs; their 24-unit paths match Pully's Lu.close and Lu.more. */
+/** Close, overflow and back glyphs from Pully's Lucide icons. */
 @Immutable
-class CardHeaderIcons(val close: Painter, val menu: Painter)
+class CardHeaderIcons(val close: Painter, val menu: Painter, val back: Painter? = null)
 
 @Composable
-fun defaultCardHeaderIcons() = CardHeaderIcons(painterResource(R.drawable.ic_sheet_close), painterResource(R.drawable.ic_sheet_more))
+fun defaultCardHeaderIcons() = CardHeaderIcons(painterResource(R.drawable.ic_sheet_close), painterResource(R.drawable.ic_sheet_more), painterResource(R.drawable.ic_sheet_back))
 
 /** Pully's floating controls flanking a centered title that wraps to keep the full heading readable. */
 @Composable
-fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier, onMenu: (() -> Unit)? = null, icons: CardHeaderIcons = defaultCardHeaderIcons(), enabled: Boolean = true) {
+fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier, onMenu: (() -> Unit)? = null, icons: CardHeaderIcons = defaultCardHeaderIcons(), enabled: Boolean = true, closeLabel: String = "Close card", onBack: (() -> Unit)? = null, titleContent: (@Composable () -> Unit)? = null) {
     val colors = LocalCardSheetColors.current
     val density = LocalDensity.current
     var firstLineHeight by remember(title, density) { mutableFloatStateOf(with(density) { 26.sp.toPx() }) }
@@ -76,21 +78,24 @@ fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier
     val titleTop = ((44.dp - lineHeight) / 2f).coerceAtLeast(0.dp)
     // Keep room for the card body at the half-height stop, even with exceptionally long headings.
     val titleLimit = with(density) { (LocalWindowInfo.current.containerSize.height / 4f).toDp() }.coerceAtLeast(lineHeight)
+    val titleStyle = TextStyle(
+        fontFamily = MymindTheme.fonts.heading,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
+        lineHeight = 26.sp,
+        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
+        textAlign = TextAlign.Center,
+        color = colors.text,
+    )
+    val leading = if (onBack != null) icons.back ?: painterResource(R.drawable.ic_sheet_back) else icons.close
     Row(modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp), verticalAlignment = Alignment.Top) {
-        CardHeaderButton(icons.close, "Close card", onClose, enabled, Modifier.padding(top = buttonTop))
+        CardHeaderButton(leading, if (onBack != null) "Back" else closeLabel, onBack ?: onClose, enabled, Modifier.padding(top = buttonTop))
         Box(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, top = titleTop, bottom = 4.dp)) {
-            Text(
+            if (titleContent != null) CompositionLocalProvider(LocalTextStyle provides titleStyle) { titleContent() }
+            else Text(
                 title,
                 modifier = Modifier.fillMaxWidth().heightIn(max = titleLimit).verticalScroll(rememberScrollState()),
-                style = TextStyle(
-                    fontFamily = FontFamily(Font(R.font.geist_semibold, FontWeight.SemiBold)),
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 18.sp,
-                    lineHeight = 26.sp,
-                    lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
-                    textAlign = TextAlign.Center,
-                ),
-                color = colors.text,
+                style = titleStyle,
                 onTextLayout = { firstLineHeight = it.getLineBottom(0) - it.getLineTop(0) },
             )
         }
@@ -102,7 +107,7 @@ fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier
 @Composable
 private fun CardHeaderButton(icon: Painter, label: String, onClick: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier) {
     val colors = LocalCardSheetColors.current
-    val tint = colors.shadow.copy(alpha = if (colors === DarkCardSheetColors) 0.08f * 2.7f else 0.08f)
+    val tint = colors.shadow.copy(alpha = if (colors.paper.luminance() < 0.5f) 0.08f * 2.7f else 0.08f)
     val fill = colors.raised
     val haptic = rememberSheetHaptics()
     Box(

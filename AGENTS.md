@@ -88,6 +88,9 @@ output format and a length cap.
 
 ## Code conventions
 
+- Before changing Android UI, read applicable ancestor and area `CONTRACTS` files. Card-sheet navigation follows
+  `android/app/src/main/kotlin/com/octaviantocan/mymind/ui/menu/CONTRACTS`; its pinned Pully source is documented in
+  `docs/pully-ui-reference.md`. Keep the implementation, tests and contracts consistent in the same change.
 - The backend is Rust; public rustdoc states the caller contract. Retained Node tooling uses plain ES modules,
   no framework or build step. Match the surrounding code.
 - JSDoc on exported functions states the caller contract (summary, every `@param`, `@returns`); private helpers get

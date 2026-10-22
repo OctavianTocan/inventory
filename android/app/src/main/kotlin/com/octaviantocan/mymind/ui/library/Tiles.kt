@@ -36,6 +36,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -119,7 +120,7 @@ fun TileCaption(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
         modifier.fillMaxWidth().padding(top = 3.dp).height(20.dp),
-        style = TextStyle(color = MymindTheme.page.muted, fontSize = 14.sp, fontFamily = MymindTheme.fonts.nunito, textAlign = TextAlign.Center),
+        style = TextStyle(color = MymindTheme.page.muted, fontSize = 14.sp, fontFamily = MymindTheme.fonts.body, textAlign = TextAlign.Center),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
@@ -196,7 +197,7 @@ private fun PlayMark(modifier: Modifier = Modifier) {
 /** A note's text on a plain tile (`mymind-card.content`, 12 px prose with 1.1 em paragraphs). */
 @Composable
 private fun NoteTile(card: Card) {
-    val style = TextStyle(color = MymindTheme.page.text2, fontSize = NOTE_TEXT, lineHeight = 1.5.em, fontFamily = MymindTheme.fonts.nunito)
+    val style = TextStyle(color = MymindTheme.page.text2, fontSize = NOTE_TEXT, lineHeight = 1.5.em, fontFamily = MymindTheme.fonts.body)
     val gap = with(LocalDensity.current) { NOTE_TEXT.toDp() }
     Column(
         Modifier
@@ -217,7 +218,7 @@ private fun NoteTile(card: Card) {
 private fun PostTile(card: Card, deck: Boolean) {
     val page = MymindTheme.page
     val size = if (deck) DECK_POST_TEXT else POST_TEXT
-    val body = TextStyle(color = page.text2, fontSize = size, lineHeight = 1.3.em, fontFamily = MymindTheme.fonts.nunito)
+    val body = TextStyle(color = page.text2, fontSize = size, lineHeight = 1.3.em, fontFamily = MymindTheme.fonts.body)
     val gap = with(LocalDensity.current) { (size * 1.3f).toDp() }
     val links = TextLinkStyles(SpanStyle(color = page.link))
     val paragraphs = remember(card.id, card.post?.bodyHtml) { postParagraphs(card) }
@@ -245,7 +246,7 @@ private fun PostTile(card: Card, deck: Boolean) {
             }
             card.post?.author?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(gap))
-                Text(it, style = body.copy(color = page.faint, fontFamily = MymindTheme.fonts.nunitoSemiBold), maxLines = 1)
+                Text(it, style = body.copy(color = page.faint, fontFamily = MymindTheme.fonts.body, fontWeight = FontWeight.SemiBold), maxLines = 1)
             }
         }
     }
@@ -326,7 +327,7 @@ private fun RepositoryTile(card: Card) {
         ) {
             Text(
                 card.title?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: cardHeading(card),
-                style = TextStyle(color = page.heading, fontSize = nameSize, lineHeight = 1.2.em, fontFamily = MymindTheme.fonts.louize, letterSpacing = (-0.05).em),
+                style = TextStyle(color = page.heading, fontSize = nameSize, lineHeight = 1.2.em, fontFamily = MymindTheme.fonts.heading, letterSpacing = (-0.05).em),
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -337,7 +338,7 @@ private fun RepositoryTile(card: Card) {
                     color = REPOSITORY_LABEL,
                     fontSize = 14.sp,
                     lineHeight = 19.sp,
-                    fontFamily = MymindTheme.fonts.nunitoMedium,
+                    fontFamily = MymindTheme.fonts.body, fontWeight = FontWeight.Medium,
                     letterSpacing = (-0.03).em,
                 ),
                 maxLines = 1,
@@ -367,7 +368,7 @@ private fun ArticleTile(card: Card) {
                     color = page.heading,
                     fontSize = 17.sp,
                     lineHeight = 1.06.em,
-                    fontFamily = MymindTheme.fonts.louize,
+                    fontFamily = MymindTheme.fonts.heading,
                     letterSpacing = (-0.03).em,
                     lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
                 ),
@@ -396,7 +397,7 @@ private fun PlainTile(card: Card) {
             .background(MymindTheme.page.surface)
             .padding(16.dp),
     ) {
-        Text(cardHeading(card), style = TextStyle(color = MymindTheme.page.text2, fontSize = 16.sp, fontFamily = MymindTheme.fonts.nunito))
+        Text(cardHeading(card), style = TextStyle(color = MymindTheme.page.text2, fontSize = 16.sp, fontFamily = MymindTheme.fonts.body))
     }
 }
 
@@ -424,7 +425,7 @@ fun TopOfMindTile(card: Card, onClick: () -> Unit, modifier: Modifier = Modifier
                 Text(
                     if (kind == TileKind.Note) noteText(card) else cardHeading(card),
                     Modifier.padding(start = 10.dp, end = 8.dp, top = 8.dp),
-                    style = TextStyle(color = page.heading, fontSize = 17.sp, lineHeight = 1.06.em, fontFamily = MymindTheme.fonts.louize, letterSpacing = (-0.03).em),
+                    style = TextStyle(color = page.heading, fontSize = 17.sp, lineHeight = 1.06.em, fontFamily = MymindTheme.fonts.heading, letterSpacing = (-0.03).em),
                     maxLines = 3,
                     overflow = TextOverflow.Clip,
                 )

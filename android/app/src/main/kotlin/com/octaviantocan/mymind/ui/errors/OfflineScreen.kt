@@ -74,7 +74,7 @@ fun OfflineScreen(modifier: Modifier = Modifier, pictures: OfflinePictures = def
                 style = TextStyle(
                     color = Color.White,
                     fontSize = 18.sp,
-                    fontFamily = MymindTheme.fonts.nunito,
+                    fontFamily = MymindTheme.fonts.body,
                     letterSpacing = (-0.01).em,
                     textAlign = TextAlign.Center,
                     lineHeight = 24.sp,

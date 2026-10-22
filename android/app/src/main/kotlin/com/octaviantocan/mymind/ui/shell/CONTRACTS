@@ -1,0 +1,33 @@
+@cc [owner:OctavianTocan,label:architecture;design;motion] library-one-foot-bar
+Library destinations MUST register their bar through FootPill or FootFree. One
+FootBarLayer in the shell draws the active registration over the pages. A page change
+MUST keep that layer in place; the contents change through Pully's blur fade and the
+pill's width eases to its new size. Disposed registrations MUST stop owning the bar.
+Source: pulls.review kit-one-foot-bar, DESIGN rule 196, FootBar.kt at
+ee5cf358333cb1170f1923c7118e12af3f265b74; requested by Tavi on 22 October 2026.
+
+@cc [owner:OctavianTocan,label:design] library-bars-rest-alike
+Every library foot bar MUST use floatingBar for its position: 16dp in from the sides,
+24dp above the system navigation bar, and raised by the keyboard. Screens MUST NOT
+add their own bottom offset to the bar. The bar floats over the content without a
+solid strip behind it and carries Pully's two-layer downward canvas shadow.
+Source: pulls.review kit-bottom-bars-rest-alike, DESIGN rules 192 and 45, Kit.kt at
+ee5cf358333cb1170f1923c7118e12af3f265b74.
+
+@cc [owner:OctavianTocan,label:product] library-foot-bar-owns-its-taps
+A tap anywhere inside the search pill, including its edge and padding, MUST focus
+its field or expand its compact form. A tap on the navigation capsule's padding
+MUST NOT open a card underneath it. Search and navigation controls MUST have touch
+targets of at least 44dp.
+Source: pulls.review kit-foot-bar-owns-its-taps, DESIGN rule 198, FootBar.kt at
+ee5cf358333cb1170f1923c7118e12af3f265b74.
+
+@cc [owner:OctavianTocan,label:product;motion] library-navigation-is-the-gallery-capsule
+The library navigation capsule MUST offer Everything and Spaces, with Search as a
+separate circular control. It MUST NOT add a Create tab. The selected highlight
+MUST slide between segments on Pully's capsule curve; when system animations are
+disabled it MUST finish immediately. Changing the selected tab MUST preserve the
+one bar registration rather than creating a second visible bar.
+Source: Tavi's Google Photos reference and no-Create decision, 22 October 2026;
+pulls.review kit-segment-highlight-slides, DESIGN rule 67, Kit.kt at
+ee5cf358333cb1170f1923c7118e12af3f265b74.

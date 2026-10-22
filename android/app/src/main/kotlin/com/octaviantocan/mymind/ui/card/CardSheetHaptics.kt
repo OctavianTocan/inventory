@@ -10,8 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 
-/** Pully's native tick on header controls, following system touch feedback. */
+/** Pully's landing click and control tick, following system touch feedback. */
 internal class CardSheetHaptics(private val context: Context) {
+    fun land() = feel(VibrationEffect.EFFECT_CLICK)
     fun tick() = feel(VibrationEffect.EFFECT_TICK)
 
     private fun feel(effect: Int) {

@@ -47,7 +47,7 @@ fun RowValue(text: String) {
         Modifier.widthIn(max = 190.dp),
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
-        style = TextStyle(color = MymindTheme.colors.settingsHint, fontSize = 13.sp, fontFamily = MymindTheme.fonts.nunito, textAlign = TextAlign.End),
+        style = TextStyle(color = MymindTheme.colors.settingsHint, fontSize = 13.sp, fontFamily = MymindTheme.fonts.body, textAlign = TextAlign.End),
     )
     Spacer(Modifier.width(8.dp))
 }

@@ -29,7 +29,8 @@ import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.menu.AddTagsPage
 import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 import com.octaviantocan.mymind.ui.menu.LocalCardMenuAccent
-import com.octaviantocan.mymind.ui.menu.MenuCard
+import com.octaviantocan.mymind.ui.menu.CardMenuPanel
+import com.octaviantocan.mymind.ui.menu.CardSubmenu
 import com.octaviantocan.mymind.ui.menu.SelectSpacePage
 import com.octaviantocan.mymind.ui.shell.ShellFrame
 import com.octaviantocan.mymind.ui.shell.Tab
@@ -59,7 +60,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
         compose.mainClock.advanceTimeBy(SETTLE_MS)
     }
 
-    private fun submenu(name: String, card: Card = LibrarySamples.grid[1], content: @Composable () -> Unit) {
+    private fun submenu(name: String, card: Card = LibrarySamples.grid[1], page: CardSubmenu = CardSubmenu.Tags, content: @Composable () -> Unit) {
         render {
             Box(Modifier.fillMaxSize()) {
                 ShellFrame(
@@ -71,12 +72,9 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
                         PageTheme(PageScheme.Dark) {
                             CardDetail(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
                         }
-                        Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim))
                     },
                 ) { SampleEverything() }
-                CompositionLocalProvider(LocalCardMenuAccent provides cardAccent(card)) {
-                    MenuCard(Modifier.align(Alignment.BottomCenter)) { content() }
-                }
+                CardMenuPanel(page.title, onDismiss = {}, accent = cardAccent(card), onBack = {}) { content() }
             }
         }
         capture(name)
@@ -84,38 +82,38 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun addTagsEmpty() = submenu("S12_add_tags_empty") {
-        AddTagsPage(TAGS, RECENT, onClose = {}, onSave = {}, focusOnOpen = false)
+        AddTagsPage(TAGS, RECENT, onSave = {}, focusOnOpen = false)
     }
 
     @Test
     fun addTagsRecent() = submenu("S12_add_tags_recent") {
-        AddTagsPage(TAGS, RECENT, onClose = {}, onSave = {}, initiallyExpanded = true, focusOnOpen = false)
+        AddTagsPage(TAGS, RECENT, onSave = {}, initiallyExpanded = true, focusOnOpen = false)
     }
 
     @Test
     fun addTagsTyped() = submenu("S12_add_tags_typed") {
-        AddTagsPage(TAGS, RECENT, onClose = {}, onSave = {}, initialText = "re", focusOnOpen = false)
+        AddTagsPage(TAGS, RECENT, onSave = {}, initialText = "re", focusOnOpen = false)
     }
 
     @Test
     fun addTagsAdded() = submenu("S12_add_tags_added") {
-        AddTagsPage(TAGS, RECENT, onClose = {}, onSave = {}, initialTags = listOf("recipes", "weekend", "to try"), focusOnOpen = false)
+        AddTagsPage(TAGS, RECENT, onSave = {}, initialTags = listOf("recipes", "weekend", "to try"), focusOnOpen = false)
     }
 
     @Test
     fun addTagsPaleCardAccent() = submenu("S12_add_tags_pale_accent",
         LibrarySamples.video.copy(cover = Cover(width = 1280, height = 720, dominantColor = "#ffe3b5"))) {
-        AddTagsPage(TAGS, RECENT, onClose = {}, onSave = {}, focusOnOpen = false)
+        AddTagsPage(TAGS, RECENT, onSave = {}, focusOnOpen = false)
     }
 
     @Test
-    fun selectSpace() = submenu("S12_select_space") {
-        SelectSpacePage(LibrarySamples.spaces.spaces, selected = setOf("s2", "s3"), onClose = {}, onToggle = {}, onCreateSpace = {})
+    fun selectSpace() = submenu("S12_select_space", page = CardSubmenu.Spaces) {
+        SelectSpacePage(LibrarySamples.spaces.spaces, selected = setOf("s2", "s3"), onToggle = {}, onCreateSpace = {})
     }
 
     @Test
-    fun selectSpaceEmpty() = submenu("S12_select_space_empty") {
-        SelectSpacePage(emptyList(), selected = emptySet(), onClose = {}, onToggle = {}, onCreateSpace = {})
+    fun selectSpaceEmpty() = submenu("S12_select_space_empty", page = CardSubmenu.Spaces) {
+        SelectSpacePage(emptyList(), selected = emptySet(), onToggle = {}, onCreateSpace = {})
     }
 
     private fun newSpace(name: String, step: Int) {

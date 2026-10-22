@@ -70,7 +70,7 @@ fun PasswordForm(
                 .clickable(enabled = canSubmit, onClick = onSubmit),
             contentAlignment = Alignment.Center,
         ) {
-            Text(SIGN_IN_LABEL, style = TextStyle(color = Color.White, fontSize = 18.sp, fontFamily = MymindTheme.fonts.nunito))
+            Text(SIGN_IN_LABEL, style = TextStyle(color = Color.White, fontSize = 18.sp, fontFamily = MymindTheme.fonts.body))
         }
     }
 }
@@ -84,7 +84,7 @@ private fun PillField(
     transformation: VisualTransformation,
     onDone: () -> Unit,
 ) {
-    val style = TextStyle(color = Color.Black, fontSize = 18.sp, fontFamily = MymindTheme.fonts.nunito)
+    val style = TextStyle(color = Color.Black, fontSize = 18.sp, fontFamily = MymindTheme.fonts.body)
     BasicTextField(
         value = value,
         onValueChange = onValueChange,

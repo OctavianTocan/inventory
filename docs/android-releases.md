@@ -1,7 +1,7 @@
 # Android releases
 
 `android/CHANGELOG.md` remains the source of `versionName`, `versionCode`, bundled notes and update history.
-The next release is **0.4.0 (5)**: Pully-style card sheets, close/actions inside the sheet header and one readable title.
+The next release is **0.5.0 (7)**: a pinch-adjustable photo-style gallery, profile and Top of Mind header, Pully floating navigation/search bar, and accented action sheets with nested Back navigation. Card reading remains full screen.
 
 The `Android verify` workflow compares a PR's checked-out merge revision with its base commit. Changes to Android
 main sources, resources, Gradle build files, dependency versions or the wrapper require both a higher version name

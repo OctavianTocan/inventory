@@ -141,7 +141,7 @@ private fun Heading(text: String, dark: Boolean) {
             fontSize = 34.sp,
             lineHeight = 1.1.em,
             letterSpacing = (-0.03).em,
-            fontFamily = MymindTheme.fonts.louize,
+            fontFamily = MymindTheme.fonts.heading,
             textAlign = TextAlign.Center,
         ),
     )
@@ -157,7 +157,7 @@ private fun Paragraph(text: String, dark: Boolean) {
             fontSize = 19.sp,
             fontWeight = FontWeight.Light,
             letterSpacing = (-0.01).em,
-            fontFamily = MymindTheme.fonts.nunito,
+            fontFamily = MymindTheme.fonts.body,
             textAlign = TextAlign.Center,
         ),
     )
@@ -173,7 +173,7 @@ private fun NameField(value: String, onChange: (String) -> Unit, dark: Boolean, 
         value = value,
         onValueChange = onChange,
         singleLine = true,
-        textStyle = TextStyle(color = ink, fontSize = 19.sp, fontFamily = MymindTheme.fonts.nunito, textAlign = TextAlign.Center),
+        textStyle = TextStyle(color = ink, fontSize = 19.sp, fontFamily = MymindTheme.fonts.body, textAlign = TextAlign.Center),
         cursorBrush = SolidColor(ink),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { onDone() }),
@@ -186,7 +186,7 @@ private fun NameField(value: String, onChange: (String) -> Unit, dark: Boolean, 
                 if (value.isEmpty()) {
                     Text(
                         "Name your new space",
-                        style = TextStyle(color = if (dark) Color(0xFF626C7A) else Color(0xFF748297), fontSize = 19.sp, fontFamily = MymindTheme.fonts.nunito, textAlign = TextAlign.Center),
+                        style = TextStyle(color = if (dark) Color(0xFF626C7A) else Color(0xFF748297), fontSize = 19.sp, fontFamily = MymindTheme.fonts.body, textAlign = TextAlign.Center),
                     )
                 }
                 field()
@@ -235,6 +235,6 @@ private fun ModalButton(label: String, enabled: Boolean, fill: Color, disabledFi
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = TextStyle(color = text, fontSize = 13.sp, fontFamily = MymindTheme.fonts.nunitoSemiBold))
+        Text(label, style = TextStyle(color = text, fontSize = 13.sp, fontFamily = MymindTheme.fonts.body, fontWeight = FontWeight.SemiBold))
     }
 }

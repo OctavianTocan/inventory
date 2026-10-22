@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -135,7 +136,7 @@ fun ShareSheet(
                     fontSize = 38.sp,
                     lineHeight = 36.sp,
                     letterSpacing = 0.03.em,
-                    fontFamily = MymindTheme.fonts.louize,
+                    fontFamily = MymindTheme.fonts.heading,
                 ),
             )
             TabRow(state)
@@ -188,7 +189,7 @@ private fun TabRow(state: ShareSheetState) {
                 Image(painterResource(tab.icon), contentDescription = null, colorFilter = ColorFilter.tint(color))
                 Text(
                     tab.label,
-                    style = TextStyle(color = color, fontSize = 20.sp, lineHeight = 28.sp, letterSpacing = 0.02.em, fontFamily = MymindTheme.fonts.nunito),
+                    style = TextStyle(color = color, fontSize = 20.sp, lineHeight = 28.sp, letterSpacing = 0.02.em, fontFamily = MymindTheme.fonts.body),
                 )
             }
         }
@@ -197,7 +198,7 @@ private fun TabRow(state: ShareSheetState) {
 
 @Composable
 private fun bodyStyle(color: Color) =
-    TextStyle(color = color, fontSize = 15.sp, lineHeight = 20.sp, fontFamily = MymindTheme.fonts.nunito)
+    TextStyle(color = color, fontSize = 15.sp, lineHeight = 20.sp, fontFamily = MymindTheme.fonts.body)
 
 @Composable
 private fun TagsPanel(state: ShareSheetState) {
@@ -209,7 +210,7 @@ private fun TagsPanel(state: ShareSheetState) {
                 value = state.tagText,
                 onValueChange = { state.tagText = it },
                 singleLine = true,
-                textStyle = TextStyle(color = ShareColors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.nunito),
+                textStyle = TextStyle(color = ShareColors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body),
                 cursorBrush = SolidColor(ShareColors.fieldText),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(onNext = {
@@ -233,7 +234,7 @@ private fun TagsPanel(state: ShareSheetState) {
             }
         }
         if (choices.isNotEmpty()) {
-            if (state.tagText.isEmpty()) Text("RECENT TAGS", style = bodyStyle(ShareColors.hint).copy(fontSize = 12.sp, fontFamily = MymindTheme.fonts.nunitoSemiBold))
+            if (state.tagText.isEmpty()) Text("RECENT TAGS", style = bodyStyle(ShareColors.hint).copy(fontSize = 12.sp, fontFamily = MymindTheme.fonts.body, fontWeight = FontWeight.SemiBold))
             choices.forEach { choice ->
                 Text(
                     choice,
@@ -256,7 +257,7 @@ private fun NotePanel(state: ShareSheetState) {
             BasicTextField(
                 value = state.note,
                 onValueChange = { state.note = it },
-                textStyle = TextStyle(color = ShareColors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.nunito),
+                textStyle = TextStyle(color = ShareColors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body),
                 cursorBrush = SolidColor(ShareColors.fieldText),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -318,7 +319,7 @@ private fun SaveButton(phase: SavePhase, onSave: () -> Unit) {
                     SavePhase.Saved -> "Saved"
                     else -> "Save"
                 },
-                style = TextStyle(color = Color.White, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.nunito),
+                style = TextStyle(color = Color.White, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body),
             )
         }
     }
@@ -351,17 +352,17 @@ fun ShareProblem(problem: ShareState, onAction: () -> Unit, onClose: () -> Unit)
             Image(painterResource(R.drawable.sad_mymind), contentDescription = null, colorFilter = ColorFilter.tint(ShareColors.tabInactive))
             Text(
                 text.title,
-                style = TextStyle(color = ShareColors.tabInactive, fontSize = 45.sp, lineHeight = 44.sp, fontFamily = MymindTheme.fonts.louize, textAlign = TextAlign.Center),
+                style = TextStyle(color = ShareColors.tabInactive, fontSize = 45.sp, lineHeight = 44.sp, fontFamily = MymindTheme.fonts.heading, textAlign = TextAlign.Center),
             )
             Text(
                 text.body,
-                style = TextStyle(color = ShareColors.label, fontSize = 22.sp, lineHeight = 26.sp, fontFamily = MymindTheme.fonts.nunito, textAlign = TextAlign.Center),
+                style = TextStyle(color = ShareColors.label, fontSize = 22.sp, lineHeight = 26.sp, fontFamily = MymindTheme.fonts.body, textAlign = TextAlign.Center),
             )
             Box(
                 Modifier.height(48.dp).clip(RoundedCornerShape(100.dp)).background(ShareColors.button).clickable(onClick = onAction).padding(horizontal = 32.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text.button, style = TextStyle(color = Color.White, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.nunito))
+                Text(text.button, style = TextStyle(color = Color.White, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body))
             }
         }
     }

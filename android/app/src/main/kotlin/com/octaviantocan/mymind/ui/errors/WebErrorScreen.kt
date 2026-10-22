@@ -35,14 +35,14 @@ private const val BODY_ALPHA = 0.7f
 @Composable
 fun WebErrorScreen(onRetry: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MymindTheme.colors
-    val nunito = MymindTheme.fonts.nunito
+    val bodyFont = MymindTheme.fonts.body
     Box(modifier.fillMaxSize().background(colors.page), contentAlignment = Alignment.Center) {
         Column(Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(HEADING, style = TextStyle(color = colors.muted, fontSize = 20.sp, fontFamily = nunito, textAlign = TextAlign.Center))
+            Text(HEADING, style = TextStyle(color = colors.muted, fontSize = 20.sp, fontFamily = bodyFont, textAlign = TextAlign.Center))
             Spacer(Modifier.height(8.dp))
             Text(
                 BODY,
-                style = TextStyle(color = colors.muted.copy(alpha = BODY_ALPHA), fontSize = 14.sp, fontFamily = nunito, textAlign = TextAlign.Center),
+                style = TextStyle(color = colors.muted.copy(alpha = BODY_ALPHA), fontSize = 14.sp, fontFamily = bodyFont, textAlign = TextAlign.Center),
             )
             Spacer(Modifier.height(24.dp))
             Button(
@@ -50,7 +50,7 @@ fun WebErrorScreen(onRetry: () -> Unit, modifier: Modifier = Modifier) {
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.White),
             ) {
-                Text(RETRY_LABEL, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = TextStyle(fontSize = 16.sp, fontFamily = nunito))
+                Text(RETRY_LABEL, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = TextStyle(fontSize = 16.sp, fontFamily = bodyFont))
             }
         }
     }

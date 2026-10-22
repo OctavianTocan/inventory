@@ -2,7 +2,6 @@ package com.octaviantocan.mymind.ui.menu
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -14,6 +13,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,26 +24,22 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +53,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -65,16 +66,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.ui.library.CardSpaceCreationState
+import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Space
+import com.octaviantocan.mymind.ui.describe
+import com.octaviantocan.mymind.ui.library.SPACE_COLORS
 import com.octaviantocan.mymind.ui.library.parseHexColor
-import com.octaviantocan.mymind.ui.theme.MymindTheme
 import java.util.Locale
 
 /**
  * Colours of the Add tags and Select a space pages in one system appearance.
  *
  * @property title Header title and suggestion text.
- * @property close Tint of the close icon.
  * @property fieldText Text and cursor of the tag field.
  * @property field Fill of the tag field.
  * @property chevron Tint of the field's chevron.
@@ -90,7 +93,6 @@ import java.util.Locale
 @Immutable
 class SubmenuColors(
     val title: Color,
-    val close: Color,
     val fieldText: Color,
     val field: Color,
     val chevron: Color,
@@ -104,50 +106,18 @@ class SubmenuColors(
     val buttonText: Color = Color.White,
 )
 
-private val Slate = Color(0xFF748297)
-private val Orange = Color(0xFFFF5924)
-
-/** Submenu colours when the system is dark. */
-val DarkSubmenuColors = SubmenuColors(
-    title = Slate,
-    close = Slate,
-    fieldText = Color(0xFFA7B4C6),
-    field = Color(0xFF1C1E26),
-    chevron = Color(0x99748297),
-    recentLabel = Color(0xFFA7B4C6),
-    help = Color(0x99748297),
-    button = Orange,
-    chip = Color(0xFF1C1E26),
-    chipText = Slate,
-    spaceRow = Color(0xFF1C1E26),
-    spaceLabel = Slate,
-)
-
-/** Submenu colours when the system is light. */
-val LightSubmenuColors = SubmenuColors(
-    title = Slate,
-    close = Slate,
-    fieldText = Color.Black,
-    field = Color(0xFFF4F6F9),
-    chevron = Color(0x4D415777),
-    recentLabel = Color(0xFFB3BCCA),
-    help = Color(0x9951647D),
-    button = Orange,
-    chip = Color(0xFFF4F6F9),
-    chipText = Color.Black,
-    spaceRow = Color(0xFFF4F6F9),
-    spaceLabel = Color(0xFF353643),
-)
-
-/** Carry the selected card's accent into submenu controls without recolouring their content. */
+/** Pully surfaces and type follow the card; the primary action uses its actual accent. */
 @Composable
 private fun submenuColors(): SubmenuColors {
-    val base = if (MymindTheme.colors.dark) DarkSubmenuColors else LightSubmenuColors
-    val accent = LocalCardMenuAccent.current ?: return base
+    val colors = menuColors()
+    val button = LocalCardMenuAccent.current ?: colors.rowText
     return SubmenuColors(
-        base.title, base.close, base.fieldText, base.field, base.chevron, base.recentLabel,
-        base.help, accent, base.chip, base.chipText, base.spaceRow, base.spaceLabel,
-        buttonText = if (accent.luminance() > 0.179f) Color.Black else Color.White,
+        title = colors.rowText, fieldText = colors.rowText,
+        field = colors.row, chevron = colors.rowText.copy(alpha = 0.6f),
+        recentLabel = colors.rowText.copy(alpha = 0.65f), help = colors.rowText.copy(alpha = 0.7f),
+        button = button, chip = colors.row, chipText = colors.rowText,
+        spaceRow = colors.row, spaceLabel = colors.rowText,
+        buttonText = if (button.luminance() > 0.179f) Color.Black else Color.White,
     )
 }
 
@@ -182,46 +152,10 @@ fun addTag(tags: List<String>, text: String): List<String> {
 }
 
 /**
- * The header of a submenu: the title in capitals and the close icon.
- *
- * @param title Title.
- * @param onClose Called when the close icon is tapped.
- */
-@Composable
-fun SubmenuHeader(title: String, onClose: () -> Unit) {
-    val colors = submenuColors()
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 20.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            title.uppercase(Locale.ROOT),
-            Modifier.weight(1f),
-            style = TextStyle(
-                color = colors.title,
-                fontSize = 14.sp,
-                lineHeight = 21.sp,
-                letterSpacing = 0.05.em,
-                fontFamily = MymindTheme.fonts.nunitoBold,
-            ),
-        )
-        Icon(
-            painterResource(R.drawable.close),
-            contentDescription = "Close",
-            tint = colors.close,
-            modifier = Modifier
-                .size(24.dp)
-                .clickable(interactionSource = null, indication = ripple(bounded = false), onClick = onClose),
-        )
-    }
-}
-
-/**
  * The Add tags page: the tag field with its suggestions, the added tags and "Finish & Save".
  *
  * @param allTags Every tag of the library.
  * @param recentTags Tags added last.
- * @param onClose Called when the close icon is tapped.
  * @param onSave Called with the tags to add once "Finish & Save" is tapped, including text left in the field.
  * @param initialText Text the field starts with.
  * @param initialTags Tags already added when the page opens.
@@ -232,7 +166,6 @@ fun SubmenuHeader(title: String, onClose: () -> Unit) {
 fun AddTagsPage(
     allTags: List<String>,
     recentTags: List<String>,
-    onClose: () -> Unit,
     onSave: (List<String>) -> Unit,
     initialText: String = "",
     initialTags: List<String> = emptyList(),
@@ -249,15 +182,14 @@ fun AddTagsPage(
     LaunchedEffect(text) { if (text.isNotEmpty()) expanded = true }
     LaunchedEffect(Unit) { if (focusOnOpen) focus.requestFocus() }
 
-    // With the keyboard up and the suggestions open the page can be taller than the room left above the keyboard.
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-        SubmenuHeader(CardSubmenu.Tags.title, onClose)
+    // The sheet owns the viewport so dragging and IME changes share one scroll owner.
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).background(colors.field, RoundedCornerShape(16.dp))) {
             BasicTextField(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                textStyle = TextStyle(color = colors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, letterSpacing = (-0.02).em, fontFamily = MymindTheme.fonts.nunito),
+                textStyle = TextStyle(color = colors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, letterSpacing = (-0.02).em, fontFamily = CardMenuFont),
                 cursorBrush = SolidColor(colors.fieldText),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(onNext = {
@@ -267,7 +199,7 @@ fun AddTagsPage(
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 decorationBox = { field ->
                     Row(
-                        Modifier.height(56.dp).padding(horizontal = 20.dp, vertical = 16.dp),
+                        Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -292,7 +224,7 @@ fun AddTagsPage(
                             Text(
                                 "RECENT TAGS",
                                 Modifier.padding(top = 8.dp).padding(horizontal = 20.dp),
-                                style = TextStyle(color = colors.recentLabel, fontSize = 12.sp, lineHeight = 26.sp, fontFamily = MymindTheme.fonts.nunitoSemiBold),
+                                style = TextStyle(color = colors.recentLabel, fontSize = 12.sp, lineHeight = 26.sp, fontFamily = CardMenuFont),
                             )
                         }
                         choices.forEach { choice ->
@@ -310,7 +242,7 @@ fun AddTagsPage(
                             ) {
                                 Text(
                                     choice,
-                                    style = TextStyle(color = colors.title, fontSize = 18.sp, lineHeight = 34.sp, letterSpacing = (-0.01).em, fontFamily = MymindTheme.fonts.nunito),
+                                    style = TextStyle(color = colors.title, fontSize = 18.sp, lineHeight = 34.sp, letterSpacing = (-0.01).em, fontFamily = CardMenuFont),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
@@ -343,7 +275,7 @@ fun AddTagsPage(
                                 fontSize = 17.sp,
                                 lineHeight = 23.sp,
                                 letterSpacing = (-0.02).em,
-                                fontFamily = MymindTheme.fonts.nunito,
+                                fontFamily = CardMenuFont,
                                 textAlign = TextAlign.Center,
                             ),
                         )
@@ -361,7 +293,6 @@ fun AddTagsPage(
  *
  * @param spaces Spaces in the user's order.
  * @param selected Ids of the spaces the card is in.
- * @param onClose Called when the close icon is tapped.
  * @param onToggle Called with a tapped space.
  * @param onCreateSpace Called when "Create Your First Space" is tapped.
  */
@@ -369,26 +300,24 @@ fun AddTagsPage(
 fun SelectSpacePage(
     spaces: List<Space>,
     selected: Set<String>,
-    onClose: () -> Unit,
     onToggle: (Space) -> Unit,
     onCreateSpace: () -> Unit,
 ) {
     val colors = submenuColors()
-    Column(Modifier.fillMaxWidth().animateContentSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        SubmenuHeader(CardSubmenu.Spaces.title, onClose)
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         if (spaces.isEmpty()) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(painterResource(R.drawable.ic_spaces), contentDescription = null, modifier = Modifier.size(49.dp))
                 HelpText(NO_SPACES_HELP, colors)
             }
-            SubmenuButton("Create Your First Space", colors, onCreateSpace)
+            SubmenuButton("Create Your First Space", colors, onClick = onCreateSpace)
         } else {
-            LazyColumn(
-                Modifier.heightIn(max = 280.dp),
-                contentPadding = PaddingValues(start = 10.dp, top = 10.dp, end = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(spaces, key = { it.id }) { space -> SpaceChoiceRow(space, space.id in selected, colors) { onToggle(space) } }
+            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 30.dp)
+                .fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.spaceRow)) {
+                spaces.forEachIndexed { index, space ->
+                    if (index > 0) HorizontalDivider(Modifier.padding(start = 52.dp), color = colors.spaceLabel.copy(alpha = 0.1f), thickness = 1.dp)
+                    SpaceChoiceRow(space, space.id in selected, colors) { onToggle(space) }
+                }
             }
         }
     }
@@ -411,16 +340,13 @@ private fun SpaceChoiceRow(space: Space, selected: Boolean, colors: SubmenuColor
         scale.animateTo(if (selected) 1.1f else 0.9f, bump)
         scale.animateTo(1f, bump)
     }
-    val shape = RoundedCornerShape(16.dp)
     Row(
         Modifier
             .fillMaxWidth()
-            .height(48.dp)
-            .background(colors.spaceRow, shape)
-            .clip(shape)
+            .heightIn(min = 52.dp)
             .clickable(onClick = onClick)
-            .padding(start = 20.dp, end = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -441,9 +367,7 @@ private fun SpaceChoiceRow(space: Space, selected: Boolean, colors: SubmenuColor
         }
         Text(
             space.name.orEmpty(),
-            style = TextStyle(color = colors.spaceLabel, fontSize = 17.sp, lineHeight = 23.sp, fontFamily = MymindTheme.fonts.nunito),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            style = TextStyle(color = colors.spaceLabel, fontSize = 17.sp, lineHeight = 23.sp, fontFamily = CardMenuFont),
         )
     }
 }
@@ -459,7 +383,7 @@ private fun HelpText(text: String, colors: SubmenuColors) {
             fontSize = 15.sp,
             lineHeight = 20.sp,
             letterSpacing = (-0.01).em,
-            fontFamily = MymindTheme.fonts.nunito,
+            fontFamily = CardMenuFont,
             textAlign = TextAlign.Center,
         ),
     )
@@ -467,20 +391,80 @@ private fun HelpText(text: String, colors: SubmenuColors) {
 
 /** The 44 dp action pill at the bottom of a submenu. */
 @Composable
-private fun SubmenuButton(label: String, colors: SubmenuColors, onClick: () -> Unit) {
+private fun SubmenuButton(label: String, colors: SubmenuColors, enabled: Boolean = true, onClick: () -> Unit) {
     Row(
         Modifier
             .padding(horizontal = 20.dp)
             .padding(top = 8.dp, bottom = 20.dp)
             .fillMaxWidth()
-            .height(44.dp)
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(100.dp))
-            .background(colors.button)
-            .clickable(onClick = onClick)
+            .background(colors.button.copy(alpha = if (enabled) 1f else 0.4f))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = TextStyle(color = colors.buttonText, fontSize = 16.sp, letterSpacing = (-0.02).em, fontFamily = MymindTheme.fonts.nunito))
+        Text(label, style = TextStyle(color = colors.buttonText, fontSize = 16.sp, letterSpacing = (-0.02).em, fontFamily = CardMenuFont))
+    }
+}
+
+/**
+ * Creates a space as a child of the card's space selector. A failed request keeps the form available for retry.
+ *
+ * @param creation Model-owned pending operation and its last result.
+ * @param onCreate Starts creation in the model; it does not add the selected card to it.
+ * @param onCreated Returns to the space selector after creation succeeds.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CreateSpacePage(
+    creation: CardSpaceCreationState,
+    onCreate: (name: String, color: String) -> Unit,
+    onCreated: () -> Unit,
+) {
+    val colors = submenuColors()
+    var name by rememberSaveable { mutableStateOf("") }
+    var color by rememberSaveable { mutableStateOf(SPACE_COLORS.first()) }
+    val busy = creation.pending
+    val error = (creation.result as? ApiResult.Failed)?.let { describe(it.failure) }
+    LaunchedEffect(creation.result) {
+        if (creation.result is ApiResult.Ok) onCreated()
+    }
+    val submit: () -> Unit = {
+        if (name.isNotBlank() && !busy) onCreate(name.trim(), color)
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        BasicTextField(
+            value = name,
+            onValueChange = { name = it },
+            enabled = !busy,
+            singleLine = true,
+            textStyle = TextStyle(color = colors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont),
+            cursorBrush = SolidColor(colors.fieldText),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
+            modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()
+                .semantics { contentDescription = "Space name" }
+                .background(colors.field, RoundedCornerShape(16.dp)).padding(16.dp),
+            decorationBox = { field ->
+                Box {
+                    if (name.isEmpty()) Text("Space name", style = TextStyle(color = colors.help, fontSize = 17.sp, fontFamily = CardMenuFont))
+                    field()
+                }
+            },
+        )
+        Text("Color", Modifier.padding(horizontal = 20.dp), style = TextStyle(color = colors.title, fontSize = 15.sp, fontFamily = CardMenuFont))
+        FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SPACE_COLORS.forEach { choice ->
+                Box(Modifier.size(44.dp).clip(CircleShape)
+                    .clickable(enabled = !busy, role = Role.RadioButton) { color = choice }
+                    .semantics { contentDescription = "Space color $choice"; selected = color == choice }
+                    .border(if (color == choice) 2.dp else 0.dp, colors.title, CircleShape)
+                    .padding(5.dp).background(parseHexColor(choice) ?: colors.title, CircleShape))
+            }
+        }
+        error?.let { HelpText(it, colors) }
+        SubmenuButton(if (busy) "Creating…" else "Create space", colors, enabled = name.isNotBlank() && !busy, onClick = submit)
     }
 }

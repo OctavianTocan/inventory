@@ -4,7 +4,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -26,6 +26,7 @@ import com.octaviantocan.mymind.ui.library.SpacesState
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.menu.CardMenuContent
+import com.octaviantocan.mymind.ui.menu.CardMenuPanel
 import com.octaviantocan.mymind.ui.menu.CardMenuIcons
 import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 import com.octaviantocan.mymind.ui.menu.LocalCardMenuAccent
@@ -73,7 +74,7 @@ class LibraryScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun everythingScrolled() {
-        val grid = LazyStaggeredGridState()
+        val grid = LazyListState()
         shell { SampleEverything(grid = grid) }
         compose.change { runBlocking { grid.scrollToItem(3, 120) } }
         compose.mainClock.advanceTimeBy(SETTLE_MS)
@@ -184,11 +185,10 @@ class LibraryScreenshotTest(private val dark: Boolean) {
                         PageTheme(PageScheme.Dark) {
                             CardDetail(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
                         }
-                        Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim))
                     },
                 ) { SampleEverything() }
-                CompositionLocalProvider(LocalCardMenuAccent provides cardAccent(card)) {
-                    CardMenuContent(cardMenuItems(card, null), onSelect = {}, modifier = Modifier.align(Alignment.BottomCenter), icons = icons())
+                CardMenuPanel("Card actions", onDismiss = {}, accent = cardAccent(card)) {
+                    CardMenuContent(cardMenuItems(card, null), onSelect = {}, icons = icons())
                 }
             }
         }

@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.octaviantocan.mymind.BuildConfig
+import com.octaviantocan.mymind.data.AccountProfile
 import com.octaviantocan.mymind.data.Repository
 import com.octaviantocan.mymind.data.SignInOutcome
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +27,10 @@ class SignInViewModel(private val repository: Repository) : ViewModel() {
     val state: StateFlow<SignInUiState> = mutableState
 
     fun signInWithGoogle(context: Context) = run {
-        repository.signInWithGoogle { nonce -> requestGoogleIdToken(context, nonce) }
+        var profile: AccountProfile? = null
+        repository.signInWithGoogle(profile = { profile }) { nonce ->
+            requestGoogleIdToken(context, nonce) { profile = it }
+        }
     }
 
     fun signInWithPassword(username: String, password: String) = run {
@@ -56,7 +60,7 @@ class SignInViewModel(private val repository: Repository) : ViewModel() {
         }
     }
 
-    private suspend fun requestGoogleIdToken(context: Context, nonce: String): String? {
+    private suspend fun requestGoogleIdToken(context: Context, nonce: String, onProfile: (AccountProfile) -> Unit): String? {
         if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isEmpty()) {
             throw IllegalStateException("Google sign-in is not configured in this build.")
         }
@@ -69,7 +73,10 @@ class SignInViewModel(private val repository: Repository) : ViewModel() {
         return try {
             val credential = CredentialManager.create(context).getCredential(context, request).credential
             if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                GoogleIdTokenCredential.createFrom(credential.data).idToken
+                GoogleIdTokenCredential.createFrom(credential.data).let { google ->
+                    onProfile(AccountProfile(google.email.orEmpty(), google.profilePictureUri?.toString(), google.displayName))
+                    google.idToken
+                }
             } else {
                 null
             }
