@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
@@ -32,9 +33,38 @@ import com.octaviantocan.mymind.ui.shell.footShadow
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import okhttp3.OkHttpClient
 
-/** Account and library actions above Top of Mind, with no search field competing with the gallery. */
+/** Width the fixed controls cover at the end of the title row. */
+internal val CONTROLS_WIDTH = 44.dp * 3 + 8.dp * 2 + 16.dp
+
+/**
+ * A page title that scrolls away with the page beneath the fixed [GalleryControls], in the same row geometry.
+ *
+ * @param text The title.
+ * @param modifier Modifier for the row.
+ * @param start Inset before the title, such as room for a floating Back button.
+ * @param end Room kept clear for the fixed controls at the end of the row.
+ */
 @Composable
-fun GalleryHeader(
+fun GalleryTitle(text: String, modifier: Modifier = Modifier, start: Dp = 20.dp, end: Dp = CONTROLS_WIDTH) {
+    Box(modifier.fillMaxWidth().padding(start = start, top = 12.dp, bottom = 16.dp).height(44.dp), contentAlignment = Alignment.CenterStart) {
+        Text(text, Modifier.padding(end = end).semantics { heading() }, style = LibraryStyle.title,
+            color = LibraryStyle.colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * Add, Rediscover and the account, fixed over the scrolling page; their own raised circles and shadows replace a solid
+ * header strip.
+ *
+ * @param onSettings Called when the account is tapped.
+ * @param onAdd Called when Add is tapped.
+ * @param onSerendipity Called when Rediscover is tapped.
+ * @param modifier Modifier for the row; callers align it to the top end.
+ * @param photoUrl The account's Google photo, or null for the profile glyph.
+ * @param photoLoader Loader for [photoUrl] that never carries the library session.
+ */
+@Composable
+fun GalleryControls(
     onSettings: () -> Unit,
     onAdd: () -> Unit,
     onSerendipity: () -> Unit,
@@ -43,10 +73,8 @@ fun GalleryHeader(
     photoLoader: ImageLoader? = null,
 ) {
     val colors = LibraryStyle.colors
-    Row(modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Your mind", Modifier.weight(1f).semantics { heading() }, style = LibraryStyle.title,
-            color = colors.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Row(modifier.padding(end = 16.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FootCircleButton(R.drawable.ic_library_add, "Add", onAdd, size = 44.dp)
         FootCircleButton(R.drawable.ic_library_shuffle, "Rediscover cards", onSerendipity, size = 44.dp)
         FootPressTheme {

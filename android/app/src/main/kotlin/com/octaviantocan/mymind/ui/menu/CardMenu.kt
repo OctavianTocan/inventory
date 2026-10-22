@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
-import com.octaviantocan.mymind.ui.theme.AndroidFontFamily
+import com.octaviantocan.mymind.ui.theme.AppFontFamily
 import com.octaviantocan.mymind.ui.card.*
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
@@ -68,7 +68,7 @@ val DarkMenuColors = MenuColors(Scrim, Color(0xFF14161E), Color(0xFF1C1E26), Col
 val LightMenuColors = MenuColors(Scrim, Color.White, Color(0xFFF4F6F9), Color(0xFF353643), Danger.copy(alpha = 0.1f), Danger, Handle)
 
 internal val LocalCardMenuAccent = staticCompositionLocalOf<Color?> { null }
-internal val CardMenuFont = AndroidFontFamily
+internal val CardMenuFont = AppFontFamily
 
 /** Neutral Pully paper and controls; the card accent is confined to the top hint and grabber. */
 internal fun cardMenuSheetColors(accent: Color?, dark: Boolean): CardSheetColors {
@@ -128,7 +128,7 @@ fun CardMenuContent(
                 CardMenuHeading(heading, first = quick.isEmpty() && heading == "Organize")
                 CardMenuGroup(Modifier.padding(top = 12.dp)) {
                     rows.forEachIndexed { index, item ->
-                        if (index > 0) HorizontalDivider(Modifier.padding(start = 52.dp), color = colors.rowText.copy(alpha = 0.1f), thickness = 1.dp)
+                        if (index > 0) SheetRowDivider()
                         CardMenuRow(item, colors, icons, enabled) { onSelect(item) }
                     }
                 }
@@ -159,20 +159,36 @@ internal fun CardMenuGroup(modifier: Modifier = Modifier, content: @Composable C
 
 @Composable
 private fun CardQuickAction(item: CardMenuItem, colors: MenuColors, icons: CardMenuIcons, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
-    val haptic = rememberSheetHaptics()
     val label = when (item.action) {
         CardMenuAction.ViewSource -> "Source"
         CardMenuAction.Copy -> "Copy"
         CardMenuAction.RemoveFromTopOfMind -> "Unpin"
         else -> item.action.label
     }
+    SheetTile(icons.icon(item.action), label, onClick, modifier, description = item.action.label, enabled = enabled)
+}
+
+/**
+ * One of Pully's quick-action tiles: a raised 16dp card with the icon over a short label.
+ *
+ * @param icon Artwork, tinted with the row ink.
+ * @param label Short label under the icon.
+ * @param onClick Called on a tap, after the sheet's tick.
+ * @param modifier Modifier for the tile; callers in a row give each tile the same weight.
+ * @param description Spoken name, when the label alone is too short.
+ * @param enabled False ignores taps.
+ */
+@Composable
+internal fun SheetTile(icon: Painter, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, description: String = label, enabled: Boolean = true) {
+    val colors = menuColors()
+    val shape = RoundedCornerShape(16.dp)
+    val haptic = rememberSheetHaptics()
     Column(modifier.heightIn(min = 72.dp).cardSurfaceShadow(shape, note = true).clip(shape).background(colors.row)
-        .semantics { contentDescription = item.action.label }
+        .semantics { contentDescription = description }
         .clickable(remember { MutableInteractionSource() }, CardSheetIndication, enabled = enabled, role = Role.Button) { haptic.tick(); onClick() }
         .padding(horizontal = 8.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
-        Image(icons.icon(item.action), null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(colors.rowText))
+        Image(icon, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(colors.rowText))
         Text(label, style = TextStyle(fontFamily = CardMenuFont, fontSize = 14.sp, lineHeight = 20.sp, color = colors.rowText),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
@@ -195,7 +211,39 @@ fun MenuCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() 
 /** A Pully row: one shared surface, an inset divider and a label that can wrap. */
 @Composable
 private fun CardMenuRow(item: CardMenuItem, colors: MenuColors, icons: CardMenuIcons, enabled: Boolean, onClick: () -> Unit) {
-    val tint = if (item.action.danger) colors.dangerText else colors.rowText
+    val detail = when (item.action) {
+        CardMenuAction.AddTags -> "Label and find this card"
+        CardMenuAction.AddToSpace -> "Keep related cards together"
+        else -> if (item.locked) "Not included in your plan" else null
+    }
+    val opensPage = item.action == CardMenuAction.AddTags || item.action == CardMenuAction.AddToSpace
+    SheetRow(icons.icon(item.action), item.action.label, onClick, detail = detail, danger = item.action.danger, enabled = enabled,
+        trailing = if (opensPage) { { SheetRowChevron(colors) } } else null)
+}
+
+/**
+ * One row of a raised Pully group: the icon, the label with an optional muted detail, then optional trailing content.
+ *
+ * @param icon Artwork, tinted like the label.
+ * @param label The row's name.
+ * @param onClick Called on a tap, after the sheet's tick.
+ * @param detail Muted second line, or null.
+ * @param danger True paints the icon and label in the destructive color.
+ * @param enabled False ignores taps.
+ * @param trailing Drawn at the end, such as a value or a chevron.
+ */
+@Composable
+internal fun SheetRow(
+    icon: Painter,
+    label: String,
+    onClick: () -> Unit,
+    detail: String? = null,
+    danger: Boolean = false,
+    enabled: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val colors = menuColors()
+    val tint = if (danger) colors.dangerText else colors.rowText
     val haptic = rememberSheetHaptics()
     Row(
         Modifier.fillMaxWidth().heightIn(min = 52.dp)
@@ -204,18 +252,23 @@ private fun CardMenuRow(item: CardMenuItem, colors: MenuColors, icons: CardMenuI
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(icons.icon(item.action), contentDescription = null, modifier = Modifier.size(22.dp), colorFilter = ColorFilter.tint(tint))
+        Image(icon, contentDescription = null, modifier = Modifier.size(22.dp), colorFilter = ColorFilter.tint(tint))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(item.action.label, style = TextStyle(color = tint, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont))
-            val detail = when (item.action) {
-                CardMenuAction.AddTags -> "Label and find this card"
-                CardMenuAction.AddToSpace -> "Keep related cards together"
-                else -> if (item.locked) "Not included in your plan" else null
-            }
+            Text(label, style = TextStyle(color = tint, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont))
             if (detail != null) Text(detail, style = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 14.sp, lineHeight = 20.sp, fontFamily = CardMenuFont))
         }
-        if (item.action == CardMenuAction.AddTags || item.action == CardMenuAction.AddToSpace) {
-            Image(painterResource(R.drawable.ic_caret_right), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(colors.rowText.copy(alpha = 0.55f)))
-        }
+        trailing?.invoke()
     }
+}
+
+/** The muted chevron of a row that opens a page. */
+@Composable
+internal fun SheetRowChevron(colors: MenuColors = menuColors()) {
+    Image(painterResource(R.drawable.ic_caret_right), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(colors.rowText.copy(alpha = 0.55f)))
+}
+
+/** The inset divider between rows of one raised group. */
+@Composable
+internal fun SheetRowDivider() {
+    HorizontalDivider(Modifier.padding(start = 52.dp), color = menuColors().rowText.copy(alpha = 0.1f), thickness = 1.dp)
 }

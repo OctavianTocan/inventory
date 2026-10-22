@@ -27,6 +27,7 @@ import com.octaviantocan.mymind.ui.shell.ShellFrame
 import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import org.junit.Assert.assertEquals
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -80,7 +81,7 @@ class LibraryChromeTest {
         val gallery = compose.onNodeWithContentDescription("Card gallery")
         val rail = compose.onNodeWithContentDescription("Pinned cards").assertIsDisplayed()
         compose.onNodeWithText("Top of Mind").assertDoesNotExist()
-        assertTrue(gallery.fetchSemanticsNode().boundsInRoot.top >= before.maxOf { it.bottom })
+        assertTrue("The page scrolls beneath the floating controls", gallery.fetchSemanticsNode().boundsInRoot.top <= before.minOf { it.top })
 
         rail.performTouchInput { swipeLeft(durationMillis = 500) }
         compose.waitForIdle()
@@ -145,7 +146,8 @@ class LibraryChromeTest {
     }
 
     @Test fun topBlurLeavesCardTapsAndPullToRefreshInteractive() {
-        show(highlights = emptyList())
+        val state = LazyListState(firstVisibleItemIndex = 1)
+        show(state, highlights = emptyList())
         val before = controlBounds()
         val gallery = compose.onNodeWithContentDescription("Card gallery")
         val bounds = gallery.fetchSemanticsNode().boundsInRoot
@@ -155,6 +157,7 @@ class LibraryChromeTest {
         assertTrue("The tap must start within the decorative top edge", spot.y < with(compose.density) { 32.dp.toPx() })
         gallery.performTouchInput { click(spot) }
         assertEquals(listOf("photo-1"), opened)
+        compose.runOnIdle { runBlocking { state.scrollToItem(0) } }
         gallery.performTouchInput {
             swipe(Offset(centerX, edge), Offset(centerX, height * 0.75f), durationMillis = 700)
         }

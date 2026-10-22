@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.0 (11), 2026-10-22
+Your review, applied: a new typeface, videos that play, posts that look like posts, and Pully sheets for adding and your profile.
+
+### New
+- Google Sans Flex, the typeface of Google's own apps, replaces Android's default font.
+- Tap + for an Add sheet with Camera, Photos and Files, and New space on the Spaces tab.
+- Tap your photo for a profile sheet with your Google photo, email, updates and Sign out.
+- Spaces share the gallery's background and top controls; an opened space has Back and an options menu.
+- Cards open with everything they hold: picture, post, description, saved page text and your note.
+- Tap a card's picture or its source pill to open the original; hold the picture for card actions.
+- Videos play quietly in the gallery, with a play or YouTube mark and their length instead of the camera icon.
+- Posts look like posts: their words, their own picture and who wrote them, without pic.twitter.com links.
+- GitHub repositories show GitHub's preview picture.
+
+### Fixed
+- Pinching holds each size for a moment, never shows empty margins and no longer pans with two fingers.
+- "Your mind" scrolls away with your cards while the buttons stay put without a bar behind them.
+- The bottom bar is slimmer, wider and sits lower, like Google Photos.
+- The reader leads with a back arrow, carries the card's colour at the top and keeps tags quiet until you edit them.
+- Long notes and posts shrink their text a little to show more of themselves.
+- Pictures from other sites no longer receive your sign-in.
+
 ## 0.5.3 (10), 2026-10-22
 Release notes that read like Pully, and a softer edge above your cards.
 

@@ -17,6 +17,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -87,6 +88,49 @@ class LibraryMosaicTest {
         assertTrue("A later pointer frame must keep shrinking the same live card", smaller.width < middle.width - 10f)
         assertTrue("The focal card must stay at the fingers while down", kotlin.math.abs(smaller.center.y - before.center.y) < 4f)
         gallery.performTouchInput { up(0); up(1) }
+    }
+
+    @Test
+    fun aPinchBetweenStopsNeverLeavesEmptyMarginsOrPansTheGallery() {
+        val density = MosaicState(2)
+        val state = LazyListState(firstVisibleItemIndex = 8)
+        compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(cards, endReached = true), {}, {}, state = state, mosaic = density) } }
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        val root = gallery.fetchSemanticsNode().boundsInRoot
+        val focal = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot.center - root.topLeft
+        fun coverage(): Pair<Float, Float> {
+            val shown = cards.indices.mapNotNull { index ->
+                compose.onAllNodesWithContentDescription("Photo ${index + 1}").fetchSemanticsNodes().firstOrNull()?.boundsInRoot
+            }.filter { it.bottom > root.top && it.top < root.bottom }
+            return shown.minOf { it.left } to shown.maxOf { it.right }
+        }
+        for (spread in listOf(0.26f, 0.09f)) {
+            gallery.performTouchInput {
+                down(0, focal - Offset(width * 0.15f, 0f))
+                down(1, focal + Offset(width * 0.15f, 0f))
+                updatePointerTo(0, focal - Offset(width * spread, 0f))
+                updatePointerTo(1, focal + Offset(width * spread, 0f))
+                move(delayMillis = 16)
+            }
+            compose.waitForIdle()
+            assertTrue("The pinch must be between stops", density.position % 1f != 0f)
+            val (left, right) = coverage()
+            assertTrue("No empty margin on the left at ${density.position}: $left", left <= root.left + 1f)
+            assertTrue("No empty margin on the right at ${density.position}: $right", right >= root.right - 1f)
+            val before = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot.center
+            gallery.performTouchInput {
+                updatePointerTo(0, focal - Offset(width * spread, -height * 0.1f))
+                updatePointerTo(1, focal + Offset(width * spread, height * 0.1f))
+                move(delayMillis = 16)
+            }
+            compose.waitForIdle()
+            val after = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot.center
+            assertEquals("Moving both fingers together must not pan the gallery", before.y, after.y, 2f)
+            gallery.performTouchInput { up(0); up(1) }
+            compose.waitForIdle()
+            density.larger(); density.smaller()
+            compose.waitForIdle()
+        }
     }
 
     @Test
@@ -223,7 +267,7 @@ class LibraryMosaicTest {
             }
             compose.waitForIdle()
             assertTrue(compose.onNodeWithContentDescription("Photo 1").fetchSemanticsNode().boundsInRoot.width < before)
-            assertEquals(2.6667f, density.position, 0.01f)
+            assertEquals(heldPosition(2.6667f), density.position, 0.01f)
             gallery.performTouchInput { up(0); up(1) }
             compose.waitForIdle()
             assertEquals(3, density.columns)
@@ -288,7 +332,7 @@ class LibraryMosaicTest {
             up(0); up(1)
         }
         compose.mainClock.advanceTimeByFrame()
-        assertTrue(density.position in 2.55f..2.65f)
+        assertTrue(density.position in heldPosition(2.55f)..heldPosition(2.65f))
         compose.onNodeWithContentDescription("Photo 20").performTouchInput { click() }
         compose.runOnIdle { assertEquals(listOf("m20"), opened) }
         compose.mainClock.autoAdvance = true
@@ -332,7 +376,7 @@ class LibraryMosaicTest {
                 up(0); up(1)
             }
             compose.mainClock.advanceTimeByFrame()
-            assertTrue(density.position in 2.55f..2.65f)
+            assertTrue(density.position in heldPosition(2.55f)..heldPosition(2.65f))
             val point = compose.onNodeWithContentDescription("Photo $number").fetchSemanticsNode().boundsInRoot.center - root.topLeft
             gallery.performTouchInput { down(0, point) }
             val duration = if (longPress) 700L else 128L

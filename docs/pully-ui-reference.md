@@ -78,10 +78,12 @@ areas for both at every density. Compact tiles prioritize the excerpt over the t
 label. Photos and videos with authored notes also retain their text. Text-only notes
 and image-only cards keep their own presentation.
 
-The app uses Android's system sans-serif for all text, including the reader,
-settings, and Material components. This is Roboto on standard Android and follows
-the device's system font configuration. Gallery excerpts keep their smaller preview
-sizes independently of the reader.
+The app uses Google Sans Flex, the typeface of Google's own phone apps such as Google
+Photos, for all text, including the reader, settings, and Material components. The
+bundled file is a Latin subset with a variable weight axis
+(`android/app/src/main/assets/font-licenses/`). Tavi's recorded review of 22 October
+2026 replaced the system font: "just not default Android font". Gallery excerpts keep
+their smaller preview sizes independently of the reader.
 
 Native Compose tests cover pointer gestures, card targeting, pagination, sheet
 navigation, bar ownership, and retained gallery state. Dark and light Roborazzi
@@ -123,7 +125,6 @@ at `20e889540b7c05ed9174b038ae366191932924e9`. Settings and the after-install no
 share the same What's new sheet and existing Pully drag/window implementation.
 Versions use unboxed blocks, a small version and newest badge, bold summaries,
 optional groups, 12dp-spaced accent-dot bullets, 24dp/28dp version separation,
-and rounded illustrations under the corresponding bullet. The user's Android
-system-font choice is retained. The flat notes consumed by older updaters and the
-release publisher stay unchanged; summary/group/image metadata enriches the
-bundled presentation. The obligations live in `ui/update/CONTRACTS`.
+and rounded illustrations under the corresponding bullet, in the app's font. The
+flat notes consumed by older updaters and the release publisher stay unchanged;
+summary/group/image metadata enriches the bundled presentation. The obligations live in `ui/update/CONTRACTS`.

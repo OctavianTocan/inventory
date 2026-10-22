@@ -9,12 +9,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,8 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -32,19 +34,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import androidx.core.text.HtmlCompat
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.size.Scale
 import com.octaviantocan.mymind.BuildConfig
-import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.resolveMediaUrl
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
+import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
 import com.octaviantocan.mymind.ui.shell.FootPressTheme
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
+private val GITHUB_REPOSITORY = Regex("""https://(?:www\.)?github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?(?:[?#].*)?""")
 private val VISUAL_CARD_TYPES = setOf("Image", "Screenshot", "Video", "YouTubeVideo", "InstagramReel")
 
 /** A gallery brick keeps both the words and picture of a mixed card visible at every density. */
@@ -57,6 +60,7 @@ internal fun GalleryTile(
     enabled: Boolean = true,
     highlight: Boolean = false,
     imageRequestSizePx: Int? = null,
+    playVideo: Boolean = true,
 ) {
     val colors = LibraryStyle.colors
     val accent = cardAccent(card) ?: colors.selected
@@ -74,8 +78,23 @@ internal fun GalleryTile(
     val text = remember(card) { galleryText(card) }
     val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card)
     val paper = lerp(colors.raised, accent, 0.13f)
-    val background = if (picture == null || mixed) paper else parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper
+    val background = if (picture == null || mixed || kind == TileKind.Post) paper else parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper
     val heading = card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card)
+    val previews = LocalVideoPreviews.current
+    val video = remember(card) { previewVideo(card) }
+    var length by remember(video, previews) { mutableStateOf(video?.let { previews?.length(it) }) }
+    val moving = rememberSheetMotionEnabled()
+    val tilePicture = @Composable { description: String?, pictureModifier: Modifier ->
+        if (previews != null && video != null && playVideo && moving) {
+            Box(pictureModifier) {
+                VideoPreview(video, previews, { length = it }) {
+                    AsyncImage(model = imageModel, contentDescription = description, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
+            }
+        } else {
+            AsyncImage(model = imageModel, contentDescription = description, contentScale = ContentScale.Crop, modifier = pictureModifier)
+        }
+    }
     FootPressTheme {
         Box(
             modifier.fillMaxSize().clip(RoundedCornerShape(if (highlight) 28.dp else 3.dp)).background(background)
@@ -85,20 +104,17 @@ internal fun GalleryTile(
                     onLongClickLabel = "Card actions", onLongClick = onLongClick, onClick = onClick,
                 ) else Modifier),
         ) {
-            if (mixed) {
+            if (kind == TileKind.Post) {
+                PostTile(card, text, highlight, if (picture == null) null else ({ pictureModifier -> tilePicture("Image preview", pictureModifier) }))
+                Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
+            } else if (mixed) {
                 Column(Modifier.fillMaxSize()) {
                     GalleryTextPreview(card, text, highlight, Modifier.weight(0.56f).fillMaxWidth())
-                    AsyncImage(
-                        model = imageModel, contentDescription = "Image preview",
-                        contentScale = ContentScale.Crop, modifier = Modifier.weight(0.44f).fillMaxWidth(),
-                    )
+                    tilePicture("Image preview", Modifier.weight(0.44f).fillMaxWidth())
                 }
                 Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
             } else if (picture != null) {
-                AsyncImage(
-                    model = imageModel, contentDescription = null,
-                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
-                )
+                tilePicture(null, Modifier.fillMaxSize())
                 if (highlight || kind !in setOf(TileKind.Media, TileKind.Video)) {
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.78f))))
                     Text(
@@ -115,54 +131,109 @@ internal fun GalleryTile(
                 GalleryTextPreview(card, text, highlight, Modifier.fillMaxSize())
                 Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
             }
-            if (picture != null && kind == TileKind.Video) {
-                Icon(
-                    painterResource(R.drawable.ic_video), "Video", tint = Color.White,
-                    modifier = Modifier.align(if (mixed) Alignment.BottomStart else Alignment.TopEnd).padding(10.dp).height(20.dp),
-                )
+            if (picture != null && kind == TileKind.Video) BoxWithConstraints(Modifier.matchParentSize()) {
+                VideoBadge(card.type == "YouTubeVideo", length?.takeIf { maxWidth >= 96.dp },
+                    Modifier.align(if (mixed) Alignment.BottomStart else Alignment.TopEnd).padding(8.dp))
             }
-            val count = card.post?.gallery?.size ?: 0
-            if (count > 1) Text(
-                "$count", Modifier.align(if (mixed) Alignment.BottomEnd else Alignment.TopEnd).padding(8.dp).clip(RoundedCornerShape(5.dp))
-                    .background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 6.dp, vertical = 2.dp).clearAndSetSemantics {},
-                style = LibraryStyle.label, color = Color.White,
-            )
+            if (kind != TileKind.Post) GalleryCount(card, Modifier.align(if (mixed) Alignment.BottomEnd else Alignment.TopEnd))
         }
     }
+}
+
+/** How many pictures a post holds, when it holds more than one. */
+@Composable
+private fun GalleryCount(card: Card, modifier: Modifier) {
+    val count = card.post?.gallery?.size ?: 0
+    if (count > 1) Text(
+        "$count", modifier.padding(8.dp).clip(RoundedCornerShape(5.dp))
+            .background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 6.dp, vertical = 2.dp).clearAndSetSemantics {},
+        style = LibraryStyle.label, color = Color.White,
+    )
+}
+
+/**
+ * A saved post drawn as the post itself: where it was posted, its words, its own picture, then who wrote it. The words
+ * take what they need, up to a little over half the tile, and the picture fills the rest.
+ */
+@Composable
+private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Composable (Modifier) -> Unit)?) {
+    val colors = LibraryStyle.colors
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val compact = maxWidth < 110.dp
+        val inset = if (highlight) 16.dp else if (compact) 6.dp else 12.dp
+        val author = (card.post?.author ?: card.author)?.takeIf { it.isNotBlank() && !compact && maxHeight >= 160.dp }
+        val words = text.ifBlank { if (picture == null) cardHeading(card) else "" }
+        val showKind = !compact && maxHeight >= 112.dp
+        val wordsHeight = maxHeight * 0.55f
+        Column(Modifier.fillMaxSize().padding(inset)) {
+            if (showKind) {
+                KindLabel(galleryKind(card))
+                Spacer(Modifier.height(6.dp))
+            }
+            if (words.isNotBlank()) {
+                TileText(card, words, highlight, compact,
+                    if (picture == null) Modifier.weight(1f) else Modifier.heightIn(max = wordsHeight))
+            }
+            if (picture != null) Box(Modifier.padding(top = if (words.isBlank()) 0.dp else 8.dp).fillMaxWidth().weight(1f)
+                .clip(RoundedCornerShape(if (compact) 4.dp else 8.dp))) {
+                picture(Modifier.fillMaxSize())
+                GalleryCount(card, Modifier.align(Alignment.TopEnd))
+            }
+            if (author != null) Text(author, Modifier.padding(top = 6.dp).clearAndSetSemantics {}, color = colors.muted,
+                style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** The muted line naming a tile's kind or site. */
+@Composable
+private fun KindLabel(kind: String) {
+    Text(kind, Modifier.clearAndSetSemantics {}, color = LibraryStyle.colors.muted,
+        style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
+
+/** A tile's words at their usual size, shrinking a step at a time so a long text shows more of itself before it is cut. */
+@Composable
+private fun TileText(card: Card, text: String, highlight: Boolean, compact: Boolean, modifier: Modifier) {
+    val (largest, smallest) = if (highlight) 18f to 14f else if (compact) 12f to 10f else 14f to 11f
+    Text(
+        text, modifier, color = LibraryStyle.colors.text,
+        style = LibraryStyle.body.copy(fontSize = largest.sp, lineHeight = (if (highlight) 1.34f else 1.42f).em),
+        fontWeight = if (tileKind(card) in setOf(TileKind.Repository, TileKind.Article, TileKind.Plain)) FontWeight.Medium else FontWeight.Normal,
+        overflow = TextOverflow.Ellipsis,
+        autoSize = TextAutoSize.StepBased(minFontSize = smallest.sp, maxFontSize = largest.sp, stepSize = 1.sp),
+    )
 }
 
 /** Text gets its own paper area; compact tiles spend that space on the excerpt before the type label. */
 @Composable
 private fun GalleryTextPreview(card: Card, text: String, highlight: Boolean, modifier: Modifier) {
-    val colors = LibraryStyle.colors
     BoxWithConstraints(modifier) {
-        val inset = if (highlight) 16.dp else if (maxWidth < 110.dp) 6.dp else 12.dp
-        val textSize = if (highlight) 18.sp else if (maxWidth < 110.dp) 12.sp else 14.sp
-        val lineHeight = if (highlight) 24.sp else if (maxWidth < 110.dp) 17.sp else 20.sp
-        val showKind = maxWidth >= 110.dp && maxHeight >= 112.dp
-        val lineDp = with(LocalDensity.current) { lineHeight.toDp() }
-        val availableLines = ((maxHeight - inset * 2 - if (showKind) 22.dp else 0.dp) / lineDp).toInt().coerceIn(1, 12)
+        val compact = maxWidth < 110.dp
+        val inset = if (highlight) 16.dp else if (compact) 6.dp else 12.dp
+        val showKind = !compact && maxHeight >= 112.dp
         Column(Modifier.fillMaxSize().padding(inset)) {
             if (showKind) {
-                Text(galleryKind(card), Modifier.clearAndSetSemantics {}, color = colors.muted,
-                    style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                KindLabel(galleryKind(card))
                 Spacer(Modifier.height(6.dp))
             }
-            Text(
-                text.ifBlank { cardHeading(card) }, Modifier.weight(1f),
-                color = colors.text, style = LibraryStyle.body.copy(fontSize = textSize, lineHeight = lineHeight),
-                fontWeight = if (tileKind(card) in setOf(TileKind.Repository, TileKind.Article, TileKind.Plain)) FontWeight.Medium else FontWeight.Normal,
-                maxLines = availableLines, overflow = TextOverflow.Ellipsis,
-            )
+            TileText(card, text.ifBlank { cardHeading(card) }, highlight, compact, Modifier.weight(1f))
         }
     }
 }
 
-/** Only image files are sent to Coil; video cards use their cover rather than the video blob. */
-internal fun galleryPicture(card: Card): String? = card.cover?.src?.takeIf { it.isNotBlank() }
+/** Only image files are sent to Coil; video cards use their cover rather than the video blob, and moving covers a still of it. */
+internal fun galleryPicture(card: Card): String? = card.cover?.let { cover ->
+    cover.src?.takeIf { it.isNotBlank() }?.let { if (cover.type == "video") videoPoster(it) else it }
+}
     ?: card.post?.gallery?.firstOrNull()?.src?.takeIf { it.isNotBlank() }
     ?: card.blob?.takeIf { it.type?.startsWith("image/") == true || (it.type == null && card.type in setOf("Image", "Screenshot")) }
         ?.path?.takeIf { it.isNotBlank() }
+    ?: repositoryCover(card)
+
+/** GitHub's own preview picture of a saved public repository, for repositories saved before captures kept one. */
+private fun repositoryCover(card: Card): String? = card.url?.takeIf { tileKind(card) == TileKind.Repository }
+    ?.let(GITHUB_REPOSITORY::matchEntire)?.let { "https://opengraph.githubassets.com/1/${it.groupValues[1]}/${it.groupValues[2]}" }
 
 /** Saved links keep their headline; visual cards also keep any note the user wrote alongside the image. */
 internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_TYPES
@@ -170,8 +241,7 @@ internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_T
 
 private fun galleryText(card: Card): String = when (tileKind(card)) {
     TileKind.Note -> noteText(card)
-    TileKind.Post -> card.post?.bodyHtml?.let { HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_COMPACT).toString().trim() }
-        ?: card.description.orEmpty()
+    TileKind.Post -> postText(card)
     TileKind.Media, TileKind.Video -> card.prose?.let(::proseText)?.takeIf { it.isNotBlank() }
         ?: card.note?.takeIf { it.isNotBlank() }
         ?: card.title?.takeIf { it.isNotBlank() } ?: card.description.orEmpty()

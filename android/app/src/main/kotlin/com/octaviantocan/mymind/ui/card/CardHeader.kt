@@ -70,7 +70,7 @@ class CardHeaderIcons(val close: Painter, val menu: Painter, val back: Painter? 
 @Composable
 fun defaultCardHeaderIcons() = CardHeaderIcons(painterResource(R.drawable.ic_sheet_close), painterResource(R.drawable.ic_sheet_more), painterResource(R.drawable.ic_sheet_back))
 
-/** Pully's floating controls flanking a centered title that wraps to keep the full heading readable. */
+/** Pully's floating controls flanking a centered title that wraps to keep the full heading readable; the reader's pill form leads with Back. */
 @Composable
 fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier, onMenu: (() -> Unit)? = null, icons: CardHeaderIcons = defaultCardHeaderIcons(), enabled: Boolean = true, closeLabel: String = "Close card", onBack: (() -> Unit)? = null, titleContent: (@Composable () -> Unit)? = null, titleInPill: Boolean = false) {
     val colors = LocalCardSheetColors.current
@@ -96,7 +96,8 @@ fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier
         Row(modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            CardHeaderButton(leading, if (onBack != null) "Back" else closeLabel, onBack ?: onClose, enabled)
+            // The reader returns to the gallery, so it leads with Back rather than a closing cross.
+            CardHeaderButton(icons.back ?: painterResource(R.drawable.ic_sheet_back), "Back", onBack ?: onClose, enabled)
             Box(Modifier.weight(1f).cardSurfaceShadow(shape).clip(shape).background(colors.raised)
                 .heightIn(min = 44.dp).padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
                 Text(title, Modifier.fillMaxWidth(), style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)

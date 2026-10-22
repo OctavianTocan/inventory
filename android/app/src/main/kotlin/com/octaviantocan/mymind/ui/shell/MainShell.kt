@@ -15,11 +15,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -52,10 +50,12 @@ import com.octaviantocan.mymind.ui.describe
 import com.octaviantocan.mymind.ui.errors.ApiErrorDialog
 import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.library.EverythingScreen
+import com.octaviantocan.mymind.ui.library.GalleryControls
 import com.octaviantocan.mymind.ui.library.LibraryViewModel
 import com.octaviantocan.mymind.ui.library.NewSpaceDialog
 import com.octaviantocan.mymind.ui.library.SerendipityScreen
 import com.octaviantocan.mymind.ui.library.SpacesScreen
+import com.octaviantocan.mymind.ui.library.rememberPublicAccountPhotoLoader
 import com.octaviantocan.mymind.ui.menu.CreateSpacePage
 import com.octaviantocan.mymind.ui.menu.AddTagsPage
 import com.octaviantocan.mymind.ui.menu.CardMenuAction
@@ -66,14 +66,15 @@ import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
 import com.octaviantocan.mymind.ui.menu.CardSubmenu
 import com.octaviantocan.mymind.ui.menu.SelectSpacePage
 import com.octaviantocan.mymind.ui.menu.cardMenuItems
-import com.octaviantocan.mymind.ui.settings.SettingsDrawerHost
+import com.octaviantocan.mymind.ui.settings.ProfileSheetHost
 import com.octaviantocan.mymind.ui.settings.SettingsUpdates
 import com.octaviantocan.mymind.ui.settings.SettingsViewModel
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
-import com.octaviantocan.mymind.ui.upload.AddMediaPopup
+import com.octaviantocan.mymind.ui.upload.AddSheet
+import com.octaviantocan.mymind.ui.upload.PICKABLE_FILES
 import com.octaviantocan.mymind.ui.upload.UploadQueueStrip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -96,17 +97,19 @@ data class OpenedCard(val card: Card, val spaceId: String?)
 /**
  * Where the + button was tapped.
  *
- * @property spaceId Space the new cards join, or null on Everything.
+ * @property spaceId Space the new cards join, or null outside a space.
+ * @property title Title of the Add sheet.
+ * @property newSpace True offers New space too, as the Spaces tab does.
  */
-private data class AddTarget(val spaceId: String?)
+private data class AddTarget(val spaceId: String?, val title: String = "Add to your mind", val newSpace: Boolean = false)
 
 /**
  * The signed-in shell: the page of the selected tab with the tab bar over its bottom edge, an opened card over both,
- * the card menu, the + popup with the upload queue strip, and the settings drawer.
+ * the card menu, the Add sheet with the upload queue strip, and the profile sheet.
  *
  * @param viewModel Library behind the tabs and the card menu.
- * @param settingsViewModel State and actions behind the settings drawer.
- * @param updates Update rows of the settings drawer.
+ * @param settingsViewModel State and actions behind the profile sheet.
+ * @param updates Update rows of the profile sheet.
  * @param extras Drawn over everything, such as the update sheets.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -125,6 +128,7 @@ fun MainShell(
     var menuFor by remember { mutableStateOf<OpenedCard?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf<AddTarget?>(null) }
+    var profileOpen by remember { mutableStateOf(false) }
     var uploadTarget by remember { mutableStateOf(AddTarget(null)) }
     var photo by remember { mutableStateOf<File?>(null) }
     var submenu by remember { mutableStateOf<CardSubmenu?>(null) }
@@ -145,9 +149,9 @@ fun MainShell(
     val closeSearch = { viewModel.search.clear(); searchActive = false; focusManager.clearFocus() }
     val selectTab: (Tab) -> Unit = { next -> focusManager.clearFocus(); searchActive = false; tab = next }
     LaunchedEffect(settingsViewModel) { settingsViewModel.refresh() }
+    val photoLoader = if (account.photoUrl != null) rememberPublicAccountPhotoLoader() else null
     BackHandler(enabled = opened == null && !menuOpen && searching, onBack = closeSearch)
     BackHandler(enabled = opened == null && !menuOpen && tab == Tab.Serendipity) { tab = Tab.Everything }
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
     val sheetState = key(menuOpen, menuFor?.card?.id) { rememberCardMenuPosition() }
     val motion = rememberSheetMotionEnabled()
     val scope = rememberCoroutineScope()
@@ -172,6 +176,13 @@ fun MainShell(
             viewModel.upload(files, spaceId)
         }
     }
+    val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        val spaceId = uploadTarget.spaceId
+        scope.launch {
+            val files = withContext(Dispatchers.IO) { uris.mapNotNull { uploadFileOf(context.contentResolver, it) } }
+            viewModel.upload(files, spaceId)
+        }
+    }
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
         val file = photo
         if (saved && file != null) viewModel.upload(listOf(uploadFileOf(file)), uploadTarget.spaceId)
@@ -183,93 +194,77 @@ fun MainShell(
         }
     }
 
-    SettingsDrawerHost(drawerState, settingsViewModel, updates) {
-        ShellFrame(
-            tab = tab,
-            onSelectTab = selectTab,
-            scheme = scheme,
-            modifier = Modifier.blur(MENU_BLUR * menuProgress),
-            underStatusBar = tab == Tab.Serendipity,
-            footer = {
-                LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
-                    onSearch = { tab = Tab.Everything; searchActive = true }, onCloseSearch = closeSearch)
-            },
-            overlay = {
-                opened?.let { open ->
-                    key(open.card.id) {
-                        PageTheme(scheme) {
-                            CardDetailDialog(
-                                open.card,
-                                onClose = { opened = null },
-                                onMenu = { openMenu(open.card, open.spaceId) },
-                                actionsProgress = menuProgress,
-                                onRemoveTag = { tag ->
-                                    scope.launch {
-                                        when (val answer = viewModel.removeTag(open.card, tag)) {
-                                            is ApiResult.Ok -> updateCard(answer.value)
-                                            is ApiResult.Failed -> failure = answer.failure
-                                        }
+    ShellFrame(
+        tab = tab,
+        onSelectTab = selectTab,
+        scheme = scheme,
+        modifier = Modifier.blur(MENU_BLUR * menuProgress),
+        underStatusBar = tab == Tab.Serendipity,
+        footer = {
+            LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
+                onSearch = { tab = Tab.Everything; searchActive = true }, onCloseSearch = closeSearch)
+        },
+        overlay = {
+            opened?.let { open ->
+                key(open.card.id) {
+                    PageTheme(scheme) {
+                        CardDetailDialog(
+                            open.card,
+                            onClose = { opened = null },
+                            onMenu = { openMenu(open.card, open.spaceId) },
+                            actionsProgress = menuProgress,
+                            onRemoveTag = { tag ->
+                                scope.launch {
+                                    when (val answer = viewModel.removeTag(open.card, tag)) {
+                                        is ApiResult.Ok -> updateCard(answer.value)
+                                        is ApiResult.Failed -> failure = answer.failure
                                     }
-                                },
-                            )
-                        }
+                                }
+                            },
+                        )
                     }
                 }
-                UploadQueueStrip(
-                    uploads,
-                    onToggle = viewModel.uploads::toggleDetails,
-                    onDismiss = viewModel.uploads::dismiss,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    hidden = tab == Tab.Serendipity,
+            }
+            UploadQueueStrip(
+                uploads,
+                onToggle = viewModel.uploads::toggleDetails,
+                onDismiss = viewModel.uploads::dismiss,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                hidden = tab == Tab.Serendipity,
+            )
+        },
+    ) {
+        pageStates.SaveableStateProvider(tab.name) {
+            when (tab) {
+                Tab.Everything -> EverythingScreen(
+                    viewModel,
+                    onOpenCard = { openCard(it, null) },
+                    onOpenSettings = { profileOpen = true },
+                    onAdd = { adding = AddTarget(null) },
+                    onLongPressCard = { openMenu(it, null) },
+                    searching = searching,
+                    onSerendipity = { focusManager.clearFocus(); tab = Tab.Serendipity },
+                    photoUrl = account.photoUrl,
                 )
-                adding?.let { target ->
-                    BackHandler { adding = null }
-                    AddMediaPopup(
-                        onPhotoLibrary = {
-                            adding = null
-                            uploadTarget = target
-                            pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                        },
-                        onTakePhoto = if (canTakePhoto) {
-                            {
-                                adding = null
-                                uploadTarget = target
-                                val file = File.createTempFile("take_picture", ".jpg", context.cacheDir)
-                                photo = file
-                                takePhoto.launch(FileProvider.getUriForFile(context, "${context.packageName}.provider", file))
-                            }
-                        } else {
-                            null
-                        },
-                        onDismiss = { adding = null },
-                    )
-                }
-            },
-        ) {
-            pageStates.SaveableStateProvider(tab.name) {
-                when (tab) {
-                    Tab.Everything -> EverythingScreen(
-                        viewModel,
-                        onOpenCard = { openCard(it, null) },
-                        onOpenSettings = { scope.launch { drawerState.open() } },
-                        onAdd = { adding = AddTarget(null) },
-                        onLongPressCard = { openMenu(it, null) },
-                        searching = searching,
+                Tab.Spaces -> SpacesScreen(
+                    viewModel,
+                    openSpace,
+                    onOpenSpace = { openSpace = it },
+                    onOpenCard = openCard,
+                    onDeleteSpace = { deleting = it },
+                    onAddToSpace = { adding = AddTarget(it.id, "Add to ${it.name}") },
+                    onLongPressCard = openMenu,
+                ) {
+                    GalleryControls(
+                        onSettings = { profileOpen = true },
+                        onAdd = { adding = AddTarget(null, newSpace = true) },
                         onSerendipity = { focusManager.clearFocus(); tab = Tab.Serendipity },
+                        modifier = Modifier.align(Alignment.TopEnd),
                         photoUrl = account.photoUrl,
+                        photoLoader = photoLoader,
                     )
-                    Tab.Spaces -> SpacesScreen(
-                        viewModel,
-                        openSpace,
-                        onOpenSpace = { openSpace = it },
-                        onOpenCard = openCard,
-                        onNewSpace = { newSpaceOpen = true },
-                        onDeleteSpace = { deleting = it },
-                        onAddToSpace = { adding = AddTarget(it.id) },
-                        onLongPressCard = openMenu,
-                    )
-                    Tab.Serendipity -> SerendipityScreen(viewModel, onOpenCard = { openCard(it, null) })
                 }
+                Tab.Serendipity -> SerendipityScreen(viewModel, onOpenCard = { openCard(it, null) })
             }
         }
     }
@@ -360,6 +355,35 @@ fun MainShell(
             },
         )
     }
+    adding?.let { target ->
+        AddSheet(
+            title = target.title,
+            onPhotos = {
+                adding = null
+                uploadTarget = target
+                pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+            },
+            onFiles = {
+                adding = null
+                uploadTarget = target
+                pickFiles.launch(PICKABLE_FILES)
+            },
+            onCamera = if (canTakePhoto) {
+                {
+                    adding = null
+                    uploadTarget = target
+                    val file = File.createTempFile("take_picture", ".jpg", context.cacheDir)
+                    photo = file
+                    takePhoto.launch(FileProvider.getUriForFile(context, "${context.packageName}.provider", file))
+                }
+            } else {
+                null
+            },
+            onClose = { adding = null },
+            onNewSpace = if (target.newSpace) ({ adding = null; newSpaceOpen = true }) else null,
+        )
+    }
+    if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false })
     if (newSpaceOpen) {
         PageTheme(scheme) {
             NewSpaceDialog(
@@ -426,8 +450,9 @@ fun ShellFrame(
         Box(modifier.fillMaxSize().background(MymindTheme.colors.page)) {
             PageTheme(scheme) {
                 val top = if (underStatusBar) Modifier else Modifier.statusBarsPadding()
-                val background = if (tab == Tab.Everything) LibraryStyle.colors.background else MymindTheme.page.background
-                Box(Modifier.fillMaxSize().then(top).background(background).padding(bottom = if (tab == Tab.Everything) 0.dp else PAGE_BOTTOM_GAP)) {
+                val library = tab == Tab.Everything || tab == Tab.Spaces
+                val background = if (library) LibraryStyle.colors.background else MymindTheme.page.background
+                Box(Modifier.fillMaxSize().then(top).background(background).padding(bottom = if (library) 0.dp else PAGE_BOTTOM_GAP)) {
                     page()
                 }
                 if (footer != null) footer() else MymindTabBar(tab, onSelectTab)

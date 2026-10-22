@@ -67,9 +67,9 @@ class CardDetailWindowTest {
     @Test
     fun crossAndActionsAreMatchingFloatingButtonsAndCrossClosesTheReader() {
         show()
-        compose.onNodeWithContentDescription("Close card").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
+        compose.onNodeWithContentDescription("Back").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
         compose.onNodeWithContentDescription("Card actions").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
-        compose.onNodeWithContentDescription("Close card").performClick()
+        compose.onNodeWithContentDescription("Back").performClick()
         compose.mainClock.advanceTimeBy(100)
         compose.waitForIdle()
         assertEquals(1, closed)
@@ -92,7 +92,7 @@ class CardDetailWindowTest {
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
         assertEquals("Reading scrolls independently of its header", headerBounds, header.fetchSemanticsNode().boundsInRoot)
-        compose.onNodeWithContentDescription("Close card").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
+        compose.onNodeWithContentDescription("Back").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
         compose.onNodeWithContentDescription("Card actions").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
     }
 
@@ -116,6 +116,6 @@ class CardDetailWindowTest {
         assertEquals(0, closed)
         assertEquals(before, scroll.value)
         assertEquals(0f, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
-        compose.onNodeWithContentDescription("Close card").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").assertIsDisplayed()
     }
 }

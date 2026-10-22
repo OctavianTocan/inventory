@@ -1,12 +1,16 @@
 package com.octaviantocan.mymind.ui.library
 
 import androidx.compose.ui.graphics.Color
+import androidx.core.text.HtmlCompat
 import com.octaviantocan.mymind.data.Card
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+
+private val MEDIA_LINK = Regex("""(?:https?://)?(?:pic\.(?:twitter|x)\.com|t\.co)/\S+""")
+private val LINE_END_SPACE = Regex("""[ \t\u00a0]+(\n|$)""")
 
 /** How a card is drawn in the grid, following the web front-end's card classes. */
 enum class TileKind {
@@ -63,6 +67,14 @@ fun noteText(card: Card): String =
     card.prose?.let(::proseText)?.takeIf { it.isNotBlank() }
         ?: card.note?.takeIf { it.isNotBlank() }
         ?: card.description.orEmpty()
+
+/**
+ * @param card A social post.
+ * @return The post's words without the bare media links the platform appends, such as `pic.twitter.com/…`.
+ */
+fun postText(card: Card): String =
+    (card.post?.bodyHtml?.let { HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_COMPACT).toString() }?.takeIf { it.isNotBlank() }
+        ?: card.description.orEmpty()).replace(MEDIA_LINK, "").replace(LINE_END_SPACE, "$1").trim()
 
 /**
  * @param node A stored document tree (`{"type": "doc", "content": [...]}`).

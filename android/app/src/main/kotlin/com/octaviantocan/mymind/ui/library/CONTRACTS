@@ -8,7 +8,7 @@ Source: Tavi, 22 October 2026, Google Photos layout request in the Codex convers
 A note, social post, article or saved link with text and a picture MUST show both in its gallery
 preview, including the smallest density and Top of Mind. Neither the cover nor a
 generated title may replace the note or post body. Text and images MUST have separate
-visible areas, and text MUST use Android's system sans-serif with enough contrast against its paper. A
+visible areas, and text MUST use the app's font with enough contrast against its paper. A
 photo or video with an authored note MUST also retain that note beside its image.
 Source: Tavi, 22 October 2026, preserve text and images in small note previews.
 
@@ -19,16 +19,19 @@ MUST offer distinct sizes for uniform portrait, square and landscape cards, with
 to four cards per row at their stops. Text MUST retain its size and wrapping when
 releasing at a stop. Adjacent cached grids MUST remain coherent and nonoverlapping
 within each projection, sharing one focal card's fractional X/Y point and physical
-size. A density crossing with a small hysteresis starts a 90 ms timed handoff,
-then MUST show one opaque grid even if the fingers pause or jitter at the threshold. Reduced
-motion switches the grid immediately. The focal card MUST be drawn once and only
+size. Each stop holds briefly before the fingers move on, and the grid shown between
+two stops MUST be the denser one enlarged, never a sparser one shrunk below its size,
+so no empty band appears. A crossing starts a 90 ms timed handoff, then MUST show one
+opaque grid even if the fingers pause or jitter at the threshold. Reduced motion
+switches the grid immediately. The focal card MUST be drawn once and only
 one projection may expose semantics or hit targets. A new single-finger press
 MUST retain its owning projection and focal node through tap or hold. Passing drag
 slop releases focal anchoring; a second finger rebases a new pinch. Stabilizing a
 press MUST show a coherent opaque scene rather than hold a ghosted blend.
-Vertical anchoring respects scroll bounds. During a gesture, projected outer edges
-may clip or leave temporary horizontal slack; canonical stops fill the width and
-horizontal correction settles smoothly to those bounds. The profile and
+Vertical anchoring respects scroll bounds. The focal point stays where the fingers
+met: moving both fingers together MUST NOT pan the gallery. At every moment of a
+gesture the projected grid MUST cover the full width, clipping its outer edges
+rather than leaving horizontal slack. The profile and
 highlights keep their own scale. Release MUST settle the same geometry without an
 independent row animation; reduced motion settles synchronously. The gesture, its
 cancellation and a remaining one-finger tail MUST NOT open a card, open its action
@@ -38,7 +41,9 @@ on each pointer frame. Equivalent larger/smaller actions MUST be accessible, and
 each tab MUST retain its density and scroll position. Removing the gallery during
 a gesture or settle MUST synchronously save a canonical density and anchored scroll
 request, so reusing its state cannot restore a fractional transition.
-Source: Tavi, 22 October 2026, explicit pinch-to-enlarge/reduce requirement.
+Source: Tavi, 22 October 2026, explicit pinch-to-enlarge/reduce requirement; the
+recorded review of the same day, with Google Photos as the reference ("the
+intermediate state where there is emptiness", "I shouldn't be able to pan").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-highlights-stay-above-the-bricks
 Top of Mind MUST remain above the main mosaic, in pin order, as a horizontal rail of
@@ -48,18 +53,65 @@ and highlights MUST NOT scale with a mosaic pinch.
 Source: Tavi, 22 October 2026, Google Photos layout request and gallery polish in the Codex conversation.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-top-controls-stay-fixed
-The profile, Add and Rediscover controls MUST stay fixed above the gallery viewport
-while its pinned rail and mosaic scroll. They MUST remain available for an empty,
-loading or failed feed. Pull to refresh and mosaic gestures belong to the scrolling
-viewport below those controls; search and browsing MUST retain independent scroll
+The profile, Add and Rediscover controls MUST stay fixed at the top of Everything and
+the Spaces list while the page scrolls under them. They float as their own raised,
+shadowed circles with no solid header strip behind them. The page title ("Your
+mind", "All Spaces") MUST scroll away with the page. The controls MUST remain
+available for an empty, loading or failed feed. Pull to refresh and mosaic gestures
+belong to the scrolling page; search and browsing MUST retain independent scroll
 positions.
-Source: Tavi, 22 October 2026, gallery polish in the Codex conversation.
+Source: Tavi, 22 October 2026, gallery polish in the Codex conversation; the recorded
+review of the same day ("the title should not be sticky", "the buttons should be
+sticky but without a background").
 
 @cc [owner:OctavianTocan,label:design;interaction] gallery-top-edge-blurs-the-scrolling-content
-At the fixed top bar's lower edge, the scrolling cards MUST soften through true
-backdrop blur that fades into the sharp viewport. It MUST sample the displayed
+Once the page has scrolled, the cards passing under the status bar and the fixed
+controls MUST soften through true backdrop blur that fades into the sharp viewport;
+at the top of the page there is no blur. It MUST sample the displayed
 gallery rather than create a second feed or replace the cards with an opaque
 gradient. The fixed controls stay sharp, and the decorative blur MUST NOT own taps,
 pinches or pull-to-refresh gestures.
 Source: Tavi's annotated gallery screenshot, 22 October 2026: "We're missing blur
 on the top part of the scrollable section."
+
+@cc [owner:OctavianTocan,label:product;design] spaces-share-the-gallery-page
+The Spaces list and an opened space MUST use the gallery's background, title row and
+floating controls, not a separate page style. Spaces MUST NOT have a floating create
+button: New space is offered in the Add sheet opened from the Spaces list, and
+adding to or deleting an opened space lives in that space's options menu.
+Source: Tavi's recorded review, 22 October 2026 ("the background should be the same",
+"remove the orange plus, but keep the functionality").
+
+@cc [owner:OctavianTocan,label:product;design;motion] gallery-videos-play-quietly
+Video tiles MUST NOT show a camera icon. A video kept on the library server MUST play
+muted and looping in its tile while the app is in front and system animations are on,
+at most three at once, over its still cover until the first frame shows; videos on other
+sites such as YouTube keep their still cover. Every video tile with a picture MUST show a
+corner badge: the YouTube mark for YouTube, else a play mark, followed by the length
+(m:ss, or h:mm:ss) once a player has read it and the tile has room. Previews MUST only
+request media from the library server.
+Source: Tavi's recorded review, 22 October 2026 ("I don't really like this camera icon",
+"videos autoplay ... They don't play with sound", "this icon with the time is actually
+much more helpful", "we can actually use the icon for YouTube").
+
+@cc [owner:OctavianTocan,label:product;design] gallery-posts-look-like-posts
+A social post tile MUST read as the post itself: the platform, the post's words, its own
+picture inset with rounded corners below them, and the author when the tile has room.
+Bare media links the platform appends, such as pic.twitter.com or t.co addresses, MUST
+NOT appear as text in the tile or the reader.
+Source: Tavi's recorded review, 22 October 2026 ("if we have a link for the thing, I
+don't think we should put it on the thing", "I think we can just probably show the tweet").
+
+@cc [owner:OctavianTocan,label:product;design] gallery-long-text-shows-more
+Tile text MUST shrink a step at a time, down to about three quarters of its usual size,
+before it is cut, so a long note or post shows as much of itself as the tile can hold.
+Short text keeps its usual size.
+Source: Tavi's recorded review, 22 October 2026 ("I don't want to see just the first
+part. It's okay if the text is smaller and you show me the actual thing").
+
+@cc [owner:OctavianTocan,label:product;design;privacy] gallery-repositories-have-covers
+A GitHub repository card without a stored cover MUST show GitHub's generated preview
+picture of that repository. Requests to any host other than the library server MUST NOT
+carry the session token (`data/Api.kt` AuthInterceptor).
+Source: Tavi's recorded review, 22 October 2026 ("repositories I think could use having
+the repositories cover").

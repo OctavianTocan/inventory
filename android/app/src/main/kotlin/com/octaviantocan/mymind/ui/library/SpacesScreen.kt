@@ -1,7 +1,11 @@
 package com.octaviantocan.mymind.ui.library
 
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import com.octaviantocan.mymind.ui.shell.FootCircleButton
+import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,7 +19,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,63 +42,46 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.res.painterResource
 import com.octaviantocan.mymind.R
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.ui.errors.WebErrorScreen
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
-/** Height of the title bar of the Spaces list and of an opened space (`.view-header`, mobile). */
-val VIEW_HEADER_HEIGHT = 60.dp
+/** Height of the title row of the Spaces list and of an opened space. */
+val VIEW_HEADER_HEIGHT = GALLERY_CONTROLS_HEIGHT
 
-private val VIEW_HEADER_GAP = 20.dp
-private val SPACE_LIST_GAP = 25.dp
 private val SPACE_ROW_GAP = 10.dp
+private val SPACE_SIDE = 16.dp
+private val SPACE_COLUMN_GAP = 12.dp
 private val SPACE_NAME_INSET = 50.dp
-private val SPACE_NAME_COLOR = Color(0xFF40516A)
+private val SPACE_BACK_INSET = 72.dp
+private val SPACE_MENU_INSET = 68.dp
+private val SPACE_BOTTOM_PADDING = 156.dp
 private val STACK_SHADOW_LIGHT = Color(0xFF3C465A)
-private val FAB_END = 15.dp
-private val FAB_BOTTOM = 50.dp
-private val FAB_SHADOW = Shadow(radius = 22.dp, color = Color.Black, offset = DpOffset(5.dp, 5.dp), alpha = 0.25f)
 private const val STACK_SCALE = 0.9f
 
 /**
- * The Spaces tab: the list of spaces, or one space after the user opened it.
+ * The Spaces tab on the gallery's own paper: the list of spaces, or one space after the user opened it.
  *
  * @param viewModel Library behind the tab.
  * @param openSpace Space on show, or null for the list.
  * @param onOpenSpace Called with a tapped space, or null to go back to the list.
  * @param onOpenCard Called with a card tapped inside a space and that space's id.
- * @param onNewSpace Called when the + button of the list is tapped.
  * @param onDeleteSpace Called when "Delete space" is picked in an opened space's menu.
- * @param onAddToSpace Called with the opened space when its + button is tapped.
+ * @param onAddToSpace Called with the opened space when "Add to this space" is picked in its menu.
  * @param modifier Modifier for the page.
  * @param onLongPressCard Called with a card long-pressed inside a space and that space's id.
+ * @param controls The gallery's fixed controls, drawn over the list of spaces.
  */
 @Composable
 fun SpacesScreen(
@@ -103,11 +89,11 @@ fun SpacesScreen(
     openSpace: Space?,
     onOpenSpace: (Space?) -> Unit,
     onOpenCard: (Card, String) -> Unit,
-    onNewSpace: () -> Unit,
     onDeleteSpace: (Space) -> Unit,
     onAddToSpace: (Space) -> Unit,
     modifier: Modifier = Modifier,
     onLongPressCard: ((Card, String) -> Unit)? = null,
+    controls: @Composable BoxScope.() -> Unit = {},
 ) {
     val spaces by viewModel.spaces.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { if (spaces.spaces.isEmpty()) viewModel.loadSpaces() }
@@ -117,9 +103,9 @@ fun SpacesScreen(
             spaces,
             onOpenSpace = onOpenSpace,
             onRetry = viewModel::loadSpaces,
-            onAdd = onNewSpace,
             modifier = modifier,
             onRefresh = viewModel::refreshSpaces,
+            controls = controls,
         )
     } else {
         val feed = viewModel.spaceFeed(openSpace.id)
@@ -140,25 +126,26 @@ fun SpacesScreen(
 }
 
 /**
- * The list of spaces: a centred title, then two columns of card stacks with each space's name.
+ * The list of spaces on the gallery paper: a title that scrolls away under the fixed controls, then two columns of
+ * card stacks with each space's name. Creating a space is offered by the Add sheet rather than a floating button.
  *
  * @param state Spaces and their first cards.
  * @param onOpenSpace Called with a tapped space.
  * @param onRetry Called to read the spaces again after a failure.
- * @param onAdd Called when the + button is tapped.
  * @param modifier Modifier for the page.
  * @param onRefresh Called when the list is pulled down to refresh.
+ * @param controls The gallery's fixed controls, drawn over the list.
  */
 @Composable
 fun SpaceListContent(
     state: SpacesState,
     onOpenSpace: (Space) -> Unit,
     onRetry: () -> Unit,
-    onAdd: () -> Unit,
     modifier: Modifier = Modifier,
     onRefresh: () -> Unit = {},
+    controls: @Composable BoxScope.() -> Unit = {},
 ) {
-    Box(modifier.fillMaxSize().background(MymindTheme.page.background)) {
+    Box(modifier.fillMaxSize().background(LibraryStyle.colors.background)) {
         when {
             state.spaces.isEmpty() && state.error != null -> WebErrorScreen(onRetry = onRetry)
             state.spaces.isEmpty() && !state.loaded -> PageSpinner()
@@ -166,31 +153,32 @@ fun SpaceListContent(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = PAGE_GUTTER, end = PAGE_GUTTER, top = VIEW_HEADER_HEIGHT + SPACE_LIST_GAP, bottom = GRID_BOTTOM_PADDING),
-                    horizontalArrangement = Arrangement.spacedBy(PAGE_GUTTER),
+                    contentPadding = PaddingValues(start = SPACE_SIDE, end = SPACE_SIDE, bottom = SPACE_BOTTOM_PADDING),
+                    horizontalArrangement = Arrangement.spacedBy(SPACE_COLUMN_GAP),
                     verticalArrangement = Arrangement.spacedBy(SPACE_ROW_GAP),
                 ) {
+                    item(key = "spaces-title", span = { GridItemSpan(maxLineSpan) }) { GalleryTitle("All Spaces", start = 20.dp - SPACE_SIDE, end = CONTROLS_WIDTH - SPACE_SIDE) }
                     items(state.spaces, key = { it.id }) { space -> SpaceStack(space, state.covers[space.id]) { onOpenSpace(space) } }
                 }
             }
         }
-        ViewHeader(title = "All Spaces")
-        AddFab(onAdd, Modifier.align(Alignment.BottomEnd))
+        controls()
     }
 }
 
 /**
- * An opened space: back arrow, the space's name and a menu button over the space's card grid.
+ * An opened space in the gallery's photo-style mosaic, with floating Back and options controls over a title that
+ * scrolls with its cards.
  *
  * @param space The space.
  * @param feed Its cards.
- * @param onBack Called when the back arrow is tapped.
- * @param onLoadMore Called when the grid nears its end.
+ * @param onBack Called when Back is tapped.
+ * @param onLoadMore Called when the mosaic nears its end.
  * @param onOpenCard Called with a tapped card.
- * @param onAdd Called when the + button is tapped.
+ * @param onAdd Called when "Add to this space" is picked in the options.
  * @param modifier Modifier for the page.
- * @param onDelete Called when "Delete space" is picked in the menu; null leaves the menu dots without a menu.
- * @param onRefresh Called when the grid is pulled down to refresh.
+ * @param onDelete Called when "Delete space" is picked in the options; null leaves only the add option.
+ * @param onRefresh Called when the mosaic is pulled down to refresh.
  * @param onLongPressCard Called with a long-pressed card, or null to ignore long presses.
  */
 @Composable
@@ -206,89 +194,42 @@ fun SpaceContent(
     onRefresh: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
 ) {
-    Box(modifier.fillMaxSize().background(MymindTheme.page.background)) {
+    Box(modifier.fillMaxSize().background(LibraryStyle.colors.background)) {
         if (feed.empty) {
             PageSpinner()
         } else {
             PullRefresh(feed.refreshing, onRefresh, top = VIEW_HEADER_HEIGHT) {
-                CardGrid(feed, onLoadMore, onOpenCard, top = VIEW_HEADER_HEIGHT + VIEW_HEADER_GAP, onLongPressCard = onLongPressCard)
+                LibraryMosaic(feed, onLoadMore, onOpenCard, onLongPressCard = onLongPressCard, header = {
+                    GalleryTitle(space.name.orEmpty(), start = SPACE_BACK_INSET, end = SPACE_MENU_INSET)
+                })
             }
         }
-        ViewHeader(title = space.name.orEmpty(), onBack = onBack, showMenu = true, onDelete = onDelete)
-        AddFab(onAdd, Modifier.align(Alignment.BottomEnd))
+        FootCircleButton(R.drawable.ic_sheet_back, "Back", onBack, Modifier.align(Alignment.TopStart).padding(start = 16.dp, top = 12.dp), size = 44.dp)
+        SpaceOptions(onAdd, onDelete, Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = 12.dp))
     }
 }
 
-/**
- * The 60 dp title bar: optional back arrow, centred title, optional menu dots that open "Delete space" with the
- * long-press haptic the web asks for when space options open.
- */
+/** The opened space's options: adding to it, and deleting it, with the long-press haptic the web gives the menu. */
 @Composable
-private fun ViewHeader(title: String, onBack: (() -> Unit)? = null, showMenu: Boolean = false, onDelete: (() -> Unit)? = null) {
-    val color = viewHeaderColor()
+private fun SpaceOptions(onAdd: () -> Unit, onDelete: (() -> Unit)?, modifier: Modifier = Modifier) {
     val haptic = LocalHapticFeedback.current
-    Box(Modifier.fillMaxWidth().height(VIEW_HEADER_HEIGHT).background(MymindTheme.page.background)) {
-        Text(
-            title,
-            Modifier.align(Alignment.Center).padding(horizontal = 60.dp),
-            style = TextStyle(
-                color = color,
-                fontSize = 19.sp,
-                lineHeight = 26.sp,
-                letterSpacing = (-0.03).em,
-                fontFamily = MymindTheme.fonts.body,
-                textAlign = TextAlign.Center,
-            ),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (onBack != null) {
-            Box(Modifier.align(Alignment.CenterStart).padding(start = 8.dp).size(44.dp)
-                .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = onBack),
-                contentAlignment = Alignment.Center) {
-                Image(painterResource(R.drawable.ic_sheet_back), "Back", Modifier.size(20.dp), colorFilter = ColorFilter.tint(color))
-            }
-        }
-        if (showMenu) {
-            var expanded by remember { mutableStateOf(false) }
-            Box(Modifier.align(Alignment.CenterEnd)) {
-                val tap = if (onDelete != null) {
-                    Modifier
-                        .semantics { contentDescription = "Space options" }
-                        .clickable(interactionSource = null, indication = null, role = Role.Button) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            expanded = true
-                        }
-                } else {
-                    Modifier
-                }
-                Box(Modifier.size(60.dp).then(tap), contentAlignment = Alignment.Center) {
-                    Image(painterResource(R.drawable.ic_horizontal_menu), null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(color.copy(alpha = 0.7f)))
-                }
-                if (onDelete != null) {
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Delete space") },
-                            onClick = {
-                                expanded = false
-                                onDelete()
-                            },
-                        )
-                    }
-                }
-            }
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier) {
+        FootCircleButton(R.drawable.ic_sheet_more, "Space options", {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            expanded = true
+        }, size = 44.dp)
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text("Add to this space") }, onClick = { expanded = false; onAdd() })
+            if (onDelete != null) DropdownMenuItem(text = { Text("Delete space") }, onClick = { expanded = false; onDelete() })
         }
     }
 }
-
-/** Colour of view header titles (`.view-header --color`). */
-@Composable
-private fun viewHeaderColor(): Color = if (MymindTheme.colors.dark) Color(0xFF626C7A) else Color(0xFF383F4A)
 
 /** One space (`mymind-stack`): its first card over three tilted blank cards, then the space's ring and name. */
 @Composable
 private fun SpaceStack(space: Space, cover: Card?, onClick: () -> Unit) {
-    val page = MymindTheme.page
+    val colors = LibraryStyle.colors
     val shape = RoundedCornerShape(TILE_RADIUS)
     val shadows = stackShadows(MymindTheme.colors.dark)
     val angles = remember(space.id) { stackAngles(space.id) }
@@ -297,25 +238,20 @@ private fun SpaceStack(space: Space, cover: Card?, onClick: () -> Unit) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.fillMaxWidth().scale(STACK_SCALE)) {
                 angles.asReversed().forEach { angle ->
-                    Box(Modifier.matchParentSize().rotate(angle).stackShadow(shape, shadows).background(page.surface, shape))
+                    Box(Modifier.matchParentSize().rotate(angle).stackShadow(shape, shadows).background(colors.raised, shape))
                 }
-                Box(Modifier.stackShadow(shape, shadows).clip(shape)) {
-                    if (cover != null) StackCover(cover) else Spacer(Modifier.fillMaxWidth().aspectRatio(1f).background(page.surface))
+                Box(Modifier.fillMaxWidth().aspectRatio(1f).stackShadow(shape, shadows).clip(shape).background(colors.raised)) {
+                    if (cover != null) GalleryTile(cover, onClick = {}, modifier = Modifier.clearAndSetSemantics {}, enabled = false, playVideo = false)
                 }
             }
             Row(Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                SpaceRing(parseHexColor(space.color) ?: page.muted)
+                SpaceRing(parseHexColor(space.color) ?: colors.muted)
                 Spacer(Modifier.width(10.dp))
                 Text(
                     space.name.orEmpty(),
                     Modifier.widthIn(max = nameWidth),
-                    style = TextStyle(
-                        color = SPACE_NAME_COLOR,
-                        fontSize = 17.sp,
-                        lineHeight = 20.sp,
-                        letterSpacing = (-0.02).em,
-                        fontFamily = MymindTheme.fonts.body,
-                    ),
+                    style = LibraryStyle.body,
+                    color = colors.text,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -364,15 +300,6 @@ private fun stackShadows(dark: Boolean): List<Shadow> = if (dark) {
 private fun Modifier.stackShadow(shape: RoundedCornerShape, shadows: List<Shadow>) =
     shadows.asReversed().fold(this) { modifier, shadow -> modifier.dropShadow(shape, shadow) }
 
-/** The front card of a space stack: the card's tile at its grid height, without its caption. */
-@Composable
-private fun StackCover(card: Card) {
-    when (tileKind(card)) {
-        TileKind.Media, TileKind.Video -> CardPicture(card, play = tileKind(card) == TileKind.Video)
-        else -> CardTile(card, onClick = {}, caption = false)
-    }
-}
-
 /** The 14 dp ring in the space's colour (`mm-circle`, radius 7, stroke 3) in its 8 dp layout box. */
 @Composable
 private fun SpaceRing(color: Color) {
@@ -380,30 +307,4 @@ private fun SpaceRing(color: Color) {
         val stroke = 3.dp.toPx()
         drawCircle(color, radius = 7.dp.toPx() - stroke / 2, style = Stroke(stroke))
     }
-}
-
-/**
- * The orange + button at the bottom right of the Spaces pages, 50 dp above the end of the page.
- *
- * @param onClick Called when tapped.
- * @param modifier Modifier that places the button.
- */
-@Composable
-fun AddFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val square = with(LocalDensity.current) { fabSquare() }
-    AddButton(
-        onClick,
-        modifier.padding(end = FAB_END, bottom = FAB_BOTTOM).dropShadow(RoundedCornerShape(6.dp), FAB_SHADOW),
-        plus = 22.dp,
-        square = square,
-    )
-}
-
-/** The button's exact square inside its laid-out box: padding rounds to whole pixels, the web page does not. */
-private fun Density.fabSquare(): Rect {
-    val box = SEARCH_BAR_HEIGHT.roundToPx().toFloat()
-    val right = box + FAB_END.roundToPx() - FAB_END.toPx()
-    val bottom = box + FAB_BOTTOM.roundToPx() - FAB_BOTTOM.toPx()
-    val size = SEARCH_BAR_HEIGHT.toPx()
-    return Rect(right - size, bottom - size, right, bottom)
 }

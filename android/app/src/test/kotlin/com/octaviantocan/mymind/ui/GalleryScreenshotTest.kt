@@ -30,6 +30,7 @@ import com.octaviantocan.mymind.data.Post
 import com.octaviantocan.mymind.ui.library.EverythingContent
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.MosaicState
+import com.octaviantocan.mymind.ui.library.heldPosition
 import com.octaviantocan.mymind.ui.library.SearchType
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.shell.LibraryFootBar
@@ -139,6 +140,13 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         photo("annotated-photo", "mountains", 1200, 800, "Morning light").copy(note = "A small reminder: take a breath before rushing into the day."),
         photo("saved-video", "coast", 1200, 900, "A saved film").copy(type = "YouTubeVideo", note = "A short film worth watching again."),
         testCard("snippet", type = "Content", title = "A useful reminder", note = "Good tools should get out of your way."),
+        testCard("long-note", type = "Note", title = "Landing pages", note = "Send your landing page to five people who have never heard of you " +
+            "and ask them what you sell. If they cannot say it in one sentence, the page is not done. Then cut every line that " +
+            "does not help them say it. Keep the picture that shows the thing working, drop the ones that only look nice."),
+        testCard("post-media-link", type = "XPost", title = "A saved post").copy(post = Post(
+            bodyHtml = "<p>\uD83C\uDF2D pic.twitter.com/mHuTM2eiQ1</p>", author = "Ana Lima (@ana)",
+            gallery = listOf(GalleryImage("https://gallery.example.test/forest.jpg", 1000, 900)),
+        )),
     )
 
     private fun show(columns: Int, searching: Boolean = false,
@@ -223,28 +231,30 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         }
         compose.mainClock.autoAdvance = false
         spread(0.1875f)
-        assertEquals(2.56f, mosaicState.position, 0.02f)
+        assertEquals(heldPosition(2.56f), mosaicState.position, 0.02f)
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeBy(40)
         compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(2)
         frame("handoff_transient")
         repeat(4) {
-            for (position in listOf(2.49f, 2.51f)) {
+            // Jitter where the denser grid hands back to the held stop.
+            for (position in listOf(2.09f, 2.11f)) {
                 spread(0.5f - 0.8f / position)
                 compose.mainClock.advanceTimeBy(16)
             }
         }
         compose.mainClock.advanceTimeBy(120)
         compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
-        assertEquals(2.51f, mosaicState.position, 0.02f)
+        assertEquals(heldPosition(2.11f), mosaicState.position, 0.02f)
         val heldWidth = noteWidth()
         frame("handoff")
         compose.mainClock.advanceTimeBy(120)
         compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
         assertEquals("Holding the fingers must not change the live focal size", heldWidth, noteWidth(), 2f)
         compose.mainClock.autoAdvance = true
-        val requestsAfterHandoff = requests[watchedUrl]
         spread(0.2f)
+        val requestsAfterHandoff = requests[watchedUrl]
+        spread(0.205f)
         assertEquals("Measuring another pointer frame must keep the same projection request", requestsAfterHandoff, requests[watchedUrl])
         val middle = noteWidth()
         assertTrue("The preview must shrink while both fingers remain down", middle < initial - 8f)

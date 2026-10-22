@@ -154,6 +154,30 @@
       "path_count": 1
     },
     {
+      "resource": "ic_add_file",
+      "icon": "file-arrow-up",
+      "weight": "regular",
+      "source_path": "assets/regular/file-arrow-up.svg",
+      "source_sha256": "b7127fb44729f481bb574b3e3ddfff1085de38bfe82d112c743f887ba7352da2",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_allow_installs",
+      "icon": "shield-check",
+      "weight": "regular",
+      "source_path": "assets/regular/shield-check.svg",
+      "source_sha256": "bb04d552c0baaaabd90f7eb60760cb0c7ddb7e9f47e4b76e9599ddd7dfd8eaa7",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_caret_down",
       "icon": "caret-down",
       "weight": "regular",
@@ -174,6 +198,18 @@
       "android_width": "16dp",
       "android_height": "16dp",
       "fill_color": "#000000",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_check_updates",
+      "icon": "arrow-clockwise",
+      "weight": "regular",
+      "source_path": "assets/regular/arrow-clockwise.svg",
+      "source_sha256": "4a78a777b692cb74826e3071ae7049cc0d3927e68a7b8272e7251b1760cd771f",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FFFFFF",
       "root_attributes": {},
       "path_count": 1
     },
@@ -358,6 +394,18 @@
       "path_count": 1
     },
     {
+      "resource": "ic_play_fill",
+      "icon": "play",
+      "weight": "fill",
+      "source_path": "assets/fill/play-fill.svg",
+      "source_sha256": "6d2a75bc5700a68dec50516ebae121c307807e4e6fcca5c863e5b4af006df880",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_sheet_back",
       "icon": "arrow-left",
       "weight": "regular",
@@ -476,6 +524,18 @@
       "android_width": "20dp",
       "android_height": "20dp",
       "fill_color": "#a7b4c7",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_youtube",
+      "icon": "youtube-logo",
+      "weight": "fill",
+      "source_path": "assets/fill/youtube-logo-fill.svg",
+      "source_sha256": "fce097e65d0df0cb2bb84cd282bb6cc08ccb47ec18d41b7c22870830257065be",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FFFFFF",
       "root_attributes": {},
       "path_count": 1
     },

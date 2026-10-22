@@ -30,7 +30,9 @@ import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.shell.MymindTabBar
 import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.MymindTheme
-import com.octaviantocan.mymind.ui.upload.AddMediaPopup
+import com.octaviantocan.mymind.ui.upload.AddSheetContent
+import com.octaviantocan.mymind.ui.upload.NEW_SPACE
+import com.octaviantocan.mymind.ui.upload.PICK_FILES
 import com.octaviantocan.mymind.ui.upload.PHOTO_LIBRARY
 import com.octaviantocan.mymind.ui.upload.TAKE_PHOTO
 import com.octaviantocan.mymind.ui.upload.UploadQueueStrip
@@ -121,16 +123,25 @@ class InteractionTest {
     }
 
     @Test
-    fun thePopupOffersBothSourcesAndClosesOnATapOutside() {
-        var library = 0
+    fun theAddSheetOffersEachSourceAndNewSpaceOnlyWhereAsked() {
+        var photos = 0
+        var files = 0
         var camera = 0
-        var dismissed = 0
+        var spaces = 0
         var withCamera by mutableStateOf(true)
-        show { AddMediaPopup(onPhotoLibrary = { library++ }, onTakePhoto = if (withCamera) ({ camera++ }) else null, onDismiss = { dismissed++ }) }
+        var onSpaces by mutableStateOf(false)
+        show {
+            SheetFixture("Add to your mind") {
+                AddSheetContent({ photos++ }, { files++ }, if (withCamera) ({ camera++ }) else null, if (onSpaces) ({ spaces++ }) else null)
+            }
+        }
         compose.onNodeWithText(PHOTO_LIBRARY).performClick()
+        compose.onNodeWithText(PICK_FILES).performClick()
         compose.onNodeWithText(TAKE_PHOTO).performClick()
-        compose.onRoot().performTouchInput { click(bottomCenter.copy(y = bottom - 10f)) }
-        assertEquals(listOf(1, 1, 1), listOf(library, camera, dismissed))
+        compose.onNodeWithText(NEW_SPACE).assertDoesNotExist()
+        onSpaces = true
+        compose.onNodeWithText(NEW_SPACE).performClick()
+        assertEquals(listOf(1, 1, 1, 1), listOf(photos, files, camera, spaces))
         withCamera = false
         compose.onNodeWithText(TAKE_PHOTO).assertDoesNotExist()
     }

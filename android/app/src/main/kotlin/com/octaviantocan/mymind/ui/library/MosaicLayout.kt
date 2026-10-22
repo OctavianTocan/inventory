@@ -165,7 +165,7 @@ class MosaicState(initialColumns: Int = 2) {
 
     internal fun beginPinch() {
         isPinching = true
-        startPosition = position
+        startPosition = fingerPosition(position)
         gestureScale = 1f
     }
 
@@ -173,7 +173,7 @@ class MosaicState(initialColumns: Int = 2) {
         if (!factor.isFinite() || factor <= 0f) return
         // Discard overshoot at a limit so the very next reversed pointer delta changes the geometry.
         gestureScale = (gestureScale * factor).coerceIn(startPosition / 4f, startPosition)
-        position = (startPosition / gestureScale).coerceIn(1f, 4f)
+        position = heldPosition(startPosition / gestureScale)
     }
 
     internal fun finishPinch() {
@@ -191,6 +191,26 @@ class MosaicState(initialColumns: Int = 2) {
         val Saver: Saver<MosaicState, Int> = Saver(save = { it.position.roundToInt().coerceIn(1, 4) }, restore = { MosaicState(it) })
     }
 }
+
+/** Share of each step between stops that the fingers travel before the next denser grid takes over. */
+private const val STOP_HOLD = 0.1f
+
+/** Maps finger travel to a density, holding each stop briefly so the sparser grid is never shown below its own size. */
+internal fun heldPosition(finger: Float): Float {
+    val raw = finger.coerceIn(1f, 4f)
+    val stop = floor(raw)
+    return stop + ((raw - stop - STOP_HOLD) / (1f - STOP_HOLD)).coerceAtLeast(0f)
+}
+
+/** The inverse of [heldPosition], so a pinch that interrupts a settle starts from the geometry on screen. */
+internal fun fingerPosition(position: Float): Float {
+    val held = position.coerceIn(1f, 4f)
+    val stop = floor(held)
+    return if (held == stop) stop else stop + STOP_HOLD + (held - stop) * (1f - STOP_HOLD)
+}
+
+/** The grid drawn at [position]: the denser neighbour between stops, which is enlarged and so always fills the width. */
+internal fun pinchScene(position: Float): Int = ceil(position.coerceIn(1f, 4f)).toInt().coerceIn(1, 4)
 
 /** Keeps the selected gallery density across tab changes and activity recreation. */
 @Composable

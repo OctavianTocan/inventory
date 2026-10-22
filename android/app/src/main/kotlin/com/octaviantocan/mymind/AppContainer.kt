@@ -27,7 +27,7 @@ import java.io.File
 class AppContainer(context: Context) {
     val connectivity = Connectivity(context)
     val session = Session(KeystoreTokenStore(context))
-    val httpClient: OkHttpClient = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session)).build()
+    val httpClient: OkHttpClient = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session, BuildConfig.SERVER_URL)).build()
     val repository = Repository(MymindApi(httpClient, BuildConfig.SERVER_URL), session, PrivateAccountProfileStore(context))
     val downloads = DownloadsSaver(context.applicationContext.contentResolver)
     val updatePrefs = UpdatePrefs(context)

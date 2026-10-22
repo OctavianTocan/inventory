@@ -16,12 +16,19 @@ import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.ui.settings.GlassBackdrop
 import com.octaviantocan.mymind.ui.settings.glass
 
-/** A non-interactive sample of the scrolling viewport, blurred into the fixed header's lower edge. */
+/**
+ * A non-interactive sample of the scrolling viewport, blurred into the top edge of the page once content passes under it.
+ *
+ * @param visible Pixels the page has scrolled; the edge fades in over its own height so the title at rest stays sharp.
+ */
 @Composable
-internal fun GalleryScrollEdge(backdrop: GlassBackdrop, paper: Color, modifier: Modifier = Modifier) {
+internal fun GalleryScrollEdge(backdrop: GlassBackdrop, paper: Color, modifier: Modifier = Modifier, visible: () -> Float = { Float.MAX_VALUE }) {
     Box(
         modifier.fillMaxWidth().height(32.dp)
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .graphicsLayer {
+                compositingStrategy = CompositingStrategy.Offscreen
+                alpha = (visible() / 32.dp.toPx()).coerceIn(0f, 1f)
+            }
             .drawWithCache {
                 val fade = Brush.verticalGradient(listOf(Color.Black, Color.Transparent))
                 onDrawWithContent {

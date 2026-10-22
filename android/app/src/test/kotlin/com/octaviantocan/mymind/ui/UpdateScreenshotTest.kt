@@ -34,7 +34,8 @@ import androidx.test.core.app.ApplicationProvider
 import android.content.Context
 import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 import com.octaviantocan.mymind.ui.settings.SettingsUpdates
-import com.octaviantocan.mymind.ui.settings.SettingsSheet
+import com.octaviantocan.mymind.ui.settings.ProfileSheetContent
+import com.octaviantocan.mymind.ui.settings.SettingsUiState
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import com.octaviantocan.mymind.ui.update.AfterUpdateSheet
 import com.octaviantocan.mymind.ui.update.ChangelogScreen
@@ -111,7 +112,8 @@ class UpdateScreenshotTest {
         compose.mainClock.advanceTimeBy(1500)
         val close = compose.onNodeWithContentDescription("Close")
         val before = close.fetchSemanticsNode().boundsInRoot
-        compose.onAllNodesWithText("New").assertCountEquals(2) // Newest badge and its New section.
+        // The newest version's badge, and the New section of each version that has one.
+        compose.onAllNodesWithText("New").assertCountEquals(1 + entries.count { entry -> entry.groups.any { it.title == "New" } })
         val body = compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("0.1.0")))
         repeat(6) {
             body.performTouchInput { swipeUp(durationMillis = 500) }
@@ -199,14 +201,16 @@ class UpdateScreenshotTest {
     private fun settingsRows(dark: Boolean, state: UpdateState = UpdateState.UpToDate, allowed: Boolean = true, name: String = "") {
         compose.setPhoneContent(dark) {
             Box(Modifier.fillMaxSize().background(MymindTheme.colors.page)) {
-                SettingsSheet(
-                    account = "name@example.com",
-                    version = "0.2.0 (2)",
-                    onSignOut = {},
-                    pictures = flatSettingsPictures(dark),
-                    updates = SettingsUpdates(true, "Version 0.2.0 (2)", updateStatusText(state, allowed), showAllow = !allowed),
-                    scrollState = androidx.compose.foundation.ScrollState(Int.MAX_VALUE),
-                )
+                SheetFixture("Profile") {
+                    ProfileSheetContent(
+                        SettingsUiState(email = "name@example.com"),
+                        "0.2.0 (2)",
+                        SettingsUpdates(true, "Version 0.2.0 (2)", updateStatusText(state, allowed), showAllow = !allowed),
+                        onSignOut = {},
+                        onClose = {},
+                        photoLoader = null,
+                    )
+                }
             }
         }
         compose.mainClock.advanceTimeBy(1_500)

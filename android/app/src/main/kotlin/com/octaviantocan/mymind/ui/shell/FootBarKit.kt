@@ -56,8 +56,8 @@ internal val FieldInset = 16.dp
 internal val FieldButtonInset = 6.dp
 internal val FieldGap = 10.dp
 
-/** Pully Kit.floatingBar: one position for every bar, including while the keyboard is shown. */
-fun Modifier.floatingBar(): Modifier = imePadding().navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = 24.dp)
+/** Pully Kit.floatingBar at the gallery's Google Photos geometry: one position for every bar, including while the keyboard is shown. */
+fun Modifier.floatingBar(): Modifier = imePadding().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
 
 @Composable
 internal fun rememberFootMotionEnabled(): Boolean = rememberSheetMotionEnabled()

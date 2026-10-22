@@ -92,7 +92,7 @@ class CardDetailInteractionTest {
         compose.waitForIdle()
         assertEquals(0, closed)
         assertEquals(0f, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
-        compose.onNodeWithContentDescription("Close card").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").assertIsDisplayed()
     }
 
     @Test
