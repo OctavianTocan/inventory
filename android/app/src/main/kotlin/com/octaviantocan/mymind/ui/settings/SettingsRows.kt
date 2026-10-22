@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -74,7 +75,7 @@ fun GlassRow(
             style = TextStyle(
                 color = colors.settingsRowLabel,
                 fontSize = 16.sp,
-                fontFamily = MymindTheme.fonts.nunitoMedium,
+                fontFamily = MymindTheme.fonts.body, fontWeight = FontWeight.Medium,
                 letterSpacing = (-0.01).em,
                 textAlign = TextAlign.Start,
             ),
@@ -134,12 +135,12 @@ fun DangerZone(onClick: () -> Unit, modifier: Modifier = Modifier) {
     ) {
         BasicText(
             "DANGER ZONE",
-            style = TextStyle(color = colors.dangerLabel, fontSize = 11.sp, fontFamily = fonts.nunitoMedium, letterSpacing = 0.48.em, lineHeight = 15.sp),
+            style = TextStyle(color = colors.dangerLabel, fontSize = 11.sp, fontFamily = fonts.body, fontWeight = FontWeight.Medium, letterSpacing = 0.48.em, lineHeight = 15.sp),
         )
         BasicText(
             "DELETE MY ACCOUNT",
             Modifier.fillMaxWidth().height(48.dp).clip(BUTTON_SHAPE).background(colors.dangerButton, BUTTON_SHAPE).wrapContentSize(),
-            style = TextStyle(color = Color.White, fontSize = 14.sp, fontFamily = fonts.nunitoBold, letterSpacing = 0.1.em, textAlign = TextAlign.Center),
+            style = TextStyle(color = Color.White, fontSize = 14.sp, fontFamily = fonts.body, fontWeight = FontWeight.Bold, letterSpacing = 0.1.em, textAlign = TextAlign.Center),
         )
     }
 }
@@ -156,7 +157,7 @@ fun SettingsFooter(version: String, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         BasicText(
             "mymind® v$version",
-            style = TextStyle(color = MymindTheme.colors.settingsHint, fontSize = 12.sp, fontFamily = MymindTheme.fonts.nunito, textAlign = TextAlign.Center),
+            style = TextStyle(color = MymindTheme.colors.settingsHint, fontSize = 12.sp, fontFamily = MymindTheme.fonts.body, textAlign = TextAlign.Center),
         )
     }
 }

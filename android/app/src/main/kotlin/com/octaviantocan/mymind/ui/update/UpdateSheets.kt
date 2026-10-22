@@ -46,13 +46,13 @@ private fun colors() = if (MymindTheme.colors.dark) DarkMenuColors else LightMen
 @Composable
 private fun Notes(title: String, lines: List<String>) {
     val colors = colors()
-    Text(title, style = TextStyle(color = colors.rowText, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.nunito))
+    Text(title, style = TextStyle(color = colors.rowText, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.body))
     Spacer(Modifier.height(12.dp))
     lines.forEach {
         Text(
             "•  $it",
             Modifier.padding(bottom = 6.dp),
-            style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.nunito),
+            style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.body),
         )
     }
 }
@@ -71,7 +71,7 @@ private fun PillButton(label: String, primary: Boolean, modifier: Modifier = Mod
     ) {
         Text(
             label,
-            style = TextStyle(color = if (primary) Color.White else colors.rowText, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.nunito),
+            style = TextStyle(color = if (primary) Color.White else colors.rowText, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.body),
         )
     }
 }
@@ -87,11 +87,11 @@ fun AllowRequestContent(model: AllowRequestModel, onAllow: () -> Unit) {
     val colors = colors()
     MenuCard {
         Column(Modifier.padding(24.dp)) {
-            Text("mymind ${model.release.versionName} is ready", style = TextStyle(color = colors.rowText, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.nunito))
+            Text("mymind ${model.release.versionName} is ready", style = TextStyle(color = colors.rowText, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.body))
             Spacer(Modifier.height(12.dp))
             Text(
                 "Allow installs once, and updates install by themselves when you leave the app.",
-                style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.nunito),
+                style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.body),
             )
             Spacer(Modifier.height(16.dp))
             InstallPermissionRow(onAllow)
@@ -117,7 +117,7 @@ fun InstallPermissionRow(onClick: () -> Unit) {
             .padding(horizontal = 24.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Text("Allow mymind to install updates", style = TextStyle(color = colors.rowText, fontSize = 17.sp, fontFamily = MymindTheme.fonts.nunito))
+        Text("Allow mymind to install updates", style = TextStyle(color = colors.rowText, fontSize = 17.sp, fontFamily = MymindTheme.fonts.body))
     }
 }
 
@@ -189,18 +189,18 @@ fun ChangelogScreen(entries: List<ChangelogEntry>, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     Column(Modifier.fillMaxSize().background(MymindTheme.colors.page).statusBarsPadding().padding(horizontal = 24.dp)) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Changelog", Modifier.weight(1f), style = TextStyle(color = colors.rowText, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.nunito))
-            Text("Close", Modifier.clickable(onClick = onClose).padding(8.dp), style = TextStyle(color = Accent, fontSize = 16.sp, fontFamily = MymindTheme.fonts.nunito))
+            Text("Changelog", Modifier.weight(1f), style = TextStyle(color = colors.rowText, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.body))
+            Text("Close", Modifier.clickable(onClick = onClose).padding(8.dp), style = TextStyle(color = Accent, fontSize = 16.sp, fontFamily = MymindTheme.fonts.body))
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             entries.forEach { entry ->
                 Text(
                     "${entry.versionName} (${entry.versionCode}), ${entry.date}",
                     Modifier.padding(top = 16.dp, bottom = 8.dp),
-                    style = TextStyle(color = colors.rowText, fontSize = 17.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.nunito),
+                    style = TextStyle(color = colors.rowText, fontSize = 17.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.body),
                 )
                 entry.notes.forEach {
-                    Text("•  $it", Modifier.padding(bottom = 4.dp), style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.nunito))
+                    Text("•  $it", Modifier.padding(bottom = 4.dp), style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.body))
                 }
             }
         }

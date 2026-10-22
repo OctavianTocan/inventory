@@ -119,14 +119,21 @@ sealed interface CardMenuOutcome {
 /**
  * The pages that replace the card menu inside its sheet.
  *
- * @property title Header title, shown in capitals.
+ * @property title Header title.
+ * @property parent Parent page; null returns to the action list.
  */
-enum class CardSubmenu(val title: String) {
+enum class CardSubmenu(val title: String, val parent: CardSubmenu? = null) {
     /** Add tags. */
     Tags("Add tags"),
 
     /** Select a space. */
     Spaces("Select a space"),
+
+    /** Create a space inside the space selector. */
+    CreateSpace("Create a space", Spaces);
+
+    /** Navigation depth determines the direction of the sheet page transition. */
+    val depth: Int get() = (parent?.depth ?: 0) + 1
 }
 
 /**

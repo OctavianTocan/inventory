@@ -21,11 +21,10 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.ui.theme.GeistFontFamily
 import com.octaviantocan.mymind.ui.card.*
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
@@ -65,7 +64,7 @@ val DarkMenuColors = MenuColors(Scrim, Color(0xFF14161E), Color(0xFF1C1E26), Col
 val LightMenuColors = MenuColors(Scrim, Color.White, Color(0xFFF4F6F9), Color(0xFF353643), Danger.copy(alpha = 0.1f), Danger, Handle)
 
 internal val LocalCardMenuAccent = staticCompositionLocalOf<Color?> { null }
-internal val CardMenuFont = FontFamily(Font(R.font.geist_regular))
+internal val CardMenuFont = GeistFontFamily
 
 /** Pully's paper and floating controls, tinted with the same accent as the visible card. */
 internal fun cardMenuSheetColors(accent: Color?, dark: Boolean): CardSheetColors {

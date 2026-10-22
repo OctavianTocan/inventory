@@ -213,7 +213,7 @@ private fun CardMenuPageSwitch(
         transitionSpec = {
             if (!moving) EnterTransition.None togetherWith ExitTransition.None
             else {
-                val direction = if (targetState == null) -1 else 1
+                val direction = if ((targetState?.depth ?: 0) < (initialState?.depth ?: 0)) -1 else 1
                 val travel = { width: Int -> if (slow) (width * 0.34f).toInt() else step }
                 ((slideInHorizontally(tween(inMs, easing = CardSheetMotion.SmoothOut)) { direction * travel(it) }
                     + fadeIn(tween(inMs, easing = CardSheetMotion.SmoothOut))) togetherWith

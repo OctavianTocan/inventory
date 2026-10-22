@@ -59,6 +59,12 @@ data class SpacesState(
  */
 data class TagChoices(val all: List<String> = emptyList(), val recent: List<String> = emptyList())
 
+/** A card-sheet creation keeps running when its form leaves composition. */
+data class CardSpaceCreationState(
+    val pending: Boolean = false,
+    val result: ApiResult<String>? = null,
+)
+
 /**
  * The library behind the three tabs, search, the card menu and the upload queue.
  *
@@ -76,6 +82,7 @@ class LibraryViewModel(
     private val mutableFeatures = MutableStateFlow(emptySet<String>())
     private val mutableSpaces = MutableStateFlow(SpacesState())
     private val mutableTagChoices = MutableStateFlow(TagChoices())
+    private val mutableCardSpaceCreation = MutableStateFlow(CardSpaceCreationState())
     private val spaceFeeds = mutableMapOf<String, CardFeed>()
     private val actions = CardActions(library, saver)
 
@@ -99,6 +106,9 @@ class LibraryViewModel(
 
     /** Tags the Add tags page offers; read by [loadTagChoices]. */
     val tagChoices: StateFlow<TagChoices> = mutableTagChoices
+
+    /** Pending creation and its last result, shared by every card-sheet form instance. */
+    val cardSpaceCreation: StateFlow<CardSpaceCreationState> = mutableCardSpaceCreation
 
     /** Search text, filter, suggestions and results. */
     val search = SearchModel(viewModelScope, library)
@@ -210,7 +220,7 @@ class LibraryViewModel(
             is CardMenuOutcome.ShowSimilar -> search.similarTo(outcome.card)
             is CardMenuOutcome.OpenSubmenu -> when (outcome.submenu) {
                 CardSubmenu.Tags -> loadTagChoices()
-                CardSubmenu.Spaces -> if (!mutableSpaces.value.loaded) loadSpaces()
+                CardSubmenu.Spaces, CardSubmenu.CreateSpace -> if (!mutableSpaces.value.loaded) loadSpaces()
             }
             else -> Unit
         }
@@ -292,6 +302,26 @@ class LibraryViewModel(
      */
     suspend fun createSpace(name: String, color: String): ApiResult<String> =
         library.createSpace(name, color).also { if (it is ApiResult.Ok) reloadSpaces() }
+
+    /**
+     * Starts one card-sheet creation in the model's scope. Leaving the form cannot cancel creation or its list reload.
+     *
+     * @param name Trimmed, nonblank space name.
+     * @param color Selected CSS hex color.
+     */
+    fun createCardSpace(name: String, color: String) {
+        if (mutableCardSpaceCreation.value.pending || name.isBlank()) return
+        mutableCardSpaceCreation.value = CardSpaceCreationState(pending = true)
+        viewModelScope.launch {
+            val answer = createSpace(name, color)
+            mutableCardSpaceCreation.value = CardSpaceCreationState(result = answer)
+        }
+    }
+
+    /** Clears a completed creation once the active form has returned to the selector. */
+    fun acknowledgeCardSpaceCreation() {
+        if (!mutableCardSpaceCreation.value.pending) mutableCardSpaceCreation.value = CardSpaceCreationState()
+    }
 
     /**
      * Deletes a space; its cards stay in the library.

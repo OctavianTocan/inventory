@@ -1,49 +1,31 @@
 package com.octaviantocan.mymind.ui.library
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridScope
-import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
-import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Suggestion
-import com.octaviantocan.mymind.ui.errors.WebErrorScreen
-import com.octaviantocan.mymind.ui.theme.MymindTheme
-
-/** Distance from the top of the page to the first row under the search bar (10 + 55 + 11 dp). */
-val UNDER_SEARCH_BAR = PAGE_GUTTER + SEARCH_BAR_HEIGHT + 11.dp
+import com.octaviantocan.mymind.ui.shell.LoadingSpinner
+import com.octaviantocan.mymind.ui.shell.FootPressTheme
+import com.octaviantocan.mymind.ui.card.CardSheetIndication
+import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
 /**
  * A card type the search can be limited to, with the chip label the web front-end uses. The chips come from the
@@ -77,17 +59,7 @@ enum class SearchType(val type: String, val label: String, val slug: String) {
     val suggestion: Suggestion get() = Suggestion("type", label, "type:$slug")
 }
 
-/**
- * The Everything tab: the search bar over the Top of Mind row and the card grid; with the search field focused, the
- * type chips or the search results instead.
- *
- * @param viewModel Library behind the tab.
- * @param onOpenCard Called with a card the user tapped.
- * @param onOpenSettings Called when the hamburger is tapped.
- * @param onAdd Called when the + button is tapped.
- * @param modifier Modifier for the page.
- * @param onLongPressCard Called with a grid card the user long-pressed.
- */
+/** The library gallery; its search field lives in the shell's single floating bar. */
 @Composable
 fun EverythingScreen(
     viewModel: LibraryViewModel,
@@ -96,6 +68,9 @@ fun EverythingScreen(
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
     onLongPressCard: ((Card) -> Unit)? = null,
+    searching: Boolean = false,
+    onSerendipity: () -> Unit = {},
+    photoUrl: String? = null,
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
     val pinned by viewModel.topOfMind.state.collectAsStateWithLifecycle()
@@ -105,82 +80,26 @@ fun EverythingScreen(
     val suggestions by viewModel.search.suggestions.collectAsStateWithLifecycle()
     val results by viewModel.search.results.collectAsStateWithLifecycle()
     val resultState by results.state.collectAsStateWithLifecycle()
-    var focused by remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
-    val searching = focused || query.isNotEmpty() || filter != null
+    val resultsScroll = rememberLazyListState()
     LaunchedEffect(searching) { if (searching) viewModel.search.loadTypes() }
-    val close = {
-        viewModel.search.clear()
-        focusManager.clearFocus()
-        focused = false
-    }
-    BackHandler(enabled = searching, onBack = close)
-
+    LaunchedEffect(query, filter) { resultsScroll.scrollToItem(0) }
     EverythingContent(
-        feed = feed,
-        searching = searching,
-        searchResults = if (query.isNotBlank() || filter != null) resultState else null,
-        typeChips = types.ifEmpty { SearchType.entries.map { it.suggestion } },
-        filter = filter,
-        suggestions = suggestions,
-        query = query,
-        focused = focused,
-        focusRequester = focusRequester,
-        onQueryChange = viewModel.search::setQuery,
-        onFocusChange = { if (it) focused = true },
-        onClear = close,
-        onChoose = {
-            viewModel.search.choose(it)
-            focusManager.clearFocus()
-        },
+        feed, searching, if (query.isNotBlank() || filter != null) resultState else null,
+        types.ifEmpty { SearchType.entries.map { it.suggestion } }, filter, suggestions,
+        onChoose = { viewModel.search.choose(it); focusManager.clearFocus() },
         onRemoveFilter = { viewModel.search.setFilter(null) },
-        onLoadMore = viewModel.everything::loadMore,
-        onLoadMoreResults = results::loadMore,
-        onRetry = viewModel.everything::reload,
-        onOpenCard = onOpenCard,
-        onOpenSettings = onOpenSettings,
-        onAdd = onAdd,
-        modifier = modifier,
-        topOfMind = pinned.cards,
-        onLoadMoreTopOfMind = viewModel.topOfMind::loadMore,
-        onRefresh = viewModel::refreshEverything,
-        onRefreshResults = results::refresh,
-        onLongPressCard = onLongPressCard,
+        onLoadMore = viewModel.everything::loadMore, onLoadMoreResults = results::loadMore,
+        onRetry = viewModel.everything::reload, onOpenCard = onOpenCard,
+        onOpenSettings = onOpenSettings, onAdd = onAdd, modifier = modifier,
+        topOfMind = pinned.cards, onLoadMoreTopOfMind = viewModel.topOfMind::loadMore,
+        onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
+        onLongPressCard = onLongPressCard, onSerendipity = onSerendipity,
+        photoUrl = photoUrl, resultsState = resultsScroll,
     )
 }
 
-/**
- * The Everything tab without a view model.
- *
- * @param feed The library's cards.
- * @param searching True while the search overlay is open.
- * @param searchResults Results of the current search, or null while nothing is searched.
- * @param typeChips Card types offered while the field is empty, most used first.
- * @param filter Filter the search is limited to, or null.
- * @param suggestions Tags that match the typed text, shown above the results.
- * @param query Text in the search field.
- * @param focused True while the search field has focus.
- * @param focusRequester Moves focus into the search field.
- * @param onQueryChange Called with new search text.
- * @param onFocusChange Called when the search field gains or loses focus.
- * @param onClear Called when the search is closed.
- * @param onChoose Called with a tapped type or tag chip.
- * @param onRemoveFilter Called when the filter chip is tapped.
- * @param onLoadMore Called when the grid nears its end.
- * @param onLoadMoreResults Called when the results near their end.
- * @param onRetry Called to read the library again after a failure.
- * @param onOpenCard Called with a tapped card.
- * @param onOpenSettings Called when the hamburger is tapped.
- * @param onAdd Called when the + button is tapped.
- * @param modifier Modifier for the page.
- * @param gridState Scroll position of the library grid.
- * @param topOfMind Pinned cards in pin order, shown in the row above the grid.
- * @param onLoadMoreTopOfMind Called when the Top of Mind row nears its end.
- * @param onRefresh Called when the library grid is pulled down to refresh.
- * @param onRefreshResults Called when the search results are pulled down to refresh.
- * @param onLongPressCard Called with a long-pressed card of the grid or the results, or null to ignore long presses.
- */
+/** Profile controls and Top of Mind scroll above the cards; search and browsing retain independent positions. */
 @Composable
 fun EverythingContent(
     feed: FeedState,
@@ -189,12 +108,6 @@ fun EverythingContent(
     typeChips: List<Suggestion>,
     filter: SearchFilter?,
     suggestions: List<Suggestion>,
-    query: String,
-    focused: Boolean,
-    focusRequester: FocusRequester,
-    onQueryChange: (String) -> Unit,
-    onFocusChange: (Boolean) -> Unit,
-    onClear: () -> Unit,
     onChoose: (Suggestion) -> Unit,
     onRemoveFilter: () -> Unit,
     onLoadMore: () -> Unit,
@@ -204,74 +117,79 @@ fun EverythingContent(
     onOpenSettings: () -> Unit,
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
-    gridState: LazyStaggeredGridState = rememberLazyStaggeredGridState(),
+    gridState: LazyListState = rememberLazyListState(),
     topOfMind: List<Card> = emptyList(),
     onLoadMoreTopOfMind: () -> Unit = {},
     onRefresh: () -> Unit = {},
     onRefreshResults: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
+    onSerendipity: () -> Unit = {},
+    photoUrl: String? = null,
+    mosaic: MosaicState = rememberMosaicState(),
+    resultsState: LazyListState = rememberLazyListState(),
 ) {
-    val page = MymindTheme.page
-    Box(modifier.fillMaxSize().background(page.background)) {
+    val colors = LibraryStyle.colors
+    val photoLoader = if (photoUrl != null) rememberPublicAccountPhotoLoader() else null
+    Box(modifier.fillMaxSize().background(colors.background)) {
         when {
-            searching && searchResults != null -> PullRefresh(searchResults.refreshing, onRefreshResults, top = UNDER_SEARCH_BAR) {
-                CardGrid(searchResults, onLoadMoreResults, onOpenCard, top = UNDER_SEARCH_BAR, onLongPressCard = onLongPressCard) {
-                    resultChips(filter, suggestions, onChoose, onRemoveFilter)
-                }
+            searching && searchResults != null -> PullRefresh(searchResults.refreshing, onRefreshResults) {
+                LibraryMosaic(searchResults, onLoadMoreResults, onOpenCard, state = resultsState, mosaic = mosaic,
+                    onLongPressCard = onLongPressCard, header = {
+                        Text("Search", Modifier.padding(20.dp).semantics { heading() }, style = LibraryStyle.title, color = colors.text)
+                        ResultChips(filter, suggestions, onChoose, onRemoveFilter)
+                        if (searchResults.cards.isEmpty()) GalleryFeedNotice(searchResults, onLoadMoreResults, search = true)
+                    })
             }
-            searching -> SearchChips(typeChips, onChoose, Modifier.padding(top = UNDER_SEARCH_BAR))
-            feed.cards.isEmpty() && feed.error != null -> WebErrorScreen(onRetry = onRetry)
-            feed.empty -> PageSpinner()
-            else -> PullRefresh(feed.refreshing, onRefresh, top = UNDER_SEARCH_BAR) {
-                CardGrid(feed, onLoadMore, onOpenCard, state = gridState, top = UNDER_SEARCH_BAR, onLongPressCard = onLongPressCard) {
-                    topOfMindHeader(topOfMind, onOpenCard, onLoadMoreTopOfMind)
-                }
+            searching -> Column(Modifier.fillMaxSize().padding(top = 20.dp)) {
+                Text("Find something", Modifier.padding(horizontal = 20.dp, vertical = 12.dp).semantics { heading() },
+                    style = LibraryStyle.title, color = colors.text)
+                SearchChips(typeChips, onChoose, Modifier.padding(bottom = 150.dp))
+            }
+            else -> PullRefresh(feed.refreshing, onRefresh) {
+                LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
+                    onLongPressCard = onLongPressCard, header = {
+                        GalleryHeader(onOpenSettings, onAdd, onSerendipity, photoUrl = photoUrl, photoLoader = photoLoader)
+                        GalleryHighlights(topOfMind, onOpenCard, onLoadMore = onLoadMoreTopOfMind, onLongPressCard = onLongPressCard)
+                        if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
+                    })
             }
         }
-        Box(Modifier.fillMaxWidth().height(PAGE_GUTTER).background(page.background))
-        SearchBar(
-            query = query,
-            focused = searching,
-            onQueryChange = onQueryChange,
-            onFocusChange = onFocusChange,
-            onClear = onClear,
-            onOpenSettings = onOpenSettings,
-            onAdd = onAdd,
-            focusRequester = focusRequester,
-        )
     }
 }
 
-/**
- * The type chips under the focused search bar.
- *
- * @param chips Type suggestions, most used first.
- * @param onSelect Called with the tapped chip.
- * @param modifier Modifier for the chip area.
- */
+/** Loading, empty and failed first pages keep the profile controls available. */
+@Composable
+private fun GalleryFeedNotice(feed: FeedState, onRetry: () -> Unit, search: Boolean) {
+    val colors = LibraryStyle.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        when {
+            feed.error != null -> {
+                Text(feed.error, style = LibraryStyle.body, color = colors.muted)
+                Text("Retry", Modifier.clip(CircleShape).clickable(role = Role.Button, onClick = onRetry).padding(16.dp),
+                    style = LibraryStyle.body, color = colors.text)
+            }
+            feed.loading || !feed.endReached -> LoadingSpinner(color = colors.accent)
+            else -> Text(if (search) "No cards found" else "Your mind starts here", style = LibraryStyle.body, color = colors.muted)
+        }
+    }
+}
+
+/** Search suggestions use the same neutral capsule treatment as the gallery navigation. */
 @Composable
 fun SearchChips(chips: List<Suggestion>, onSelect: (Suggestion) -> Unit, modifier: Modifier = Modifier) {
-    ChipFlow(
-        modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = PAGE_GUTTER),
-    ) {
-        chips.forEach { chip -> SearchChip(chip.text, chosen = false) { onSelect(chip) } }
+    ChipFlow(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+        chips.forEach { chip -> SearchChip(chip.text, false) { onSelect(chip) } }
     }
 }
 
-/** The filter chip, in the accent colour, and the tag suggestions over the search results. */
-private fun LazyStaggeredGridScope.resultChips(
-    filter: SearchFilter?,
-    suggestions: List<Suggestion>,
-    onChoose: (Suggestion) -> Unit,
-    onRemoveFilter: () -> Unit,
-) {
+@Composable
+private fun ResultChips(filter: SearchFilter?, suggestions: List<Suggestion>, onChoose: (Suggestion) -> Unit, onRemoveFilter: () -> Unit) {
     if (filter == null && suggestions.isEmpty()) return
-    item(key = "search-chips", span = StaggeredGridItemSpan.FullLine) {
-        ChipFlow(Modifier.fillMaxWidth()) {
-            filter?.let { SearchChip(it.label, chosen = true, onClick = onRemoveFilter) }
-            suggestions.filter { it.queryText != filter?.queryText }.forEach { chip ->
-                SearchChip(if (chip.type == "type") chip.text else chip.text.lowercase(), chosen = false) { onChoose(chip) }
-            }
+    ChipFlow(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 20.dp)) {
+        filter?.let { SearchChip(it.label, true, onRemoveFilter) }
+        suggestions.filter { it.queryText != filter?.queryText }.forEach { chip ->
+            SearchChip(if (chip.type == "type") chip.text else chip.text.lowercase(), false) { onChoose(chip) }
         }
     }
 }
@@ -279,35 +197,17 @@ private fun LazyStaggeredGridScope.resultChips(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChipFlow(modifier: Modifier, content: @Composable () -> Unit) {
-    FlowRow(
-        modifier,
-        horizontalArrangement = Arrangement.spacedBy(PAGE_GUTTER),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) { content() }
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
 }
 
-/** One 32.7 dp search chip; [chosen] draws it in the accent colour. A tap gives the long-press haptic, as on the web. */
 @Composable
 private fun SearchChip(label: String, chosen: Boolean, onClick: () -> Unit) {
-    val page = MymindTheme.page
-    val haptic = LocalHapticFeedback.current
-    val ink = if (MymindTheme.colors.dark) Color(0xFF8B94A1) else page.muted
-    Box(
-        Modifier
-            .height(32.7.dp)
-            .clip(RoundedCornerShape(50))
-            .background(if (chosen) MymindTheme.colors.accent else page.surface)
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
-            }
-            .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            style = TextStyle(color = if (chosen) Color.White else ink, fontSize = 16.sp, fontFamily = MymindTheme.fonts.nunito),
-            maxLines = 1,
-        )
+    val colors = LibraryStyle.colors
+    FootPressTheme {
+    Box(Modifier.heightIn(min = 44.dp).clip(CircleShape).background(if (chosen) colors.selected else colors.raised)
+        .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button, onClick = onClick)
+        .padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+        Text(label, style = LibraryStyle.label, color = colors.text)
+    }
     }
 }

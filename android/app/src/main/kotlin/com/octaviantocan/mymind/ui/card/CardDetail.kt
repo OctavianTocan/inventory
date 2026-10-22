@@ -22,7 +22,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -143,7 +143,7 @@ private fun TagChips(tags: List<Tag>, style: TextStyle, onRemove: (Tag) -> Unit)
 private fun CardBody(card: Card, onRemoveTag: ((Tag) -> Unit)?) {
     val page = MymindTheme.page
     val fonts = MymindTheme.fonts
-    val body = TextStyle(color = LocalCardSheetColors.current.text, fontSize = 19.sp, lineHeight = 1.5.em, fontFamily = FontFamily.Serif)
+    val body = TextStyle(color = LocalCardSheetColors.current.text, fontSize = 19.sp, lineHeight = 1.5.em, fontFamily = MymindTheme.fonts.body)
     Column(Modifier.fillMaxWidth().padding(horizontal = BODY_SIDE, vertical = 30.dp)) {
         val kind = tileKind(card)
         if (kind == TileKind.Media || kind == TileKind.Video) {
@@ -155,7 +155,7 @@ private fun CardBody(card: Card, onRemoveTag: ((Tag) -> Unit)?) {
         val tags = card.tags.orEmpty().filter { !it.name.isNullOrEmpty() }
         if (tags.isNotEmpty()) {
             Spacer(Modifier.height(24.dp))
-            val style = TextStyle(color = page.muted, fontSize = 15.sp, fontFamily = fonts.nunitoSemiBold)
+            val style = TextStyle(color = page.muted, fontSize = 15.sp, fontFamily = fonts.body, fontWeight = FontWeight.SemiBold)
             if (onRemoveTag == null) {
                 Text(tags.joinToString("  ") { it.name.orEmpty() }, style = style)
             } else {

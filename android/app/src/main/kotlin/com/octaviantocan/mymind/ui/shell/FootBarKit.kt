@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Paint
@@ -77,16 +77,18 @@ internal fun Modifier.footShadow(shape: Shape, level: FootShadow = FootShadow.Bu
     val colors = LibraryStyle.colors
     val tint = colors.shadow.copy(alpha = if (MymindTheme.colors.dark) (level.alpha * 2.7f).coerceAtMost(0.9f) else level.alpha)
     val fill = colors.raised
-    return drawBehind {
+    return drawWithCache {
         val radius = ((level.blur.toPx() / 2f - 0.5f) / 0.57735f).coerceAtLeast(0.5f)
         val broad = Paint().apply { color = fill }
         val edge = Paint().apply { color = fill }
         val outline = shape.createOutline(size, layoutDirection, this)
         edge.asFrameworkPaint().setShadowLayer(1f, 0f, 1.dp.toPx(), tint.copy(alpha = tint.alpha * 0.5f).toArgb())
         broad.asFrameworkPaint().setShadowLayer(radius, 0f, level.dy.toPx(), tint.toArgb())
-        drawIntoCanvas {
-            it.drawOutline(outline, edge)
-            it.drawOutline(outline, broad)
+        onDrawBehind {
+            drawIntoCanvas {
+                it.drawOutline(outline, edge)
+                it.drawOutline(outline, broad)
+            }
         }
     }
 }

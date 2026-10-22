@@ -98,28 +98,28 @@ fun MymindTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -
         LocalMymindFonts provides fonts,
         LocalPageColors provides if (dark) DarkPageColors else LightPageColors,
     ) {
-        MaterialTheme(colorScheme = scheme, typography = nunitoTypography(fonts), content = content)
+        MaterialTheme(colorScheme = scheme, typography = geistTypography(fonts), content = content)
     }
 }
 
-private fun nunitoTypography(fonts: MymindFonts): Typography {
+private fun geistTypography(fonts: MymindFonts): Typography {
     val base = Typography()
-    fun TextStyle.nunito() = copy(fontFamily = fonts.nunito)
+    fun TextStyle.geist() = copy(fontFamily = fonts.body)
     return Typography(
-        displayLarge = base.displayLarge.nunito(),
-        displayMedium = base.displayMedium.nunito(),
-        displaySmall = base.displaySmall.nunito(),
-        headlineLarge = base.headlineLarge.nunito(),
-        headlineMedium = base.headlineMedium.nunito(),
-        headlineSmall = base.headlineSmall.nunito(),
-        titleLarge = base.titleLarge.nunito(),
-        titleMedium = base.titleMedium.nunito(),
-        titleSmall = base.titleSmall.nunito(),
-        bodyLarge = base.bodyLarge.nunito(),
-        bodyMedium = base.bodyMedium.nunito(),
-        bodySmall = base.bodySmall.nunito(),
-        labelLarge = base.labelLarge.nunito(),
-        labelMedium = base.labelMedium.nunito(),
-        labelSmall = base.labelSmall.nunito(),
+        displayLarge = base.displayLarge.geist(),
+        displayMedium = base.displayMedium.geist(),
+        displaySmall = base.displaySmall.geist(),
+        headlineLarge = base.headlineLarge.geist(),
+        headlineMedium = base.headlineMedium.geist(),
+        headlineSmall = base.headlineSmall.geist(),
+        titleLarge = base.titleLarge.geist(),
+        titleMedium = base.titleMedium.geist(),
+        titleSmall = base.titleSmall.geist(),
+        bodyLarge = base.bodyLarge.geist(),
+        bodyMedium = base.bodyMedium.geist(),
+        bodySmall = base.bodySmall.geist(),
+        labelLarge = base.labelLarge.geist(),
+        labelMedium = base.labelMedium.geist(),
+        labelSmall = base.labelSmall.geist(),
     )
 }

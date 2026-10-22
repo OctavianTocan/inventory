@@ -50,6 +50,7 @@ internal fun mosaicRows(cards: List<Card>, width: Float, columns: Int, gap: Floa
 
 /** Uses cover proportions where possible, and readable proportions for text cards. */
 private fun mosaicAspectRatio(card: Card): Float {
+    if (galleryKeepsText(card) && galleryPicture(card) != null) return 0.9f
     val width = card.cover?.width ?: card.blob?.width
     val height = card.cover?.height ?: card.blob?.height
     if (width != null && height != null && width > 0 && height > 0) return (width.toFloat() / height).coerceIn(0.65f, 1.8f)

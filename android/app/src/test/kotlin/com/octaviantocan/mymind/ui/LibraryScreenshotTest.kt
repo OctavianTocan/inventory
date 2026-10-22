@@ -4,7 +4,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -74,7 +74,7 @@ class LibraryScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun everythingScrolled() {
-        val grid = LazyStaggeredGridState()
+        val grid = LazyListState()
         shell { SampleEverything(grid = grid) }
         compose.change { runBlocking { grid.scrollToItem(3, 120) } }
         compose.mainClock.advanceTimeBy(SETTLE_MS)

@@ -1,7 +1,11 @@
 # Changelog
 
-## 0.4.2 (7), 2026-10-22
-- Card actions, tags and spaces now use Pully-style sheets with a centered title and floating close button.
+## 0.5.0 (7), 2026-10-22
+- Geist is the app's typeface, with text and images both visible in mixed card previews.
+- Browse a photo-style brick gallery and pinch to make your cards larger or smaller.
+- Find your profile, add controls and Serendipity above large Top of Mind highlights.
+- Switch between Everything and Spaces in the floating bottom bar, with Search beside it.
+- Card actions, tags and spaces use accented Pully sheets; child pages slide in and Back returns to the previous page.
 - Sheets attach to the bottom edge, carry the card's accent and follow your drag with spring motion.
 
 ## 0.4.1 (6), 2026-10-21

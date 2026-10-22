@@ -144,19 +144,19 @@ private fun Greeting(name: String, modifier: Modifier) {
     BasicText(
         text,
         modifier,
-        style = TextStyle(fontSize = 48.sp, fontFamily = MymindTheme.fonts.louize, letterSpacing = (-0.05).em, lineHeight = 0.95.em),
+        style = TextStyle(fontSize = 48.sp, fontFamily = MymindTheme.fonts.heading, letterSpacing = (-0.05).em, lineHeight = 0.95.em),
     )
 }
 
 @Composable
 private fun LabelledValue(label: String, value: String, modifier: Modifier) {
     val colors = MymindTheme.colors
-    val nunito = MymindTheme.fonts.nunito
-    BasicText(label, modifier, style = TextStyle(color = colors.settingsLabel, fontSize = 13.sp, fontFamily = nunito, letterSpacing = 0.06.em))
+    val bodyFont = MymindTheme.fonts.body
+    BasicText(label, modifier, style = TextStyle(color = colors.settingsLabel, fontSize = 13.sp, fontFamily = bodyFont, letterSpacing = 0.06.em))
     BasicText(
         value,
         modifier,
-        style = TextStyle(color = colors.settingsValue, fontSize = 20.sp, fontFamily = nunito, letterSpacing = (-0.01).em, lineHeight = 1.4.em),
+        style = TextStyle(color = colors.settingsValue, fontSize = 20.sp, fontFamily = bodyFont, letterSpacing = (-0.01).em, lineHeight = 1.4.em),
     )
 }
 
@@ -172,7 +172,7 @@ private fun ScrollHint(pictures: SettingsPictures, scrolled: Int) {
         Image(pictures.hand, contentDescription = null)
         BasicText(
             "Swipe down for more options",
-            style = TextStyle(color = MymindTheme.colors.settingsHint, fontSize = 13.sp, fontFamily = MymindTheme.fonts.nunito, lineHeight = 18.sp),
+            style = TextStyle(color = MymindTheme.colors.settingsHint, fontSize = 13.sp, fontFamily = MymindTheme.fonts.body, lineHeight = 18.sp),
         )
     }
 }

@@ -4,6 +4,14 @@ regroups cards into variable-width brick rows. Images fill their bricks; text ca
 retain a readable preview. Tap and hold MUST target the same card at every density.
 Source: Tavi, 22 October 2026, Google Photos layout request in the Codex conversation.
 
+@cc [owner:OctavianTocan,label:product;design] gallery-mixed-cards-keep-text-and-images
+A note, social post, article or saved link with text and a picture MUST show both in its gallery
+preview, including the smallest density and Top of Mind. Neither the cover nor a
+generated title may replace the note or post body. Text and images MUST have separate
+visible areas, and text MUST use Geist with enough contrast against its paper. A
+photo or video with an authored note MUST also retain that note beside its image.
+Source: Tavi, 22 October 2026, preserve text and images in small note previews.
+
 @cc [owner:OctavianTocan,label:product;motion] gallery-pinches-change-tile-size
 A two-finger pinch on the mosaic MUST change tile size and regroup the cards. The
 gesture MUST NOT open a card, open its action sheet, or trigger pull to refresh.

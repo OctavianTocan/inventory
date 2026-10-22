@@ -16,6 +16,7 @@ import com.octaviantocan.mymind.data.UploadBlob
 import com.octaviantocan.mymind.data.UploadChunkAnswer
 import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.data.User
+import kotlinx.coroutines.CompletableDeferred
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
@@ -97,6 +98,9 @@ class FakeLibrary(
     /** When set, every write fails with it. */
     var writeFailure: ApiFailure? = null
 
+    /** Holds a successful create-space response until completed, without blocking the test thread. */
+    var createSpaceGate: CompletableDeferred<Unit>? = null
+
     /** When set, upload pieces fail with it. */
     var chunkFailure: ApiFailure? = null
 
@@ -147,7 +151,11 @@ class FakeLibrary(
 
     override suspend fun addToSpace(spaceId: String, cardId: String) = write("space:$spaceId:$cardId") {}
 
-    override suspend fun createSpace(name: String, color: String) = write("newSpace:$name:$color") { "s-new" }
+    override suspend fun createSpace(name: String, color: String): ApiResult<String> {
+        val answer = write("newSpace:$name:$color") { "s-new" }
+        if (answer is ApiResult.Ok) createSpaceGate?.await()
+        return answer
+    }
 
     override suspend fun deleteSpace(spaceId: String) = write("deleteSpace:$spaceId") {}
 

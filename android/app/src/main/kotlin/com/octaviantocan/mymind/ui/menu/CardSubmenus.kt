@@ -13,6 +13,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +53,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -59,7 +66,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.ui.library.CardSpaceCreationState
+import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Space
+import com.octaviantocan.mymind.ui.describe
+import com.octaviantocan.mymind.ui.library.SPACE_COLORS
 import com.octaviantocan.mymind.ui.library.parseHexColor
 import java.util.Locale
 
@@ -299,7 +310,7 @@ fun SelectSpacePage(
                 Image(painterResource(R.drawable.ic_spaces), contentDescription = null, modifier = Modifier.size(49.dp))
                 HelpText(NO_SPACES_HELP, colors)
             }
-            SubmenuButton("Create Your First Space", colors, onCreateSpace)
+            SubmenuButton("Create Your First Space", colors, onClick = onCreateSpace)
         } else {
             Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 30.dp)
                 .fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.spaceRow)) {
@@ -380,7 +391,7 @@ private fun HelpText(text: String, colors: SubmenuColors) {
 
 /** The 44 dp action pill at the bottom of a submenu. */
 @Composable
-private fun SubmenuButton(label: String, colors: SubmenuColors, onClick: () -> Unit) {
+private fun SubmenuButton(label: String, colors: SubmenuColors, enabled: Boolean = true, onClick: () -> Unit) {
     Row(
         Modifier
             .padding(horizontal = 20.dp)
@@ -388,12 +399,72 @@ private fun SubmenuButton(label: String, colors: SubmenuColors, onClick: () -> U
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(100.dp))
-            .background(colors.button)
-            .clickable(onClick = onClick)
+            .background(colors.button.copy(alpha = if (enabled) 1f else 0.4f))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = TextStyle(color = colors.buttonText, fontSize = 16.sp, letterSpacing = (-0.02).em, fontFamily = CardMenuFont))
+    }
+}
+
+/**
+ * Creates a space as a child of the card's space selector. A failed request keeps the form available for retry.
+ *
+ * @param creation Model-owned pending operation and its last result.
+ * @param onCreate Starts creation in the model; it does not add the selected card to it.
+ * @param onCreated Returns to the space selector after creation succeeds.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CreateSpacePage(
+    creation: CardSpaceCreationState,
+    onCreate: (name: String, color: String) -> Unit,
+    onCreated: () -> Unit,
+) {
+    val colors = submenuColors()
+    var name by rememberSaveable { mutableStateOf("") }
+    var color by rememberSaveable { mutableStateOf(SPACE_COLORS.first()) }
+    val busy = creation.pending
+    val error = (creation.result as? ApiResult.Failed)?.let { describe(it.failure) }
+    LaunchedEffect(creation.result) {
+        if (creation.result is ApiResult.Ok) onCreated()
+    }
+    val submit: () -> Unit = {
+        if (name.isNotBlank() && !busy) onCreate(name.trim(), color)
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        BasicTextField(
+            value = name,
+            onValueChange = { name = it },
+            enabled = !busy,
+            singleLine = true,
+            textStyle = TextStyle(color = colors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont),
+            cursorBrush = SolidColor(colors.fieldText),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
+            modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()
+                .semantics { contentDescription = "Space name" }
+                .background(colors.field, RoundedCornerShape(16.dp)).padding(16.dp),
+            decorationBox = { field ->
+                Box {
+                    if (name.isEmpty()) Text("Space name", style = TextStyle(color = colors.help, fontSize = 17.sp, fontFamily = CardMenuFont))
+                    field()
+                }
+            },
+        )
+        Text("Color", Modifier.padding(horizontal = 20.dp), style = TextStyle(color = colors.title, fontSize = 15.sp, fontFamily = CardMenuFont))
+        FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SPACE_COLORS.forEach { choice ->
+                Box(Modifier.size(44.dp).clip(CircleShape)
+                    .clickable(enabled = !busy, role = Role.RadioButton) { color = choice }
+                    .semantics { contentDescription = "Space color $choice"; selected = color == choice }
+                    .border(if (color == choice) 2.dp else 0.dp, colors.title, CircleShape)
+                    .padding(5.dp).background(parseHexColor(choice) ?: colors.title, CircleShape))
+            }
+        }
+        error?.let { HelpText(it, colors) }
+        SubmenuButton(if (busy) "Creating…" else "Create space", colors, enabled = name.isNotBlank() && !busy, onClick = submit)
     }
 }

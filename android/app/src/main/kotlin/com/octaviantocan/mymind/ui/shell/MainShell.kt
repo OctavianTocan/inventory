@@ -21,12 +21,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +37,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -52,6 +56,7 @@ import com.octaviantocan.mymind.ui.library.LibraryViewModel
 import com.octaviantocan.mymind.ui.library.NewSpaceDialog
 import com.octaviantocan.mymind.ui.library.SerendipityScreen
 import com.octaviantocan.mymind.ui.library.SpacesScreen
+import com.octaviantocan.mymind.ui.menu.CreateSpacePage
 import com.octaviantocan.mymind.ui.menu.AddTagsPage
 import com.octaviantocan.mymind.ui.menu.CardMenuAction
 import com.octaviantocan.mymind.ui.menu.CardMenuOutcome
@@ -65,6 +70,7 @@ import com.octaviantocan.mymind.ui.settings.SettingsDrawerHost
 import com.octaviantocan.mymind.ui.settings.SettingsUpdates
 import com.octaviantocan.mymind.ui.settings.SettingsViewModel
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
 import com.octaviantocan.mymind.ui.upload.AddMediaPopup
@@ -112,6 +118,8 @@ fun MainShell(
     extras: @Composable () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Everything) }
+    var searchActive by rememberSaveable { mutableStateOf(false) }
+    val pageStates = rememberSaveableStateHolder()
     var openSpace by remember { mutableStateOf<Space?>(null) }
     var opened by remember { mutableStateOf<OpenedCard?>(null) }
     var menuFor by remember { mutableStateOf<OpenedCard?>(null) }
@@ -127,7 +135,18 @@ fun MainShell(
     val features by viewModel.features.collectAsStateWithLifecycle()
     val tagChoices by viewModel.tagChoices.collectAsStateWithLifecycle()
     val spaces by viewModel.spaces.collectAsStateWithLifecycle()
+    val cardSpaceCreation by viewModel.cardSpaceCreation.collectAsStateWithLifecycle()
     val uploads by viewModel.uploads.state.collectAsStateWithLifecycle()
+    val query by viewModel.search.query.collectAsStateWithLifecycle()
+    val filter by viewModel.search.filter.collectAsStateWithLifecycle()
+    val account by settingsViewModel.state.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
+    val searching = tab == Tab.Everything && (searchActive || query.isNotEmpty() || filter != null)
+    val closeSearch = { viewModel.search.clear(); searchActive = false; focusManager.clearFocus() }
+    val selectTab: (Tab) -> Unit = { next -> focusManager.clearFocus(); searchActive = false; tab = next }
+    LaunchedEffect(settingsViewModel) { settingsViewModel.refresh() }
+    BackHandler(enabled = opened == null && !menuOpen && searching, onBack = closeSearch)
+    BackHandler(enabled = opened == null && !menuOpen && tab == Tab.Serendipity) { tab = Tab.Everything }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val sheetState = key(menuOpen, menuFor?.card?.id) { rememberCardMenuPosition() }
     val motion = rememberSheetMotionEnabled()
@@ -167,10 +186,14 @@ fun MainShell(
     SettingsDrawerHost(drawerState, settingsViewModel, updates) {
         ShellFrame(
             tab = tab,
-            onSelectTab = { tab = it },
+            onSelectTab = selectTab,
             scheme = scheme,
             modifier = Modifier.blur(MENU_BLUR * menuProgress),
             underStatusBar = tab == Tab.Serendipity,
+            footer = {
+                LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
+                    onSearch = { tab = Tab.Everything; searchActive = true }, onCloseSearch = closeSearch)
+            },
             overlay = {
                 opened?.let { open ->
                     key(open.card.id) {
@@ -223,25 +246,30 @@ fun MainShell(
                 }
             },
         ) {
-            when (tab) {
-                Tab.Everything -> EverythingScreen(
-                    viewModel,
-                    onOpenCard = { openCard(it, null) },
-                    onOpenSettings = { scope.launch { drawerState.open() } },
-                    onAdd = { adding = AddTarget(null) },
-                    onLongPressCard = { openMenu(it, null) },
-                )
-                Tab.Spaces -> SpacesScreen(
-                    viewModel,
-                    openSpace,
-                    onOpenSpace = { openSpace = it },
-                    onOpenCard = openCard,
-                    onNewSpace = { newSpaceOpen = true },
-                    onDeleteSpace = { deleting = it },
-                    onAddToSpace = { adding = AddTarget(it.id) },
-                    onLongPressCard = openMenu,
-                )
-                Tab.Serendipity -> SerendipityScreen(viewModel, onOpenCard = { openCard(it, null) })
+            pageStates.SaveableStateProvider(tab.name) {
+                when (tab) {
+                    Tab.Everything -> EverythingScreen(
+                        viewModel,
+                        onOpenCard = { openCard(it, null) },
+                        onOpenSettings = { scope.launch { drawerState.open() } },
+                        onAdd = { adding = AddTarget(null) },
+                        onLongPressCard = { openMenu(it, null) },
+                        searching = searching,
+                        onSerendipity = { focusManager.clearFocus(); tab = Tab.Serendipity },
+                        photoUrl = account.photoUrl,
+                    )
+                    Tab.Spaces -> SpacesScreen(
+                        viewModel,
+                        openSpace,
+                        onOpenSpace = { openSpace = it },
+                        onOpenCard = openCard,
+                        onNewSpace = { newSpaceOpen = true },
+                        onDeleteSpace = { deleting = it },
+                        onAddToSpace = { adding = AddTarget(it.id) },
+                        onLongPressCard = openMenu,
+                    )
+                    Tab.Serendipity -> SerendipityScreen(viewModel, onOpenCard = { openCard(it, null) })
+                }
             }
         }
     }
@@ -283,7 +311,7 @@ fun MainShell(
             },
             position = sheetState,
             submenu = submenu,
-            onBack = { submenu = null },
+            onBack = { focusManager.clearFocus(); submenu = submenu?.parent },
             submenuContent = { shown ->
                     when (shown) {
                         CardSubmenu.Tags -> AddTagsPage(
@@ -300,6 +328,17 @@ fun MainShell(
                                 }
                             },
                         )
+                        CardSubmenu.CreateSpace -> CreateSpacePage(
+                            creation = cardSpaceCreation,
+                            onCreate = viewModel::createCardSpace,
+                            onCreated = {
+                                if (submenu == CardSubmenu.CreateSpace) {
+                                    viewModel.acknowledgeCardSpaceCreation()
+                                    focusManager.clearFocus()
+                                    submenu = CardSubmenu.Spaces
+                                }
+                            },
+                        )
                         CardSubmenu.Spaces -> SelectSpacePage(
                             spaces = spaces.spaces,
                             selected = target.card.spaces.orEmpty().toSet(),
@@ -313,8 +352,8 @@ fun MainShell(
                                 }
                             },
                             onCreateSpace = {
-                                closeMenu()
-                                newSpaceOpen = true
+                                viewModel.acknowledgeCardSpaceCreation()
+                                submenu = CardSubmenu.CreateSpace
                             },
                         )
                     }
@@ -378,17 +417,23 @@ fun ShellFrame(
     scheme: PageScheme,
     modifier: Modifier = Modifier,
     underStatusBar: Boolean = false,
+    footer: (@Composable () -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
     page: @Composable () -> Unit,
 ) {
-    Box(modifier.fillMaxSize().background(MymindTheme.colors.page)) {
-        PageTheme(scheme) {
-            val top = if (underStatusBar) Modifier else Modifier.statusBarsPadding()
-            Box(Modifier.fillMaxSize().then(top).padding(bottom = PAGE_BOTTOM_GAP).background(MymindTheme.page.background)) {
-                page()
+    val bars = remember { FootBars() }
+    CompositionLocalProvider(LocalFootBars provides bars) {
+        Box(modifier.fillMaxSize().background(MymindTheme.colors.page)) {
+            PageTheme(scheme) {
+                val top = if (underStatusBar) Modifier else Modifier.statusBarsPadding()
+                val background = if (tab == Tab.Everything) LibraryStyle.colors.background else MymindTheme.page.background
+                Box(Modifier.fillMaxSize().then(top).background(background).padding(bottom = if (tab == Tab.Everything) 0.dp else PAGE_BOTTOM_GAP)) {
+                    page()
+                }
+                if (footer != null) footer() else MymindTabBar(tab, onSelectTab)
+                FootBarLayer(bars, Modifier.align(Alignment.BottomCenter))
             }
+            overlay()
         }
-        MymindTabBar(tab, onSelect = onSelectTab, modifier = Modifier.align(Alignment.BottomCenter))
-        overlay()
     }
 }

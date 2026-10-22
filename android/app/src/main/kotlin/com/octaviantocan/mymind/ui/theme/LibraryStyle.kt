@@ -5,11 +5,8 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import com.octaviantocan.mymind.R
 
 /** Neutral gallery surfaces; card-specific accents remain on each card and its action sheet. */
 @Immutable
@@ -37,7 +34,7 @@ object LibraryStyle {
     val colors: LibraryColors
         @Composable @ReadOnlyComposable get() = if (MymindTheme.colors.dark) DarkLibraryColors else LightLibraryColors
 
-    val font = FontFamily(Font(R.font.geist_regular), Font(R.font.geist_semibold, FontWeight.SemiBold))
+    val font = GeistFontFamily
     val label = TextStyle(fontFamily = font, fontSize = 15.sp, lineHeight = 21.sp)
     val body = TextStyle(fontFamily = font, fontSize = 17.sp, lineHeight = 24.sp)
     val title = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp)

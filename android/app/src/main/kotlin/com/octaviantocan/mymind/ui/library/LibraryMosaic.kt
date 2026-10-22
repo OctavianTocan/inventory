@@ -68,7 +68,7 @@ import kotlin.math.roundToInt
 private val MOSAIC_GAP = 3.dp
 private const val MOSAIC_HEADER = "gallery-header"
 
-private data class MosaicAnchor(val cardId: String, val top: Int)
+private data class MosaicAnchor(val cardId: String, val viewportY: Float, val fractionY: Float)
 private data class MosaicLoadPosition(val count: Int, val last: Int, val total: Int, val ready: Boolean)
 
 /**
@@ -115,7 +115,9 @@ fun LibraryMosaic(
                     edge = end + gap
                     contains
                 }.takeIf { it >= 0 } ?: row.cards.lastIndex
-                MosaicAnchor(row.cards[cell].id, item.offset)
+                val pointY = (focal?.y?.takeIf { it.isFinite() } ?: item.offset.coerceAtLeast(state.layoutInfo.viewportStartOffset).toFloat())
+                    .coerceIn(item.offset.toFloat(), (item.offset + item.size).toFloat())
+                MosaicAnchor(row.cards[cell].id, pointY, (pointY - item.offset) / item.size.coerceAtLeast(1))
             }
         })
         fun resize(change: () -> Boolean): Boolean {
@@ -127,7 +129,10 @@ fun LibraryMosaic(
         LaunchedEffect(rows, pendingAnchor) {
             val anchor = pendingAnchor ?: return@LaunchedEffect
             val row = rows.indexOfFirst { packed -> packed.cards.any { it.id == anchor.cardId } }
-            if (row >= 0) state.requestScrollToItem(row + headerItems, -anchor.top)
+            if (row >= 0) {
+                val offset = (rows[row].height * anchor.fractionY - anchor.viewportY).roundToInt()
+                state.requestScrollToItem(row + headerItems, offset)
+            }
             pendingAnchor = null
         }
         SideEffect {

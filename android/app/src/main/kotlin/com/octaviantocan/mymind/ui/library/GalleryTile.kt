@@ -2,7 +2,6 @@ package com.octaviantocan.mymind.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -15,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,13 +39,12 @@ import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.resolveMediaUrl
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
-import com.octaviantocan.mymind.ui.card.DarkCardSheetColors
-import com.octaviantocan.mymind.ui.card.LightCardSheetColors
-import com.octaviantocan.mymind.ui.card.LocalCardSheetColors
+import com.octaviantocan.mymind.ui.shell.FootPressTheme
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
-import com.octaviantocan.mymind.ui.theme.MymindTheme
 
-/** A gallery brick: photographs fill it, while text cards retain a readable preview and their own accent. */
+private val VISUAL_CARD_TYPES = setOf("Image", "Screenshot", "Video", "YouTubeVideo", "InstagramReel")
+
+/** A gallery brick keeps both the words and picture of a mixed card visible at every density. */
 @Composable
 internal fun GalleryTile(
     card: Card,
@@ -59,13 +56,15 @@ internal fun GalleryTile(
 ) {
     val colors = LibraryStyle.colors
     val accent = cardAccent(card) ?: colors.selected
-    val background = parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor)
-        ?: lerp(colors.raised, accent, 0.13f)
+    val kind = tileKind(card)
     val picture = galleryPicture(card)
     val text = remember(card) { galleryText(card) }
-    val heading = card.title?.takeIf { it.isNotBlank() } ?: text.takeIf { it.isNotBlank() } ?: card.type
-    CompositionLocalProvider(LocalCardSheetColors provides if (MymindTheme.colors.dark) DarkCardSheetColors else LightCardSheetColors) {
-        BoxWithConstraints(
+    val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card)
+    val paper = lerp(colors.raised, accent, 0.13f)
+    val background = if (picture == null || mixed) paper else parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper
+    val heading = card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card)
+    FootPressTheme {
+        Box(
             modifier.fillMaxSize().clip(RoundedCornerShape(if (highlight) 28.dp else 3.dp)).background(background)
                 .semantics(mergeDescendants = true) { contentDescription = heading }
                 .combinedClickable(
@@ -73,12 +72,21 @@ internal fun GalleryTile(
                     onLongClickLabel = "Card actions", onLongClick = onLongClick, onClick = onClick,
                 ),
         ) {
-            if (picture != null) {
+            if (mixed) {
+                Column(Modifier.fillMaxSize()) {
+                    GalleryTextPreview(card, text, highlight, Modifier.weight(0.56f).fillMaxWidth())
+                    AsyncImage(
+                        model = resolveMediaUrl(BuildConfig.SERVER_URL, picture), contentDescription = "Image preview",
+                        contentScale = ContentScale.Crop, modifier = Modifier.weight(0.44f).fillMaxWidth(),
+                    )
+                }
+                Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
+            } else if (picture != null) {
                 AsyncImage(
                     model = resolveMediaUrl(BuildConfig.SERVER_URL, picture), contentDescription = null,
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                 )
-                if (highlight || tileKind(card) !in setOf(TileKind.Media, TileKind.Video)) {
+                if (highlight || kind !in setOf(TileKind.Media, TileKind.Video)) {
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.78f))))
                     Text(
                         card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card),
@@ -87,37 +95,48 @@ internal fun GalleryTile(
                         maxLines = if (highlight) 3 else 2, overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (tileKind(card) == TileKind.Video) {
-                    Icon(
-                        painterResource(R.drawable.ic_video), null, tint = Color.White,
-                        modifier = Modifier.align(Alignment.TopEnd).padding(10.dp).height(20.dp),
-                    )
-                }
             } else {
-                val inset = if (highlight) 18.dp else if (maxWidth < 110.dp) 10.dp else 14.dp
-                val textSize = if (highlight) 22.sp else if (maxWidth < 110.dp) 15.sp else 17.sp
-                val lineHeight = if (highlight) 29.sp else if (maxWidth < 110.dp) 21.sp else 24.sp
-                val lineDp = with(LocalDensity.current) { lineHeight.toDp() }
-                val availableLines = ((maxHeight - inset * 2 - 30.dp) / lineDp).toInt().coerceIn(1, 12)
-                Column(Modifier.fillMaxSize().padding(inset), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        galleryKind(card), Modifier.clearAndSetSemantics {}, color = colors.muted,
-                        style = LibraryStyle.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text.ifBlank { cardHeading(card) }, Modifier.weight(1f).clearAndSetSemantics {},
-                        color = colors.text, style = LibraryStyle.body.copy(fontSize = textSize, lineHeight = lineHeight),
-                        fontWeight = if (tileKind(card) in setOf(TileKind.Repository, TileKind.Article, TileKind.Plain)) FontWeight.SemiBold else FontWeight.Normal,
-                        maxLines = availableLines, overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                GalleryTextPreview(card, text, highlight, Modifier.fillMaxSize())
                 Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
+            }
+            if (picture != null && kind == TileKind.Video) {
+                Icon(
+                    painterResource(R.drawable.ic_video), "Video", tint = Color.White,
+                    modifier = Modifier.align(if (mixed) Alignment.BottomStart else Alignment.TopEnd).padding(10.dp).height(20.dp),
+                )
             }
             val count = card.post?.gallery?.size ?: 0
             if (count > 1) Text(
-                "$count", Modifier.align(Alignment.TopEnd).padding(8.dp).clip(RoundedCornerShape(5.dp))
+                "$count", Modifier.align(if (mixed) Alignment.BottomEnd else Alignment.TopEnd).padding(8.dp).clip(RoundedCornerShape(5.dp))
                     .background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 6.dp, vertical = 2.dp).clearAndSetSemantics {},
                 style = LibraryStyle.label, color = Color.White,
+            )
+        }
+    }
+}
+
+/** Text gets its own paper area; compact tiles spend that space on the excerpt before the type label. */
+@Composable
+private fun GalleryTextPreview(card: Card, text: String, highlight: Boolean, modifier: Modifier) {
+    val colors = LibraryStyle.colors
+    BoxWithConstraints(modifier) {
+        val inset = if (highlight) 18.dp else if (maxWidth < 110.dp) 8.dp else 14.dp
+        val textSize = if (highlight) 22.sp else if (maxWidth < 110.dp) 15.sp else 17.sp
+        val lineHeight = if (highlight) 29.sp else if (maxWidth < 110.dp) 21.sp else 24.sp
+        val showKind = maxWidth >= 110.dp && maxHeight >= 112.dp
+        val lineDp = with(LocalDensity.current) { lineHeight.toDp() }
+        val availableLines = ((maxHeight - inset * 2 - if (showKind) 31.dp else 0.dp) / lineDp).toInt().coerceIn(1, 12)
+        Column(Modifier.fillMaxSize().padding(inset)) {
+            if (showKind) {
+                Text(galleryKind(card), Modifier.clearAndSetSemantics {}, color = colors.muted,
+                    style = LibraryStyle.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(10.dp))
+            }
+            Text(
+                text.ifBlank { cardHeading(card) }, Modifier.weight(1f),
+                color = colors.text, style = LibraryStyle.body.copy(fontSize = textSize, lineHeight = lineHeight),
+                fontWeight = if (tileKind(card) in setOf(TileKind.Repository, TileKind.Article, TileKind.Plain)) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = availableLines, overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -129,18 +148,31 @@ internal fun galleryPicture(card: Card): String? = card.cover?.src?.takeIf { it.
     ?: card.blob?.takeIf { it.type?.startsWith("image/") == true || (it.type == null && card.type in setOf("Image", "Screenshot")) }
         ?.path?.takeIf { it.isNotBlank() }
 
+/** Saved links keep their headline; visual cards also keep any note the user wrote alongside the image. */
+internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_TYPES
+    || !card.note.isNullOrBlank() || card.prose?.let(::proseText)?.isNotBlank() == true
+
 private fun galleryText(card: Card): String = when (tileKind(card)) {
     TileKind.Note -> noteText(card)
     TileKind.Post -> card.post?.bodyHtml?.let { HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_COMPACT).toString().trim() }
         ?: card.description.orEmpty()
+    TileKind.Media, TileKind.Video -> card.prose?.let(::proseText)?.takeIf { it.isNotBlank() }
+        ?: card.note?.takeIf { it.isNotBlank() }
+        ?: card.title?.takeIf { it.isNotBlank() } ?: card.description.orEmpty()
     else -> card.title?.takeIf { it.isNotBlank() } ?: card.description.orEmpty()
 }
 
 private fun galleryKind(card: Card): String = when (tileKind(card)) {
-    TileKind.Note -> "Note"
+    TileKind.Note -> if (card.type == "Quote" || card.type == "Quotation") "Quote" else "Note"
     TileKind.Post -> when (card.type) { "XPost" -> "X"; "SubstackNote" -> "Substack"; "ThreadsPost" -> "Threads"; else -> card.siteName ?: "Post" }
     TileKind.Repository -> "Repository"
     TileKind.Article -> card.siteName?.takeIf { it.isNotBlank() } ?: "Article"
     TileKind.Video -> "Video"
-    else -> card.domain?.takeIf { it.isNotBlank() } ?: if (card.type == "Image") "Image" else "Saved"
+    else -> card.domain?.takeIf { it.isNotBlank() } ?: when (card.type) {
+        "Image" -> "Image"
+        "WebPage" -> "Web page"
+        "Product" -> "Product"
+        "SoftwareApplication" -> "App"
+        else -> "Saved"
+    }
 }

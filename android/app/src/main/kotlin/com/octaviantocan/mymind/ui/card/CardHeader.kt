@@ -43,8 +43,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -52,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.ui.theme.MymindTheme
 
 /** Pully's paper and floating control colors, following the card's light or dark appearance. */
 @Immutable
@@ -80,7 +79,7 @@ fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier
     // Keep room for the card body at the half-height stop, even with exceptionally long headings.
     val titleLimit = with(density) { (LocalWindowInfo.current.containerSize.height / 4f).toDp() }.coerceAtLeast(lineHeight)
     val titleStyle = TextStyle(
-        fontFamily = FontFamily(Font(R.font.geist_semibold, FontWeight.SemiBold)),
+        fontFamily = MymindTheme.fonts.heading,
         fontWeight = FontWeight.SemiBold,
         fontSize = 18.sp,
         lineHeight = 26.sp,

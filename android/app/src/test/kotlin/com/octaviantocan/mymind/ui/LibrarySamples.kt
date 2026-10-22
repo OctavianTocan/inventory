@@ -1,9 +1,8 @@
 package com.octaviantocan.mymind.ui
 
-import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import com.octaviantocan.mymind.data.Blob
@@ -99,10 +98,9 @@ fun SampleEverything(
     filter: SearchFilter? = type?.let { SearchFilter(it.label, "type:${it.slug}") },
     suggestions: List<Suggestion> = emptyList(),
     query: String = "",
-    grid: LazyStaggeredGridState? = null,
+    grid: LazyListState? = null,
     topOfMind: List<Card> = LibrarySamples.topOfMind,
 ) {
-    val focus = remember { FocusRequester() }
     EverythingContent(
         feed = feed,
         searching = searching,
@@ -110,12 +108,6 @@ fun SampleEverything(
         typeChips = SearchType.entries.map { it.suggestion },
         filter = filter,
         suggestions = suggestions,
-        query = query,
-        focused = searching,
-        focusRequester = focus,
-        onQueryChange = {},
-        onFocusChange = {},
-        onClear = {},
         onChoose = {},
         onRemoveFilter = {},
         onLoadMore = {},
@@ -124,7 +116,7 @@ fun SampleEverything(
         onOpenCard = {},
         onOpenSettings = {},
         onAdd = {},
-        gridState = grid ?: remember { LazyStaggeredGridState() },
+        gridState = grid ?: remember { LazyListState() },
         topOfMind = topOfMind,
     )
 }
