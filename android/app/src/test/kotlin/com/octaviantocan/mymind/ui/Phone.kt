@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui
 
+import android.graphics.Bitmap
 import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -9,6 +10,7 @@ import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import java.nio.ByteBuffer
 
 /** Robolectric qualifiers of the reference phone: 1080 x 2520 px at the 450 dpi override, 384 x 896 dp. */
 const val PHONE_QUALIFIERS = "w384dp-h896dp-450dpi"
@@ -41,6 +43,13 @@ fun ComposeContentTestRule.setPhoneContent(dark: Boolean, content: @Composable (
  * @param content Screen under test.
  */
 fun ComposeContentTestRule.setPhoneContent(dark: Boolean, keyboardPx: Int, content: @Composable () -> Unit) {
+    // Robolectric's native NIO class cache must initialize before UI and image threads use it concurrently.
+    val pixel = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+    try {
+        pixel.copyPixelsToBuffer(ByteBuffer.allocate(pixel.byteCount))
+    } finally {
+        pixel.recycle()
+    }
     var view: View? = null
     mainClock.autoAdvance = false
     setContent {
