@@ -20,15 +20,20 @@ sealed interface SyncOutcome {
 
 /**
  * Brings the phone's copy of the library up to date from the server's changes feed, one answer at a time, each kept
- * whole so an interrupted sync resumes where it stopped. Runs in its own scope, so a closed screen does not cut it off.
+ * whole so an interrupted sync resumes where it stopped. Changes waiting on the phone go to the server first, so the
+ * feed's answers already hold them. Runs in its own scope, so a closed screen does not cut it off.
  *
  * @param copy The phone's copy.
  * @param fetch Reads one answer of the feed after a position, or from the start for null.
+ * @param send Sends the changes waiting on the phone; null once none waits, else the failure that stopped it.
+ * @param onChanged Called after a sync that changed the copy.
  * @param scope Scope the syncs run in.
  */
 class LibrarySync(
     private val copy: LibraryCopy,
     private val fetch: suspend (since: String?) -> ApiResult<ChangesPage>,
+    private val send: suspend () -> ApiFailure? = { null },
+    private val onChanged: () -> Unit = {},
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     private var running: Deferred<SyncOutcome>? = null
@@ -47,7 +52,10 @@ class LibrarySync(
     fun start(afterCurrent: Boolean = false): Deferred<SyncOutcome> = synchronized(this) {
         val current = running?.takeIf { it.isActive }
         if (current != null && !afterCurrent) return current
-        scope.async { current?.join(); pull() }.also { running = it }
+        scope.async {
+            current?.join()
+            pull().also { if (it == SyncOutcome.Done(changed = true)) onChanged() }
+        }.also { running = it }
     }
 
     /**
@@ -59,6 +67,7 @@ class LibrarySync(
     suspend fun sync(afterCurrent: Boolean = false): SyncOutcome = start(afterCurrent).await()
 
     private suspend fun pull(): SyncOutcome {
+        send()?.let { return SyncOutcome.Failed(it) }
         var changed = false
         var restart = false
         while (true) {

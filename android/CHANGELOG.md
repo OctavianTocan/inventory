@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.4 (15), 2026-10-22
+Changes you make offline wait on your phone, and your newest pictures come along.
+
+### New
+- Pins, trash, tags, notes and spaces changed without internet show at once and reach the server in order when you're back online, even with the app closed.
+- On Wi-Fi the app keeps the pictures of Top of Mind and your newest 1,000 cards on your phone, so they show offline. This needs the updated server, like 0.6.3.
+- If the server refuses a change made offline, a short notice says which card.
+- Signing out also wipes kept pictures and changes still waiting. New cards, uploads and new spaces still need a connection.
+
 ## 0.6.3 (14), 2026-10-22
 Your whole library on your phone, so the app works without internet.
 

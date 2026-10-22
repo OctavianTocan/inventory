@@ -9,6 +9,7 @@ import com.octaviantocan.mymind.data.Library
 import com.octaviantocan.mymind.data.LibraryCopy
 import com.octaviantocan.mymind.data.LibrarySync
 import com.octaviantocan.mymind.data.LocalFirstLibrary
+import com.octaviantocan.mymind.data.Outbox
 import com.octaviantocan.mymind.data.Session
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.SpaceList
@@ -46,11 +47,13 @@ class LibrarySyncTest {
     private val asked = mutableListOf<String?>()
     private var feed: Map<String?, ApiResult<ChangesPage>> = emptyMap()
     private var gate: CompletableDeferred<Unit>? = null
+    private val outboxServer = FakeLibrary()
+    private val outbox = Outbox(copy, outboxServer)
     private val sync = LibrarySync(copy, { since ->
         asked += since
         gate?.await()
         feed[since] ?: ApiResult.Failed(ApiFailure.Network)
-    }, CoroutineScope(Dispatchers.Unconfined))
+    }, outbox::send, scope = CoroutineScope(Dispatchers.Unconfined))
 
     @Before
     fun setUp() = runBlocking {
@@ -109,7 +112,7 @@ class LibrarySyncTest {
     fun aServerThatDropsTheFeedStopsTheGalleryReadingTheCopy() = runBlocking {
         feed = mapOf(null to answer(listOf(testCard("kept")), "t1"))
         sync.sync()
-        val library = LocalFirstLibrary(FakeLibrary(pages = mapOf(null to CardPage(listOf(testCard("server"))))), copy, sync)
+        val library = LocalFirstLibrary(FakeLibrary(pages = mapOf(null to CardPage(listOf(testCard("server"))))), copy, sync, outbox)
         assertEquals(listOf("kept"), (library.cards(null) as ApiResult.Ok).value.cards.map { it.id })
         feed = mapOf("t1" to ApiResult.Failed(ApiFailure.Server(404)))
         sync.sync()
@@ -134,7 +137,7 @@ class LibrarySyncTest {
     @Test
     fun theGalleryComesFromTheServerUntilTheCopyIsWhole() = runBlocking {
         val server = FakeLibrary(pages = mapOf(null to CardPage(listOf(testCard("server"))), "s2" to CardPage()))
-        val library = LocalFirstLibrary(server, copy, sync)
+        val library = LocalFirstLibrary(server, copy, sync, outbox)
         assertEquals(listOf("server"), (library.cards(null) as ApiResult.Ok).value.cards.map { it.id })
         assertEquals(listOf("server"), (library.cards(null) as ApiResult.Ok).value.cards.map { it.id })
         val many = (1..55).map { testCard("c%02d".format(it)).copy(bumped = "2026-01-01T00:%02d:00Z".format(it)) }
@@ -161,7 +164,7 @@ class LibrarySyncTest {
             override suspend fun spaces() = ApiResult.Failed(failure)
             override suspend fun spaceCards(spaceId: String, cursor: String?) = ApiResult.Failed(failure)
         }
-        val library = LocalFirstLibrary(server, copy, sync)
+        val library = LocalFirstLibrary(server, copy, sync, outbox)
         assertEquals(listOf("a"), (library.search("calm", null) as ApiResult.Ok).value.cards.map { it.id })
         assertEquals("Calm technology", (library.card("a") as ApiResult.Ok).value.title)
         assertEquals(SpaceList(listOf(Space("s1", "One"))), (library.spaces() as ApiResult.Ok).value)
@@ -176,15 +179,10 @@ class LibrarySyncTest {
         feed = mapOf(null to answer(listOf(testCard("a")), "t1"))
         sync.sync()
         feed = mapOf("t1" to answer(listOf(testCard("a", flags = 512, pinPosition = 0)), "t2"))
-        val server = FakeLibrary()
-        val library = LocalFirstLibrary(server, copy, sync)
+        val library = LocalFirstLibrary(outboxServer, copy, sync, outbox)
         assertEquals(ApiResult.Ok(Unit), library.setPinned("a", true))
-        assertEquals(listOf("pin:a:true"), server.calls)
+        assertEquals(listOf("pin:a:true"), outboxServer.calls)
         assertEquals(listOf("a"), copy.pinned()!!.cards.map { it.id })
-        server.writeFailure = ApiFailure.Network
-        asked.clear()
-        library.trash("a")
-        assertEquals(emptyList<String?>(), asked)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -194,7 +192,7 @@ class LibrarySyncTest {
         try {
             feed = mapOf(null to answer(listOf(testCard("a")), "t1"), "t1" to answer(emptyList(), "t1"))
             sync.sync()
-            val viewModel = LibraryViewModel(LocalFirstLibrary(FakeLibrary(), copy, sync), sync = sync)
+            val viewModel = LibraryViewModel(LocalFirstLibrary(FakeLibrary(), copy, sync, outbox), sync = sync)
             assertEquals(listOf("a"), viewModel.everything.state.value.cards.map { it.id })
             feed = mapOf("t1" to answer(listOf(testCard("b").copy(bumped = "2026-02-01T00:00:00Z"), testCard("p", flags = 512)), "t2"))
             viewModel.syncNow()
