@@ -19,6 +19,9 @@ const account = id(99);
 const secret = 'synthetic-secret-that-must-never-be-output';
 const absent = (code, message = 'not found') => new Response(JSON.stringify({ success: false, errors: [{ code, message }] }), { status: 404 });
 const ok = (result, result_info) => Response.json({ success: true, errors: [], result, ...(result_info ? { result_info } : {}) });
+const applicationPage = (result, result_info = {}) => ok(result, result_info);
+const unrelatedApplication = (n) => ({ id: id(n + 100), name: `unrelated-${n}`, configuration: { image: 'docker.io/library/alpine:latest' } });
+const applicationCalls = (f) => f.calls.filter((url) => url.pathname.endsWith('/containers/applications'));
 
 // Canonical namespace wire data contains only the fixture's synthetic identities.
 const namespaceBody = (state, errors = []) => ({
@@ -48,7 +51,7 @@ function fixture({ state = 'present', override = () => undefined, inventory = []
       { id: expected.workerName, tag: expected.workerId }, { id: expected.probeName, tag: expected.probeId },
     ] : []);
     if (tail === 'workers/durable_objects/namespaces') return Response.json(namespaceBody(state));
-    if (tail === 'containers/applications') return ok(live ? [{ id: expected.containerApplicationId, name: 'mymind-alchemy-staging-media', durable_objects: { namespace_id: id(5) } }] : []);
+    if (tail === 'containers/applications') return applicationPage(live ? [{ id: expected.containerApplicationId, name: 'mymind-alchemy-staging-media', durable_objects: { namespace_id: id(5) } }] : []);
     if (tail.startsWith('containers/applications/')) return live ? ok({ id: expected.containerApplicationId, name: 'mymind-alchemy-staging-media', durable_objects: { namespace_id: id(5) }, configuration: { secrets: [secret] } }) : absent(1609, 'APPLICATION_NOT_FOUND');
     if (tail.startsWith('r2/buckets/')) return live ? ok({ name: expected.bucketName }) : absent(10006);
     if (tail.endsWith('/schedules')) return live ? ok({ schedules: [] }) : absent(10007);
@@ -73,6 +76,227 @@ function fixture({ state = 'present', override = () => undefined, inventory = []
   };
   return { calls, commands, run: (changes = {}) => runAudit({ operation: 'audit', expectedState: state, expectedJson: JSON.stringify(expected), account, token: secret, fetcher, runWrangler, ...changes }) };
 }
+
+test('application cursor accepts empty and full terminal pages with documented metadata', async () => {
+  for (const rows of [[], Array.from({ length: 100 }, (_, n) => unrelatedApplication(n))]) {
+    const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
+      ? applicationPage(rows) : undefined });
+    assert.equal((await f.run()).state, 'absent');
+    assert.equal(applicationCalls(f).length, 1);
+    assert.equal(applicationCalls(f)[0].search, '?per_page=100');
+  }
+});
+
+test('application cursor follows exactly encoded opaque tokens and accepts their echo', async () => {
+  const token = 'opaque +/&?=☃';
+  const f = fixture({ state: 'absent', override: (url) => {
+    if (!url.pathname.endsWith('/containers/applications')) return;
+    const response = url.searchParams.has('page_token')
+      ? applicationPage([], { per_page: 100, page_token: token })
+      : applicationPage([unrelatedApplication(0)], { per_page: 100, next_page_token: token });
+    if (!url.searchParams.has('page_token')) response.headers.set('link', '<https://api.cloudflare.com/ignored>; rel="next"');
+    return response;
+  } });
+  const result = await f.run();
+  assert.equal(result.state, 'absent');
+  assert.deepEqual(applicationCalls(f).map((url) => url.search), [
+    '?per_page=100', '?per_page=100&page_token=opaque+%2B%2F%26%3F%3D%E2%98%83',
+  ]);
+  assert.ok(!JSON.stringify(result).includes(token));
+});
+
+test('application cursor follows empty intermediate pages', async () => {
+  const f = fixture({ state: 'absent', override: (url) => {
+    if (!url.pathname.endsWith('/containers/applications')) return;
+    const token = url.searchParams.get('page_token');
+    return applicationPage([], token === 'second' ? {} : { next_page_token: token === null ? 'first' : 'second' });
+  } });
+  assert.equal((await f.run()).state, 'absent');
+  assert.deepEqual(applicationCalls(f).map((url) => url.searchParams.get('page_token')), [null, 'first', 'second']);
+});
+
+test('late application pages block cleanup for saved IDs, fixed names, namespace associations and image consumers', async () => {
+  for (const changes of [
+    { id: expected.containerApplicationId }, { name: 'mymind-alchemy-staging-media' },
+    { durable_objects: { namespace_id: expected.durableObjectNamespaces.Media } },
+    { configuration: { image: `registry.cloudflare.com/${account}/mymind-alchemy-staging-media:abc123` } },
+  ]) {
+    const f = fixture({ state: 'absent', override: (url) => {
+      if (!url.pathname.endsWith('/containers/applications')) return;
+      return url.searchParams.has('page_token')
+        ? applicationPage([{ ...unrelatedApplication(1), ...changes }])
+        : applicationPage([unrelatedApplication(0)], { next_page_token: 'last' });
+    } });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), /Pilot resources or saved identities still exist|A live application still uses pilot images/);
+    assert.equal(applicationCalls(f).length, 2);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('application cursor rejects missing, malformed, mixed and unfamiliar metadata', async () => {
+  for (const result_info of [undefined, null, [], 'invalid', 100,
+    { page: 1, count: 0, total_count: 0 }, { cursors: { after: 'next' } },
+    { next_page_token: 'next', total_pages: 1 }, { unknown: secret },
+    { per_page: null }, { per_page: 101 }, { per_page: '100' },
+  ]) {
+    const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
+      ? Response.json({ success: true, errors: [], result: [], result_info }) : undefined });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), (error) => !error.message.includes(secret));
+    assert.equal(applicationCalls(f).length, 1);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('application cursor rejects malformed results even with valid terminal metadata', async () => {
+  for (const result of [undefined, null, {}, 'not-a-list', false]) {
+    const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
+      ? Response.json({ success: true, errors: [], result, result_info: {} }) : undefined });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), /Pilot audit API read failed|Pilot audit expected an application list/);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('application cursor rejects explicit empty, null, nonstring and oversized next tokens', async () => {
+  for (const next_page_token of ['', null, false, 1, {}, [], secret.repeat(100)]) {
+    const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
+      ? applicationPage([], { next_page_token }) : undefined });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), (error) =>
+      error.message === 'Pilot audit application cursor is invalid or repeated' && !error.message.includes(secret));
+    assert.equal(applicationCalls(f).length, 1);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('application cursor rejects mismatched echoes and token cycles before another read', async () => {
+  for (const page_token of [null, 'wrong', '', 1]) {
+    const f = fixture({ state: 'absent', override: (url) => {
+      if (!url.pathname.endsWith('/containers/applications')) return;
+      return url.searchParams.has('page_token') ? applicationPage([], { page_token }) : applicationPage([], { next_page_token: 'right' });
+    } });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), /application pagination is inconclusive/);
+    assert.equal(applicationCalls(f).length, 2);
+    assert.equal(f.commands.length, 0);
+  }
+  for (const cycle of [['first', 'first'], ['first', 'second', 'first']]) {
+    let page = 0;
+    const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
+      ? applicationPage([], { next_page_token: cycle[page++] }) : undefined });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), /application cursor is invalid or repeated/);
+    assert.equal(applicationCalls(f).length, cycle.length);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('application cursor rejects invalid and repeated resource IDs within and across pages', async () => {
+  for (const badId of [undefined, null, 0, '', 'invalid']) {
+    const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
+      ? applicationPage([{ ...unrelatedApplication(0), id: badId }]) : undefined });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), /application listing contains invalid or repeated identities/);
+    assert.equal(f.commands.length, 0);
+  }
+  for (const split of [false, true]) {
+    const f = fixture({ state: 'absent', override: (url) => {
+      if (!url.pathname.endsWith('/containers/applications')) return;
+      return split && !url.searchParams.has('page_token')
+        ? applicationPage([unrelatedApplication(0)], { next_page_token: 'next' })
+        : applicationPage(split ? [unrelatedApplication(0)] : [unrelatedApplication(0), unrelatedApplication(0)]);
+    } });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), /application listing contains invalid or repeated identities/);
+    assert.equal(applicationCalls(f).length, split ? 2 : 1);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('application cursor accepts the page, row and token bounds but rejects traversal beyond them', async () => {
+  let page = 0;
+  const f = fixture({ state: 'absent', override: (url) => {
+    if (!url.pathname.endsWith('/containers/applications')) return;
+    const rows = Array.from({ length: 100 }, (_, n) => unrelatedApplication(page * 100 + n));
+    page++;
+    return applicationPage(rows, page === 100 ? {} : { next_page_token: page === 1 ? 'x'.repeat(4096) : String(page) });
+  } });
+  assert.equal((await f.run()).state, 'absent');
+  assert.equal(applicationCalls(f).length, 100);
+  let reads = 0;
+  const endless = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
+    ? applicationPage([], { next_page_token: String(++reads) }) : undefined });
+  await assert.rejects(endless.run({ operation: 'cleanup-images' }), /application pagination limit reached/);
+  assert.equal(applicationCalls(endless).length, 100);
+  assert.equal(endless.commands.length, 0);
+  const oversized = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
+    ? applicationPage(Array.from({ length: 101 }, (_, n) => unrelatedApplication(n))) : undefined });
+  await assert.rejects(oversized.run({ operation: 'cleanup-images' }), /application row limit reached/);
+  assert.equal(oversized.commands.length, 0);
+});
+
+test('application cursor requires metadata to agree with next-page links without exposing headers', async () => {
+  for (const relation of ['next', 'alternate next', 'next alternate', 'alternate NEXT', 'next\tprevious']) {
+    const f = fixture({ state: 'absent', inventory: [{ name: 'mymind-alchemy-staging-media', tags: ['abc123'] }], override: (url) => {
+      if (!url.pathname.endsWith('/containers/applications')) return;
+      const response = applicationPage([]);
+      response.headers.set('link', `<https://api.cloudflare.com/${secret}>; rel="${relation}"`);
+      return response;
+    } });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), (error) =>
+      error.message === 'Pilot audit cannot verify cursor pagination' && !error.message.includes(secret));
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('application cursor treats relation names as exact tokens', async () => {
+  const f = fixture({ state: 'absent', override: (url) => {
+    if (!url.pathname.endsWith('/containers/applications')) return;
+    const response = applicationPage([]);
+    response.headers.set('link', '<https://api.cloudflare.com/ignored>; rel="next-version"');
+    return response;
+  } });
+  assert.equal((await f.run()).state, 'absent');
+});
+
+test('application cursor retains endpoint error-envelope checks on later pages', async () => {
+  for (const [errors, status] of [[null, 200], [[{ code: 971, message: secret }], 200], [[], 403]]) {
+    const f = fixture({ state: 'absent', override: (url) => {
+      if (!url.pathname.endsWith('/containers/applications')) return;
+      return url.searchParams.has('page_token')
+        ? Response.json({ success: true, result: [], result_info: {}, errors }, { status })
+        : applicationPage([], { next_page_token: 'next' });
+    } });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), (error) =>
+      error.message.includes('endpoint=application-list;') && !error.message.includes(secret));
+    assert.equal(applicationCalls(f).length, 2);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('application cursor honors the operation deadline between pages', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1000 });
+  const f = fixture({ state: 'absent', override: (url) => {
+    if (!url.pathname.endsWith('/containers/applications')) return;
+    t.mock.timers.tick(5 * 60_000);
+    return applicationPage([], { next_page_token: 'next' });
+  } });
+  await assert.rejects(f.run({ operation: 'cleanup-images' }), /Pilot audit read failed or timed out/);
+  assert.equal(applicationCalls(f).length, 1);
+  assert.equal(f.commands.length, 0);
+});
+
+test('a late application page during the repeated absence proof blocks image deletion', async () => {
+  let inventoryStarted = false;
+  const f = fixture({ state: 'absent', override: (url) => {
+    if (!url.pathname.endsWith('/containers/applications') || !inventoryStarted) return;
+    return url.searchParams.has('page_token')
+      ? applicationPage([{ ...unrelatedApplication(0), name: 'mymind-alchemy-staging-media' }])
+      : applicationPage([], { next_page_token: 'late' });
+  } });
+  const runWrangler = (args) => {
+    assert.ok(args.includes('list'));
+    inventoryStarted = true;
+    return { status: 0, stdout: JSON.stringify([{ name: 'mymind-alchemy-staging-media', tags: ['abc123'] }]), stderr: '' };
+  };
+  await assert.rejects(f.run({ operation: 'cleanup-images', runWrangler }), /Pilot resources or saved identities still exist/);
+  assert.ok(inventoryStarted);
+  assert.equal(applicationCalls(f).length, 3);
+});
 
 test('live audit verifies identities and bindings without emitting settings or secrets', async () => {
   const f = fixture();
@@ -195,7 +419,7 @@ test('absence requires definitive reads and complete namespace pagination', asyn
 
 for (const [label, override] of [
   ['a saved namespace still exists under another Worker', (u) => u.pathname.endsWith('/namespaces') ? ok([{ id: id(3), script: 'production', class: 'Auth' }], { page: 1, per_page: 100, count: 1, total_count: 1, total_pages: 1 }) : undefined],
-  ['a replacement pilot application exists', (u) => u.pathname.endsWith('/containers/applications') ? ok([{ id: id(70), name: 'mymind-alchemy-staging-media' }]) : undefined],
+  ['a replacement pilot application exists', (u) => u.pathname.endsWith('/containers/applications') ? applicationPage([{ id: id(70), name: 'mymind-alchemy-staging-media' }]) : undefined],
   ['permissions are denied', () => new Response(JSON.stringify({ success: false, errors: [{ code: 10000, message: secret }] }), { status: 403 })],
   ['an unknown 404 is returned', () => absent(7003)],
   ['pagination metadata is missing', (u) => u.pathname.endsWith('/namespaces') ? ok([]) : undefined],
@@ -244,7 +468,7 @@ test('present audit accepts absent or default entrypoints without an environment
 test('cleanup rejects application rows with an inconclusive name before registry access', async () => {
   for (const name of [undefined, null, 0, '', ' ']) {
     const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
-      ? ok([{ id: id(70), name, configuration: { image: 'docker.io/library/alpine:latest' } }]) : undefined });
+      ? applicationPage([{ id: id(70), name, configuration: { image: 'docker.io/library/alpine:latest' } }]) : undefined });
     await assert.rejects(f.run({ operation: 'cleanup-images' }));
     assert.equal(f.commands.length, 0);
   }
@@ -253,7 +477,7 @@ test('cleanup rejects application rows with an inconclusive name before registry
 test('cleanup blocks tagged and digest image consumers under unrelated application names', async () => {
   for (const reference of [':abc123', `@sha256:${'a'.repeat(64)}`]) {
     const f = fixture({ state: 'absent', inventory: [{ name: 'mymind-alchemy-staging-media', tags: ['abc123'] }],
-      override: (url) => url.pathname.endsWith('/containers/applications') ? ok([{
+      override: (url) => url.pathname.endsWith('/containers/applications') ? applicationPage([{
         id: id(70), name: 'unrelated-live-app',
         configuration: { image: `registry.cloudflare.com/${account}/mymind-alchemy-staging-media${reference}` },
       }]) : undefined });
@@ -264,7 +488,7 @@ test('cleanup blocks tagged and digest image consumers under unrelated applicati
 
 test('cleanup rejects unknown live application image usage', async () => {
   const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/containers/applications')
-    ? ok([{ id: id(70), name: 'unrelated-live-app', configuration: {} }]) : undefined });
+    ? applicationPage([{ id: id(70), name: 'unrelated-live-app', configuration: {} }]) : undefined });
   await assert.rejects(f.run({ operation: 'cleanup-images' }));
   assert.equal(f.commands.length, 0);
 });
@@ -274,7 +498,7 @@ test('other repositories and accounts do not prevent fixed pilot image cleanup',
     `registry.cloudflare.com/${id(98)}/mymind-alchemy-staging-media:abc123`]) {
     const f = fixture({ state: 'absent', inventory: [{ name: 'mymind-alchemy-staging-media', tags: ['buildcache'] }],
       override: (url) => url.pathname.endsWith('/containers/applications')
-        ? ok([{ id: id(70), name: 'unrelated-live-app', configuration: { image } }]) : undefined });
+        ? applicationPage([{ id: id(70), name: 'unrelated-live-app', configuration: { image } }]) : undefined });
     assert.deepEqual((await f.run({ operation: 'cleanup-images' })).deletedTags, ['buildcache']);
   }
 });
@@ -376,7 +600,8 @@ test('the actual CI entrypoint uses only the fixed pinned CLI and emits safe abs
   writeFileSync(loader, `globalThis.fetch = async (input) => {
     const p = new URL(input).pathname;
     if (p.endsWith('/namespaces')) return Response.json({success:true, result:[], result_info:{page:1,per_page:100,count:0,total_count:0,total_pages:1}});
-    if (p.endsWith('/workers/scripts') || p.endsWith('/containers/applications')) return Response.json({success:true,result:[]});
+    if (p.endsWith('/containers/applications')) return Response.json({success:true,result:[],result_info:{}});
+    if (p.endsWith('/workers/scripts')) return Response.json({success:true,result:[]});
     const code = p.includes('/r2/') ? 10006 : p.includes('/containers/') ? 1609 : 10007;
     return new Response(JSON.stringify({success:false,errors:[{code,message:'APPLICATION_NOT_FOUND'}]}),{status:404});
   };`);

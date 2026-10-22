@@ -119,7 +119,11 @@ export async function runAudit({ operation, expectedState, expectedJson, account
         .map((error) => Number.isSafeInteger(error?.code) && error.code >= 0 && error.code <= 1_000_000_000 ? error.code : 'invalid').join(',') : 'none';
       fail(`Pilot audit API read failed with HTTP ${response.status}; endpoint=${endpoint}; success=${success}; result=${result}; errors=${errors}; errors-kind=${errorsKind}; codes=${codes}; absence is unverified`);
     }
-    if (/rel\s*=\s*"?next/i.test(response.headers.get('link') ?? '') && !body.result_info) fail('Pilot audit cannot verify cursor pagination');
+    const nextLink = [...(response.headers.get('link') ?? '').matchAll(/(?:^|[;,])\s*rel\s*=\s*(?:"([^"]*)"|([^;,\s]+))/gi)]
+      .some(([, quoted, bare]) => (quoted ?? bare).toLowerCase().split(/\s+/).includes('next'));
+    if (nextLink
+        && (!body.result_info || (resource.split('?')[0] === 'containers/applications'
+          && !Object.hasOwn(body.result_info, 'next_page_token')))) fail('Pilot audit cannot verify cursor pagination');
     return body;
   };
   const list = async (resource, paginated = false) => {
@@ -148,10 +152,38 @@ export async function runAudit({ operation, expectedState, expectedJson, account
         || new Set(items.map((item) => item.id)).size !== items.length) fail('Pilot audit resource listing contains invalid or repeated identities');
     return items;
   };
+  // Containers use opaque cursors; only an absent next-page token proves traversal is complete.
+  const listApplications = async () => {
+    const items = [], tokens = new Set(), ids = new Set();
+    let token;
+    for (let page = 1; page <= 100; page++) {
+      const query = new URLSearchParams({ per_page: '100' });
+      if (token !== undefined) query.set('page_token', token);
+      const body = await request(`containers/applications?${query}`);
+      if (!Array.isArray(body.result)) fail('Pilot audit expected an application list');
+      const info = body.result_info;
+      if (!info || typeof info !== 'object' || Array.isArray(info)
+          || Object.keys(info).some((key) => !['next_page_token', 'page_token', 'per_page'].includes(key))
+          || (Object.hasOwn(info, 'per_page') && info.per_page !== 100)
+          || (Object.hasOwn(info, 'page_token') && info.page_token !== token)) fail('Pilot audit application pagination is inconclusive');
+      if (body.result.length > 100 || items.length + body.result.length > 10_000) fail('Pilot audit application row limit reached');
+      for (const item of body.result) {
+        if (!item || typeof item.id !== 'string' || !ID.test(item.id) || ids.has(item.id)) fail('Pilot audit application listing contains invalid or repeated identities');
+        ids.add(item.id);
+        items.push(item);
+      }
+      if (!Object.hasOwn(info, 'next_page_token')) return items;
+      const next = info.next_page_token;
+      if (typeof next !== 'string' || next.length === 0 || next.length > 4096 || tokens.has(next)) fail('Pilot audit application cursor is invalid or repeated');
+      if (page === 100) fail('Pilot audit application pagination limit reached');
+      tokens.add(next);
+      token = next;
+    }
+  };
   const audit = async () => {
     const scripts = await list('workers/scripts');
     const namespaces = await list('workers/durable_objects/namespaces', true);
-    const applications = await list('containers/applications');
+    const applications = await listApplications();
     if (applications.some((app) => typeof app.name !== 'string' || !app.name.trim())) fail('Pilot audit application names are inconclusive');
     const workers = [];
     const schedules = {};
