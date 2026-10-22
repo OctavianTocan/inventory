@@ -2,9 +2,19 @@ package com.octaviantocan.mymind.ui
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.core.app.ApplicationProvider
+import coil3.decode.DataSource
 import coil3.EventListener
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -31,6 +41,8 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -39,6 +51,7 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 /** Actual Compose gallery and Coil photo decoding, with public fixture bytes and no network requests. */
 @OptIn(coil3.annotation.DelicateCoilApi::class)
@@ -48,7 +61,11 @@ import java.util.Collections
 class GalleryScreenshotTest(private val dark: Boolean) {
     @get:Rule val compose = createComposeRule()
     private val loaded = Collections.synchronizedSet(mutableSetOf<String>())
+    private val requests = ConcurrentHashMap<String, Int>()
+    private val fetches = ConcurrentHashMap<String, Int>()
+    private val decodes = ConcurrentHashMap<String, Int>()
     private lateinit var loader: ImageLoader
+    private lateinit var mosaicState: MosaicState
     private lateinit var client: OkHttpClient
 
     @Before fun photos() {
@@ -58,6 +75,7 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         client = OkHttpClient.Builder().addInterceptor { chain ->
             val request = chain.request()
             check(request.url.host == "gallery.example.test")
+            fetches.merge(request.url.toString(), 1, Int::plus)
             check(request.header("Authorization") == null)
             val bytes = pictures.getValue(request.url.encodedPath.removePrefix("/").removeSuffix(".jpg"))
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("Fixture")
@@ -66,7 +84,11 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         loader = ImageLoader.Builder(ApplicationProvider.getApplicationContext())
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }
             .eventListener(object : EventListener() {
-                override fun onSuccess(request: ImageRequest, result: SuccessResult) { loaded += request.data.toString() }
+                override fun onStart(request: ImageRequest) { requests.merge(request.data.toString(), 1, Int::plus) }
+                override fun onSuccess(request: ImageRequest, result: SuccessResult) {
+                    if (result.dataSource != DataSource.MEMORY_CACHE) decodes.merge(request.data.toString(), 1, Int::plus)
+                    loaded += request.data.toString()
+                }
             }).build()
         SingletonImageLoader.setUnsafe(loader)
     }
@@ -118,29 +140,131 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         testCard("snippet", type = "Content", title = "A useful reminder", note = "Good tools should get out of your way."),
     )
 
-    private fun capture(columns: Int, name: String, searching: Boolean = false,
+    private fun show(columns: Int, searching: Boolean = false,
         sample: List<Card> = cards, highlights: List<Card> = pins) {
+        mosaicState = MosaicState(columns)
         compose.setPhoneContent(dark) {
             ShellFrame(Tab.Everything, {}, PageScheme.System, footer = {
                 LibraryFootBar(Tab.Everything, {}, searching, "", {}, {}, {})
             }) {
                 EverythingContent(FeedState(sample, endReached = true), searching, null,
                     SearchType.entries.map { it.suggestion }, null, emptyList(), {}, {}, {}, {}, {}, {}, {}, {},
-                    topOfMind = highlights, gridState = remember { LazyListState() }, mosaic = remember { MosaicState(columns) })
+                    topOfMind = highlights, gridState = remember { LazyListState() }, mosaic = remember { mosaicState })
             }
         }
         compose.mainClock.autoAdvance = true
         if (!searching) compose.waitUntil(10_000) { loaded.size >= 3 }
         compose.mainClock.advanceTimeBy(1200)
         compose.waitForIdle()
+    }
+
+    private fun capture(columns: Int, name: String, searching: Boolean = false,
+        sample: List<Card> = cards, highlights: List<Card> = pins) {
+        show(columns, searching, sample, highlights)
         compose.onRoot().captureRoboImage("screenshots/${name}_${if (dark) "dark" else "light"}.png")
     }
 
-    @Test fun gallery() = capture(2, "gallery")
+    @Test fun gallery() {
+        show(2)
+        val account = compose.onNodeWithContentDescription("Account settings").fetchSemanticsNode().boundsInRoot
+        val heading = compose.onNodeWithText("Top of Mind").fetchSemanticsNode().boundsInRoot
+        val highlight = compose.onNodeWithContentDescription("Places to return to").fetchSemanticsNode().boundsInRoot
+        assertTrue("Top of Mind must sit below the account controls", heading.top >= account.bottom)
+        assertTrue("Highlights must sit below their heading", highlight.top >= heading.bottom)
+        compose.onRoot().captureRoboImage("screenshots/gallery_${if (dark) "dark" else "light"}.png")
+    }
     @Test fun compactGallery() = capture(4, "gallery_compact")
     @Test fun search() = capture(2, "gallery_search", searching = true)
     @Test fun differentNoteTypes() = capture(2, "gallery_notes", sample = mixedNotes, highlights = emptyList())
     @Test fun compactNoteTypes() = capture(4, "gallery_notes_compact", sample = mixedNotes, highlights = emptyList())
+
+    @Test fun mixedNotePreviewsFollowThePinchBeforeRelease() {
+        val watchedUrl = "https://gallery.example.test/forest.jpg?pinch-fixture=walk"
+        val sample = mixedNotes.map { card -> if (card.id == "walk") card.copy(cover = card.cover!!.copy(src = watchedUrl)) else card }
+        show(2, sample = sample, highlights = emptyList())
+        compose.waitUntil(10_000) { watchedUrl in loaded }
+        val initialFetches = fetches[watchedUrl]
+        val initialDecodes = decodes[watchedUrl]
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        fun noteWidth() = compose.onNodeWithContentDescription("Weekend walk").fetchSemanticsNode().boundsInRoot.width
+        fun textLayout(): TextLayoutResult {
+            val results = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(sample.first { it.id == "walk" }.note!!, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { assertTrue(it(results)) }
+            return results.single()
+        }
+        fun frame(name: String) {
+            compose.waitForIdle()
+            compose.onRoot().captureRoboImage("screenshots/gallery_pinch_${name}_${if (dark) "dark" else "light"}.png")
+        }
+        fun spread(fraction: Float) {
+            gallery.performTouchInput {
+                updatePointerTo(0, Offset(width * fraction, height * 0.22f))
+                updatePointerTo(1, Offset(width * (1f - fraction), height * 0.22f))
+                move(delayMillis = 16)
+            }
+            compose.waitForIdle()
+        }
+        val initial = noteWidth()
+        gallery.performTouchInput {
+            down(0, Offset(width * 0.1f, height * 0.22f))
+            down(1, Offset(width * 0.9f, height * 0.22f))
+        }
+        compose.mainClock.autoAdvance = false
+        spread(0.1875f)
+        assertEquals(2.56f, mosaicState.position, 0.02f)
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(40)
+        compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(2)
+        frame("handoff_transient")
+        repeat(4) {
+            for (position in listOf(2.49f, 2.51f)) {
+                spread(0.5f - 0.8f / position)
+                compose.mainClock.advanceTimeBy(16)
+            }
+        }
+        compose.mainClock.advanceTimeBy(120)
+        compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
+        assertEquals(2.51f, mosaicState.position, 0.02f)
+        val heldWidth = noteWidth()
+        frame("handoff")
+        compose.mainClock.advanceTimeBy(120)
+        compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
+        assertEquals("Holding the fingers must not change the live focal size", heldWidth, noteWidth(), 2f)
+        compose.mainClock.autoAdvance = true
+        val requestsAfterHandoff = requests[watchedUrl]
+        spread(0.2f)
+        assertEquals("Measuring another pointer frame must keep the same projection request", requestsAfterHandoff, requests[watchedUrl])
+        val middle = noteWidth()
+        assertTrue("The preview must shrink while both fingers remain down", middle < initial - 8f)
+        frame("middle")
+        spread(0.3f)
+        assertTrue("One pinch must continue through more than one size", noteWidth() < middle - 8f)
+        assertEquals("Additional projections must reuse cached image bytes", initialFetches, fetches[watchedUrl])
+        assertEquals("Additional projections must reuse the decoded memory image", initialDecodes, decodes[watchedUrl])
+        frame("dense")
+        spread(0.1f)
+        assertEquals("Reversing the fingers must restore the original preview size", initial, noteWidth(), 2f)
+        frame("reversed")
+        gallery.performTouchInput { up(0); up(1) }
+        compose.waitForIdle()
+        assertEquals("Releasing at the original size must not jump", initial, noteWidth(), 2f)
+
+        gallery.performTouchInput {
+            down(0, Offset(width * 0.1f, height * 0.22f))
+            down(1, Offset(width * 0.9f, height * 0.22f))
+        }
+        spread(0.3f)
+        val denseWidth = noteWidth()
+        val beforeRelease = textLayout()
+        gallery.performTouchInput { up(0); up(1) }
+        compose.waitForIdle()
+        val afterRelease = textLayout()
+        assertEquals("The dense preview must keep its geometry on release", denseWidth, noteWidth(), 2f)
+        assertEquals("The font must not reset on release", beforeRelease.layoutInput.style.fontSize, afterRelease.layoutInput.style.fontSize)
+        assertEquals("The excerpt must not rewrap on release", beforeRelease.lineCount, afterRelease.lineCount)
+        frame("dense_released")
+    }
 
     companion object {
         @JvmStatic @ParameterizedRobolectricTestRunner.Parameters(name = "dark={0}") fun modes() = listOf(arrayOf(false), arrayOf(true))

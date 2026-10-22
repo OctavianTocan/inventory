@@ -9,9 +9,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import com.octaviantocan.mymind.data.Card
-import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** One justified row, in pixels, in the server's original card order. */
 internal data class MosaicRow(val cards: List<Card>, val widths: List<Float>, val height: Float) {
@@ -23,25 +27,14 @@ internal fun mosaicRows(cards: List<Card>, width: Float, columns: Int, gap: Floa
     if (cards.isEmpty() || !width.isFinite() || width <= 0f) return emptyList()
     val across = columns.coerceIn(1, 4)
     val space = gap.takeIf { it.isFinite() }?.coerceIn(0f, width / 16f) ?: 0f
-    val target = width / across
     val ratios = cards.map(::mosaicAspectRatio)
     val rows = ArrayList<MosaicRow>()
     var start = 0
     while (start < cards.size) {
-        var count = 1
-        var sum = ratios[start]
-        if (across > 1) {
-            while (start + count < cards.size && count < across + 2) {
-                val height = (width - space * (count - 1)) / sum
-                val nextSum = sum + ratios[start + count]
-                val nextHeight = (width - space * count) / nextSum
-                if (abs(nextHeight - target) >= abs(height - target)) break
-                count++
-                sum = nextSum
-            }
-        }
+        val count = min(across, cards.size - start)
+        val sum = (start until start + count).sumOf { ratios[it].toDouble() }.toFloat()
         val justified = (width - space * (count - 1)) / sum
-        val height = if (start + count == cards.size && count < across) min(justified, target) else justified
+        val height = if (count < across) min(justified, (width - space * (across - 1)) / (across * sum / count)) else justified
         rows += MosaicRow(cards.subList(start, start + count), (start until start + count).map { ratios[it] * height }, height)
         start += count
     }
@@ -62,16 +55,98 @@ private fun mosaicAspectRatio(card: Card): Float {
     }
 }
 
-/** Saveable density and the short-lived visual response to a two-finger pinch. */
+/** Cached canonical geometry. Only the visible window is interpolated during a pointer frame. */
+internal class MosaicLayouts(val cards: List<Card>, val width: Float, gap: Float) {
+    internal class Level(val rows: List<MosaicRow>, val cells: List<Rect>, val starts: List<Int>, val rowOf: IntArray, val height: Float, val tallest: Float)
+    val byId = cards.mapIndexed { index, card -> card.id to index }.toMap()
+    val levels = (1..4).map { columns ->
+        val rows = mosaicRows(cards, width, columns, gap)
+        val cells = ArrayList<Rect>(cards.size)
+        val starts = ArrayList<Int>(rows.size)
+        val rowOf = IntArray(cards.size)
+        var y = 0f
+        rows.forEachIndexed { rowIndex, row ->
+            starts += cells.size
+            var x = 0f
+            row.widths.forEach { w ->
+                rowOf[cells.size] = rowIndex
+                cells += Rect(x, y, x + w, y + row.height)
+                x += w + gap
+            }
+            y += row.height + gap
+        }
+        Level(rows, cells, starts, rowOf, (y - gap).coerceAtLeast(0f), rows.maxOfOrNull { it.height } ?: 0f)
+    }
+
+    fun level(columns: Int): Level = levels[columns.coerceIn(1, 4) - 1]
+
+    /** Projects a whole canonical grid around one shared focal rectangle; row neighbours never cross. */
+    fun projection(columns: Int, position: Float, focalIndex: Int): MosaicProjection {
+        val base = level(columns).cells[focalIndex]
+        val focal = cell(focalIndex, position)
+        val scale = focal.width / base.width
+        return MosaicProjection(this, columns, scale, Offset(focal.left - base.left * scale, focal.top - base.top * scale))
+    }
+
+    fun cell(index: Int, position: Float): Rect {
+        val p = position.coerceIn(1f, 4f)
+        val a = level(floor(p).toInt()).cells[index]
+        val b = level(ceil(p).toInt()).cells[index]
+        val t = p - floor(p)
+        return Rect(a.left + (b.left - a.left) * t, a.top + (b.top - a.top) * t,
+            a.right + (b.right - a.right) * t, a.bottom + (b.bottom - a.bottom) * t)
+    }
+
+    fun height(position: Float): Float {
+        val p = position.coerceIn(1f, 4f)
+        val a = level(floor(p).toInt()).height
+        return a + (level(ceil(p).toInt()).height - a) * (p - floor(p))
+    }
+
+    fun slotHeight(row: Int, columns: Int, position: Float): Float {
+        val starts = level(columns).starts
+        val top = cell(starts[row], position).top
+        return ((starts.getOrNull(row + 1)?.let { cell(it, position).top } ?: height(position)) - top).coerceAtLeast(0f)
+    }
+
+    /** Binary search keeps lookup O(log n); overscan covers a whole neighbouring brick at either density. */
+    fun window(position: Float, origin: Float, viewport: Float): IntRange {
+        if (level(1).cells.isEmpty()) return IntRange.EMPTY
+        val margin = maxOf(level(floor(position).toInt()).tallest, level(ceil(position).toInt()).tallest)
+        fun lowerBound(y: Float): Int {
+            var low = 0
+            var high = cards.size
+            while (low < high) {
+                val middle = (low + high) ushr 1
+                if (cell(middle, position).top < y) low = middle + 1 else high = middle
+            }
+            return low
+        }
+        return lowerBound(origin - margin)..(lowerBound(origin + viewport + margin) - 1).coerceAtMost(cards.lastIndex)
+    }
+}
+
+/** A rigid grid projection. Its inverse transform allows a bounded canonical viewport lookup. */
+internal class MosaicProjection(val layouts: MosaicLayouts, val columns: Int, val scale: Float, val offset: Offset) {
+    fun cell(index: Int): Rect {
+        val base = layouts.level(columns).cells[index]
+        return Rect(base.left * scale + offset.x, base.top * scale + offset.y,
+            base.right * scale + offset.x, base.bottom * scale + offset.y)
+    }
+    fun window(origin: Float, viewport: Float): IntRange =
+        layouts.window(columns.toFloat(), (origin - offset.y) / scale, viewport / scale)
+}
+
+/** Saveable density with continuous, reversible finger tracking between canonical brick layouts. */
 @Stable
 class MosaicState(initialColumns: Int = 2) {
     var columns by mutableIntStateOf(initialColumns.coerceIn(1, 4))
         private set
     internal var isPinching by mutableStateOf(false)
         private set
-    internal var previewScale by mutableFloatStateOf(1f)
-        private set
-    internal var focalX by mutableFloatStateOf(0.5f)
+    internal var position by mutableFloatStateOf(initialColumns.coerceIn(1, 4).toFloat())
+    internal var referenceColumns by mutableIntStateOf(initialColumns.coerceIn(1, 4))
+    private var startPosition = position
     private var gestureScale = 1f
 
     /** Makes cards larger; returns false at the largest size. */
@@ -84,34 +159,36 @@ class MosaicState(initialColumns: Int = 2) {
         val next = value.coerceIn(1, 4)
         if (next == columns) return false
         columns = next
+        position = next.toFloat()
         return true
     }
 
     internal fun beginPinch() {
         isPinching = true
+        startPosition = position
         gestureScale = 1f
-        previewScale = 1f
     }
 
     internal fun zoomPinch(factor: Float) {
         if (!factor.isFinite() || factor <= 0f) return
-        gestureScale = (gestureScale * factor).coerceIn(0.25f, 4f)
-        previewScale = gestureScale.coerceIn(0.82f, 1.2f)
+        // Discard overshoot at a limit so the very next reversed pointer delta changes the geometry.
+        gestureScale = (gestureScale * factor).coerceIn(startPosition / 4f, startPosition)
+        position = (startPosition / gestureScale).coerceIn(1f, 4f)
     }
 
     internal fun finishPinch() {
-        if (gestureScale < 0.88f) smaller() else if (gestureScale > 1.12f) larger()
-        cancelPinch()
+        columns = position.roundToInt().coerceIn(1, 4)
+        isPinching = false
     }
 
     internal fun cancelPinch() {
         isPinching = false
-        previewScale = 1f
+        columns = position.roundToInt().coerceIn(1, 4)
         gestureScale = 1f
     }
 
     internal companion object {
-        val Saver: Saver<MosaicState, Int> = Saver(save = { it.columns }, restore = { MosaicState(it) })
+        val Saver: Saver<MosaicState, Int> = Saver(save = { it.position.roundToInt().coerceIn(1, 4) }, restore = { MosaicState(it) })
     }
 }
 

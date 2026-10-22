@@ -60,9 +60,16 @@ and account settings remain available in the gallery header.
 ## Gallery behavior and verification
 
 The gallery keeps server order while packing mixed image and text cards into
-variable-width rows. Pinching previews a size change, then moves one density stop
-on release and retains a card near the gesture as the scroll anchor. Top of Mind
-and the account header do not scale. Accessible larger/smaller actions expose the
+variable-width rows with one to four cards per row. During a pinch, two adjacent cached
+grids project rigidly around the same focal card and crossfade only during a short
+handoff. Cards do not fly independently through occupied rows. The focal card is drawn
+once at its real size; the other projection exposes no duplicate actions. A gesture
+can cross several stops and reverse; release settles at the nearest stop. The touched
+card stays at the gesture's height within scroll limits. Projected outer edges may
+clip or leave temporary horizontal slack while pinching; canonical stops fill the width.
+Stable card keys and explicit image request sizes retain previews between pointer frames;
+creating a new projection may reuse a cached painter once.
+Top of Mind and the account header do not scale. Accessible larger/smaller actions expose the
 same density settings. These are recorded in
 [`ui/library/CONTRACTS`](../android/app/src/main/kotlin/com/octaviantocan/mymind/ui/library/CONTRACTS).
 
@@ -71,10 +78,10 @@ areas for both at every density. Compact tiles prioritize the excerpt over the t
 label. Photos and videos with authored notes also retain their text. Text-only notes
 and image-only cards keep their own presentation.
 
-The app uses one bundled Geist variable font for all text, including the reader,
-settings, and Material components. Its real weight axis covers 100–900. The pinned
-official source and checksum are recorded beside the bundled OFL in
-[`Geist-source.txt`](../android/app/src/main/assets/font-licenses/Geist-source.txt).
+The app uses Android's system sans-serif for all text, including the reader,
+settings, and Material components. This is Roboto on standard Android and follows
+the device's system font configuration. Gallery excerpts keep their smaller preview
+sizes independently of the reader.
 
 Native Compose tests cover pointer gestures, card targeting, pagination, sheet
 navigation, bar ownership, and retained gallery state. Dark and light Roborazzi

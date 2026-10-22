@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -34,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.text.HtmlCompat
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Scale
 import com.octaviantocan.mymind.BuildConfig
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
@@ -53,11 +56,21 @@ internal fun GalleryTile(
     onLongClick: (() -> Unit)? = null,
     enabled: Boolean = true,
     highlight: Boolean = false,
+    imageRequestSizePx: Int? = null,
 ) {
     val colors = LibraryStyle.colors
     val accent = cardAccent(card) ?: colors.selected
     val kind = tileKind(card)
     val picture = galleryPicture(card)
+    val context = LocalContext.current
+    val imageModel = remember(picture, imageRequestSizePx, context) {
+        picture?.let {
+            val url = resolveMediaUrl(BuildConfig.SERVER_URL, it)
+            if (imageRequestSizePx == null) url else ImageRequest.Builder(context).data(url)
+                .size(imageRequestSizePx.coerceAtLeast(1)).scale(Scale.FIT)
+                .memoryCacheKey(url).placeholderMemoryCacheKey(url).build()
+        }
+    }
     val text = remember(card) { galleryText(card) }
     val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card)
     val paper = lerp(colors.raised, accent, 0.13f)
@@ -67,23 +80,23 @@ internal fun GalleryTile(
         Box(
             modifier.fillMaxSize().clip(RoundedCornerShape(if (highlight) 28.dp else 3.dp)).background(background)
                 .semantics(mergeDescendants = true) { contentDescription = heading }
-                .combinedClickable(
-                    interactionSource = null, indication = CardSheetIndication, enabled = enabled, role = Role.Button,
+                .then(if (enabled) Modifier.combinedClickable(
+                    interactionSource = null, indication = CardSheetIndication, role = Role.Button,
                     onLongClickLabel = "Card actions", onLongClick = onLongClick, onClick = onClick,
-                ),
+                ) else Modifier),
         ) {
             if (mixed) {
                 Column(Modifier.fillMaxSize()) {
                     GalleryTextPreview(card, text, highlight, Modifier.weight(0.56f).fillMaxWidth())
                     AsyncImage(
-                        model = resolveMediaUrl(BuildConfig.SERVER_URL, picture), contentDescription = "Image preview",
+                        model = imageModel, contentDescription = "Image preview",
                         contentScale = ContentScale.Crop, modifier = Modifier.weight(0.44f).fillMaxWidth(),
                     )
                 }
                 Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
             } else if (picture != null) {
                 AsyncImage(
-                    model = resolveMediaUrl(BuildConfig.SERVER_URL, picture), contentDescription = null,
+                    model = imageModel, contentDescription = null,
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                 )
                 if (highlight || kind !in setOf(TileKind.Media, TileKind.Video)) {
@@ -91,7 +104,10 @@ internal fun GalleryTile(
                     Text(
                         card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card),
                         Modifier.align(Alignment.BottomStart).padding(if (highlight) 18.dp else 12.dp).clearAndSetSemantics {},
-                        color = Color.White, style = if (highlight) LibraryStyle.title else LibraryStyle.body,
+                        color = Color.White, style = LibraryStyle.body.copy(
+                            fontSize = if (highlight) 18.sp else 14.sp,
+                            lineHeight = if (highlight) 24.sp else 20.sp,
+                        ),
                         maxLines = if (highlight) 3 else 2, overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -120,22 +136,22 @@ internal fun GalleryTile(
 private fun GalleryTextPreview(card: Card, text: String, highlight: Boolean, modifier: Modifier) {
     val colors = LibraryStyle.colors
     BoxWithConstraints(modifier) {
-        val inset = if (highlight) 18.dp else if (maxWidth < 110.dp) 8.dp else 14.dp
-        val textSize = if (highlight) 22.sp else if (maxWidth < 110.dp) 15.sp else 17.sp
-        val lineHeight = if (highlight) 29.sp else if (maxWidth < 110.dp) 21.sp else 24.sp
+        val inset = if (highlight) 16.dp else if (maxWidth < 110.dp) 6.dp else 12.dp
+        val textSize = if (highlight) 18.sp else if (maxWidth < 110.dp) 12.sp else 14.sp
+        val lineHeight = if (highlight) 24.sp else if (maxWidth < 110.dp) 17.sp else 20.sp
         val showKind = maxWidth >= 110.dp && maxHeight >= 112.dp
         val lineDp = with(LocalDensity.current) { lineHeight.toDp() }
-        val availableLines = ((maxHeight - inset * 2 - if (showKind) 31.dp else 0.dp) / lineDp).toInt().coerceIn(1, 12)
+        val availableLines = ((maxHeight - inset * 2 - if (showKind) 22.dp else 0.dp) / lineDp).toInt().coerceIn(1, 12)
         Column(Modifier.fillMaxSize().padding(inset)) {
             if (showKind) {
                 Text(galleryKind(card), Modifier.clearAndSetSemantics {}, color = colors.muted,
-                    style = LibraryStyle.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(10.dp))
+                    style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(6.dp))
             }
             Text(
                 text.ifBlank { cardHeading(card) }, Modifier.weight(1f),
                 color = colors.text, style = LibraryStyle.body.copy(fontSize = textSize, lineHeight = lineHeight),
-                fontWeight = if (tileKind(card) in setOf(TileKind.Repository, TileKind.Article, TileKind.Plain)) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (tileKind(card) in setOf(TileKind.Repository, TileKind.Article, TileKind.Plain)) FontWeight.Medium else FontWeight.Normal,
                 maxLines = availableLines, overflow = TextOverflow.Ellipsis,
             )
         }

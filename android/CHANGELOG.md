@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 (8), 2026-10-22
+- Use Android's familiar system typeface throughout the app.
+- Smaller, lighter gallery text makes card previews easier to scan while retaining their words and pictures.
+- Cards follow your fingers throughout a pinch, including direction changes and several size steps.
+
 ## 0.5.0 (7), 2026-10-22
 - Geist is the app's typeface, with text and images both visible in mixed card previews.
 - Browse a photo-style brick gallery and pinch to make your cards larger or smaller.

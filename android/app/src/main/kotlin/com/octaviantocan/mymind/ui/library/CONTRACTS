@@ -8,15 +8,36 @@ Source: Tavi, 22 October 2026, Google Photos layout request in the Codex convers
 A note, social post, article or saved link with text and a picture MUST show both in its gallery
 preview, including the smallest density and Top of Mind. Neither the cover nor a
 generated title may replace the note or post body. Text and images MUST have separate
-visible areas, and text MUST use Geist with enough contrast against its paper. A
+visible areas, and text MUST use Android's system sans-serif with enough contrast against its paper. A
 photo or video with an authored note MUST also retain that note beside its image.
 Source: Tavi, 22 October 2026, preserve text and images in small note previews.
 
 @cc [owner:OctavianTocan,label:product;motion] gallery-pinches-change-tile-size
-A two-finger pinch on the mosaic MUST change tile size and regroup the cards. The
-gesture MUST NOT open a card, open its action sheet, or trigger pull to refresh.
-Reflow MUST keep a visible card at the gesture's position in view instead of returning
-to the top. Equivalent larger/smaller actions MUST be available to accessibility.
+A two-finger pinch on the mosaic MUST continuously change tile size through multiple
+density levels and reverse while the fingers remain down. Density stops
+MUST offer distinct sizes for uniform portrait, square and landscape cards, with one
+to four cards per row at their stops. Text MUST retain its size and wrapping when
+releasing at a stop. Adjacent cached grids MUST remain coherent and nonoverlapping
+within each projection, sharing one focal card's fractional X/Y point and physical
+size. A density crossing with a small hysteresis starts a 90 ms timed handoff,
+then MUST show one opaque grid even if the fingers pause or jitter at the threshold. Reduced
+motion switches the grid immediately. The focal card MUST be drawn once and only
+one projection may expose semantics or hit targets. A new single-finger press
+MUST retain its owning projection and focal node through tap or hold. Passing drag
+slop releases focal anchoring; a second finger rebases a new pinch. Stabilizing a
+press MUST show a coherent opaque scene rather than hold a ghosted blend.
+Vertical anchoring respects scroll bounds. During a gesture, projected outer edges
+may clip or leave temporary horizontal slack; canonical stops fill the width and
+horizontal correction settles smoothly to those bounds. The profile and
+highlights keep their own scale. Release MUST settle the same geometry without an
+independent row animation; reduced motion settles synchronously. The gesture, its
+cancellation and a remaining one-finger tail MUST NOT open a card, open its action
+sheet, or trigger pull to refresh. Rendering MUST retain stable card keys and a lazy,
+bounded visible window, without scanning all cards or changing image decode sizes
+on each pointer frame. Equivalent larger/smaller actions MUST be accessible, and
+each tab MUST retain its density and scroll position. Removing the gallery during
+a gesture or settle MUST synchronously save a canonical density and anchored scroll
+request, so reusing its state cannot restore a fractional transition.
 Source: Tavi, 22 October 2026, explicit pinch-to-enlarge/reduce requirement.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-highlights-stay-above-the-bricks
