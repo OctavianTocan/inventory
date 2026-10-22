@@ -1,8 +1,28 @@
 @cc [owner:OctavianTocan,label:product;design] card-reader-header-is-one-row
-Card reading MUST remain full screen. Its fixed header MUST have a 44dp cross,
-a centered raised title pill occupying the available middle width, and a 44dp
+Card reading MUST remain full screen. Its fixed header MUST have a 44dp Back
+arrow (the reader returns to the gallery; it is not a closing action), a centered
+raised title pill occupying the available middle width, and a 44dp
 vertical overflow menu. It MUST NOT add a second metadata row. Long titles may
 ellipsize to one line in this pill, while keeping the complete title in text
 semantics. The pill and controls MUST remain separate at narrow widths and large
 font settings. Sheet headers remain plain titles; this pill belongs to the reader.
-Source: Tavi's attached toolbar reference and one-row requirement, 22 October 2026.
+Source: Tavi's attached toolbar reference and one-row requirement, 22 October 2026;
+the recorded review of the same day ("this icon here should actually be a back
+icon").
+
+@cc [owner:OctavianTocan,label:product;design] card-reader-shows-the-whole-card
+The reader MUST show every part of a card it has: its picture (cover, post image or
+image file), the post or note body, the saved description, the captured page text
+and the user's note, each once and in that order. The card's type colour MUST wash
+the top of the reader as a faint fade, as it does on the card's sheets, and never
+tint the body. Tags are quiet pills without crosses; Edit tags reveals a cross on
+each and Done hides them again.
+Source: Tavi's recorded review, 22 October 2026 ("why is there nothing here", "can't
+just tint only the bottom sheet", "some tags which look really weird").
+
+@cc [owner:OctavianTocan,label:product] card-reader-opens-its-source
+A card with a web link MUST open it from a tap on its picture and from a source pill
+naming the site under the picture. Holding the picture MUST open the card's actions.
+A card without a link MUST NOT show the source pill.
+Source: Tavi's recorded review, 22 October 2026 ("especially the preview, I should be
+taken to the source").

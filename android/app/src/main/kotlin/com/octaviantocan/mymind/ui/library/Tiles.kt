@@ -152,10 +152,10 @@ fun CardPicture(card: Card, play: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
-/** Draws the card's cover over the whole box, cropped. */
+/** Draws the card's picture (cover, post image or image file) over the whole box, cropped. */
 @Composable
 private fun PictureImage(card: Card, modifier: Modifier = Modifier) {
-    val src = card.cover?.src ?: return
+    val src = galleryPicture(card) ?: return
     AsyncImage(
         model = resolveMediaUrl(BuildConfig.SERVER_URL, src),
         contentDescription = null,

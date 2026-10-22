@@ -86,7 +86,7 @@ class CardHeaderLayoutTest(private val title: String, private val fontScale: Flo
         assertEquals("The reader title stays on one row", 1, layouts.single().lineCount)
         val bounds = text.fetchSemanticsNode().boundsInRoot
         val header = compose.onNodeWithTag("header").fetchSemanticsNode().boundsInRoot
-        val close = compose.onNodeWithContentDescription("Close card").fetchSemanticsNode().boundsInRoot
+        val close = compose.onNodeWithContentDescription("Back").fetchSemanticsNode().boundsInRoot
         assertEquals(header.center.x, bounds.center.x, 1f)
         assertEquals(bounds.center.y, close.center.y, 1f)
         assertTrue(bounds.left > close.right)

@@ -7,11 +7,14 @@ Your review, applied: calmer gallery chrome, Spaces that match, and Pully sheets
 - Tap + for an Add sheet with Camera, Photos and Files, and New space on the Spaces tab.
 - Tap your photo for a profile sheet with your Google photo, email, updates and Sign out.
 - Spaces share the gallery's background and top controls; an opened space has Back and an options menu.
+- Cards open with everything they hold: picture, post, description, saved page text and your note.
+- Tap a card's picture or its source pill to open the original; hold the picture for card actions.
 
 ### Fixed
 - Pinching holds each size for a moment, never shows empty margins and no longer pans with two fingers.
 - "Your mind" scrolls away with your cards while the buttons stay put without a bar behind them.
 - The bottom bar is slimmer, wider and sits lower, like Google Photos.
+- The reader leads with a back arrow, carries the card's colour at the top and keeps tags quiet until you edit them.
 
 ## 0.5.3 (10), 2026-10-22
 Release notes that read like Pully, and a softer edge above your cards.
