@@ -2,6 +2,7 @@ package com.octaviantocan.mymind.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Repository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,8 +13,10 @@ import kotlinx.coroutines.launch
  * What the settings drawer shows about the account.
  *
  * @property email Email address of the signed-in account, or null until the server has answered.
+ * @property photoUrl Session-bound Google photo, or null when the account has no cached photo.
+ * @property displayName Session-bound Google name, or null.
  */
-data class SettingsUiState(val email: String? = null)
+data class SettingsUiState(val email: String? = null, val photoUrl: String? = null, val displayName: String? = null)
 
 /**
  * State and actions of the settings drawer.
@@ -26,16 +29,22 @@ class SettingsViewModel(private val repository: Repository) : ViewModel() {
     /** Account shown in the drawer. */
     val state: StateFlow<SettingsUiState> = mutableState
 
-    /** Asks the server for the signed-in account; the shown account stays as it was when the request fails. */
+    /** Replaces prior display metadata only after the current account has been read successfully. */
     fun refresh() {
+        mutableState.value = SettingsUiState()
         viewModelScope.launch {
-            val answer = repository.me() as? ApiResult.Ok ?: return@launch
-            mutableState.value = SettingsUiState(email = answer.value.email)
+            when (val answer = repository.me()) {
+                is ApiResult.Ok -> mutableState.value = SettingsUiState(answer.value.email, answer.value.photoUrl, answer.value.displayName)
+                is ApiResult.Failed -> if (answer.failure == ApiFailure.Unauthorized || answer.failure == ApiFailure.InvalidToken) {
+                    mutableState.value = SettingsUiState()
+                }
+            }
         }
     }
 
     /** Signs the account out of this device. */
     fun signOut() {
+        mutableState.value = SettingsUiState()
         viewModelScope.launch { repository.signOut() }
     }
 }

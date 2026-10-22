@@ -4,26 +4,52 @@ import android.os.Build
 import java.io.InputStream
 
 /** Sign-in and library operations used by the screens. */
-class Repository(private val api: MymindApi, private val session: Session) : Library {
+class Repository(private val api: MymindApi, private val session: Session, private val profiles: AccountProfileStore? = null) : Library {
 
-    suspend fun signInWithGoogle(requestIdToken: suspend (nonce: String) -> String?): SignInOutcome {
+    suspend fun signInWithGoogle(
+        profile: () -> AccountProfile? = { null },
+        requestIdToken: suspend (nonce: String) -> String?,
+    ): SignInOutcome {
         val nonce = when (val answer = api.nonce()) {
             is ApiResult.Ok -> answer.value.nonce
             is ApiResult.Failed -> return SignInOutcome.Failed(answer.failure)
         }
         val idToken = requestIdToken(nonce) ?: return SignInOutcome.Cancelled
-        return finish(api.signInWithGoogle(idToken, nonce, deviceLabel()))
+        return finish(api.signInWithGoogle(idToken, nonce, deviceLabel()), profile)
     }
 
     suspend fun signInWithPassword(username: String, password: String): SignInOutcome =
         finish(api.signInWithPassword(username, password, deviceLabel()))
 
     suspend fun signOut() {
-        api.signOut()
-        session.clear()
+        try {
+            api.signOut()
+        } finally {
+            runCatching { profiles?.clear() }
+            session.clear()
+        }
     }
 
-    override suspend fun me(): ApiResult<User> = api.me()
+    override suspend fun me(): ApiResult<User> {
+        val requestedSession = session.token
+        val answer = api.me()
+        if (session.token != requestedSession) {
+            if (session.token == null) runCatching { profiles?.clear() }
+            return ApiResult.Failed(ApiFailure.Unauthorized)
+        }
+        return when (answer) {
+            is ApiResult.Ok -> {
+                val profile = requestedSession?.let { token ->
+                    runCatching { profiles?.read(accountProfileSessionKey(token))?.forVerifiedUser(answer.value) }.getOrNull()
+                }
+                ApiResult.Ok(answer.value.copy(photoUrl = profile?.photoUrl, displayName = profile?.displayName))
+            }
+            is ApiResult.Failed -> {
+                if (answer.failure == ApiFailure.Unauthorized || answer.failure == ApiFailure.InvalidToken) runCatching { profiles?.clear() }
+                answer
+            }
+        }
+    }
 
     override suspend fun cards(cursor: String?): ApiResult<CardPage> = api.cards(PAGE_SIZE, cursor)
 
@@ -89,8 +115,12 @@ class Repository(private val api: MymindApi, private val session: Session) : Lib
 
     override suspend fun setNote(cardId: String, text: String): ApiResult<Unit> = api.setNote(cardId, text)
 
-    private suspend fun finish(answer: ApiResult<TokenAnswer>): SignInOutcome = when (answer) {
+    private suspend fun finish(answer: ApiResult<TokenAnswer>, profile: () -> AccountProfile? = { null }): SignInOutcome = when (answer) {
         is ApiResult.Ok -> {
+            // Cosmetic metadata is accepted only after server verification, and ready before the signed-in UI appears.
+            runCatching {
+                profiles?.write(accountProfileSessionKey(answer.value.token), profile()?.forVerifiedUser(answer.value.user))
+            }
             session.signIn(answer.value.token)
             SignInOutcome.Success
         }
