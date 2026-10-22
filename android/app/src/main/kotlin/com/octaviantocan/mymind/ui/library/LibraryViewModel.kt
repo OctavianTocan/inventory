@@ -7,6 +7,7 @@ import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.CardPage
 import com.octaviantocan.mymind.data.Library
+import com.octaviantocan.mymind.data.LibraryMemory
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.Tag
@@ -71,12 +72,14 @@ data class CardSpaceCreationState(
  * @param library Reads and writes of the account's library.
  * @param saver Where Download puts a card's file.
  * @param io Dispatcher picked files are read on.
+ * @param memory What the gallery keeps on the phone, so it opens on last time's cards and page scheme; null keeps nothing.
  */
 class LibraryViewModel(
     private val library: Library,
     saver: FileSaver = FileSaver { _, _, _ -> ApiResult.Failed(ApiFailure.Server(0)) },
     io: CoroutineDispatcher = Dispatchers.IO,
     uploadActivity: UploadActivity? = null,
+    private val memory: LibraryMemory? = null,
 ) : ViewModel() {
     private val mutableScheme = MutableStateFlow(PageScheme.System)
     private val mutableFeatures = MutableStateFlow(emptySet<String>())
@@ -87,10 +90,10 @@ class LibraryViewModel(
     private val actions = CardActions(library, saver)
 
     /** The Everything tab's cards, newest first. */
-    val everything = CardFeed(viewModelScope) { library.cards(it) }
+    val everything = CardFeed(viewModelScope, memory?.feed("everything")) { library.cards(it) }
 
     /** Cards pinned to Top of Mind, in pin order. */
-    val topOfMind = CardFeed(viewModelScope) { library.topOfMind(it) }
+    val topOfMind = CardFeed(viewModelScope, memory?.feed("top-of-mind")) { library.topOfMind(it) }
 
     /** Files being uploaded from the + button. */
     val uploads = UploadQueue(viewModelScope, library, onUploaded = ::showUploaded, io = io, activity = uploadActivity)
@@ -119,13 +122,23 @@ class LibraryViewModel(
     init {
         everything.loadMore()
         topOfMind.loadMore()
+        var schemeRead = false
         viewModelScope.launch {
-            when (val config = library.pageConfig()) {
+            val kept = memory?.scheme()?.let { name -> PageScheme.entries.firstOrNull { it.name == name } }
+            if (kept != null && !schemeRead) mutableScheme.value = kept
+        }
+        viewModelScope.launch {
+            val scheme = when (val config = library.pageConfig()) {
                 is ApiResult.Ok -> {
-                    mutableScheme.value = PageScheme.of(config.value.colorScheme)
                     mutableFeatures.value = config.value.features
+                    PageScheme.of(config.value.colorScheme)
                 }
-                is ApiResult.Failed -> (library.me() as? ApiResult.Ok)?.let { mutableScheme.value = PageScheme.of(it.value.colorScheme) }
+                is ApiResult.Failed -> (library.me() as? ApiResult.Ok)?.value?.colorScheme?.let(PageScheme::of)
+            }
+            if (scheme != null) {
+                schemeRead = true
+                mutableScheme.value = scheme
+                memory?.saveScheme(scheme.name)
             }
         }
     }

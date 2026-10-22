@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.2 (13), 2026-10-22
+The app opens on your cards at once, even before the server answers.
+
+### New
+- Everything and Top of Mind open on the cards you saw last time, kept on your phone, then update from the server.
+- Without a connection you still see those cards. Signing out wipes them from the phone.
+
 ## 0.6.1 (12), 2026-10-22
 Search that finds what you mean, not only the words you typed.
 
