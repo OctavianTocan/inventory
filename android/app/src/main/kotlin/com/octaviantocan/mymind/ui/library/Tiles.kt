@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui.library
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import com.octaviantocan.mymind.R
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -172,25 +176,14 @@ private fun pictureRatio(card: Card): Float {
 private fun pictureBackground(card: Card): Color =
     parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: MymindTheme.page.surface
 
-/** The white ring and triangle drawn over video tiles. */
+/** Phosphor play-circle over video tiles. */
 @Composable
 private fun PlayMark(modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier) {
         val side: Dp = min(min(maxWidth * 0.225f, maxHeight * 0.4f), 74.dp)
-        Canvas(Modifier.size(side)) {
-            val stroke = size.minDimension * 0.07f
-            val radius = size.minDimension / 2 - stroke / 2
-            drawCircle(Color.Black.copy(alpha = 0.15f), radius)
-            drawCircle(Color.White, radius, style = Stroke(stroke))
-            val r = size.minDimension
-            val triangle = Path().apply {
-                moveTo(center.x - r * 0.13f, center.y - r * 0.2f)
-                lineTo(center.x + r * 0.22f, center.y)
-                lineTo(center.x - r * 0.13f, center.y + r * 0.2f)
-                close()
-            }
-            drawPath(triangle, Color.White)
-        }
+        Image(painterResource(R.drawable.ic_play_circle), null,
+            Modifier.size(side).background(Color.Black.copy(alpha = 0.15f), androidx.compose.foundation.shape.CircleShape),
+            colorFilter = ColorFilter.tint(Color.White))
     }
 }
 

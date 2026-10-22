@@ -20,7 +20,11 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
@@ -66,13 +70,13 @@ val LightMenuColors = MenuColors(Scrim, Color.White, Color(0xFFF4F6F9), Color(0x
 internal val LocalCardMenuAccent = staticCompositionLocalOf<Color?> { null }
 internal val CardMenuFont = AndroidFontFamily
 
-/** Pully's paper and floating controls, tinted with the same accent as the visible card. */
+/** Neutral Pully paper and controls; the card accent is confined to the top hint and grabber. */
 internal fun cardMenuSheetColors(accent: Color?, dark: Boolean): CardSheetColors {
     val base = if (dark) DarkCardSheetColors else LightCardSheetColors
     if (accent == null) return base
     return CardSheetColors(
-        paper = lerp(base.paper, accent, 0.24f),
-        raised = lerp(base.raised, accent, 0.12f),
+        paper = base.paper,
+        raised = base.raised,
         text = base.text,
         grabber = lerp(base.grabber, accent, 0.5f),
         scrim = base.scrim,
@@ -96,7 +100,7 @@ class CardMenuIcons(val icon: @Composable (CardMenuAction) -> Painter)
 @Composable
 fun defaultCardMenuIcons() = CardMenuIcons(icon = { painterResource(it.icon) })
 
-/** Pully's grouped action rows; the sheet owns the grabber, header and scrolling viewport. */
+/** Pully's quick tiles and titled groups; the sheet owns its fixed header and viewport. */
 @Composable
 fun CardMenuContent(
     items: List<CardMenuItem>,
@@ -106,13 +110,71 @@ fun CardMenuContent(
     enabled: Boolean = true,
 ) {
     val colors = menuColors()
-    Column(modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 30.dp)) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.row)) {
-            items.forEachIndexed { index, item ->
-                if (index > 0) HorizontalDivider(Modifier.padding(start = 52.dp), color = colors.rowText.copy(alpha = 0.1f), thickness = 1.dp)
-                CardMenuRow(item, colors, icons, enabled) { onSelect(item) }
+    val quick = items.filter { it.action in QUICK_ACTIONS }
+    val organize = items.filter { it.action in ORGANIZE_ACTIONS }
+    val discover = items.filter { it.action !in QUICK_ACTIONS && it.action !in ORGANIZE_ACTIONS && !it.action.danger }
+    val manage = items.filter { it.action.danger }
+    Column(modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 30.dp)) {
+        if (quick.isNotEmpty()) {
+            CardMenuHeading("Quick actions", first = true)
+            quick.chunked(if (quick.size > 3) 2 else 3).forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { item -> CardQuickAction(item, colors, icons, enabled, Modifier.weight(1f)) { onSelect(item) } }
+                }
             }
         }
+        listOf("Organize" to organize, "Discover" to discover, "Manage card" to manage).forEach { (heading, rows) ->
+            if (rows.isNotEmpty()) {
+                CardMenuHeading(heading, first = quick.isEmpty() && heading == "Organize")
+                CardMenuGroup(Modifier.padding(top = 12.dp)) {
+                    rows.forEachIndexed { index, item ->
+                        if (index > 0) HorizontalDivider(Modifier.padding(start = 52.dp), color = colors.rowText.copy(alpha = 0.1f), thickness = 1.dp)
+                        CardMenuRow(item, colors, icons, enabled) { onSelect(item) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val QUICK_ACTIONS = setOf(CardMenuAction.ViewSource, CardMenuAction.Copy, CardMenuAction.Download,
+    CardMenuAction.AddToTopOfMind, CardMenuAction.RemoveFromTopOfMind)
+private val ORGANIZE_ACTIONS = setOf(CardMenuAction.AddTags, CardMenuAction.AddToSpace, CardMenuAction.RemoveFromSpace)
+
+/** The kit's small, muted, non-folding section heading, outside the raised group. */
+@Composable
+internal fun CardMenuHeading(label: String, first: Boolean = false) {
+    Text(label, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = if (first) 12.dp else 24.dp, bottom = 2.dp)
+        .semantics { heading() },
+        style = TextStyle(fontFamily = CardMenuFont, fontSize = 14.sp, lineHeight = 20.sp,
+            fontWeight = FontWeight.Medium, color = menuColors().rowText.copy(alpha = 0.65f)))
+}
+
+/** The same 16dp raised card and offset note shadow used by Pully's sheets. */
+@Composable
+internal fun CardMenuGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(modifier.fillMaxWidth().cardSurfaceShadow(shape, note = true).clip(shape).background(menuColors().row), content = content)
+}
+
+@Composable
+private fun CardQuickAction(item: CardMenuItem, colors: MenuColors, icons: CardMenuIcons, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    val haptic = rememberSheetHaptics()
+    val label = when (item.action) {
+        CardMenuAction.ViewSource -> "Source"
+        CardMenuAction.Copy -> "Copy"
+        CardMenuAction.RemoveFromTopOfMind -> "Unpin"
+        else -> item.action.label
+    }
+    Column(modifier.heightIn(min = 72.dp).cardSurfaceShadow(shape, note = true).clip(shape).background(colors.row)
+        .semantics { contentDescription = item.action.label }
+        .clickable(remember { MutableInteractionSource() }, CardSheetIndication, enabled = enabled, role = Role.Button) { haptic.tick(); onClick() }
+        .padding(horizontal = 8.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
+        Image(icons.icon(item.action), null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(colors.rowText))
+        Text(label, style = TextStyle(fontFamily = CardMenuFont, fontSize = 14.sp, lineHeight = 20.sp, color = colors.rowText),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 
@@ -143,6 +205,17 @@ private fun CardMenuRow(item: CardMenuItem, colors: MenuColors, icons: CardMenuI
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(icons.icon(item.action), contentDescription = null, modifier = Modifier.size(22.dp), colorFilter = ColorFilter.tint(tint))
-        Text(item.action.label, Modifier.weight(1f), style = TextStyle(color = tint, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(item.action.label, style = TextStyle(color = tint, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont))
+            val detail = when (item.action) {
+                CardMenuAction.AddTags -> "Label and find this card"
+                CardMenuAction.AddToSpace -> "Keep related cards together"
+                else -> if (item.locked) "Not included in your plan" else null
+            }
+            if (detail != null) Text(detail, style = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 14.sp, lineHeight = 20.sp, fontFamily = CardMenuFont))
+        }
+        if (item.action == CardMenuAction.AddTags || item.action == CardMenuAction.AddToSpace) {
+            Image(painterResource(R.drawable.ic_caret_right), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(colors.rowText.copy(alpha = 0.55f)))
+        }
     }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 (9), 2026-10-22
+- Keep gallery controls visible while scrolling, with a cleaner pinned-card rail.
+- Show an icon only on the selected Everything or Spaces tab, and use Phosphor interface icons.
+- Read cards beneath a centered title pill with a vertical actions menu.
+- Organize card sheets with Pully section headings, quick actions and softly raised groups, with only a subtle accent at the top.
+
 ## 0.5.1 (8), 2026-10-22
 - Use Android's familiar system typeface throughout the app.
 - Smaller, lighter gallery text makes card previews easier to scan while retaining their words and pictures.

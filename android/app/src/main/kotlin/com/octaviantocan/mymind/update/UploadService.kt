@@ -1,6 +1,7 @@
 package com.octaviantocan.mymind.update
 
 import android.app.Notification
+import com.octaviantocan.mymind.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -56,7 +57,7 @@ class UploadService : Service() {
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(CHANNEL, "Uploads", NotificationManager.IMPORTANCE_LOW))
         return NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setSmallIcon(R.drawable.ic_notification_upload)
             .setContentTitle("Saving to your mind")
             .setProgress(0, 0, true)
             .setOngoing(true)

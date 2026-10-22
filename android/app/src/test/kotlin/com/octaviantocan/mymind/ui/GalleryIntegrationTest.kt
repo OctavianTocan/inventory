@@ -72,7 +72,7 @@ class GalleryIntegrationTest {
         }
         compose.mainClock.autoAdvance = true
         compose.onNodeWithContentDescription("Account settings").assertIsDisplayed()
-        compose.onNodeWithText("Top of Mind").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Pinned cards").assertIsDisplayed()
         compose.onNodeWithContentDescription("Card gallery").assertExists()
         compose.onNodeWithContentDescription("Rediscover cards").assertIsDisplayed()
         compose.onNodeWithText("Create").assertDoesNotExist()

@@ -29,9 +29,9 @@ The imported obligations live beside the implementation in
 [`ui/menu/CONTRACTS`](../android/app/src/main/kotlin/com/octaviantocan/mymind/ui/menu/CONTRACTS).
 `CardMenuPresentationTest` exercises the actual dialog, the root cross, child Back,
 Android Back, one shared panel, and independent retained page scroll positions.
-Card reading continues to use its full-screen reader. The action panel and its
-controls use the selected card's accent; the library's neutral palette does not
-replace that accent.
+Card reading continues to use its full-screen reader. The action panel keeps the selected card's accent as a faint wash at its top
+and in the grabber. Its paper, raised cards, controls and primary actions stay
+neutral, following Tavi's later accent correction.
 
 Creating the first space is a child of the space selector in the same panel. Header
 Back and Android Back return to the selector; creation failures keep the form
@@ -87,3 +87,30 @@ Native Compose tests cover pointer gestures, card targeting, pagination, sheet
 navigation, bar ownership, and retained gallery state. Dark and light Roborazzi
 renders use local sample images. These checks do not measure frame pacing on a
 physical phone.
+
+## Sheet composition and reader chrome
+
+The styling port was checked against current Pully revision
+`f651a784cfca9b3730c60116832b89bbe236c9c3`, where the kit now lives under
+`mobile/shared-ui/src/commonMain/kotlin/com/octaviantocan/pulls/ui/design/`.
+`SheetHeader` centers the title between equal 44dp slots. `SheetHeading` supplies
+small muted, non-folding section labels; `SheetCard` and `QuickAction` share 16dp
+corners and the note shadow. The shadow has two canvas layers: a tight 1dp-down
+edge and a 2dp-down soft drop (12dp blur at 10% ink for cards, 10dp at 8% for
+controls), with Pully's 2.7 dark-mode strength. DESIGN rules 45, 70, 74 and 141
+remain the source. The card accent is limited to a faint 64dp wash fading down from the top and the
+grabber; paper, raised cards, controls and primary actions remain neutral.
+
+The root mixes quick tiles for source/copy/download/pinning, organizing rows that
+lead to child pages, optional discovery actions, and a separate destructive group.
+Tag and space pages keep the same surface hierarchy and plain section labels.
+All page motion, detents, Back behavior and retained scroll obligations above still
+apply. Native renders use the shipped Phosphor assets, with license and pinned
+source mappings in `android/app/src/main/assets/icon-licenses/`.
+
+The full-screen reader follows Tavi's separate toolbar reference: one centered
+title pill between the cross and vertical overflow button. This single-row title
+may ellipsize while its complete accessible text remains available; the reader
+body does not repeat it. Sheet titles remain plain. The gallery profile controls
+stay fixed above the scrolling pinned rail and mosaic, and the rail has no visible
+heading. Only the selected Everything/Spaces tab shows its Phosphor icon.

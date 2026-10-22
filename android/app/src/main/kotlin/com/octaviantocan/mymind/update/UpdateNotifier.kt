@@ -1,6 +1,7 @@
 package com.octaviantocan.mymind.update
 
 import android.Manifest
+import com.octaviantocan.mymind.R
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -34,7 +35,7 @@ class UpdateNotifier(private val context: Context) {
         )
         post(
             NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setSmallIcon(R.drawable.ic_notification_download)
                 .setContentTitle("Allow mymind to install updates")
                 .setContentText("mymind ${release.versionName} is ready. Allow it once and updates install by themselves.")
                 .setContentIntent(open)
@@ -57,7 +58,7 @@ class UpdateNotifier(private val context: Context) {
         )
         post(
             NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setSmallIcon(R.drawable.ic_notification_download)
                 .setContentTitle("Finish installing mymind ${release?.versionName.orEmpty()}".trim())
                 .setContentText("Tap to confirm with Android.")
                 .setContentIntent(open)

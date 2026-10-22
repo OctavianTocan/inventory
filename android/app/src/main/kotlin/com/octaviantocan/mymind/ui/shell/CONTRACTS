@@ -27,7 +27,9 @@ The library navigation capsule MUST offer Everything and Spaces, with Search as 
 separate circular control. It MUST NOT add a Create tab. The selected highlight
 MUST slide between segments on Pully's capsule curve; when system animations are
 disabled it MUST finish immediately. Changing the selected tab MUST preserve the
-one bar registration rather than creating a second visible bar.
+one bar registration rather than creating a second visible bar. Only the selected
+tab MAY show its icon; both tab labels MUST remain visible. Narrow widths and large
+system text MAY hide the selected icon to preserve label space and touch targets.
 Source: Tavi's Google Photos reference and no-Create decision, 22 October 2026;
 pulls.review kit-segment-highlight-slides, DESIGN rule 67, Kit.kt at
 ee5cf358333cb1170f1923c7118e12af3f265b74.

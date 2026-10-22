@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.LocalTextStyle
@@ -27,10 +28,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.luminance
@@ -46,6 +48,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -60,7 +63,7 @@ internal val LightCardSheetColors = CardSheetColors(Color(0xFFF4F2EF), Color.Whi
 internal val DarkCardSheetColors = CardSheetColors(Color(0xFF1B1B1B), Color(0xFF1D1D1D), Color(0xFFE3E3E3), Color(0xFF3A3A3A), Color(0x99000000), Color(0x1FFFFFFF), Color.Black)
 internal val LocalCardSheetColors = compositionLocalOf { LightCardSheetColors }
 
-/** Close, overflow and back glyphs from Pully's Lucide icons. */
+/** Phosphor close, vertical overflow and back glyphs. */
 @Immutable
 class CardHeaderIcons(val close: Painter, val menu: Painter, val back: Painter? = null)
 
@@ -69,7 +72,7 @@ fun defaultCardHeaderIcons() = CardHeaderIcons(painterResource(R.drawable.ic_she
 
 /** Pully's floating controls flanking a centered title that wraps to keep the full heading readable. */
 @Composable
-fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier, onMenu: (() -> Unit)? = null, icons: CardHeaderIcons = defaultCardHeaderIcons(), enabled: Boolean = true, closeLabel: String = "Close card", onBack: (() -> Unit)? = null, titleContent: (@Composable () -> Unit)? = null) {
+fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier, onMenu: (() -> Unit)? = null, icons: CardHeaderIcons = defaultCardHeaderIcons(), enabled: Boolean = true, closeLabel: String = "Close card", onBack: (() -> Unit)? = null, titleContent: (@Composable () -> Unit)? = null, titleInPill: Boolean = false) {
     val colors = LocalCardSheetColors.current
     val density = LocalDensity.current
     var firstLineHeight by remember(title, density) { mutableFloatStateOf(with(density) { 26.sp.toPx() }) }
@@ -88,9 +91,23 @@ fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier
         color = colors.text,
     )
     val leading = if (onBack != null) icons.back ?: painterResource(R.drawable.ic_sheet_back) else icons.close
+    if (titleInPill) {
+        val shape = RoundedCornerShape(50)
+        Row(modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            CardHeaderButton(leading, if (onBack != null) "Back" else closeLabel, onBack ?: onClose, enabled)
+            Box(Modifier.weight(1f).cardSurfaceShadow(shape).clip(shape).background(colors.raised)
+                .heightIn(min = 44.dp).padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+                Text(title, Modifier.fillMaxWidth(), style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (onMenu != null) CardHeaderButton(icons.menu, "Card actions", onMenu, enabled) else Spacer(Modifier.size(44.dp))
+        }
+        return
+    }
     Row(modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp), verticalAlignment = Alignment.Top) {
         CardHeaderButton(leading, if (onBack != null) "Back" else closeLabel, onBack ?: onClose, enabled, Modifier.padding(top = buttonTop))
-        Box(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, top = titleTop, bottom = 4.dp)) {
+        Box(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, top = titleTop, bottom = 4.dp), contentAlignment = Alignment.Center) {
             if (titleContent != null) CompositionLocalProvider(LocalTextStyle provides titleStyle) { titleContent() }
             else Text(
                 title,
@@ -107,21 +124,30 @@ fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier
 @Composable
 private fun CardHeaderButton(icon: Painter, label: String, onClick: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier) {
     val colors = LocalCardSheetColors.current
-    val tint = colors.shadow.copy(alpha = if (colors.paper.luminance() < 0.5f) 0.08f * 2.7f else 0.08f)
     val fill = colors.raised
     val haptic = rememberSheetHaptics()
     Box(
-        modifier.size(44.dp).drawBehind {
-            val outline = CircleShape.createOutline(size, layoutDirection, this)
-            val edge = Paint().apply { color = fill }
-            edge.asFrameworkPaint().setShadowLayer(1f, 0f, 1.dp.toPx(), tint.copy(alpha = tint.alpha * 0.5f).toArgb())
-            val drop = Paint().apply { color = fill }
-            drop.asFrameworkPaint().setShadowLayer(((10.dp.toPx() / 2f - 0.5f) / 0.57735f).coerceAtLeast(0.5f), 0f, 2.dp.toPx(), tint.toArgb())
-            drawIntoCanvas { it.drawOutline(outline, edge); it.drawOutline(outline, drop) }
-        }.clip(CircleShape).background(fill).semantics { contentDescription = label }
+        modifier.size(44.dp).cardSurfaceShadow(CircleShape).clip(CircleShape).background(fill).semantics { contentDescription = label }
             .clickable(remember { MutableInteractionSource() }, CardSheetIndication, enabled = enabled, role = Role.Button, onClickLabel = label, onClick = { haptic.tick(); onClick() }),
         contentAlignment = Alignment.Center,
     ) {
         Image(icon, contentDescription = null, modifier = Modifier.size(20.dp), colorFilter = ColorFilter.tint(colors.text))
+    }
+}
+
+/** Pully's offset canvas shadow: 10dp/8% for controls, 12dp/10% for grouped cards. */
+@Composable
+internal fun Modifier.cardSurfaceShadow(shape: Shape, note: Boolean = false): Modifier {
+    val colors = LocalCardSheetColors.current
+    val alpha = if (note) 0.10f else 0.08f
+    val tint = colors.shadow.copy(alpha = if (colors.paper.luminance() < 0.5f) alpha * 2.7f else alpha)
+    return drawWithCache {
+        val outline = shape.createOutline(size, layoutDirection, this)
+        val edge = Paint().apply { color = colors.raised }
+        edge.asFrameworkPaint().setShadowLayer(1f, 0f, 1.dp.toPx(), tint.copy(alpha = tint.alpha * 0.5f).toArgb())
+        val drop = Paint().apply { color = colors.raised }
+        val blur = if (note) 12.dp else 10.dp
+        drop.asFrameworkPaint().setShadowLayer(((blur.toPx() / 2f - 0.5f) / 0.57735f).coerceAtLeast(0.5f), 0f, 2.dp.toPx(), tint.toArgb())
+        onDrawBehind { drawIntoCanvas { it.drawOutline(outline, edge); it.drawOutline(outline, drop) } }
     }
 }

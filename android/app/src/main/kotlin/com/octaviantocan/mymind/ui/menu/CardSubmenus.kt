@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.ui.card.cardSurfaceShadow
 import com.octaviantocan.mymind.ui.library.CardSpaceCreationState
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Space
@@ -81,7 +82,7 @@ import java.util.Locale
  * @property fieldText Text and cursor of the tag field.
  * @property field Fill of the tag field.
  * @property chevron Tint of the field's chevron.
- * @property recentLabel Colour of "RECENT TAGS".
+ * @property recentLabel Colour of "Recent tags".
  * @property help Colour of the help and empty texts.
  * @property button Fill of the bottom button.
  * @property chip Fill of an added tag.
@@ -106,11 +107,11 @@ class SubmenuColors(
     val buttonText: Color = Color.White,
 )
 
-/** Pully surfaces and type follow the card; the primary action uses its actual accent. */
+/** Neutral Pully surfaces and primary action; only the sheet's top carries the card hint. */
 @Composable
 private fun submenuColors(): SubmenuColors {
     val colors = menuColors()
-    val button = LocalCardMenuAccent.current ?: colors.rowText
+    val button = colors.rowText
     return SubmenuColors(
         title = colors.rowText, fieldText = colors.rowText,
         field = colors.row, chevron = colors.rowText.copy(alpha = 0.6f),
@@ -123,7 +124,7 @@ private fun submenuColors(): SubmenuColors {
 
 private const val SUGGESTION_LIMIT = 5
 private const val ADD_TAGS_HELP = "Hit next to add separate tags.\nTap on added tags to remove them."
-private const val NO_SPACES_HELP = "It looks like you don't have any spaces to\nadd this card to unfortunately."
+private const val NO_SPACES_HELP = "Create a space to keep related cards together."
 
 /**
  * The tags the Add tags page offers under its field, as the original app picks them.
@@ -183,8 +184,9 @@ fun AddTagsPage(
     LaunchedEffect(Unit) { if (focusOnOpen) focus.requestFocus() }
 
     // The sheet owns the viewport so dragging and IME changes share one scroll owner.
-    Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).background(colors.field, RoundedCornerShape(16.dp))) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        CardMenuHeading("Tags", first = true)
+        CardMenuGroup(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp)) {
             BasicTextField(
                 value = text,
                 onValueChange = { text = it },
@@ -203,7 +205,10 @@ fun AddTagsPage(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Box(Modifier.weight(1f)) { field() }
+                        Box(Modifier.weight(1f)) {
+                            if (text.isEmpty()) Text("Type a tag", style = TextStyle(color = colors.help, fontSize = 17.sp, fontFamily = CardMenuFont))
+                            field()
+                        }
                         Image(
                             painterResource(R.drawable.ic_chevron_down_light),
                             contentDescription = if (expanded) "Hide suggestions" else "Show suggestions",
@@ -222,9 +227,9 @@ fun AddTagsPage(
                     Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (text.isEmpty()) {
                             Text(
-                                "RECENT TAGS",
+                                "Recent tags",
                                 Modifier.padding(top = 8.dp).padding(horizontal = 20.dp),
-                                style = TextStyle(color = colors.recentLabel, fontSize = 12.sp, lineHeight = 26.sp, fontFamily = CardMenuFont),
+                                style = TextStyle(color = colors.recentLabel, fontSize = 14.sp, lineHeight = 20.sp, fontFamily = CardMenuFont),
                             )
                         }
                         choices.forEach { choice ->
@@ -255,6 +260,7 @@ fun AddTagsPage(
         if (added.isEmpty()) {
             HelpText(ADD_TAGS_HELP, colors)
         } else {
+            CardMenuHeading("Added tags")
             LazyRow(
                 Modifier.fillMaxWidth().wrapContentHeight(),
                 contentPadding = PaddingValues(20.dp, 16.dp, 20.dp, 16.dp),
@@ -304,16 +310,16 @@ fun SelectSpacePage(
     onCreateSpace: () -> Unit,
 ) {
     val colors = submenuColors()
-    Column(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         if (spaces.isEmpty()) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(painterResource(R.drawable.ic_spaces), contentDescription = null, modifier = Modifier.size(49.dp))
+                Image(painterResource(R.drawable.ic_spaces), contentDescription = null, modifier = Modifier.size(36.dp), colorFilter = ColorFilter.tint(colors.help))
                 HelpText(NO_SPACES_HELP, colors)
             }
             SubmenuButton("Create Your First Space", colors, onClick = onCreateSpace)
         } else {
-            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 30.dp)
-                .fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.spaceRow)) {
+            CardMenuHeading("Your spaces", first = true)
+            CardMenuGroup(Modifier.padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 30.dp)) {
                 spaces.forEachIndexed { index, space ->
                     if (index > 0) HorizontalDivider(Modifier.padding(start = 52.dp), color = colors.spaceLabel.copy(alpha = 0.1f), thickness = 1.dp)
                     SpaceChoiceRow(space, space.id in selected, colors) { onToggle(space) }
@@ -434,7 +440,7 @@ fun CreateSpacePage(
     val submit: () -> Unit = {
         if (name.isNotBlank() && !busy) onCreate(name.trim(), color)
     }
-    Column(Modifier.fillMaxWidth().padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxWidth().padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         BasicTextField(
             value = name,
             onValueChange = { name = it },
@@ -444,7 +450,8 @@ fun CreateSpacePage(
             cursorBrush = SolidColor(colors.fieldText),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() }),
-            modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()
+            modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
+                .cardSurfaceShadow(RoundedCornerShape(16.dp), note = true)
                 .semantics { contentDescription = "Space name" }
                 .background(colors.field, RoundedCornerShape(16.dp)).padding(16.dp),
             decorationBox = { field ->
@@ -454,7 +461,7 @@ fun CreateSpacePage(
                 }
             },
         )
-        Text("Color", Modifier.padding(horizontal = 20.dp), style = TextStyle(color = colors.title, fontSize = 15.sp, fontFamily = CardMenuFont))
+        CardMenuHeading("Color")
         FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SPACE_COLORS.forEach { choice ->
                 Box(Modifier.size(44.dp).clip(CircleShape)

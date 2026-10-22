@@ -75,6 +75,8 @@ class CardMenuPresentationTest {
     @Test fun fullWidthPaperReachesTheBottomAndTheFloatingCrossClosesIt() {
         show()
         val bounds = panel.fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText("Card actions").fetchSemanticsNode().boundsInRoot
+        assertEquals("Animated sheet title stays centered", bounds.center.x, title.center.x, 1f)
         assertEquals(0f, bounds.left, 1f)
         assertEquals(1080f, bounds.right, 1f)
         // Pully translates a tall panel; the extra paper continues below the window.

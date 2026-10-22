@@ -1,6 +1,7 @@
 package com.octaviantocan.mymind.ui.library
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +41,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import com.octaviantocan.mymind.R
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -239,20 +243,10 @@ private fun ViewHeader(title: String, onBack: (() -> Unit)? = null, showMenu: Bo
             overflow = TextOverflow.Ellipsis,
         )
         if (onBack != null) {
-            Canvas(
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 21.dp)
-                    .size(16.dp)
-                    .semantics { contentDescription = "Back" }
-                    .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = onBack),
-            ) {
-                val chevron = Path().apply {
-                    moveTo(10.98.dp.toPx(), 1.06.dp.toPx())
-                    lineTo(4.58.dp.toPx(), 7.46.dp.toPx())
-                    lineTo(10.98.dp.toPx(), 13.86.dp.toPx())
-                }
-                drawPath(chevron, color, style = Stroke(2.11.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            Box(Modifier.align(Alignment.CenterStart).padding(start = 8.dp).size(44.dp)
+                .clickable(interactionSource = null, indication = null, role = Role.Button, onClick = onBack),
+                contentAlignment = Alignment.Center) {
+                Image(painterResource(R.drawable.ic_sheet_back), "Back", Modifier.size(20.dp), colorFilter = ColorFilter.tint(color))
             }
         }
         if (showMenu) {
@@ -268,10 +262,8 @@ private fun ViewHeader(title: String, onBack: (() -> Unit)? = null, showMenu: Bo
                 } else {
                     Modifier
                 }
-                Canvas(Modifier.size(60.dp).then(tap)) {
-                    val r = 2.dp.toPx()
-                    val gap = 6.dp.toPx()
-                    for (i in -1..1) drawCircle(color.copy(alpha = 0.7f), r, Offset(center.x + i * gap, center.y))
+                Box(Modifier.size(60.dp).then(tap), contentAlignment = Alignment.Center) {
+                    Image(painterResource(R.drawable.ic_horizontal_menu), null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(color.copy(alpha = 0.7f)))
                 }
                 if (onDelete != null) {
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {

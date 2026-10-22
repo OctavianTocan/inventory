@@ -36,9 +36,31 @@ at ee5cf358333cb1170f1923c7118e12af3f265b74; see `docs/pully-ui-reference.md`.
 
 @cc [owner:OctavianTocan,label:product;motion] first-space-creation-is-a-child-page
 From a card's empty space selector, Create Your First Space MUST open a creation
-page inside the same card sheet and retain its selected card, accent, panel and
+page inside the same card sheet and retain its selected card, accent hint, panel and
 drag state. Header Back and Android Back MUST return to the space selector, then
 to card actions, then dismiss. A failed creation MUST preserve the form for retry;
 success MUST return to the space selector without automatically adding the card.
 Source: Tavi's same-sheet child navigation requirement, 22 October 2026; applies
 card-sheet-pages-stay-in-the-sheet to the first-space creation path.
+
+@cc [owner:OctavianTocan,label:design] card-sheet-actions-have-hierarchy
+The root action sheet MUST combine quick-action tiles with separate, titled raised
+cards for organizing, discovering and managing a card, omitting empty sections.
+Section headings MUST be small, muted and non-folding, without a count, divider or
+chevron. The destructive action MUST sit in its own group. Cards and tiles use
+16dp corners and Pully's 2dp-down, 12dp-blur, 10% ink canvas shadow with its tight
+edge; header controls use the 10dp/8% variant. The title MUST remain centered in
+its own fixed area even while its animated content changes. The grabber has a
+14dp gap to the header; the first content respects Pully's 20dp top gap.
+Source: pulls.review DESIGN rules 45, 70, 74 and 141; SheetHeading, SheetCard,
+QuickAction and SheetHeader at f651a784cfca9b3730c60116832b89bbe236c9c3;
+Tavi's 22 October 2026 request to port the composition as well as sheet motion.
+
+@cc [owner:OctavianTocan,label:design] card-sheet-accent-is-only-a-top-hint
+A card sheet MUST keep neutral Pully paper, raised groups, controls and primary
+actions. The selected card's accent MUST be limited to a faint wash fading out
+within the top 64dp and the grabber. Child pages MUST retain that hint without
+tinting the body or their fields. Semantic colors such as Delete and space
+selection colors remain independent of the card-type accent.
+Source: Tavi's explicit correction, 22 October 2026: "Don't paint the entire
+bottom sheets in the color of the card type, just a little hint at the top of it".

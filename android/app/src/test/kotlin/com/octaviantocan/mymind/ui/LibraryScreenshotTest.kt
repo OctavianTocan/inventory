@@ -150,7 +150,7 @@ class LibraryScreenshotTest(private val dark: Boolean) {
         val scroll = ScrollState(0)
         shell(overlay = {
             PageTheme(PageScheme.Dark) {
-                CardDetail(LibrarySamples.article, onClose = {}, onMenu = {}, scrollState = scroll, headerIcons = flatSizedCardHeaderIcons())
+                CardDetail(LibrarySamples.article, onClose = {}, onMenu = {}, scrollState = scroll, headerIcons = com.octaviantocan.mymind.ui.card.defaultCardHeaderIcons())
             }
         }) { SampleEverything() }
         capture("S10_card_rest")
@@ -173,7 +173,7 @@ class LibraryScreenshotTest(private val dark: Boolean) {
         capture("card_detail")
     }
 
-    private fun menu(card: Card, name: String, icons: @Composable () -> CardMenuIcons = { flatCardMenuIcons() }) {
+    private fun menu(card: Card, name: String, icons: @Composable () -> CardMenuIcons = { defaultCardMenuIcons() }) {
         render {
             Box(Modifier.fillMaxSize()) {
                 ShellFrame(
@@ -183,7 +183,7 @@ class LibraryScreenshotTest(private val dark: Boolean) {
                     modifier = Modifier.blur(8.dp),
                     overlay = {
                         PageTheme(PageScheme.Dark) {
-                            CardDetail(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
+                            CardDetail(card, onClose = {}, onMenu = {}, headerIcons = com.octaviantocan.mymind.ui.card.defaultCardHeaderIcons())
                         }
                     },
                 ) { SampleEverything() }
@@ -210,7 +210,7 @@ class LibraryScreenshotTest(private val dark: Boolean) {
     @Test
     fun cardMenuRepository() = menu(LibrarySamples.grid[5], "S11_card_menu_repository") { defaultCardMenuIcons() }
 
-    /** Renders the shipped icons; the files are written for the machine's owner and are never looked at by the agent. */
+    /** Renders the shipped Phosphor glyphs for visual review. */
     @Test
     fun cardMenuShipped() = menu(LibrarySamples.article, "S11_card_menu_real") { defaultCardMenuIcons() }
 
