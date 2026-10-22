@@ -54,3 +54,12 @@ loading or failed feed. Pull to refresh and mosaic gestures belong to the scroll
 viewport below those controls; search and browsing MUST retain independent scroll
 positions.
 Source: Tavi, 22 October 2026, gallery polish in the Codex conversation.
+
+@cc [owner:OctavianTocan,label:design;interaction] gallery-top-edge-blurs-the-scrolling-content
+At the fixed top bar's lower edge, the scrolling cards MUST soften through true
+backdrop blur that fades into the sharp viewport. It MUST sample the displayed
+gallery rather than create a second feed or replace the cards with an opaque
+gradient. The fixed controls stay sharp, and the decorative blur MUST NOT own taps,
+pinches or pull-to-refresh gestures.
+Source: Tavi's annotated gallery screenshot, 22 October 2026: "We're missing blur
+on the top part of the scrollable section."

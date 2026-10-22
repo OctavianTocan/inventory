@@ -25,6 +25,8 @@ import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.ui.shell.LoadingSpinner
 import com.octaviantocan.mymind.ui.shell.FootPressTheme
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
+import com.octaviantocan.mymind.ui.settings.glassSource
+import com.octaviantocan.mymind.ui.settings.rememberGlassBackdrop
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
 /**
@@ -130,6 +132,7 @@ fun EverythingContent(
 ) {
     val colors = LibraryStyle.colors
     val photoLoader = if (photoUrl != null) rememberPublicAccountPhotoLoader() else null
+    val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
     Box(modifier.fillMaxSize().background(colors.background)) {
         when {
             searching && searchResults != null -> PullRefresh(searchResults.refreshing, onRefreshResults) {
@@ -147,12 +150,15 @@ fun EverythingContent(
             }
             else -> Column(Modifier.fillMaxSize()) {
                 GalleryHeader(onOpenSettings, onAdd, onSerendipity, photoUrl = photoUrl, photoLoader = photoLoader)
-                PullRefresh(feed.refreshing, onRefresh, Modifier.weight(1f).fillMaxWidth()) {
-                    LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
-                        onLongPressCard = onLongPressCard, header = {
-                            GalleryHighlights(topOfMind, onOpenCard, onLoadMore = onLoadMoreTopOfMind, onLongPressCard = onLongPressCard)
-                            if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
-                        })
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop)) {
+                        LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
+                            onLongPressCard = onLongPressCard, header = {
+                                GalleryHighlights(topOfMind, onOpenCard, onLoadMore = onLoadMoreTopOfMind, onLongPressCard = onLongPressCard)
+                                if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
+                            })
+                    }
+                    GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter))
                 }
             }
         }

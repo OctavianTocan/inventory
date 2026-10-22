@@ -1,0 +1,14 @@
+@cc [owner:OctavianTocan,label:product;design] changelog-copies-pully-format
+Settings' changelog and the once-after-update notice MUST use the same Pully
+bottom sheet titled What's new, with a fixed centered header and floating cross,
+shared drag/detent/Back behavior and a scrolling body. Each version is an unboxed
+block: small muted version, New badge on the newest, optional bold summary, plain
+group headings and accent-dot bullets with 12dp spacing. Versions are separated
+by a hairline, 24dp top padding and 28dp bottom padding. Bundled illustrations
+appear under their associated bullet, rounded and framed, at most 420dp tall.
+The app's user-selected Android system font remains in use. This layout MUST NOT
+change update permission, install, download or once-after-install bookkeeping.
+Source: Tavi, 22 October 2026: "literally copy exactly the format from Pully for
+the changelog. It's a bottom sheet." pulls.review UpdateUi.kt WhatsNewSheet,
+ChangelogEntries, ChangelogItem and NewTag at
+20e889540b7c05ed9174b038ae366191932924e9.

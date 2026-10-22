@@ -44,7 +44,7 @@ class UpdateViewModel(
     private val installAllowed = MutableStateFlow(canInstallPackages())
     private var started = false
 
-    /** True while the full changelog screen is open. */
+    /** True while the changelog sheet is open. */
     val changelogOpen = MutableStateFlow(false)
 
     /** The notes of the version the app was just updated to, until the user closes them. */
@@ -102,7 +102,7 @@ class UpdateViewModel(
         afterUpdate.value = null
     }
 
-    /** Closes the full changelog screen. */
+    /** Closes the changelog sheet. */
     fun closeChangelog() {
         changelogOpen.value = false
     }

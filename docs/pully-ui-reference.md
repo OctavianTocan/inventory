@@ -114,3 +114,16 @@ may ellipsize while its complete accessible text remains available; the reader
 body does not repeat it. Sheet titles remain plain. The gallery profile controls
 stay fixed above the scrolling pinned rail and mosaic, and the rail has no visible
 heading. Only the selected Everything/Spaces tab shows its Phosphor icon.
+
+## Changelog
+
+The changelog copies `WhatsNewSheet`, `ChangelogEntries`, `ChangelogItem` and
+`NewTag` from `android/app/src/main/kotlin/com/octaviantocan/pulls/ui/update/UpdateUi.kt`
+at `20e889540b7c05ed9174b038ae366191932924e9`. Settings and the after-install notice
+share the same What's new sheet and existing Pully drag/window implementation.
+Versions use unboxed blocks, a small version and newest badge, bold summaries,
+optional groups, 12dp-spaced accent-dot bullets, 24dp/28dp version separation,
+and rounded illustrations under the corresponding bullet. The user's Android
+system-font choice is retained. The flat notes consumed by older updaters and the
+release publisher stay unchanged; summary/group/image metadata enriches the
+bundled presentation. The obligations live in `ui/update/CONTRACTS`.

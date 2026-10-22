@@ -74,21 +74,12 @@ internal fun CardMenuSheet(
     val scope = rememberCoroutineScope()
     val motion = rememberSheetMotionEnabled()
     val latestDismiss by rememberUpdatedState(onDismiss)
-    val colors = cardMenuSheetColors(accent, MymindTheme.colors.dark)
     val scrolls = remember { mutableMapOf<CardSubmenu?, ScrollState>() }
-    Dialog(
+    PullySheetHost(
         onDismissRequest = { if (submenu != null) onBack() else position.dismiss(scope, motion) { latestDismiss() } },
-        properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        accent = accent,
     ) {
-        val view = LocalView.current
-        SideEffect {
-            val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
-            window.setDimAmount(0f)
-            window.setWindowAnimations(0)
-            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-            window.isNavigationBarContrastEnforced = false
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = colors.paper.luminance() > 0.5f
-        }
+        val colors = cardMenuSheetColors(accent, MymindTheme.colors.dark)
         CardMenuPanel(submenu?.title ?: "Card actions", onDismiss, position = position, accent = accent,
             onBack = if (submenu != null) onBack else null, scrollState = null,
             titleContent = {
@@ -110,6 +101,41 @@ internal fun CardMenuSheet(
     }
 }
 
+/** The same Pully sheet window used by card pages and the changelog. */
+@Composable
+private fun PullySheetHost(onDismissRequest: () -> Unit, accent: androidx.compose.ui.graphics.Color? = null, content: @Composable () -> Unit) {
+    val colors = cardMenuSheetColors(accent, MymindTheme.colors.dark)
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        val view = LocalView.current
+        SideEffect {
+            val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
+            window.setDimAmount(0f)
+            window.setWindowAnimations(0)
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            window.isNavigationBarContrastEnforced = false
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = colors.paper.luminance() > 0.5f
+        }
+        content()
+    }
+}
+
+/** Pully's plain-title, scrolling bottom sheet, with its shared drag, Back and dismiss behavior. */
+@Composable
+internal fun PullySheet(title: String, onClose: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val position = rememberCardMenuPosition()
+    val scope = rememberCoroutineScope()
+    val motion = rememberSheetMotionEnabled()
+    val latestClose by rememberUpdatedState(onClose)
+    PullySheetHost(onDismissRequest = { position.dismiss(scope, motion) { latestClose() } }) {
+        CardMenuPanel(title, onClose, position = position, closeLabel = "Close") {
+            Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 30.dp), content = content)
+        }
+    }
+}
+
 /** Pully's bottom-attached paper, shared by the live dialog and native screenshot fixtures. */
 @Composable
 internal fun CardMenuPanel(
@@ -121,6 +147,7 @@ internal fun CardMenuPanel(
     onBack: (() -> Unit)? = null,
     scrollState: ScrollState? = rememberScrollState(),
     titleContent: (@Composable () -> Unit)? = null,
+    closeLabel: String = "Close card actions",
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = cardMenuSheetColors(accent, MymindTheme.colors.dark)
@@ -153,7 +180,7 @@ internal fun CardMenuPanel(
         Box(modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = position.scrim }.background(colors.scrim)
                 .clickable(remember { MutableInteractionSource() }, indication = null, role = Role.Button,
-                    onClickLabel = "Close card actions", onClick = { haptic.tick(); dismiss() }))
+                    onClickLabel = closeLabel, onClick = { haptic.tick(); dismiss() }))
             Box(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(tall)
                     .onSizeChanged { position.measured(it.height, scope, motion) }
@@ -185,7 +212,7 @@ internal fun CardMenuPanel(
                     .onSizeChanged { position.measuredContent(it.height, scope, motion) }) {
                     Box(Modifier.padding(top = 10.dp, bottom = 14.dp).align(Alignment.CenterHorizontally)
                         .size(36.dp, 4.dp).clip(CircleShape).background(colors.grabber))
-                    CardHeader(title, onClose = dismiss, enabled = !position.closing, closeLabel = "Close card actions",
+                    CardHeader(title, onClose = dismiss, enabled = !position.closing, closeLabel = closeLabel,
                         onBack = onBack, titleContent = titleContent)
                     val fade = with(density) { 20.dp.toPx() }
                     Column(Modifier.fillMaxWidth().weight(1f, fill = false).then(

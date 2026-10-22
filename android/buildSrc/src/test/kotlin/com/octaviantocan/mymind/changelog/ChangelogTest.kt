@@ -81,4 +81,28 @@ class ChangelogTest {
         assertEquals(0, Changelog.compareVersions("1.0", "1.0.0"))
         assertTrue(Changelog.compareVersions("0.1.9", "0.2.0") < 0)
     }
+
+    @Test
+    fun retainsPullySummariesGroupsAndPicturePositionsWithoutChangingFlatReleaseNotes() {
+        val entry = Changelog.parse("""
+            ## 0.5.3 (10), 2026-10-22
+            Clearer release notes.
+
+            ### New
+            - Read the changelog in a sheet.
+            ![Changelog sheet](changelog/0.5.3/sheet.png)
+            ### Fixed
+            - Cards soften beneath the header.
+        """.trimIndent()).single()
+        assertEquals("Clearer release notes.", entry.summary)
+        assertEquals(listOf("New", "Fixed"), entry.groups.map { it.title })
+        assertEquals(entry.notes, entry.groups.flatMap { it.items })
+        assertEquals(ChangelogPicture(0, "Changelog sheet", "changelog/0.5.3/sheet.png"), entry.pictures.single())
+    }
+
+    @Test
+    fun rejectsPicturesOutsideBundledChangelogAssets() {
+        val message = failure("## 0.5.3 (10), 2026-10-22\n- x\n![x](changelog/../private.png)")
+        assertTrue(message, message.contains("bundled changelog/ image"))
+    }
 }

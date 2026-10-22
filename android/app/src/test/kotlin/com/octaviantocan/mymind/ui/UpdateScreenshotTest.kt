@@ -11,14 +11,32 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
-import com.octaviantocan.mymind.changelog.ChangelogEntry
+import com.octaviantocan.mymind.changelog.Changelog
+import androidx.test.core.app.ApplicationProvider
+import android.content.Context
 import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 import com.octaviantocan.mymind.ui.settings.SettingsUpdates
 import com.octaviantocan.mymind.ui.settings.SettingsSheet
 import com.octaviantocan.mymind.ui.theme.MymindTheme
-import com.octaviantocan.mymind.ui.update.AfterUpdateContent
+import com.octaviantocan.mymind.ui.update.AfterUpdateSheet
 import com.octaviantocan.mymind.ui.update.ChangelogScreen
 import com.octaviantocan.mymind.ui.update.AllowRequestContent
 import com.octaviantocan.mymind.ui.update.AllowRequestModel
@@ -41,10 +59,10 @@ class UpdateScreenshotTest {
     val compose = createComposeRule()
 
     private val release = ReleaseInfo("0.3.0", 4, "/download/mymind-0.3.0.apk", 1000, "ab", notes = listOf("Pull to refresh is faster.", "Uploads keep going in the background.", "Fixed a crash when opening a space."))
-    private val entries = listOf(
-        ChangelogEntry("0.3.0", 4, "2026-10-20", release.notes),
-        ChangelogEntry("0.2.0", 2, "2026-10-17", listOf("Sign in with your mymind account.", "Browse everything, spaces and Serendipity.")),
-    )
+    private val entries by lazy {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        Changelog.parse(context.assets.open("CHANGELOG.md").bufferedReader().use { it.readText() })
+    }
 
     private fun shot(name: String, dark: Boolean, content: @Composable () -> Unit) {
         compose.setPhoneContent(dark) {
@@ -62,16 +80,76 @@ class UpdateScreenshotTest {
     fun allowRequestDark() = shot("update_allow_dark", true) { AllowRequestContent(AllowRequestModel(release)) {} }
 
     @Test
-    fun afterUpdateLight() = shot("update_after_light", false) { AfterUpdateContent(entries[0]) {} }
+    fun afterUpdateLight() = shot("update_after_light", false) { AfterUpdateSheet(entries[0]) {} }
 
     @Test
-    fun afterUpdateDark() = shot("update_after_dark", true) { AfterUpdateContent(entries[0]) {} }
+    fun afterUpdateDark() = shot("update_after_dark", true) { AfterUpdateSheet(entries[0]) {} }
 
     @Test
     fun changelogLight() = shot("update_changelog_light", false) { ChangelogScreen(entries) {} }
 
     @Test
     fun changelogDark() = shot("update_changelog_dark", true) { ChangelogScreen(entries) {} }
+
+    @Test
+    fun changelogUsesTheWhatsNewBottomSheet() {
+        compose.setPhoneContent(false) { ChangelogScreen(entries) {} }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "What's new")).assertIsDisplayed()
+    }
+
+    @Test
+    fun historyScrollsIndependentlyAndTheCrossClosesIt() {
+        var opened by mutableStateOf(true)
+        var closes = 0
+        compose.setPhoneContent(false) {
+            if (opened) ChangelogScreen(entries) { closes++; opened = false }
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "What's new"))
+            .performSemanticsAction(SemanticsActions.Expand) { it() }
+        compose.mainClock.advanceTimeBy(1500)
+        val close = compose.onNodeWithContentDescription("Close")
+        val before = close.fetchSemanticsNode().boundsInRoot
+        compose.onAllNodesWithText("New").assertCountEquals(2) // Newest badge and its New section.
+        val body = compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("0.1.0")))
+        repeat(6) {
+            body.performTouchInput { swipeUp(durationMillis = 500) }
+            compose.mainClock.advanceTimeBy(500)
+            compose.waitForIdle()
+        }
+        compose.onNodeWithText("0.1.0").assertIsDisplayed()
+        assertEquals(before, close.fetchSemanticsNode().boundsInRoot)
+        close.performClick()
+        compose.mainClock.advanceTimeBy(1500)
+        assertEquals(1, closes)
+        compose.onNodeWithText("What's new").assertDoesNotExist()
+    }
+
+    @Test
+    fun emptyChangelogHasAReadableState() {
+        compose.setPhoneContent(false) { ChangelogScreen(emptyList()) {} }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithText("Nothing is written down for this version.").assertIsDisplayed()
+    }
+
+    @Test
+    fun afterUpdateUsesTheSameSheetAndAndroidBackClosesItOnce() {
+        var opened by mutableStateOf(true)
+        var closes = 0
+        compose.setPhoneContent(false) {
+            if (opened) com.octaviantocan.mymind.ui.update.AfterUpdateSheet(entries.first()) { closes++; opened = false }
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithText("What's new").assertIsDisplayed()
+        compose.runOnIdle {
+            (org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.activity.ComponentDialog)
+                .onBackPressedDispatcher.onBackPressed()
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        assertEquals(1, closes)
+        compose.onNodeWithText("What's new").assertDoesNotExist()
+    }
 
     @Test
     fun settingsRowsLight() = settingsRows(false)

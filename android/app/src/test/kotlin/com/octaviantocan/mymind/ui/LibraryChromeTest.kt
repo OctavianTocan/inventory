@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.ui.library.EverythingContent
@@ -140,6 +142,26 @@ class LibraryChromeTest {
         assertEquals(0, refreshes)
         tile.performClick()
         assertEquals(listOf("mixed-note"), opened)
+    }
+
+    @Test fun topBlurLeavesCardTapsAndPullToRefreshInteractive() {
+        show(highlights = emptyList())
+        val before = controlBounds()
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        val bounds = gallery.fetchSemanticsNode().boundsInRoot
+        val card = compose.onNodeWithContentDescription("Photo 1").fetchSemanticsNode().boundsInRoot
+        val edge = with(compose.density) { 12.dp.toPx() }
+        val spot = Offset(card.center.x - bounds.left, card.top - bounds.top + edge)
+        assertTrue("The tap must start within the decorative top edge", spot.y < with(compose.density) { 32.dp.toPx() })
+        gallery.performTouchInput { click(spot) }
+        assertEquals(listOf("photo-1"), opened)
+        gallery.performTouchInput {
+            swipe(Offset(centerX, edge), Offset(centerX, height * 0.75f), durationMillis = 700)
+        }
+        compose.waitForIdle()
+        assertEquals(1, refreshes)
+        assertEquals(before, controlBounds())
+        assertTrue(held.isEmpty())
     }
 
     private fun assertMixedPreview(body: String) {
