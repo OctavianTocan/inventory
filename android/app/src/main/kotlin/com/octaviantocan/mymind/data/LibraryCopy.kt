@@ -56,7 +56,8 @@ interface LibraryMemory {
 
 /**
  * The phone's copy of the library, in a private SQLite database: the first screens of each list as last shown, and,
- * once the server's changes feed has been read to the end, every card with a keyword index and the spaces.
+ * once the server's changes feed has been read to the end, every card with a keyword index and the spaces. It also
+ * holds the [Outbox]'s queue of changes made while the server could not be reached, and shows them on its cards.
  *
  * Everything in it belongs to the session that wrote it: under another session's token it reads as empty and is wiped
  * on the next write, and [clear] runs at sign-out. Failures read as empty or null and writes that fail are dropped, so
@@ -113,6 +114,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         }
         page.cards.forEach { card -> keep(db, card) }
         page.removed.forEach { id -> forget(db, id) }
+        showQueued(db, page.cards.mapTo(HashSet()) { it.id })
         page.spaces?.let { spaces -> setMeta(db, SPACES, AppJson.encodeToString(ListSerializer(Space.serializer()), spaces)) }
         setMeta(db, TOKEN, page.next)
         if (!page.more) setMeta(db, COMPLETE, "1")
@@ -142,11 +144,19 @@ class LibraryCopy(context: Context, private val session: Session, private val io
     }
 
     /** @return Top of Mind from the copy, in pin order, or null when it cannot be read. */
-    suspend fun pinned(): CardPage? = owned(null) { db ->
-        db.rawQuery(
-            "SELECT card FROM cards WHERE (flags & $PINNED_FLAG) != 0 AND (flags & $GRID_HIDDEN_FLAGS) = 0 ORDER BY COALESCE(pin, 2147483647), bumped DESC, id DESC",
-            null,
-        ).use { rows -> CardPage(buildList { while (rows.moveToNext()) add(decode(rows.getString(0))) }) }
+    suspend fun pinned(): CardPage? = owned(null) { db -> CardPage(pinnedIn(db)) }
+
+    /**
+     * @param newest How many of the gallery's newest cards to include.
+     * @return The cards whose pictures the phone keeps for use offline: Top of Mind, then the gallery's [newest] cards,
+     *   each once; null when the copy cannot be read.
+     */
+    suspend fun pictureCards(newest: Int): List<Card>? = owned(null) { db ->
+        val latest = db.rawQuery(
+            "SELECT card FROM cards WHERE (flags & $GRID_HIDDEN_FLAGS) = 0 ORDER BY bumped DESC, id DESC LIMIT ?",
+            arrayOf(newest.toString()),
+        ).use { rows -> buildList { while (rows.moveToNext()) add(decode(rows.getString(0))) } }
+        (pinnedIn(db) + latest).distinctBy { it.id }
     }
 
     /**
@@ -169,9 +179,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
      * @param id Card id.
      * @return The card as the copy holds it, or null.
      */
-    suspend fun card(id: String): Card? = owned(null) { db ->
-        db.rawQuery("SELECT card FROM cards WHERE id = ?", arrayOf(id)).use { if (it.moveToFirst()) decode(it.getString(0)) else null }
-    }
+    suspend fun card(id: String): Card? = owned(null) { db -> cardIn(db, id) }
 
     /** @return The spaces as the last full answer listed them, or null. */
     suspend fun spaces(): List<Space>? = owned(null) { db ->
@@ -187,6 +195,55 @@ class LibraryCopy(context: Context, private val session: Session, private val io
             "SELECT card FROM cards WHERE spaces LIKE ? AND (flags & $GRID_HIDDEN_FLAGS) = 0 ORDER BY bumped DESC, id DESC",
             arrayOf("%,$spaceId,%"),
         ).use { rows -> CardPage(buildList { while (rows.moveToNext()) add(decode(rows.getString(0))) }.filter { spaceId in it.spaces.orEmpty() }) }
+    }
+
+    /**
+     * Queues a change for the server and shows it on the card at once.
+     *
+     * @param edit The change; a tag removal without a card is matched to the card that has the tag.
+     * @return True when it was queued; false when signed out or the database failed.
+     */
+    suspend fun queue(edit: Edit): Boolean = owned(false) { db ->
+        val kept = if (edit is Edit.RemoveTag && edit.cardId == null) edit.copy(cardId = cardWithTag(db, edit.tagId)?.id) else edit
+        db.insertOrThrow("outbox", null, ContentValues().apply { put("edit", AppJson.encodeToString(Edit.serializer(), kept)) })
+        show(db, kept)
+        true
+    }
+
+    /** @return The change that waits longest, with its place in the queue, or null when none waits or it cannot be read. */
+    suspend fun firstQueued(): Pair<Long, Edit>? = owned(null) { db -> queuedIn(db).firstOrNull() }
+
+    /**
+     * @param seq A change's place in the queue.
+     * @return True once the change is out of the queue; false when the database failed.
+     */
+    suspend fun unqueue(seq: Long): Boolean = owned(false) { db ->
+        db.delete("outbox", "seq = ?", arrayOf(seq.toString()))
+        true
+    }
+
+    /**
+     * Takes a tag added while offline out of the queue and off its card, before it was sent.
+     *
+     * @param localId The tag's id on the phone.
+     * @return True when its addition was still queued and is now gone.
+     */
+    suspend fun unqueueTag(localId: String): Boolean = owned(false) { db ->
+        val (seq, edit) = queuedIn(db).firstOrNull { (_, edit) -> edit is Edit.AddTag && edit.localId == localId } ?: return@owned false
+        db.delete("outbox", "seq = ?", arrayOf(seq.toString()))
+        edit.cardId?.let { id -> cardIn(db, id) }?.let { card -> keep(db, card.copy(tags = card.tags.orEmpty().filterNot { it.id == localId })) }
+        true
+    }
+
+    /**
+     * Puts the server's version of one card in the copy, with the changes still queued for it on top.
+     *
+     * @param id Card id.
+     * @param card The card as the server has it; null or trashed takes it out of the copy.
+     */
+    suspend fun replace(id: String, card: Card?) = owned(Unit) { db ->
+        if (card == null || card.deleted != null) forget(db, id) else keep(db, card)
+        showQueued(db, setOf(id))
     }
 
     /** Forgets everything the copy holds. */
@@ -216,6 +273,43 @@ class LibraryCopy(context: Context, private val session: Session, private val io
                 }
             }.getOrDefault(fallback)
         }
+    }
+
+    private fun pinnedIn(db: SQLiteDatabase): List<Card> = db.rawQuery(
+        "SELECT card FROM cards WHERE (flags & $PINNED_FLAG) != 0 AND (flags & $GRID_HIDDEN_FLAGS) = 0 ORDER BY COALESCE(pin, 2147483647), bumped DESC, id DESC",
+        null,
+    ).use { rows -> buildList { while (rows.moveToNext()) add(decode(rows.getString(0))) } }
+
+    private fun cardIn(db: SQLiteDatabase, id: String): Card? =
+        db.rawQuery("SELECT card FROM cards WHERE id = ?", arrayOf(id)).use { if (it.moveToFirst()) decode(it.getString(0)) else null }
+
+    // The card holding a tag; the text match narrows the rows, decoding confirms it.
+    private fun cardWithTag(db: SQLiteDatabase, tagId: String): Card? =
+        db.rawQuery("SELECT card FROM cards WHERE card LIKE ?", arrayOf("%$tagId%")).use { rows ->
+            generateSequence { if (rows.moveToNext()) decode(rows.getString(0)) else null }.firstOrNull { card -> card.tags.orEmpty().any { it.id == tagId } }
+        }
+
+    // Changes still waiting, oldest first; a change this version cannot read is skipped.
+    private fun queuedIn(db: SQLiteDatabase): List<Pair<Long, Edit>> =
+        db.rawQuery("SELECT seq, edit FROM outbox ORDER BY seq", null).use { rows ->
+            buildList {
+                while (rows.moveToNext()) {
+                    val seq = rows.getLong(0)
+                    runCatching { AppJson.decodeFromString(Edit.serializer(), rows.getString(1)) }.getOrNull()?.let { add(seq to it) }
+                }
+            }
+        }
+
+    // Shows one change on its card, when the copy holds the card.
+    private fun show(db: SQLiteDatabase, edit: Edit) {
+        val id = edit.cardId ?: return
+        val card = cardIn(db, id) ?: return
+        card.edited(edit)?.let { keep(db, it) } ?: forget(db, id)
+    }
+
+    // Shows the changes still waiting on cards the server's answer just replaced.
+    private fun showQueued(db: SQLiteDatabase, ids: Set<String>) {
+        queuedIn(db).forEach { (_, edit) -> if (edit.cardId in ids) show(db, edit) }
     }
 
     // Writes a card and its keyword text, keeping its row number so the text stays joined to it.
@@ -257,12 +351,13 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         db.insertWithOnConflict("meta", null, ContentValues().apply { put("key", key); put("value", value) }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
-    private class Helper(context: Context) : SQLiteOpenHelper(context, "library-copy.db", null, 2) {
+    private class Helper(context: Context) : SQLiteOpenHelper(context, "library-copy.db", null, 3) {
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL("CREATE TABLE feed_cards (feed TEXT NOT NULL, position INTEGER NOT NULL, card TEXT NOT NULL, PRIMARY KEY (feed, position))")
             db.execSQL("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             db.execSQL("CREATE TABLE cards (slot INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, card TEXT NOT NULL, bumped INTEGER NOT NULL, flags INTEGER NOT NULL, pin INTEGER, spaces TEXT NOT NULL)")
             db.execSQL("CREATE INDEX cards_gallery ON cards (bumped DESC, id DESC)")
+            db.execSQL("CREATE TABLE outbox (seq INTEGER PRIMARY KEY AUTOINCREMENT, edit TEXT NOT NULL)")
             // unicode61 folds case and accents beyond ASCII; the simple tokenizer is the fallback where it is missing.
             try {
                 db.execSQL("CREATE VIRTUAL TABLE card_text USING fts4(title, body, tags, tokenize=unicode61)")
@@ -271,9 +366,10 @@ class LibraryCopy(context: Context, private val session: Session, private val io
             }
         }
 
-        // The copy is a cache: a new layout starts empty and fills from the server.
+        // The copy is a cache: a new layout starts empty and fills from the server. Version 3 added the outbox; a later
+        // layout must carry its waiting changes over, since the server does not have them.
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-            listOf("feed_cards", "meta", "cards", "card_text").forEach { db.execSQL("DROP TABLE IF EXISTS $it") }
+            TABLES.forEach { db.execSQL("DROP TABLE IF EXISTS $it") }
             onCreate(db)
         }
     }
@@ -285,7 +381,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         const val COMPLETE = "sync_complete"
         const val SPACES = "spaces"
         const val MAX_SEARCH_WORDS = 8
-        val TABLES = listOf("feed_cards", "meta", "cards", "card_text")
+        val TABLES = listOf("feed_cards", "meta", "cards", "card_text", "outbox")
     }
 }
 
