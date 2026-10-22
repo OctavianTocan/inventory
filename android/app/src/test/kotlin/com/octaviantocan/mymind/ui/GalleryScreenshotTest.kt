@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.core.app.ApplicationProvider
 import coil3.decode.DataSource
@@ -174,6 +175,16 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         compose.onRoot().captureRoboImage("screenshots/gallery_${if (dark) "dark" else "light"}.png")
     }
     @Test fun compactGallery() = capture(4, "gallery_compact")
+    @Test fun scrolledGalleryTopBlur() {
+        show(2)
+        val profile = compose.onNodeWithContentDescription("Account settings").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithContentDescription("Card gallery").performTouchInput {
+            swipe(Offset(centerX, height * 0.82f), Offset(centerX, height * 0.18f), durationMillis = 700)
+        }
+        compose.waitForIdle()
+        assertEquals(profile, compose.onNodeWithContentDescription("Account settings").fetchSemanticsNode().boundsInRoot)
+        compose.onRoot().captureRoboImage("screenshots/gallery_scrolled_top_blur_${if (dark) "dark" else "light"}.png")
+    }
     @Test fun search() = capture(2, "gallery_search", searching = true)
     @Test fun differentNoteTypes() = capture(2, "gallery_notes", sample = mixedNotes, highlights = emptyList())
     @Test fun compactNoteTypes() = capture(4, "gallery_notes_compact", sample = mixedNotes, highlights = emptyList())

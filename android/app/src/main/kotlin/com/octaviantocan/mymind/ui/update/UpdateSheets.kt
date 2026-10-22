@@ -1,21 +1,15 @@
 package com.octaviantocan.mymind.ui.update
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -36,45 +30,9 @@ import com.octaviantocan.mymind.ui.menu.LightMenuColors
 import com.octaviantocan.mymind.ui.menu.MenuCard
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
-private val Accent = Color(0xFFFF7A00)
-
 /** @return The card colours of the current appearance. */
 @Composable
 private fun colors() = if (MymindTheme.colors.dark) DarkMenuColors else LightMenuColors
-
-/** A heading and the lines of one version. */
-@Composable
-private fun Notes(title: String, lines: List<String>) {
-    val colors = colors()
-    Text(title, style = TextStyle(color = colors.rowText, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.body))
-    Spacer(Modifier.height(12.dp))
-    lines.forEach {
-        Text(
-            "•  $it",
-            Modifier.padding(bottom = 6.dp),
-            style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.body),
-        )
-    }
-}
-
-/** A full-width pill button. */
-@Composable
-private fun PillButton(label: String, primary: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val colors = colors()
-    Box(
-        modifier
-            .height(48.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (primary) Accent else colors.row)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            style = TextStyle(color = if (primary) Color.White else colors.rowText, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.body),
-        )
-    }
-}
 
 /**
  * The content of the request to let the app install updates.
@@ -142,74 +100,19 @@ fun AllowRequestSheet(model: AllowRequestModel, onLater: () -> Unit, onAllow: ()
 }
 
 /**
- * The content of the sheet shown once after the app was updated.
- *
- * @param entry The notes of the version now running.
- * @param onClose Called when Got it is tapped.
- */
-@Composable
-fun AfterUpdateContent(entry: ChangelogEntry, onClose: () -> Unit) {
-    MenuCard {
-        Column(Modifier.padding(24.dp)) {
-            Notes("What's new in ${entry.versionName}", entry.notes)
-            Spacer(Modifier.height(8.dp))
-            PillButton("Got it", primary = true, Modifier.fillMaxWidth(), onClose)
-        }
-    }
-}
-
-/**
  * The sheet shown once after the app was updated.
  *
  * @param entry The notes of the version now running.
  * @param onClose Called when the sheet is closed.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AfterUpdateSheet(entry: ChangelogEntry, onClose: () -> Unit) {
-    ModalBottomSheet(
-        onDismissRequest = onClose,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color.Transparent,
-        tonalElevation = 0.dp,
-        dragHandle = null,
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-    ) { AfterUpdateContent(entry, onClose) }
-}
-
-/**
- * The screen with every version of the bundled changelog.
- *
- * @param entries Versions, newest first.
- * @param onClose Called when Close or Back is pressed.
- */
-@Composable
-fun ChangelogScreen(entries: List<ChangelogEntry>, onClose: () -> Unit) {
-    val colors = colors()
-    BackHandler(onBack = onClose)
-    Column(Modifier.fillMaxSize().background(MymindTheme.colors.page).statusBarsPadding().padding(horizontal = 24.dp)) {
-        Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Changelog", Modifier.weight(1f), style = TextStyle(color = colors.rowText, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.body))
-            Text("Close", Modifier.clickable(onClick = onClose).padding(8.dp), style = TextStyle(color = Accent, fontSize = 16.sp, fontFamily = MymindTheme.fonts.body))
-        }
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            entries.forEach { entry ->
-                Text(
-                    "${entry.versionName} (${entry.versionCode}), ${entry.date}",
-                    Modifier.padding(top = 16.dp, bottom = 8.dp),
-                    style = TextStyle(color = colors.rowText, fontSize = 17.sp, fontWeight = FontWeight.Bold, fontFamily = MymindTheme.fonts.body),
-                )
-                entry.notes.forEach {
-                    Text("•  $it", Modifier.padding(bottom = 4.dp), style = TextStyle(color = colors.rowText, fontSize = 15.sp, fontFamily = MymindTheme.fonts.body))
-                }
-            }
-        }
-    }
+    ChangelogScreen(listOf(entry), onClose)
 }
 
 /**
  * Everything the update feature draws over the signed-in app: the allow request, the after-update sheet and the
- * changelog screen.
+ * changelog sheet.
  *
  * @param viewModel State and actions of the update screens.
  * @param onAllow Called when the user asks to allow installs.
