@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.text.HtmlCompat
 import androidx.core.view.WindowCompat
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Tag
@@ -51,6 +50,7 @@ import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.library.cardHeading
 import com.octaviantocan.mymind.ui.library.galleryPicture
 import com.octaviantocan.mymind.ui.library.noteText
+import com.octaviantocan.mymind.ui.library.postText
 import com.octaviantocan.mymind.ui.library.proseText
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.MymindTheme
@@ -143,9 +143,7 @@ internal fun readerParagraphs(card: Card): List<String> {
     val prose = card.prose?.let(::proseText)
     val parts = when (tileKind(card)) {
         TileKind.Note -> listOf(noteText(card), card.note)
-        TileKind.Post -> listOf(
-            card.post?.bodyHtml?.let { HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_COMPACT).toString() }, card.description, prose, card.note,
-        )
+        TileKind.Post -> listOf(postText(card), prose, card.note)
         else -> listOf(card.description, prose, card.note)
     }
     return parts.mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }.distinct()

@@ -140,6 +140,13 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         photo("annotated-photo", "mountains", 1200, 800, "Morning light").copy(note = "A small reminder: take a breath before rushing into the day."),
         photo("saved-video", "coast", 1200, 900, "A saved film").copy(type = "YouTubeVideo", note = "A short film worth watching again."),
         testCard("snippet", type = "Content", title = "A useful reminder", note = "Good tools should get out of your way."),
+        testCard("long-note", type = "Note", title = "Landing pages", note = "Send your landing page to five people who have never heard of you " +
+            "and ask them what you sell. If they cannot say it in one sentence, the page is not done. Then cut every line that " +
+            "does not help them say it. Keep the picture that shows the thing working, drop the ones that only look nice."),
+        testCard("post-media-link", type = "XPost", title = "A saved post").copy(post = Post(
+            bodyHtml = "<p>\uD83C\uDF2D pic.twitter.com/mHuTM2eiQ1</p>", author = "Ana Lima (@ana)",
+            gallery = listOf(GalleryImage("https://gallery.example.test/forest.jpg", 1000, 900)),
+        )),
     )
 
     private fun show(columns: Int, searching: Boolean = false,

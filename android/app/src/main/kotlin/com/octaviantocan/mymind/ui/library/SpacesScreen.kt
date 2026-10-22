@@ -241,7 +241,7 @@ private fun SpaceStack(space: Space, cover: Card?, onClick: () -> Unit) {
                     Box(Modifier.matchParentSize().rotate(angle).stackShadow(shape, shadows).background(colors.raised, shape))
                 }
                 Box(Modifier.fillMaxWidth().aspectRatio(1f).stackShadow(shape, shadows).clip(shape).background(colors.raised)) {
-                    if (cover != null) GalleryTile(cover, onClick = {}, modifier = Modifier.clearAndSetSemantics {}, enabled = false)
+                    if (cover != null) GalleryTile(cover, onClick = {}, modifier = Modifier.clearAndSetSemantics {}, enabled = false, playVideo = false)
                 }
             }
             Row(Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {

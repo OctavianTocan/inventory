@@ -467,7 +467,7 @@ private fun ProjectedMosaicCards(
             GalleryTile(card, { if (activeInteraction && !mosaic.isPinching) onOpenCard(card) },
                 modifier = Modifier.fillMaxSize(), enabled = activeInteraction && !mosaic.isPinching,
                 onLongClick = onLongPressCard?.let { press -> { if (activeInteraction && !mosaic.isPinching) press(card) } },
-                imageRequestSizePx = maxOf(imageCell.width, imageCell.height).roundToInt().coerceAtLeast(1))
+                imageRequestSizePx = maxOf(imageCell.width, imageCell.height).roundToInt().coerceAtLeast(1), playVideo = activeInteraction)
         }
     }) { children, constraints ->
         val projected = projection()

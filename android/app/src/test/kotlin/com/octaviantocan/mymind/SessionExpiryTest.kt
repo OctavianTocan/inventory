@@ -32,7 +32,7 @@ class SessionExpiryTest {
         server.start()
         session = Session(store)
         runBlocking { session.restore() }
-        client = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session)).build()
+        client = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session, server.url("/").toString())).build()
     }
 
     @After
@@ -46,6 +46,16 @@ class SessionExpiryTest {
         get()
         assertEquals("Bearer tok-123", server.takeRequest().getHeader("Authorization"))
         assertEquals(SessionState.SignedIn, session.state.value)
+    }
+
+    @Test
+    fun otherHostsNeverSeeTheToken() {
+        val other = MockWebServer().apply { start() }
+        other.enqueue(MockResponse().setResponseCode(401))
+        client.newCall(Request.Builder().url(other.url("/cover.jpg")).build()).execute().close()
+        assertNull(other.takeRequest().getHeader("Authorization"))
+        assertEquals(SessionState.SignedIn, session.state.value)
+        other.shutdown()
     }
 
     @Test

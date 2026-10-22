@@ -25,13 +25,20 @@ import java.io.InputStream
 import java.time.Duration
 
 /**
- * Adds the bearer token and signs the session out when the server rejects a token-bearing request with 401. An upload
- * piece refused with 401 leaves the session alone, since that answer is about its upload token.
+ * Adds the bearer token to requests for the library server and signs the session out when the server rejects a
+ * token-bearing request with 401. An upload piece refused with 401 leaves the session alone, since that answer is about
+ * its upload token. Requests to any other host, such as a cover on another site, never carry the token.
+ *
+ * @param session Holder of the token.
+ * @param server The library server's address; only its scheme, host and port are compared.
  */
-class AuthInterceptor(private val session: Session) : Interceptor {
+class AuthInterceptor(private val session: Session, server: String) : Interceptor {
+    private val origin = server.toHttpUrl()
+
     override fun intercept(chain: Interceptor.Chain): Response {
-        val token = session.token ?: return chain.proceed(chain.request())
         val request = chain.request()
+        val sameOrigin = request.url.scheme == origin.scheme && request.url.host == origin.host && request.url.port == origin.port
+        val token = session.token?.takeIf { sameOrigin } ?: return chain.proceed(request)
         val response = chain.proceed(request.newBuilder().header("Authorization", "Bearer $token").build())
         if (response.code == 401 && request.header(UPLOAD_TOKEN_HEADER) == null) session.invalidate(token)
         return response

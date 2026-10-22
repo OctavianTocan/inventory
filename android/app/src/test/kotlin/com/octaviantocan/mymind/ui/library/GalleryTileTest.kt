@@ -3,18 +3,22 @@ package com.octaviantocan.mymind.ui.library
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
+import com.octaviantocan.mymind.data.Blob
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
 import com.octaviantocan.mymind.ui.PHONE_QUALIFIERS
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -28,10 +32,12 @@ class GalleryTileTest(private val width: Int) {
     @get:Rule val compose = createComposeRule()
     private val source = "https://gallery.example.test/forest.jpg"
 
-    private fun render(card: Card) {
+    private fun render(card: Card, previews: VideoPreviews? = null) {
         compose.setContent {
-            MymindTheme(dark = true) {
-                Box(Modifier.width(width.dp).height((width * 1.35f).dp)) { GalleryTile(card, {}) }
+            CompositionLocalProvider(LocalVideoPreviews provides previews) {
+                MymindTheme(dark = true) {
+                    Box(Modifier.width(width.dp).height((width * 1.35f).dp)) { GalleryTile(card, {}, playVideo = false) }
+                }
             }
         }
     }
@@ -77,12 +83,22 @@ class GalleryTileTest(private val width: Int) {
         assertBoth(body)
     }
 
-    @Test fun anAnnotatedVideoKeepsItsNoteCoverAndVideoIndicator() {
+    @Test fun anAnnotatedVideoKeepsItsNoteCoverAndYouTubeMark() {
         val body = "A short film worth watching again."
         render(testCard("annotated-video", type = "YouTubeVideo", title = "A saved film", note = body)
             .copy(cover = Cover(source, 1200, 800)))
         assertBoth(body)
-        compose.onNodeWithContentDescription("Video", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("YouTube video", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun aVideoFileShowsItsLengthWhereItFits() {
+        val card = testCard("clip", type = "Video", title = "clip.mp4")
+            .copy(cover = Cover("/media/u/clip;600x1000-t.webp", 600, 1000), blob = Blob("u/clip", "video/mp4", 1080, 1800))
+        val previews = VideoPreviews(ApplicationProvider.getApplicationContext(), OkHttpClient())
+        previews.rememberLength(checkNotNull(previewVideo(card)), 65_000)
+        render(card, previews)
+        val badge = if (width >= 96) "Video, 1:05" else "Video"
+        compose.onNodeWithContentDescription(badge, useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test fun aTextOnlyNoteKeepsItsBody() {

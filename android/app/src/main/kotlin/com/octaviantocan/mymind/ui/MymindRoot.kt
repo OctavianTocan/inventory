@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
@@ -24,7 +26,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.octaviantocan.mymind.AppContainer
 import com.octaviantocan.mymind.data.SessionState
 import com.octaviantocan.mymind.ui.errors.OfflineScreen
+import com.octaviantocan.mymind.ui.library.ClosePreviewsOnDispose
 import com.octaviantocan.mymind.ui.library.LibraryViewModel
+import com.octaviantocan.mymind.ui.library.LocalVideoPreviews
+import com.octaviantocan.mymind.ui.library.VideoPreviews
 import com.octaviantocan.mymind.ui.settings.SettingsViewModel
 import com.octaviantocan.mymind.ui.shell.MainShell
 import com.octaviantocan.mymind.ui.signin.SignInScreen
@@ -91,5 +96,9 @@ private fun SignedIn(container: AppContainer) {
     }
     val allow = { context.startActivity(allowInstallsIntent(context)) }
     val rows by updates.settings.collectAsStateWithLifecycle()
-    MainShell(library, settings, rows.copy(onAllow = allow)) { UpdateOverlays(updates, allow) }
+    val previews = remember { VideoPreviews(context.applicationContext, container.httpClient) }
+    ClosePreviewsOnDispose(previews)
+    CompositionLocalProvider(LocalVideoPreviews provides previews) {
+        MainShell(library, settings, rows.copy(onAllow = allow)) { UpdateOverlays(updates, allow) }
+    }
 }

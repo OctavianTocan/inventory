@@ -47,7 +47,7 @@ class AccountProfileTest {
     fun setUp() {
         server.start()
         session = Session(tokens)
-        val client = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session)).build()
+        val client = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session, server.url("/").toString())).build()
         repository = Repository(MymindApi(client, server.url("/").toString()), session, profiles)
     }
 
