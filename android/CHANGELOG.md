@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2 (7), 2026-10-22
+- Card actions, tags and spaces now use Pully-style sheets with a centered title and floating close button.
+- Sheets attach to the bottom edge, carry the card's accent and follow your drag with spring motion.
+
 ## 0.4.1 (6), 2026-10-21
 - Read cards in a full-screen view with one clear title and close and action controls.
 - Card action, tag and space sheets use the accent of the card they belong to.

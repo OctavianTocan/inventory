@@ -26,6 +26,7 @@ import com.octaviantocan.mymind.ui.library.SpacesState
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.menu.CardMenuContent
+import com.octaviantocan.mymind.ui.menu.CardMenuPanel
 import com.octaviantocan.mymind.ui.menu.CardMenuIcons
 import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 import com.octaviantocan.mymind.ui.menu.LocalCardMenuAccent
@@ -184,11 +185,10 @@ class LibraryScreenshotTest(private val dark: Boolean) {
                         PageTheme(PageScheme.Dark) {
                             CardDetail(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
                         }
-                        Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim))
                     },
                 ) { SampleEverything() }
-                CompositionLocalProvider(LocalCardMenuAccent provides cardAccent(card)) {
-                    CardMenuContent(cardMenuItems(card, null), onSelect = {}, modifier = Modifier.align(Alignment.BottomCenter), icons = icons())
+                CardMenuPanel("Card actions", onDismiss = {}, accent = cardAccent(card)) {
+                    CardMenuContent(cardMenuItems(card, null), onSelect = {}, icons = icons())
                 }
             }
         }

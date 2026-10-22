@@ -2,7 +2,6 @@ package com.octaviantocan.mymind.ui.card
 
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,7 +38,6 @@ import com.octaviantocan.mymind.ui.library.cardHeading
 import com.octaviantocan.mymind.ui.library.noteText
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.MymindTheme
-import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 
 private val BODY_SIDE = 16.dp
 
@@ -50,10 +48,9 @@ fun CardDetailDialog(
     onClose: () -> Unit,
     onMenu: () -> Unit,
     onRemoveTag: ((Tag) -> Unit)? = null,
-    actionsVisible: Boolean = false,
+    actionsProgress: Float = 0f,
     scrollState: ScrollState = rememberScrollState(),
 ) {
-    val actionsProgress by animateFloatAsState(if (actionsVisible) 1f else 0f, label = "cardActions")
     Dialog(
         onDismissRequest = onClose,
         properties = DialogProperties(dismissOnClickOutside = false, usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -73,7 +70,6 @@ fun CardDetailDialog(
         }
         Box(Modifier.fillMaxSize()) {
             CardDetail(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress), onRemoveTag = onRemoveTag, scrollState = scrollState)
-            if (actionsProgress > 0f) Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim.copy(alpha = DarkMenuColors.scrim.alpha * actionsProgress)))
         }
     }
 }

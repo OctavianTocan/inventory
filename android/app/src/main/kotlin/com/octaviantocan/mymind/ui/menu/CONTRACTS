@@ -1,0 +1,27 @@
+@cc [owner:OctavianTocan,label:product;motion] card-sheet-pages-stay-in-the-sheet
+A card action that opens a child page MUST keep the same sheet window, panel and drag
+state. The page content and heading change without restarting the sheet. At the
+normal detent the panel MAY resize to the new content through the page transition;
+at the tall detent the grabber and header MUST stay at the same height.
+The root's cross becomes Back;
+the header's Back and the phone's Back return to the parent without dismissing the
+sheet. The phone's Back dismisses only from the root page. Each page MUST retain its
+own scroll position when another page is shown.
+Source: pulls.review `kit-sheet-pages-stay-in-the-sheet`, DESIGN rules 78 and 115,
+at ee5cf358333cb1170f1923c7118e12af3f265b74; see `docs/pully-ui-reference.md`.
+
+@cc [owner:OctavianTocan,label:motion] card-sheet-pages-follow-navigation
+Opening a child page MUST move it in from the right and move the parent left; Back
+MUST reverse that direction. Page content travels through the Pully blurred slide,
+and the grabber and header controls MUST NOT travel sideways with it. When the
+system disables animations, navigation MUST finish without the slide or blur.
+Source: pulls.review DESIGN rules 78 and 105, `PagedSheetPanel` and `BlurSwitch`,
+at ee5cf358333cb1170f1923c7118e12af3f265b74; see `docs/pully-ui-reference.md`.
+
+@cc [owner:OctavianTocan,label:design] card-sheet-header-stays-clear
+A card sheet MUST have one header above its scrolling content. The leading close
+or Back control MUST remain separate from the title and have a 44dp target. Content
+scrolling under the header MUST fade through the sheet's paper, leaving the title
+and controls sharp and unobstructed.
+Source: pulls.review `kit-sheet-header-is-fixed`, DESIGN rules 70, 74 and 77,
+at ee5cf358333cb1170f1923c7118e12af3f265b74; see `docs/pully-ui-reference.md`.

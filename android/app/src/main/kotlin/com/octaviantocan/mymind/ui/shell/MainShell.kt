@@ -8,7 +8,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -21,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -58,8 +56,9 @@ import com.octaviantocan.mymind.ui.menu.AddTagsPage
 import com.octaviantocan.mymind.ui.menu.CardMenuAction
 import com.octaviantocan.mymind.ui.menu.CardMenuOutcome
 import com.octaviantocan.mymind.ui.menu.CardMenuSheet
+import com.octaviantocan.mymind.ui.menu.rememberCardMenuPosition
+import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
 import com.octaviantocan.mymind.ui.menu.CardSubmenu
-import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 import com.octaviantocan.mymind.ui.menu.SelectSpacePage
 import com.octaviantocan.mymind.ui.menu.cardMenuItems
 import com.octaviantocan.mymind.ui.settings.SettingsDrawerHost
@@ -130,12 +129,13 @@ fun MainShell(
     val spaces by viewModel.spaces.collectAsStateWithLifecycle()
     val uploads by viewModel.uploads.state.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = key(menuOpen, menuFor?.card?.id) { rememberCardMenuPosition() }
+    val motion = rememberSheetMotionEnabled()
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboard.current
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
-    val menuProgress by animateFloatAsState(if (menuOpen) 1f else 0f, label = "menu")
+    val menuProgress = if (menuOpen) sheetState.scrim else 0f
     val openCard = { card: Card, spaceId: String? -> opened = OpenedCard(card, spaceId) }
     val updateCard = { card: Card ->
         opened = opened?.takeIf { it.card.id == card.id }?.copy(card = card) ?: opened
@@ -158,8 +158,7 @@ fun MainShell(
         if (saved && file != null) viewModel.upload(listOf(uploadFileOf(file)), uploadTarget.spaceId)
     }
     val closeMenu: () -> Unit = {
-        scope.launch {
-            sheetState.hide()
+        sheetState.dismiss(scope, motion) {
             menuOpen = false
             submenu = null
         }
@@ -180,7 +179,7 @@ fun MainShell(
                                 open.card,
                                 onClose = { opened = null },
                                 onMenu = { openMenu(open.card, open.spaceId) },
-                                actionsVisible = menuOpen,
+                                actionsProgress = menuProgress,
                                 onRemoveTag = { tag ->
                                     scope.launch {
                                         when (val answer = viewModel.removeTag(open.card, tag)) {
@@ -200,7 +199,6 @@ fun MainShell(
                     modifier = Modifier.align(Alignment.BottomCenter),
                     hidden = tab == Tab.Serendipity,
                 )
-                if (menuProgress > 0f) Box(Modifier.fillMaxSize().background(DarkMenuColors.scrim.copy(alpha = DarkMenuColors.scrim.alpha * menuProgress)))
                 adding?.let { target ->
                     BackHandler { adding = null }
                     AddMediaPopup(
@@ -256,9 +254,12 @@ fun MainShell(
             onSelect = { item ->
                 scope.launch {
                     val opensSubmenu = !item.locked && (item.action == CardMenuAction.AddTags || item.action == CardMenuAction.AddToSpace)
+                    if (sheetState.closing) return@launch
                     if (!opensSubmenu) {
-                        sheetState.hide()
+                        if (!sheetState.startClosing()) return@launch
+                        sheetState.hide(motion)
                         menuOpen = false
+                        submenu = null
                     }
                     when (val outcome = viewModel.perform(item, target.card, target.spaceId)) {
                         is CardMenuOutcome.OpenSubmenu -> submenu = outcome.submenu
@@ -280,14 +281,14 @@ fun MainShell(
                 menuOpen = false
                 submenu = null
             },
-            sheetState = sheetState,
-            submenu = submenu?.let { shown ->
-                @Composable {
+            position = sheetState,
+            submenu = submenu,
+            onBack = { submenu = null },
+            submenuContent = { shown ->
                     when (shown) {
                         CardSubmenu.Tags -> AddTagsPage(
                             allTags = tagChoices.all,
                             recentTags = tagChoices.recent,
-                            onClose = closeMenu,
                             onSave = { names ->
                                 closeMenu()
                                 scope.launch {
@@ -302,7 +303,6 @@ fun MainShell(
                         CardSubmenu.Spaces -> SelectSpacePage(
                             spaces = spaces.spaces,
                             selected = target.card.spaces.orEmpty().toSet(),
-                            onClose = closeMenu,
                             onToggle = { space ->
                                 scope.launch {
                                     val card = menuFor?.card ?: return@launch
@@ -318,7 +318,6 @@ fun MainShell(
                             },
                         )
                     }
-                }
             },
         )
     }
