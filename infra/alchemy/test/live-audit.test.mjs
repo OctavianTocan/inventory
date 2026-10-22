@@ -22,6 +22,9 @@ const ok = (result, result_info) => Response.json({ success: true, errors: [], r
 const applicationPage = (result, result_info = {}) => ok(result, result_info);
 const unrelatedApplication = (n) => ({ id: id(n + 100), name: `unrelated-${n}`, configuration: { image: 'docker.io/library/alpine:latest' } });
 const applicationCalls = (f) => f.calls.filter((url) => url.pathname.endsWith('/containers/applications'));
+const defaultService = () => ({ id: expected.workerName, default_environment: {
+  environment: 'production', script: { id: expected.workerName, tag: expected.workerId },
+} });
 
 // Canonical namespace wire data contains only the fixture's synthetic identities.
 const namespaceBody = (state, errors = []) => ({
@@ -457,11 +460,72 @@ test('present audit rejects foreign service environments and entrypoints', async
   }
 });
 
+test('present audit verifies production as the fixed Worker default environment', async () => {
+  for (const entrypoint of [undefined, 'default']) {
+    const f = fixture({ transformBindings: (bindings) => bindings.map((binding) => binding.name === 'TARGET'
+      ? { ...binding, environment: 'production', entrypoint } : binding),
+    override: (url) => url.pathname.endsWith(`/workers/services/${expected.workerName}`) ? ok(defaultService()) : undefined });
+    const result = await f.run();
+    assert.deepEqual(result.workers[1].bindings.find((binding) => binding.bindingName === 'TARGET'), {
+      bindingName: 'TARGET', targetWorkerId: expected.workerId, defaultEnvironment: 'production-verified',
+    });
+    assert.equal(f.calls.filter((url) => url.pathname.endsWith(`/workers/services/${expected.workerName}`)).length, 1);
+  }
+});
+
+test('production selector rejects missing or mismatched default Worker metadata', async () => {
+  const valid = defaultService();
+  for (const result of [null, {}, { ...valid, id: 'foreign' },
+    { ...valid, default_environment: {} },
+    { ...valid, default_environment: { ...valid.default_environment, environment: 'staging' } },
+    { ...valid, default_environment: { environment: 'production', script: { id: 'foreign', tag: expected.workerId } } },
+    { ...valid, default_environment: { environment: 'production', script: { id: expected.workerName, tag: id(88) } } },
+  ]) {
+    const f = fixture({ transformBindings: (bindings) => bindings.map((binding) => binding.name === 'TARGET'
+      ? { ...binding, environment: 'production' } : binding),
+    override: (url) => url.pathname.endsWith(`/workers/services/${expected.workerName}`) ? ok(result) : undefined });
+    await assert.rejects(f.run(), /default-target=unverified/);
+    assert.equal(f.calls.filter((url) => url.pathname.endsWith(`/workers/services/${expected.workerName}`)).length, 1);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('default Worker metadata permission and envelope failures remain audit failures', async () => {
+  for (const status of [200, 403]) {
+    const f = fixture({ transformBindings: (bindings) => bindings.map((binding) => binding.name === 'TARGET'
+      ? { ...binding, environment: 'production' } : binding),
+    override: (url) => url.pathname.endsWith(`/workers/services/${expected.workerName}`)
+      ? Response.json({ success: false, errors: [{ code: 10000, message: secret }], result: defaultService() }, { status }) : undefined });
+    await assert.rejects(f.run(), (error) => error.message.includes('endpoint=worker-default-service;') && !error.message.includes(secret));
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('TARGET rejection reports only finite selector classes', async () => {
+  for (const [selector, environment, entrypoint] of [
+    [{ environment: secret }, 'other-string', 'absent'],
+    [{ environment: '', entrypoint: 'default' }, 'empty-string', 'default'],
+    [{ environment: false, entrypoint: 0 }, 'boolean', 'number'],
+    [{ environment: {}, entrypoint: [] }, 'object', 'array'],
+    [{ environment: null, entrypoint: secret }, 'null', 'other-string'],
+    [{ entrypoint: '' }, 'absent', 'empty-string'],
+  ]) {
+    const f = fixture({ transformBindings: (bindings) => bindings.map((binding) => binding.name === 'TARGET'
+      ? { ...binding, ...selector } : binding) });
+    await assert.rejects(f.run(), (error) => error.message.includes(`environment=${environment}; entrypoint=${entrypoint};`)
+      && !error.message.includes(secret));
+    assert.equal(f.commands.length, 0);
+  }
+});
+
 test('present audit accepts absent or default entrypoints without an environment selector', async () => {
   for (const selector of [{ environment: null, entrypoint: null }, { entrypoint: 'default' }]) {
     const f = fixture({ transformBindings: (bindings) => bindings.map((binding) => binding.name === 'TARGET'
       ? { ...binding, ...selector } : binding) });
-    assert.equal((await f.run()).state, 'present');
+    const result = await f.run();
+    assert.equal(result.state, 'present');
+    assert.equal(result.workers[1].bindings.find((binding) => binding.bindingName === 'TARGET').defaultEnvironment, 'implicit');
+    assert.equal(f.calls.filter((url) => url.pathname.includes('/workers/services/')).length, 0);
   }
 });
 
