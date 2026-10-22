@@ -94,8 +94,10 @@ export async function runAudit({ operation, expectedState, expectedJson, account
     } catch { fail('Pilot audit read failed or timed out; absence is unverified'); }
     if (response.status === 404 && body?.success === false && Array.isArray(body.errors)
         && body.errors.length > 0 && notFound && body.errors.every(notFound)) return undefined;
+    // Live namespace lists report errors:null on successful reads; other endpoints retain their existing envelope.
+    const emptyNamespaceErrors = body?.errors === null && resource.split('?')[0] === 'workers/durable_objects/namespaces';
     if (!response.ok || body?.success !== true || !Object.hasOwn(body, 'result')
-        || (body.errors !== undefined && (!Array.isArray(body.errors) || body.errors.length))) {
+        || (body.errors !== undefined && !emptyNamespaceErrors && (!Array.isArray(body.errors) || body.errors.length))) {
       // Only fixed endpoint labels and predicate states may leave the response boundary.
       const endpoint = new Map([
         ['workers/scripts', 'worker-list'],

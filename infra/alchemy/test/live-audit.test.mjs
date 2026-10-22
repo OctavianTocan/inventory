@@ -20,6 +20,14 @@ const secret = 'synthetic-secret-that-must-never-be-output';
 const absent = (code, message = 'not found') => new Response(JSON.stringify({ success: false, errors: [{ code, message }] }), { status: 404 });
 const ok = (result, result_info) => Response.json({ success: true, errors: [], result, ...(result_info ? { result_info } : {}) });
 
+// Canonical namespace wire data contains only the fixture's synthetic identities.
+const namespaceBody = (state, errors = []) => ({
+  success: true, errors,
+  result: state === 'present' ? Object.entries(expected.durableObjectNamespaces)
+    .map(([name, value]) => ({ id: value, class: name, script: expected.workerName })) : [],
+  result_info: { page: 1, per_page: 100, count: state === 'present' ? 3 : 0, total_count: state === 'present' ? 3 : 0, total_pages: 1 },
+});
+
 // Exercise the real audit client with Cloudflare-shaped wire responses, never the network.
 function fixture({ state = 'present', override = () => undefined, inventory = [], transformBindings = (bindings) => bindings } = {}) {
   const calls = [], commands = [];
@@ -39,8 +47,7 @@ function fixture({ state = 'present', override = () => undefined, inventory = []
     if (tail === 'workers/scripts') return ok(live ? [
       { id: expected.workerName, tag: expected.workerId }, { id: expected.probeName, tag: expected.probeId },
     ] : []);
-    if (tail === 'workers/durable_objects/namespaces') return ok(live ? Object.entries(expected.durableObjectNamespaces).map(([name, value]) => ({ id: value, class: name, script: expected.workerName })) : [],
-      { page: 1, per_page: 100, count: live ? 3 : 0, total_count: live ? 3 : 0, total_pages: 1 });
+    if (tail === 'workers/durable_objects/namespaces') return Response.json(namespaceBody(state));
     if (tail === 'containers/applications') return ok(live ? [{ id: expected.containerApplicationId, name: 'mymind-alchemy-staging-media', durable_objects: { namespace_id: id(5) } }] : []);
     if (tail.startsWith('containers/applications/')) return live ? ok({ id: expected.containerApplicationId, name: 'mymind-alchemy-staging-media', durable_objects: { namespace_id: id(5) }, configuration: { secrets: [secret] } }) : absent(1609, 'APPLICATION_NOT_FOUND');
     if (tail.startsWith('r2/buckets/')) return live ? ok({ name: expected.bucketName }) : absent(10006);
@@ -75,6 +82,57 @@ test('live audit verifies identities and bindings without emitting settings or s
   assert.deepEqual(result.schedules, { worker: [], probe: [] });
   assert.ok(!JSON.stringify(result).includes(secret));
   assert.ok(!JSON.stringify(result).includes('ADMIN_TOKEN'));
+  assert.equal(f.commands.length, 0);
+});
+
+test('successful namespace reads accept the observed null errors field for present and absent audits', async () => {
+  for (const state of ['present', 'absent']) {
+    const f = fixture({ state, override: (url) => url.pathname.endsWith('/namespaces')
+      ? Response.json(namespaceBody(state, null)) : undefined });
+    const result = await f.run();
+    assert.equal(result.state, state);
+    assert.deepEqual(result.identities, expected);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('namespace null normalization leaves malformed envelopes and pagination inconclusive', async () => {
+  for (const changes of [
+    { success: false }, { result: null }, { result: 'not-a-list' },
+    { result_info: null }, { result_info: { page: 1, per_page: 100, count: 0 } },
+    ...['not-empty', {}, false, 971, [{ code: 971, message: secret }]].map((errors) => ({ errors })),
+  ]) {
+    const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/namespaces')
+      ? Response.json({ ...namespaceBody('absent', null), ...changes }) : undefined });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), (error) => !error.message.includes(secret));
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('namespace null normalization does not accept failed HTTP reads', async () => {
+  for (const status of [403, 404, 500]) {
+    const f = fixture({ state: 'absent', override: (url) => url.pathname.endsWith('/namespaces')
+      ? Response.json(namespaceBody('absent', null), { status }) : undefined });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }));
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('other API endpoints still reject null errors', async () => {
+  for (const resource of ['workers/scripts', 'containers/applications',
+    `workers/scripts/${expected.workerName}/settings`, `r2/buckets/${expected.bucketName}`]) {
+    const f = fixture({ override: (url) => url.pathname.endsWith(`/${resource}`)
+      ? Response.json({ success: true, result: [], errors: null }) : undefined });
+    await assert.rejects(f.run(), /Pilot audit API read failed/);
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('namespace null normalization retains immutable ownership checks', async () => {
+  const body = namespaceBody('present', null);
+  body.result[0].script = 'foreign-worker';
+  const f = fixture({ override: (url) => url.pathname.endsWith('/namespaces') ? Response.json(body) : undefined });
+  await assert.rejects(f.run(), /Live namespace ownership does not match/);
   assert.equal(f.commands.length, 0);
 });
 
@@ -234,10 +292,12 @@ test('a late namespace page containing a pilot namespace blocks deletion', async
   const f = fixture({ state: 'absent', override: (url) => {
     if (!url.pathname.endsWith('/namespaces')) return;
     const page = Number(url.searchParams.get('page'));
-    return ok([{ id: page === 1 ? id(80) : id(5), script: page === 1 ? 'unrelated' : expected.workerName, class: 'Media' }],
-      { page, per_page: 1, count: 1, total_count: 2, total_pages: 2 });
+    return Response.json({ success: true, errors: null,
+      result: [{ id: page === 1 ? id(80) : id(5), script: page === 1 ? 'unrelated' : expected.workerName, class: 'Media' }],
+      result_info: { page, per_page: 1, count: 1, total_count: 2, total_pages: 2 } });
   } });
-  await assert.rejects(f.run({ operation: 'cleanup-images' }));
+  await assert.rejects(f.run({ operation: 'cleanup-images' }), /Pilot resources or saved identities still exist/);
+  assert.equal(f.calls.filter((url) => url.pathname.endsWith('/namespaces')).length, 2);
   assert.equal(f.commands.length, 0);
 });
 
