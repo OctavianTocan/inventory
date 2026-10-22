@@ -30,8 +30,8 @@ test('staging matches the real Rust bindings while rejecting public ingress and 
 test('CI state recovery fails closed and authenticates encrypted archives', () => {
   assert.throws(() => selectArtifact([], false), /missing/);
   assert.equal(selectArtifact([], true), undefined);
-  const older = { id: 1, name: ARTIFACT_NAME, expired: false };
-  assert.throws(() => selectArtifact([older, { ...older, id: 2, expired: true }], false), /expired/);
+  const older = { id: 1, name: ARTIFACT_NAME, expired: false, created_at: '2026-10-21T12:01:00Z' };
+  assert.throws(() => selectArtifact([older, { ...older, id: 2, expired: true, created_at: '2026-10-21T12:02:00Z' }], false), /expired/);
   assert.throws(() => selectArtifact([older], true), /forbidden/);
   assert.equal(selectArtifact([older], false).id, 1);
   const secret = 'synthetic-encryption-fixture-only';
@@ -52,4 +52,28 @@ test('an interrupted operation cannot fall back to an older checkpoint', () => {
   assert.throws(() => assertCheckpoint(checkpoint, undefined), /recover/);
   assert.throws(() => assertCheckpoint(checkpoint, { ...marker, payload: { run_id: '43' } }), /recover/);
   assert.throws(() => assertCheckpoint(checkpoint, { ...marker, created_at: '2026-10-21T12:02:00Z' }), /recover/);
+});
+
+test('a newer checkpoint with a lower artifact ID remains authoritative', () => {
+  const older = { id: 2, name: ARTIFACT_NAME, expired: false, workflow_run: { id: 42 }, created_at: '2026-10-21T12:01:00Z' };
+  const newer = { id: 1, name: ARTIFACT_NAME, expired: false, workflow_run: { id: 43 }, created_at: '2026-10-21T12:03:00Z' };
+  const selected = selectArtifact([older, newer], false);
+  assert.equal(selected, newer);
+  assert.doesNotThrow(() => assertCheckpoint(selected, { payload: { run_id: '43' }, created_at: '2026-10-21T12:02:00Z' }));
+  assert.throws(() => selectArtifact([older, { ...newer, expired: true }], false), /expired/);
+  assert.throws(() => selectArtifact([older, newer], true), /forbidden/);
+  assert.throws(() => assertCheckpoint(newer, { payload: { run_id: '42' }, created_at: '2026-10-21T12:00:00Z' }), /authoritative checkpoint/);
+});
+
+test('checkpoint chronology rejects malformed dates and ambiguous newest timestamps', () => {
+  const checkpoint = { id: 1, name: ARTIFACT_NAME, expired: false, workflow_run: { id: 42 }, created_at: '2026-10-21T12:01:00Z' };
+  for (const created_at of [undefined, null, 0, 'not-a-date', '2026-10-21', '2026-02-30T12:01:00Z', '2026-10-21T24:00:00Z']) {
+    assert.throws(() => selectArtifact([checkpoint, { ...checkpoint, id: 2, created_at }], false), /timestamp is invalid/);
+  }
+  for (const duplicate of [
+    { ...checkpoint, id: 2 },
+    { ...checkpoint, id: 2, created_at: '2026-10-21T13:01:00+01:00' },
+    { ...checkpoint, workflow_run: { id: 43 } },
+  ]) assert.throws(() => selectArtifact([checkpoint, duplicate], false), /ambiguous timestamps/);
+  assert.equal(selectArtifact([{ ...checkpoint, created_at: '2026-10-21T12:01:00.123Z' }, checkpoint], false).created_at, '2026-10-21T12:01:00.123Z');
 });
