@@ -203,6 +203,38 @@ fn body_text(response: Response) -> String {
 }
 
 #[test]
+fn alchemy_probe_repairs_its_mapping_and_initializes_uploads() {
+    let probe = include_str!("../../../../infra/alchemy/probe.mjs");
+    let constant = |name| {
+        probe
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("const {name} = '")))
+            .and_then(|value| value.strip_suffix("';"))
+            .expect("probe fixture constant")
+    };
+    let username = constant("USER");
+    let library = constant("LIBRARY");
+    let profile = store_member::profile_from_session(&format!("password:{username}"), username);
+    assert_eq!(library, auth_store::library_name(&profile.account));
+    assert!(auth_store::generated_library(&profile.account, library));
+
+    let db = auth_db();
+    let identity = who(&profile.account, username);
+    auth_store::set_library(&db, &profile.account, "alchemy-staging-synthetic").unwrap();
+    let previous = auth_store::library_for_session(&db, &identity).unwrap();
+    assert!(!auth_store::generated_library(&profile.account, &previous));
+    auth_store::set_library(&db, &profile.account, library).unwrap();
+    assert_eq!(auth_store::library_for_session(&db, &identity).unwrap(), library);
+
+    let (_store, api) = open_library(&profile);
+    let response = send(&api, "POST", "/uploads/authorize", "");
+    assert_eq!(response.status, 200);
+    let capability = json::parse(&body_text(response)).unwrap();
+    assert!(capability.get("url").as_str().unwrap().starts_with("/uploads/"));
+    assert!(capability.get("token").as_str().is_some_and(|value| !value.is_empty()));
+}
+
+#[test]
 fn first_sign_in_creates_a_library_and_the_second_reuses_it() {
     let db = auth_db();
     auth_store::set_library(&db, "google:owner@example.com", "owner").unwrap();

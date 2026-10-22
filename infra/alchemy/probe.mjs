@@ -1,6 +1,7 @@
 const ORIGIN = 'https://mymind-alchemy-staging.invalid';
 const USER = 'alchemy-staging-synthetic';
-const LIBRARY = 'alchemy-staging-synthetic';
+// A generated name lets Library seed this new account; the explicit assignment also repairs older pilot mappings.
+const LIBRARY = 'u-alchemy-staging-synthetic-0ed301e039c627bdc50e031aad057f82426c417622d5df870882d1098755f9a0';
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9S8AAAAASUVORK5CYII=';
 
 // Compare status only: never put response bodies, credentials or cookies in diagnostics.
