@@ -2,8 +2,12 @@ package com.octaviantocan.mymind.share
 
 /** One thing a share brings. */
 sealed interface ShareItem {
-    /** A link or a piece of text. */
-    data class Text(val text: String) : ShareItem
+    /**
+     * A link or a piece of text.
+     *
+     * @property note Words shared around a link, kept as its card's note when the card has none.
+     */
+    data class Text(val text: String, val note: String? = null) : ShareItem
 
     /** A picture, video or PDF the sharing app handed over by address. */
     data class Stream(val uri: String) : ShareItem
@@ -90,9 +94,51 @@ fun parseShare(request: ShareRequest, signedIn: Boolean, probe: ShareProbe): Sha
             checkFiles(streams.take(1), request.mime, probe) ?: ShareState.Ready(listOf(ShareItem.Stream(streams.first())))
         else -> {
             val text = (request.text ?: request.data)?.trim().orEmpty()
-            if (text.isEmpty()) ShareState.Malformed else ShareState.Ready(listOf(ShareItem.Text(text)))
+            val item = if (request.action == ACTION_PROCESS_TEXT) ShareItem.Text(text) else sharedText(text)
+            if (text.isEmpty()) ShareState.Malformed else ShareState.Ready(listOf(item))
         }
     }
+}
+
+private val LINK_IN_TEXT = Regex("""https?://[^\s<>"“”‘’]+""")
+
+/**
+ * What a shared text saves: text holding exactly one link and other words, such as "Check this out https://…" or a
+ * place name above a map link, saves the link with those words as its note; any other text saves as it came.
+ *
+ * @param text Shared text, trimmed.
+ * @return The item to save.
+ */
+fun sharedText(text: String): ShareItem.Text {
+    val found = LINK_IN_TEXT.findAll(text).toList()
+    if (found.size != 1) return ShareItem.Text(text)
+    val match = found.single()
+    val link = withoutClosingPunctuation(match.value)
+    val words = text.removeRange(match.range)
+        .lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+    return ShareItem.Text(link, words.takeIf { line -> line.any { it.isLetterOrDigit() } })
+}
+
+// A link at the end of a sentence or inside brackets loses the punctuation that closes them; a bracket the link opened stays.
+private fun withoutClosingPunctuation(link: String): String {
+    var end = link.length
+    while (end > 0) {
+        val last = link[end - 1]
+        val opening = when (last) {
+            ')' -> '('
+            ']' -> '['
+            '}' -> '{'
+            else -> null
+        }
+        val closes = when {
+            last in ".,;:!?'" -> true
+            opening != null -> link.substring(0, end).count { it == last } > link.substring(0, end).count { it == opening }
+            else -> false
+        }
+        if (!closes) break
+        end--
+    }
+    return link.substring(0, end)
 }
 
 private fun isFileMime(mime: String) = mime.startsWith("image/") || mime.startsWith("video/") || mime == PDF

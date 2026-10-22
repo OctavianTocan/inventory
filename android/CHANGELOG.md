@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.5 (16), 2026-10-22
+Links shared with words around them are saved as links.
+
+### Fixed
+- Sharing a link with other words, such as a place name above a map link or "Check this out" before a video, saves a link card with those words as its note, instead of a note with the link inside. A link you saved before keeps its note.
+
 ## 0.6.4 (15), 2026-10-22
 Changes you make offline wait on your phone, and your newest pictures come along.
 

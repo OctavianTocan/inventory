@@ -67,13 +67,22 @@ class ShareController(
         for (item in items) {
             when (item) {
                 is ShareItem.Text -> when (val saved = library.createFromContent(item.text, SOURCE, null)) {
-                    is ApiResult.Ok -> savedIds.update { it + saved.value }
+                    is ApiResult.Ok -> {
+                        item.note?.let { words -> noteIfEmpty(saved.value, words) }
+                        savedIds.update { it + saved.value }
+                    }
                     is ApiResult.Failed -> failures.update { it + 1 }
                 }
                 is ShareItem.Stream -> open(item.uri)?.let { files += it } ?: failures.update { it + 1 }
             }
         }
         queue.add(files, null)
+    }
+
+    // A link saved before keeps its note; a failure leaves the card as it is.
+    private suspend fun noteIfEmpty(cardId: String, words: String) {
+        val card = (library.card(cardId) as? ApiResult.Ok)?.value ?: return
+        if (card.note.isNullOrBlank()) library.setNote(cardId, words)
     }
 
     /**
