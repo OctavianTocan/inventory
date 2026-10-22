@@ -11,6 +11,13 @@ const TAG = /^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$/;
 const BINDINGS = { AUTH_OBJECT: 'Auth', LIBRARY: 'Library', MEDIA: 'Media' };
 const fail = (message) => { throw new Error(message); };
 
+// Classify selectors without copying arbitrary configuration values into diagnostics.
+function selectorKind(value) {
+  return value === undefined ? 'absent' : value === null ? 'null' : value === '' ? 'empty-string'
+    : value === 'production' ? 'production' : value === 'default' ? 'default'
+      : Array.isArray(value) ? 'array' : typeof value === 'string' ? 'other-string' : typeof value;
+}
+
 // Reject extra fields and resource names before using any operator-supplied identity.
 function expectedIdentities(text) {
   let value;
@@ -103,6 +110,7 @@ export async function runAudit({ operation, expectedState, expectedJson, account
         ['workers/scripts', 'worker-list'],
         ['workers/durable_objects/namespaces', 'namespace-list'],
         ['containers/applications', 'application-list'],
+        [`workers/services/${pilot.name}`, 'worker-default-service'],
         ...[['worker', pilot.name], ['probe', pilot.probe_name]].flatMap(([role, name]) => [
           [`workers/scripts/${name}/settings`, `${role}-settings`],
           [`workers/scripts/${name}/schedules`, `${role}-schedules`],
@@ -219,10 +227,23 @@ export async function runAudit({ operation, expectedState, expectedJson, account
         : [['TARGET', 'service', 'service', pilot.name], ['RESULTS', 'r2_bucket', 'bucket_name', expected.bucketName]]) {
         const matches = settings.bindings.filter((binding) => binding.name === bindingName && binding.type === type && binding[field] === value);
         if (matches.length !== 1) fail('A pilot service or bucket binding points elsewhere');
-        // Plain Alchemy Worker bindings select no environment and use the default export.
-        if (bindingName === 'TARGET' && (matches[0].environment != null
-            || (matches[0].entrypoint != null && matches[0].entrypoint !== 'default'))) fail('Pilot target uses an unexpected environment or entrypoint');
-        safeBindings.push({ bindingName });
+        const bindingEvidence = { bindingName };
+        if (bindingName === 'TARGET') {
+          const target = matches[0];
+          const defaultEntrypoint = target.entrypoint == null || target.entrypoint === 'default';
+          let defaultTarget = target.environment == null ? 'implicit' : 'unverified';
+          // Cloudflare labels the default environment production; prove its immutable identity before accepting it.
+          if (target.environment === 'production' && defaultEntrypoint) {
+            const service = (await request(`workers/services/${pilot.name}`)).result;
+            if (service?.id === pilot.name && service.default_environment?.environment === 'production'
+                && service.default_environment.script?.id === pilot.name
+                && service.default_environment.script?.tag === expected.workerId) defaultTarget = 'production-verified';
+          }
+          if (defaultTarget === 'unverified' || !defaultEntrypoint) fail(`Pilot target uses an unexpected environment or entrypoint; environment=${selectorKind(target.environment)}; entrypoint=${selectorKind(target.entrypoint)}; default-target=${defaultTarget}`);
+          bindingEvidence.targetWorkerId = expected.workerId;
+          bindingEvidence.defaultEnvironment = defaultTarget;
+        }
+        safeBindings.push(bindingEvidence);
       }
       workers.push({ workerName: name, workerId: id, bindings: safeBindings });
     }
