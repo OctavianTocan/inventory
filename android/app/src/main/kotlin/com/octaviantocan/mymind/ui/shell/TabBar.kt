@@ -51,9 +51,9 @@ import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
-private val NAVIGATION_HEIGHT = 64.dp
+private val NAVIGATION_HEIGHT = 56.dp
 private val NAVIGATION_GAP = 8.dp
-private val NAVIGATION_INSET = 6.dp
+private val NAVIGATION_INSET = 8.dp
 private val LIBRARY_TABS = listOf(Tab.Everything, Tab.Spaces)
 
 /** Registers the gallery's navigation with Pully's one root bar, or renders in place in a standalone preview. */

@@ -86,6 +86,7 @@ import kotlin.math.roundToInt
 private val MOSAIC_GAP = 3.dp
 private const val MOSAIC_HEADER = "gallery-header"
 private const val MOSAIC_ROW = "row:"
+private const val SCENE_HYSTERESIS = 0.05f
 private data class MosaicAnchor(val cardId: String, val viewport: Offset, val fraction: Offset)
 private data class MosaicBodyShape(val top: Float, val bottom: Float) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
@@ -185,16 +186,29 @@ fun LibraryMosaic(
             ?: state.layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { item ->
                 (item.key as? String)?.removePrefix(MOSAIC_ROW)?.let(layouts.byId::get)
             } ?: 0
-        fun projection(columns: Int): MosaicProjection = layouts.projection(columns, mosaic.position, pivot())
+        fun projection(columns: Int): MosaicProjection {
+            val projected = layouts.projection(columns, mosaic.position, pivot())
+            if (projected.scale >= 1f) return projected
+            // A grid drawn below its own size would leave empty margins; keep it whole around the focal corner.
+            val focal = layouts.cell(pivot(), mosaic.position)
+            val base = layouts.level(columns).cells[pivot()]
+            return MosaicProjection(layouts, columns, 1f, Offset(focal.left - base.left, focal.top - base.top))
+        }
+        /** Moves a projection sideways only as far as its edges still cover the viewport. */
+        fun coverShift(projected: MosaicProjection, shift: Float): Float {
+            val low = width - width * projected.scale - projected.offset.x
+            val high = -projected.offset.x
+            return if (low <= high) shift.coerceIn(low, high) else (low + high) / 2f
+        }
         fun activeColumns(): Int = pressedColumns ?: outgoingColumns?.takeIf { sceneAlpha < 0.5f } ?: sceneColumns
         fun capture(focal: Offset?): MosaicAnchor? {
             if (layouts.level(1).cells.isEmpty()) return null
             val y = origin()
-            val x = horizontalShift(y)
+            val projected = projection(activeColumns())
+            val x = coverShift(projected, horizontalShift(y))
             val point = focal?.takeIf { it.x.isFinite() && it.y.isFinite() } ?: Offset.Zero
             var nearest = -1
             var distance = Float.MAX_VALUE
-            val projected = projection(activeColumns())
             for (index in projected.window(y, height)) {
                 val cell = projected.cell(index).translate(Offset(x, -y))
                 if (cell.bottom <= 0f || cell.top >= height) continue
@@ -253,8 +267,9 @@ fun LibraryMosaic(
         val latestLayouts by rememberUpdatedState(layouts)
         val latestRows by rememberUpdatedState(rows)
         val latestHeaderItems by rememberUpdatedState(headerItems)
-        val nearestScene = mosaic.position.roundToInt().coerceIn(1, 4)
-        val targetScene = pressedColumns ?: if (mosaic.isPinching && mosaic.position in (sceneColumns - 0.55f)..(sceneColumns + 0.55f)) sceneColumns else nearestScene
+        // A pinch keeps its grid a little past the stop it rests on, so fingers jittering there cannot flip grids.
+        val targetScene = pressedColumns ?: if (mosaic.isPinching && mosaic.position > sceneColumns - 1 &&
+            mosaic.position <= sceneColumns + SCENE_HYSTERESIS) sceneColumns else pinchScene(mosaic.position)
         LaunchedEffect(targetScene, moving) {
             val dominant = activeColumns()
             sceneColumns = targetScene
@@ -321,7 +336,6 @@ fun LibraryMosaic(
                         var pinched = false
                         var dragged = false
                         var pointers = emptySet<androidx.compose.ui.input.pointer.PointerId>()
-                        var centroidOffset = Offset.Zero
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             val pressed = event.changes.filter { it.pressed }.map { it.id }.toSet()
@@ -340,12 +354,11 @@ fun LibraryMosaic(
                                     anchor = captureLatest(point)
                                     pivotId = anchor?.cardId
                                     anchorXWeight = 1f
-                                    centroidOffset = anchor?.viewport?.minus(point) ?: Offset.Zero
                                     pressedColumns = null
                                     mosaic.beginPinch()
                                     scope.launch(start = CoroutineStart.UNDISPATCHED) { state.stopScroll(MutatePriority.PreventUserInput) }
                                 } else {
-                                    anchor = anchor?.copy(viewport = point + centroidOffset)
+                                    // The focal point stays where the fingers met: a pinch resizes but never pans.
                                     mosaic.zoomPinch(event.calculateZoom())
                                     alignLatest()
                                 }
@@ -408,7 +421,8 @@ fun LibraryMosaic(
                     for (columns in listOfNotNull(outgoingColumns, sceneColumns).distinct()) key(columns) {
                         val alpha = if (columns == sceneColumns) sceneAlpha else 1f
                         ProjectedMosaicCards(layouts, mosaic, state, height, focalIndex,
-                            projection = { projection(columns) }, origin = ::origin, shiftX = { horizontalShift(origin()) },
+                            projection = { projection(columns) }, origin = ::origin,
+                            shiftX = { coverShift(projection(columns), horizontalShift(origin())) },
                             activeInteraction = columns == active,
                             modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }.background(colors.background)
                                 .then(if (columns == active) Modifier.testTag("mosaic-projection") else Modifier.clearAndSetSemantics { projectionTestTag = "mosaic-projection" }),
@@ -425,7 +439,7 @@ fun LibraryMosaic(
                             val cell = layouts.cell(focalIndex, mosaic.position)
                             val child = children.single().measure(Constraints.fixed(cell.width.roundToInt().coerceAtLeast(1), cell.height.roundToInt().coerceAtLeast(1)))
                             val y = origin()
-                            val x = horizontalShift(y)
+                            val x = coverShift(projection(active), horizontalShift(y))
                             layout(constraints.maxWidth, constraints.maxHeight) { child.place((cell.left + x).roundToInt(), (cell.top - y).roundToInt()) }
                         }
                     }

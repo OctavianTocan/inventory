@@ -109,13 +109,13 @@ class LibraryScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun spacesTop() {
-        shell(Tab.Spaces) { SpaceListContent(LibrarySamples.spaces, onOpenSpace = {}, onRetry = {}, onAdd = {}) }
+        shell(Tab.Spaces) { SpaceListContent(LibrarySamples.spaces, onOpenSpace = {}, onRetry = {}) }
         capture("S07_spaces_top")
     }
 
     @Test
     fun spacesLoading() {
-        shell(Tab.Spaces) { SpaceListContent(SpacesState(loading = true), onOpenSpace = {}, onRetry = {}, onAdd = {}) }
+        shell(Tab.Spaces) { SpaceListContent(SpacesState(loading = true), onOpenSpace = {}, onRetry = {}) }
         capture("S05_spinner_spaces")
     }
 

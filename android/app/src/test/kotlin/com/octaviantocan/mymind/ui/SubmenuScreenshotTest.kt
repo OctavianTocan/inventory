@@ -120,7 +120,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
         render {
             Box(Modifier.fillMaxSize()) {
                 ShellFrame(Tab.Spaces, onSelectTab = {}, scheme = PageScheme.System) {
-                    SpaceListContent(LibrarySamples.spaces, onOpenSpace = {}, onRetry = {}, onAdd = {})
+                    SpaceListContent(LibrarySamples.spaces, onOpenSpace = {}, onRetry = {})
                 }
                 PageTheme(PageScheme.System) {
                     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)), contentAlignment = Alignment.Center) {

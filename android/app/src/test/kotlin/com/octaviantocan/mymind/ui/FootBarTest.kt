@@ -124,7 +124,7 @@ class FootBarTest {
         field.assertIsFocused()
         field.performTextInput("forest")
         compose.runOnIdle { assertEquals("forest", query) }
-        // The pill starts 16dp in from the screen: this tap is on its left padding, before its search icon.
+        // The pill starts 12dp in from the screen: this tap is on its left padding, before its search icon.
         val fieldBounds = field.fetchSemanticsNode().boundsInRoot
         compose.onRoot().performTouchInput { click(Offset(47f, fieldBounds.center.y)) }
         field.assertIsFocused()

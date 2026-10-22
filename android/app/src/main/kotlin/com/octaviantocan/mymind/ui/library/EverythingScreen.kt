@@ -101,7 +101,14 @@ fun EverythingScreen(
     )
 }
 
-/** Profile controls stay fixed above the scrolling pin rail and cards; search and browsing retain independent positions. */
+/** Height of the fixed controls' row over the top of a library page. */
+val GALLERY_CONTROLS_HEIGHT = 72.dp
+
+/** Pixels the list has scrolled past its top, saturating once the first item has left. */
+internal fun LazyListState.scrolledBy(): Float =
+    if (firstVisibleItemIndex > 0) Float.MAX_VALUE else firstVisibleItemScrollOffset.toFloat()
+
+/** The title scrolls with the pin rail and cards under fixed controls; search and browsing retain independent positions. */
 @Composable
 fun EverythingContent(
     feed: FeedState,
@@ -148,18 +155,17 @@ fun EverythingContent(
                     style = LibraryStyle.title, color = colors.text)
                 SearchChips(typeChips, onChoose, Modifier.padding(bottom = 150.dp))
             }
-            else -> Column(Modifier.fillMaxSize()) {
-                GalleryHeader(onOpenSettings, onAdd, onSerendipity, photoUrl = photoUrl, photoLoader = photoLoader)
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop)) {
-                        LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
-                            onLongPressCard = onLongPressCard, header = {
-                                GalleryHighlights(topOfMind, onOpenCard, onLoadMore = onLoadMoreTopOfMind, onLongPressCard = onLongPressCard)
-                                if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
-                            })
-                    }
-                    GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter))
+            else -> Box(Modifier.fillMaxSize()) {
+                PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop), top = GALLERY_CONTROLS_HEIGHT) {
+                    LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
+                        onLongPressCard = onLongPressCard, header = {
+                            GalleryTitle("Your mind")
+                            GalleryHighlights(topOfMind, onOpenCard, onLoadMore = onLoadMoreTopOfMind, onLongPressCard = onLongPressCard)
+                            if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
+                        })
                 }
+                GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter), visible = { gridState.scrolledBy() })
+                GalleryControls(onOpenSettings, onAdd, onSerendipity, Modifier.align(Alignment.TopEnd), photoUrl = photoUrl, photoLoader = photoLoader)
             }
         }
     }

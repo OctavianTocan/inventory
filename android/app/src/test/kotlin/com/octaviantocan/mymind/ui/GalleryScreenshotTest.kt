@@ -30,6 +30,7 @@ import com.octaviantocan.mymind.data.Post
 import com.octaviantocan.mymind.ui.library.EverythingContent
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.MosaicState
+import com.octaviantocan.mymind.ui.library.heldPosition
 import com.octaviantocan.mymind.ui.library.SearchType
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.shell.LibraryFootBar
@@ -223,28 +224,30 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         }
         compose.mainClock.autoAdvance = false
         spread(0.1875f)
-        assertEquals(2.56f, mosaicState.position, 0.02f)
+        assertEquals(heldPosition(2.56f), mosaicState.position, 0.02f)
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeBy(40)
         compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(2)
         frame("handoff_transient")
         repeat(4) {
-            for (position in listOf(2.49f, 2.51f)) {
+            // Jitter where the denser grid hands back to the held stop.
+            for (position in listOf(2.09f, 2.11f)) {
                 spread(0.5f - 0.8f / position)
                 compose.mainClock.advanceTimeBy(16)
             }
         }
         compose.mainClock.advanceTimeBy(120)
         compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
-        assertEquals(2.51f, mosaicState.position, 0.02f)
+        assertEquals(heldPosition(2.11f), mosaicState.position, 0.02f)
         val heldWidth = noteWidth()
         frame("handoff")
         compose.mainClock.advanceTimeBy(120)
         compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
         assertEquals("Holding the fingers must not change the live focal size", heldWidth, noteWidth(), 2f)
         compose.mainClock.autoAdvance = true
-        val requestsAfterHandoff = requests[watchedUrl]
         spread(0.2f)
+        val requestsAfterHandoff = requests[watchedUrl]
+        spread(0.205f)
         assertEquals("Measuring another pointer frame must keep the same projection request", requestsAfterHandoff, requests[watchedUrl])
         val middle = noteWidth()
         assertTrue("The preview must shrink while both fingers remain down", middle < initial - 8f)

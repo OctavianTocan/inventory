@@ -7,12 +7,15 @@ Source: pulls.review kit-one-foot-bar, DESIGN rule 196, FootBar.kt at
 ee5cf358333cb1170f1923c7118e12af3f265b74; requested by Tavi on 22 October 2026.
 
 @cc [owner:OctavianTocan,label:design] library-bars-rest-alike
-Every library foot bar MUST use floatingBar for its position: 16dp in from the sides,
-24dp above the system navigation bar, and raised by the keyboard. Screens MUST NOT
+Every library foot bar MUST use floatingBar for its position: 12dp in from the sides,
+16dp above the system navigation bar, and raised by the keyboard. Screens MUST NOT
 add their own bottom offset to the bar. The bar floats over the content without a
-solid strip behind it and carries Pully's two-layer downward canvas shadow.
+solid strip behind it and carries Pully's two-layer downward canvas shadow. The
+navigation capsule and the Search circle are 56dp tall, with an 8dp highlight inset.
 Source: pulls.review kit-bottom-bars-rest-alike, DESIGN rules 192 and 45, Kit.kt at
-ee5cf358333cb1170f1923c7118e12af3f265b74.
+ee5cf358333cb1170f1923c7118e12af3f265b74; geometry from Tavi's Google Photos
+comparison in the recorded review of 22 October 2026 ("less tall", "start a bit
+further to the left", "a bit wider").
 
 @cc [owner:OctavianTocan,label:product] library-foot-bar-owns-its-taps
 A tap anywhere inside the search pill, including its edge and padding, MUST focus

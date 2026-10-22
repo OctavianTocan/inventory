@@ -17,7 +17,7 @@ import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.shell.ShellFrame
 import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.PageScheme
-import com.octaviantocan.mymind.ui.upload.AddMediaPopup
+import com.octaviantocan.mymind.ui.upload.AddSheetContent
 import com.octaviantocan.mymind.ui.upload.UploadQueueStrip
 import org.junit.Rule
 import org.junit.Test
@@ -27,7 +27,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.Instant
 
-/** The + popup (S21), the upload queue strip, pull to refresh and Top of Mind, in the system mode of the parameter. */
+/** The Add sheet (S21), the upload queue strip, pull to refresh and Top of Mind, in the system mode of the parameter. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = PHONE_QUALIFIERS, fontScale = PHONE_FONT_SCALE)
@@ -50,15 +50,17 @@ class UploadScreenshotTest(private val dark: Boolean) {
     }
 
     @Test
-    fun addPopup() {
-        shell(overlay = { AddMediaPopup(onPhotoLibrary = {}, onTakePhoto = {}, onDismiss = {}) }) { SampleEverything() }
-        capture("S21_add_popup")
+    fun addSheet() {
+        shell(overlay = { SheetFixture("Add to your mind") { AddSheetContent({}, {}, onCamera = {}, onNewSpace = null) } }) { SampleEverything() }
+        capture("S21_add_sheet")
     }
 
     @Test
-    fun addPopupWithoutCamera() {
-        shell(overlay = { AddMediaPopup(onPhotoLibrary = {}, onTakePhoto = null, onDismiss = {}) }) { SampleEverything() }
-        capture("S21_add_popup_no_camera")
+    fun addSheetOnSpacesWithoutCamera() {
+        shell(Tab.Spaces, overlay = { SheetFixture("Add to your mind") { AddSheetContent({}, {}, onCamera = null, onNewSpace = {}) } }) {
+            SpaceListContent(LibrarySamples.spaces, onOpenSpace = {}, onRetry = {})
+        }
+        capture("S21_add_sheet_spaces_no_camera")
     }
 
     @Test
@@ -90,7 +92,7 @@ class UploadScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun spacesRefreshing() {
-        shell(Tab.Spaces) { SpaceListContent(LibrarySamples.spaces.copy(loaded = true, refreshing = true), onOpenSpace = {}, onRetry = {}, onAdd = {}) }
+        shell(Tab.Spaces) { SpaceListContent(LibrarySamples.spaces.copy(loaded = true, refreshing = true), onOpenSpace = {}, onRetry = {}) }
         capture("S07_pull_refresh")
     }
 

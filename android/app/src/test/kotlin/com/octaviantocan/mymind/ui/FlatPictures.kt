@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import com.octaviantocan.mymind.ui.card.CardHeaderIcons
 import com.octaviantocan.mymind.ui.errors.OfflinePictures
-import com.octaviantocan.mymind.ui.settings.SettingsPictures
 import com.octaviantocan.mymind.ui.splash.SplashPictures
 
 /** Flat-colour stand-in for a picture, sized in pixels like the decoded bitmap it replaces. */
@@ -48,13 +47,6 @@ fun flatOfflinePictures(dark: Boolean) = OfflinePictures(
         if (dark) Size(750f, 1624f) else scaled(375, 812, MDPI_TO_DEVICE),
     ),
     notice = BlockPainter(Color(0xFFEFEFEF), Size(704f, 492f)),
-)
-
-/** Settings pictures with the pixel sizes of the shipped images and none of their artwork. */
-fun flatSettingsPictures(dark: Boolean) = SettingsPictures(
-    hand = BlockPainter(Color(0xFF8493A9), Size(22f * 2.8125f, 16f * 2.8125f)),
-    help = BlockPainter(Color(0xFF8493A9), Size(19f * 2.8125f, 19f * 2.8125f)),
-    signOut = BlockPainter(Color(0xFF8493A9), Size(19f * 2.8125f, 19f * 2.8125f)),
 )
 
 /** Card header icons as 24 dp squares. */

@@ -1,27 +1,32 @@
 package com.octaviantocan.mymind.ui
 
-import androidx.compose.foundation.ScrollState
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.rememberDrawerState
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
-import com.octaviantocan.mymind.ui.settings.SettingsDrawer
-import com.octaviantocan.mymind.ui.settings.SettingsPictures
-import com.octaviantocan.mymind.ui.settings.defaultSettingsPictures
+import com.octaviantocan.mymind.ui.settings.ProfileSheetContent
+import com.octaviantocan.mymind.ui.settings.SIGN_OUT
+import com.octaviantocan.mymind.ui.settings.SettingsUiState
+import com.octaviantocan.mymind.ui.settings.SettingsUpdates
 import com.octaviantocan.mymind.ui.shell.ShellFrame
 import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.PageScheme
-import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
+/** The profile sheet the account circle opens. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = PHONE_QUALIFIERS, fontScale = PHONE_FONT_SCALE)
@@ -29,58 +34,57 @@ class SettingsScreenshotTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val scroll = ScrollState(0)
+    private val account = SettingsUiState(email = "name@example.com", displayName = "Ada Lovelace")
 
-    private fun open(dark: Boolean, pictures: @Composable () -> SettingsPictures) {
+    private fun sheet(dark: Boolean, updates: SettingsUpdates = SettingsUpdates(true, "Version 0.6.0 (11)", "You're up to date"),
+                      onSignOut: () -> Unit = {}, onClose: () -> Unit = {}) {
         compose.setPhoneContent(dark) {
-            SettingsDrawer(
-                drawerState = rememberDrawerState(DrawerValue.Open),
-                account = "name@example.com",
-                version = "1.0 (1)",
-                onSignOut = {},
-                pictures = pictures(),
-                scrollState = scroll,
-            ) {
-                ShellFrame(Tab.Everything, onSelectTab = {}, scheme = PageScheme.Dark) { SampleEverything() }
+            Box(Modifier.fillMaxSize()) {
+                ShellFrame(Tab.Everything, onSelectTab = {}, scheme = if (dark) PageScheme.Dark else PageScheme.Light) { SampleEverything() }
+                SheetFixture("Profile") { ProfileSheetContent(account, "0.6.0 (11)", updates, onSignOut, onClose, photoLoader = null) }
             }
         }
         compose.mainClock.advanceTimeBy(SETTLE_MS)
     }
 
-    private fun scrollToEnd() {
-        compose.change { runBlocking { scroll.scrollTo(scroll.maxValue) } }
-        compose.mainClock.advanceTimeBy(SETTLE_MS)
-    }
-
-    private fun capture(name: String) = compose.onRoot().captureRoboImage("screenshots/$name.png")
-
-    private fun sheet(dark: Boolean, suffix: String) {
-        open(dark) { flatSettingsPictures(dark) }
-        compose.onNodeWithText("Sign out of mymind").assertExists()
-        capture("settings_$suffix")
-        scrollToEnd()
-        capture("settings_scrolled_$suffix")
-    }
-
-    private fun shipped(dark: Boolean, suffix: String) {
-        open(dark) { defaultSettingsPictures() }
-        capture("settings_real_$suffix")
-        scrollToEnd()
-        capture("settings_real_scrolled_$suffix")
+    @Test
+    fun profileLight() {
+        sheet(dark = false)
+        compose.onRoot().captureRoboImage("screenshots/settings_light.png")
     }
 
     @Test
-    fun settingsLight() = sheet(dark = false, suffix = "light")
+    fun profileDark() {
+        sheet(dark = true)
+        compose.onRoot().captureRoboImage("screenshots/settings_dark.png")
+    }
 
     @Test
-    fun settingsDark() = sheet(dark = true, suffix = "dark")
-
-    /** Renders the shipped artwork; the files are written for the machine's owner and are never looked at by the agent. */
-    @Test
-    fun settingsShippedLight() = shipped(dark = false, suffix = "light")
-
-    @Test
-    fun settingsShippedDark() = shipped(dark = true, suffix = "dark")
+    fun theSheetShowsTheAccountAndItsActionsWork() {
+        var signedOut = 0
+        var closed = 0
+        var changelog = 0
+        var checks = 0
+        var allow by mutableStateOf(false)
+        compose.setPhoneContent(false) {
+            SheetFixture("Profile") {
+                ProfileSheetContent(account, "0.6.0 (11)",
+                    SettingsUpdates(true, "Version 0.6.0 (11)", "You're up to date", showAllow = allow,
+                        onCheck = { checks++ }, onChangelog = { changelog++ }),
+                    onSignOut = { signedOut++ }, onClose = { closed++ }, photoLoader = null)
+            }
+        }
+        compose.onNodeWithText("Ada Lovelace").assertExists()
+        compose.onNodeWithText("name@example.com").assertExists()
+        compose.onNodeWithText("Allow installs").assertDoesNotExist()
+        compose.onNodeWithText("Check for updates").performClick()
+        compose.onNodeWithText("What's new").performClick()
+        compose.onNodeWithText(SIGN_OUT).performClick()
+        compose.runOnIdle { assertEquals(listOf(1, 1, 1, 1), listOf(checks, changelog, closed, signedOut)) }
+        allow = true
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText("Allow installs").assertExists()
+    }
 
     private companion object {
         const val SETTLE_MS = 1_500L
