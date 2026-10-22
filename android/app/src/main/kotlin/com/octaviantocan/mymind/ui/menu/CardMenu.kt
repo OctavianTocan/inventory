@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
-import com.octaviantocan.mymind.ui.theme.AndroidFontFamily
+import com.octaviantocan.mymind.ui.theme.AppFontFamily
 import com.octaviantocan.mymind.ui.card.*
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
@@ -68,7 +68,7 @@ val DarkMenuColors = MenuColors(Scrim, Color(0xFF14161E), Color(0xFF1C1E26), Col
 val LightMenuColors = MenuColors(Scrim, Color.White, Color(0xFFF4F6F9), Color(0xFF353643), Danger.copy(alpha = 0.1f), Danger, Handle)
 
 internal val LocalCardMenuAccent = staticCompositionLocalOf<Color?> { null }
-internal val CardMenuFont = AndroidFontFamily
+internal val CardMenuFont = AppFontFamily
 
 /** Neutral Pully paper and controls; the card accent is confined to the top hint and grabber. */
 internal fun cardMenuSheetColors(accent: Color?, dark: Boolean): CardSheetColors {

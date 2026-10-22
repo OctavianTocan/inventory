@@ -1,9 +1,10 @@
 # Changelog
 
 ## 0.6.0 (11), 2026-10-22
-Your review, applied: calmer gallery chrome, Spaces that match, and Pully sheets for adding and your profile.
+Your review, applied: a new typeface, videos that play, posts that look like posts, and Pully sheets for adding and your profile.
 
 ### New
+- Google Sans Flex, the typeface of Google's own apps, replaces Android's default font.
 - Tap + for an Add sheet with Camera, Photos and Files, and New space on the Spaces tab.
 - Tap your photo for a profile sheet with your Google photo, email, updates and Sign out.
 - Spaces share the gallery's background and top controls; an opened space has Back and an options menu.
