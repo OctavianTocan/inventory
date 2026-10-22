@@ -8,8 +8,10 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.CardPage
 import com.octaviantocan.mymind.data.Library
 import com.octaviantocan.mymind.data.LibraryMemory
+import com.octaviantocan.mymind.data.LibrarySync
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.Suggestion
+import com.octaviantocan.mymind.data.SyncOutcome
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.data.map
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * What the Spaces tab shows.
@@ -73,6 +76,8 @@ data class CardSpaceCreationState(
  * @param saver Where Download puts a card's file.
  * @param io Dispatcher picked files are read on.
  * @param memory What the gallery keeps on the phone, so it opens on last time's cards and page scheme; null keeps nothing.
+ * @param sync Keeps the phone's copy of the library up to date: at start, on [syncNow] and on pull to refresh; null when
+ *   there is no copy.
  */
 class LibraryViewModel(
     private val library: Library,
@@ -80,6 +85,7 @@ class LibraryViewModel(
     io: CoroutineDispatcher = Dispatchers.IO,
     uploadActivity: UploadActivity? = null,
     private val memory: LibraryMemory? = null,
+    private val sync: LibrarySync? = null,
 ) : ViewModel() {
     private val mutableScheme = MutableStateFlow(PageScheme.System)
     private val mutableFeatures = MutableStateFlow(emptySet<String>())
@@ -122,6 +128,7 @@ class LibraryViewModel(
     init {
         everything.loadMore()
         topOfMind.loadMore()
+        syncNow()
         var schemeRead = false
         viewModelScope.launch {
             val kept = memory?.scheme()?.let { name -> PageScheme.entries.firstOrNull { it.name == name } }
@@ -158,10 +165,29 @@ class LibraryViewModel(
         }
     }
 
-    /** Pull to refresh on Everything: reads the first page of the library and Top of Mind again. */
+    /**
+     * Pull to refresh on Everything: syncs the phone's copy, then reads the library and Top of Mind again; every page
+     * shown when the sync brought changes, the first page otherwise.
+     */
     fun refreshEverything() {
-        everything.refresh()
-        topOfMind.refresh()
+        val sync = sync ?: return run {
+            everything.refresh()
+            topOfMind.refresh()
+        }
+        val pulled = viewModelScope.async { withTimeoutOrNull(REFRESH_SYNC_WAIT_MS) { sync.sync() }.changedAnything() }
+        everything.refresh { pulled.await() }
+        topOfMind.refresh { pulled.await() }
+    }
+
+    /** Syncs the phone's copy, as when the app comes back or the network returns, and shows what changed. */
+    fun syncNow() {
+        val sync = sync ?: return
+        viewModelScope.launch {
+            if (sync.sync().changedAnything()) {
+                everything.reread()
+                topOfMind.reread()
+            }
+        }
     }
 
     /** Pull to refresh on the Spaces list: reads the spaces and their first cards again, keeping them on show. */
@@ -541,6 +567,12 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
         const val SUGGESTION_LIMIT = 20
     }
 }
+
+// How long pull to refresh waits for a sync before it reads what the phone has.
+private const val REFRESH_SYNC_WAIT_MS = 10_000L
+
+/** True when a sync ended having changed the phone's copy; false for a failure, a missing feed or a timeout. */
+private fun SyncOutcome?.changedAnything(): Boolean = (this as? SyncOutcome.Done)?.changed == true
 
 /** A tag name as a query value, in quotes when it holds a space or a quote. */
 private fun quoted(name: String): String =

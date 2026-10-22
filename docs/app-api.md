@@ -53,6 +53,17 @@ bearer token.
 | `GET /app/v1/tags` | `{"tags": [{"name": "...", "count": 12}]}`, the same order as the web's tag list. |
 | `GET /app/v1/search?q=<query>&semantic=1&limit&cursor` | Same list shape, mymind's query syntax (`docs/search.md`). With `semantic=1` the order also weighs each card's similarity to the query's words, and up to 20 cards close in meaning join without a matching word (`Search::hybrid`); without it, words only. |
 | `GET /app/v1/top-of-mind?limit&cursor` | Same list shape, the pinned cards in pin order (`pinPosition`, then newest bumped first for pins without a position). Trashed and grid-hidden cards are left out. Paged by offset, like a space. |
+| `GET /app/v1/changes?since=<token>&limit=100` | `{"cards": [Card], "removed": ["<id>"], "next": "<token>", "more": bool, "reset": bool, "spaces": [Space]}`: the cards changed since `since`, each once, oldest change first (see below). `limit` 1–200, default 100. |
+
+### Syncing a copy of the library
+
+`/app/v1/changes` lets the phone keep the whole library and fetch only what changed.
+
+- Without `since`, the feed lists every card, oldest bumped first. Read pages until `more` is false, passing each answer's `next` as the following request's `since`.
+- `cards` holds the changed cards, in the same shape as `/cards`. `pinPosition` comes from the pin order that Top of Mind uses. Cards hidden from the grid are included, and the phone filters them out as the grid does.
+- `removed` holds the ids of cards trashed or deleted since. `spaces` (the `/spaces` list) is only on the last page.
+- Any write to a card counts as a change: its row, tags, text, spaces or pin. `app_sync.rs` keeps the log with triggers, and it starts on the first request.
+- `reset: true` means the log started again, for example after the library was replaced by an import, so the token's position no longer applies. Drop the copy, keep the cards in this answer, and carry on paging.
 
 ### Uploads from the app
 

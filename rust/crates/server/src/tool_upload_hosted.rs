@@ -201,7 +201,11 @@ fn visit(tables: &[Table], at: usize, path: &mut Vec<usize>, ordered: &mut Vec<u
 // The tables to copy, parents before children, with the columns that hold data and whether row ids are kept apart.
 fn tables_of(db: &dyn Sql) -> Result<Vec<Table>, String> {
     let names = db
-        .query("SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'search_fts%' AND name != 'search_dirty'", &[])
+        .query(
+            "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'search_fts%' AND name != 'search_dirty'
+            AND name NOT LIKE 'app\\_sync%' ESCAPE '\\'",
+            &[],
+        )
         .map_err(|error| error.to_string())?;
     let mut tables = Vec::new();
     for entry in &names {
@@ -329,7 +333,7 @@ async fn upload_library(admin: &Admin, cwd: &Path, root: &Path, name: Option<&st
     }
     let dirty = db.query("SELECT id FROM search_dirty", &[]).map_err(|error| error.to_string())?;
     let dirty: Vec<Value> = dirty.iter().map(|row| Value::Array(vec![row.get("id").to_value()])).collect();
-    let sequences = db.query("SELECT name, CAST(seq AS TEXT) AS seq FROM sqlite_sequence", &[]).map_err(|error| error.to_string())?;
+    let sequences = db.query("SELECT name, CAST(seq AS TEXT) AS seq FROM sqlite_sequence WHERE name != 'app_sync'", &[]).map_err(|error| error.to_string())?;
     let sequences: Vec<Value> = sequences.iter().map(|row| Value::Object(row.to_object())).collect();
     admin.json(&format!("library/{name}/finish"), "POST", Payload::Json(obj! { "dirty" => Value::Array(dirty), "sequences" => Value::Array(sequences) }.into())).await?;
     drop(db);

@@ -54,6 +54,7 @@ class CardFeed(
     private var job: Job? = null
     private var refreshJob: Job? = null
     private var rememberJob: Job? = null
+    private var rereadJob: Job? = null
     private var remembered: List<Card>? = null
     private var restored = false
     private var unconfirmed = false
@@ -109,6 +110,7 @@ class CardFeed(
     fun reload() {
         job?.cancel()
         refreshJob?.cancel()
+        rereadJob?.cancel()
         cursor = null
         unconfirmed = false
         mutableState.value = FeedState()
@@ -119,12 +121,19 @@ class CardFeed(
      * Reads the first page again for pull to refresh, keeping the cards on show until it arrives. When the list
      * already starts with that page, nothing changes; otherwise the list becomes the fresh page. A failed read leaves
      * a loaded list as it is and turns an empty one into the error. Does nothing while a refresh runs.
+     *
+     * @param prepare Runs first while the refresh shows, such as a sync of the phone's copy; when it returns true, every
+     *   page the list shows is read again, as [reread] does, instead of the first page alone.
      */
-    fun refresh() {
+    fun refresh(prepare: (suspend () -> Boolean)? = null) {
         if (mutableState.value.refreshing) return
         if (mutableState.value.cards.isEmpty()) return reload()
         mutableState.update { it.copy(refreshing = true) }
         refreshJob = scope.launch {
+            if (prepare?.invoke() == true) {
+                if (!rereadPages()) mutableState.update { it.copy(refreshing = false) }
+                return@launch
+            }
             when (val result = load(null)) {
                 is ApiResult.Ok -> {
                     val fresh = result.value
@@ -146,6 +155,17 @@ class CardFeed(
                 is ApiResult.Failed -> mutableState.update { it.copy(refreshing = false) }
             }
         }
+    }
+
+    /**
+     * Reads every page the list shows again and puts the result in its place when it differs, without emptying the list
+     * first; for lists read from the phone's copy, where pages cost nothing. Does nothing while a refresh runs, and a
+     * failed read leaves the list as it is.
+     */
+    fun reread() {
+        if (mutableState.value.refreshing) return
+        rereadJob?.cancel()
+        rereadJob = scope.launch { rereadPages() }
     }
 
     /**
@@ -176,6 +196,33 @@ class CardFeed(
     fun replace(card: Card) {
         mutableState.update { state -> state.copy(cards = state.cards.map { if (it.id == card.id) card else it }) }
         remember()
+    }
+
+    // Reads from the first page until it has as many cards as the list shows, then shows that; false when a read failed.
+    private suspend fun rereadPages(): Boolean {
+        val wanted = mutableState.value.cards.size.coerceAtLeast(1)
+        val read = mutableListOf<Card>()
+        var next: String? = null
+        do {
+            when (val result = load(next)) {
+                is ApiResult.Ok -> {
+                    read += result.value.cards
+                    next = result.value.next
+                }
+                is ApiResult.Failed -> return false
+            }
+        } while (next != null && read.size < wanted)
+        job?.cancel()
+        cursor = next
+        unconfirmed = false
+        val cards = read.distinctBy { it.id }
+        mutableState.value = if (cards == mutableState.value.cards) {
+            mutableState.value.copy(loading = false, refreshing = false, error = null, endReached = next == null)
+        } else {
+            FeedState(cards = cards, endReached = next == null)
+        }
+        remember()
+        return true
     }
 
     // Keeps the list's first cards for next time, when they changed; a newer list replaces a write still waiting.

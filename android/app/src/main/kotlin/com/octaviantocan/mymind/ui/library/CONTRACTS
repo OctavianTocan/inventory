@@ -121,9 +121,21 @@ Everything, Top of Mind and the page scheme MUST open on what they showed last t
 read from the phone's own copy (`data/LibraryCopy.kt`), before the server answers. The
 server's first page then decides: when the list already starts with it, the list stays
 and paging goes on after it; otherwise the list becomes the fresh page. Without the
-network the kept cards stay on show with the error. The copy holds at most the first
+network the kept cards stay on show. The copy holds at most the first
 200 cards of each list, belongs to the session that wrote it, reads as empty under any
 other session and is wiped at sign-out; a copy that cannot be read or written MUST
 never stop the app.
 Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search", step 2
 (an instant, offline local copy on the phone).
+
+@cc [owner:OctavianTocan,label:product;privacy] gallery-works-offline
+Once the phone holds the whole library (`data/LibraryCopy.kt`, filled page by page from
+`/app/v1/changes` by `data/LibrarySync.kt`), Everything and Top of Mind MUST read from it,
+in the server's order. The copy syncs when the app starts, comes back to the screen,
+regains internet, is pulled to refresh, and after each successful change. Without
+internet the app MUST stay usable: no blocking screen, a small Offline pill under the
+top controls, and search by words, cards, spaces and space pages answered from the
+copy. A server without the changes feed MUST leave the app working as before. The copy
+belongs to its session and is wiped at sign-out, like `gallery-opens-from-the-phone`.
+Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search", step 3
+(sync and offline mode).

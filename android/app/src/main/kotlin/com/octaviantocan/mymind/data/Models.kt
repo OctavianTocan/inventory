@@ -89,6 +89,26 @@ data class Card(
 @Serializable
 data class CardPage(val cards: List<Card> = emptyList(), val next: String? = null)
 
+/**
+ * One answer of the server's changes feed.
+ *
+ * @property cards Cards changed since the request's position, oldest change first.
+ * @property removed Ids of cards trashed or deleted since.
+ * @property next Position to ask from next time.
+ * @property more True while further answers follow.
+ * @property reset True when the server's log started again: the phone drops its copy before keeping these cards.
+ * @property spaces The spaces, on the last answer only.
+ */
+@Serializable
+data class ChangesPage(
+    val cards: List<Card> = emptyList(),
+    val removed: List<String> = emptyList(),
+    val next: String,
+    val more: Boolean = false,
+    val reset: Boolean = false,
+    val spaces: List<Space>? = null,
+)
+
 @Serializable
 data class Space(
     val id: String,

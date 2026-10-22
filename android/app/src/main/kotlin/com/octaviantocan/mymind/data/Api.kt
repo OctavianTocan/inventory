@@ -142,6 +142,14 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
         send(get("app/v1/top-of-mind", "limit" to limit.toString(), "cursor" to cursor), CardPage.serializer())
 
     /**
+     * @param since `next` of the previous answer, or null to read the whole library.
+     * @param limit Cards per answer, 1 to 200.
+     * @return The cards changed since [since], or the failure; a server without the feed fails with a server error.
+     */
+    suspend fun changes(since: String?, limit: Int): ApiResult<ChangesPage> =
+        send(get("app/v1/changes", "since" to since, "limit" to limit.toString()), ChangesPage.serializer())
+
+    /**
      * Reads the Serendipity deck from the partial web page, which carries its cards as `mymind-card` elements.
      *
      * @return Card ids of the deck in its order, or the failure.

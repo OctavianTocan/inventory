@@ -25,9 +25,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.octaviantocan.mymind.AppContainer
 import com.octaviantocan.mymind.data.SessionState
-import com.octaviantocan.mymind.ui.errors.OfflineScreen
 import com.octaviantocan.mymind.ui.library.ClosePreviewsOnDispose
 import com.octaviantocan.mymind.ui.library.LibraryViewModel
+import com.octaviantocan.mymind.ui.library.LocalOffline
 import com.octaviantocan.mymind.ui.library.LocalVideoPreviews
 import com.octaviantocan.mymind.ui.library.VideoPreviews
 import com.octaviantocan.mymind.ui.settings.SettingsViewModel
@@ -37,7 +37,8 @@ import com.octaviantocan.mymind.ui.splash.LaunchState
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
 /**
- * Root of the app: the theme around the signed-in screens, the splash and sign-in overlay, and the offline notice.
+ * Root of the app: the theme around the signed-in screens and the splash and sign-in overlay. Without internet the
+ * signed-in screens stay usable from the phone's copy and the gallery controls show an Offline pill.
  *
  * @param container Services the screens read their data and session from.
  */
@@ -56,8 +57,7 @@ fun MymindRoot(container: AppContainer) {
             }
             Box(Modifier.fillMaxSize()) {
                 if (session == SessionState.SignedIn) {
-                    SignedIn(container)
-                    if (!online) OfflineScreen()
+                    CompositionLocalProvider(LocalOffline provides !online) { SignedIn(container, online) }
                 }
                 SignInScreen(signIn, launchState)
             }
@@ -65,12 +65,24 @@ fun MymindRoot(container: AppContainer) {
     }
 }
 
-/** The signed-in shell with its view models. */
+/**
+ * The signed-in shell with its view models.
+ *
+ * @param container Services the screens use.
+ * @param online True while the phone has internet; the library syncs each time it comes back, and when the app does.
+ */
 @Composable
-private fun SignedIn(container: AppContainer) {
+private fun SignedIn(container: AppContainer, online: Boolean) {
     val library = viewModel {
-        LibraryViewModel(container.repository, container.downloads, uploadActivity = container.uploadActivity, memory = container.libraryCopy)
+        LibraryViewModel(
+            container.library,
+            container.downloads,
+            uploadActivity = container.uploadActivity,
+            memory = container.libraryCopy,
+            sync = container.librarySync,
+        )
     }
+    LaunchedEffect(online) { if (online) library.syncNow() }
     val settings = viewModel { SettingsViewModel(container.repository) }
     val context = LocalContext.current
     val updates = viewModel {
@@ -84,7 +96,12 @@ private fun SignedIn(container: AppContainer) {
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_START) updates.onResume() }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                updates.onResume()
+                library.syncNow()
+            }
+        }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
