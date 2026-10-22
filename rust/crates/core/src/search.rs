@@ -10,7 +10,7 @@ use regex::Regex;
 use crate::host::Fetch;
 use crate::runtime;
 use crate::search_index::refresh_search;
-use crate::search_query::{Scores, Term, evaluate, parse_query, type_slugs};
+use crate::search_query::{Parsed, Scores, Term, evaluate, parse_query, type_slugs};
 use crate::search_semantic::{Eligible, Match, Semantic};
 use crate::sql::SqlValue;
 use crate::store::{GRID_HIDDEN_FLAGS, Store};
@@ -73,6 +73,24 @@ impl SearchResult {
     }
 }
 
+/// How [`Search::hybrid`] blends similarity to the query into word search.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Hybrid {
+    /// Weight of a card's similarity to the query, added to its word score.
+    pub boost: f64,
+    /// Least similarity for a card that matches no word of the query.
+    pub floor: f64,
+    /// Most cards that match no word of the query, nearest first.
+    pub take: usize,
+}
+
+impl Default for Hybrid {
+    /// Boost 2 as in [`Search::search`], floor 0.6 and at most 20 cards found by meaning alone.
+    fn default() -> Self {
+        Self { boost: 2.0, floor: 0.6, take: 20 }
+    }
+}
+
 /// One search suggestion: a card type or a tag.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Suggestion {
@@ -117,6 +135,11 @@ pub struct Search {
     store: Rc<Store>,
     user: String,
     semantic: Semantic,
+}
+
+// The query's terms without a field, the text that semantic search embeds.
+fn free_words(parsed: &Parsed) -> String {
+    parsed.terms.iter().filter(|term| term.field.is_empty()).map(|term| term.value.as_str()).collect::<Vec<_>>().join(" ")
 }
 
 fn visible() -> String {
@@ -398,6 +421,53 @@ impl Search {
     /// # Errors
     /// Status 400 for an over-long query, or the database's error.
     pub async fn search(&self, q: &str, options: &Value) -> Result<SearchResult> {
+        let boost = if matches!(options.get("semantic"), Value::Bool(true)) {
+            let requested = options.get("semanticBoost").to_number();
+            if requested.is_finite() { requested.clamp(0.0, 100.0) } else { 2.0 }
+        } else {
+            0.0
+        };
+        self.blend(q, options, boost, None).await
+    }
+
+    /// The app's search: words, plus cards close in meaning to the query's free words. A card that matches a word
+    /// gains `boost` times its similarity; a card that matches none joins only above `floor`, at most `take` of them.
+    /// Query embeddings are cached, so paging asks Gemini once per query.
+    ///
+    /// # Arguments
+    /// * `q` - Query text in mymind's syntax; `similar:<id>` delegates to [`Search::related`].
+    /// * `tuning` - The blend.
+    ///
+    /// # Returns
+    /// Matches by score descending; word matches only when embeddings are disabled or the embedding call fails.
+    ///
+    /// # Errors
+    /// Status 400 for an over-long query, or the database's error.
+    pub async fn hybrid(&self, q: &str, tuning: &Hybrid) -> Result<SearchResult> {
+        self.blend(q, &Value::Undefined, tuning.boost.clamp(0.0, 100.0), Some(tuning)).await
+    }
+
+    /// Every card with a vector, by similarity to the query's free words alone: the half of [`Search::hybrid`] that
+    /// is not word search, sharing its query cache.
+    ///
+    /// # Arguments
+    /// * `q` - Query text in mymind's syntax; field terms such as `type:` are ignored.
+    ///
+    /// # Returns
+    /// Matches by similarity descending; empty when the query has no free words, embeddings are disabled or the
+    /// embedding call fails.
+    ///
+    /// # Errors
+    /// Status 400 for an over-long query, or the database's error.
+    pub async fn meaning(&self, q: &str) -> Result<SearchResult> {
+        let started = runtime::now_ms();
+        let parsed = parse_query(q, false)?;
+        let found = self.semantic.search_cached(&free_words(&parsed), &Value::Number(-1.0), Eligible::Any).await?;
+        Ok(Self::result(started, parsed.query, found))
+    }
+
+    // Word scores plus `boost` times similarity; `join` limits the cards that match no word and caches the query.
+    async fn blend(&self, q: &str, options: &Value, boost: f64, join: Option<&Hybrid>) -> Result<SearchResult> {
         if let Some(id) = q.strip_prefix("similar:") {
             return self.related(text::trim(id), options);
         }
@@ -405,21 +475,28 @@ impl Search {
         let parsed = parse_query(q, matches!(options.get("wildcard"), Value::Bool(true)))?;
         let mut rows = self.universe()?;
         let mut scores = self.matches(&parsed, &rows, false)?;
-        let words = parsed.terms.iter().filter(|term| term.field.is_empty()).map(|term| term.value.as_str()).collect::<Vec<_>>().join(" ");
-        if matches!(options.get("semantic"), Value::Bool(true)) && !words.is_empty() {
-            let requested = options.get("semanticBoost").to_number();
-            let boost = if requested.is_finite() { requested.clamp(0.0, 100.0) } else { 2.0 };
-            if boost > 0.0 {
-                let similar = self.semantic.search(&words, &Value::Number(-1.0), Eligible::Any).await?;
-                rows = self.universe()?;
-                scores = self.matches(&parsed, &rows, false)?;
-                let eligible = self.matches(&parsed, &rows, true)?;
-                for found in similar {
-                    if eligible.contains_key(&found.id) && found.score > 0.0 {
-                        let current = scores.get(&found.id).copied().unwrap_or(0.0);
-                        scores.insert(found.id, current + boost * found.score);
-                    }
+        let words = free_words(&parsed);
+        if boost > 0.0 && !words.is_empty() {
+            let similar = match join {
+                Some(_) => self.semantic.search_cached(&words, &Value::Number(-1.0), Eligible::Any).await?,
+                None => self.semantic.search(&words, &Value::Number(-1.0), Eligible::Any).await?,
+            };
+            rows = self.universe()?;
+            scores = self.matches(&parsed, &rows, false)?;
+            let eligible = self.matches(&parsed, &rows, true)?;
+            let mut joined = 0;
+            for found in similar {
+                if !eligible.contains_key(&found.id) || found.score <= 0.0 {
+                    continue;
                 }
+                let current = scores.get(&found.id).copied();
+                if let (None, Some(limits)) = (current, join) {
+                    if joined >= limits.take || found.score < limits.floor {
+                        continue;
+                    }
+                    joined += 1;
+                }
+                scores.insert(found.id, current.unwrap_or(0.0) + boost * found.score);
             }
         }
         Ok(Self::result(started, parsed.query, Self::ordered(&scores, &rows, options.get("sortBy"))))

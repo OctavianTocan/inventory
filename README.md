@@ -78,11 +78,13 @@ negation, boolean groups, date filters, formats and the client's action/complete
 their filters at creation and refresh memberships on query checks, retaining manual additions and exclusions.
 `/embeddings/search` embeds queries with hosted Gemini; `/embeddings/related/:id` compares stored vectors without
 an API call. Missing keys, disabled hosted calls offline and provider failures return text matches or empty
-semantic matches. See [search contracts and measured recording differences](docs/search.md).
+semantic matches. The Android app's search adds cards close in meaning (`/app/v1/search?semantic=1`), and
+`mymind search-eval queries.jsonl` measures how well each mode finds the cards you meant. See
+[search contracts and measured recording differences](docs/search.md).
 
 Backfill historical text embeddings with `rust/target/release/mymind embed-library` (estimate only), then explicitly add
-`--run`; `--db /path/to/library.db` chooses a database and `--limit 10` selects a trial. The tool does not load
-`.env`; supply API keys in the process environment before using
+`--run`; `--db /path/to/library.db` chooses a database and `--limit 10` selects a trial. `.env` supplies API keys
+the process environment does not already set, as in
 `rust/target/release/mymind embed-library --db /path/to/library.db --limit 10 --run`. It retries 429/5xx, commits each batch, skips existing vectors on
 resume, and reports provider token usage when available. Empty text-only documents are reported and skipped.
 In a worktree with shared read-only `data/`, always select a temporary database; never backfill the symlink target.

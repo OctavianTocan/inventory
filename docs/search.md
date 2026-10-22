@@ -85,6 +85,31 @@ and includes semantic-only positive matches. Explicit field constraints and nega
 eligibility is re-evaluated after the hosted call. Boost zero uses text results alone. No key, provider errors,
 or OFFLINE without an explicit loopback `GEMINI_BASE_URL` degrade to text or empty semantic matches.
 
+The Android app asks `/app/v1/search?semantic=1`, which runs `Search::hybrid`: the same blend at boost 2, except
+that a card matching no word of the query joins only at a similarity of 0.6 or more, at most 20 such cards,
+nearest first, so a vague query does not return the whole library. The query's embedding is kept for the last 64
+queries, so paging through results asks Gemini once. Without the flag the endpoint answers by words alone, as
+`/search` does without `semantic=true`.
+
+## Measuring search
+
+`rust/target/release/mymind search-eval queries.jsonl [--db path]` shows how often search puts the card you meant
+first or in the top 10, by words alone (the app before `semantic=1`), by meaning alone, and by the hybrid blend at
+boosts 1, 2 and 4 and floors 0.5 to 0.7 (`--boost`, `--floor` and `--take` change the sweep). Each line of the
+file is a query and the card it should find, by title, link or id; `expect` may also be a list:
+
+```json
+{"q": "that article about calm interfaces", "expect": "Calm Technology"}
+{"q": "angry dog password meme", "expect": "https://x.com/someone/status/123"}
+```
+
+A title matches exactly, ignoring case, or as the only title that contains it; lines that name no card, or more
+than one by part of a title, are listed and skipped. The report gives each mode's top-1, top-10 and found counts,
+the median number of results and milliseconds, the best blend (most cards first, then most in the top 10, then
+the fewest results) and each query's ranks, marking expected cards without an embedding. The database is opened
+read-only and `.env` supplies `GEMINI_API_KEY`; each query costs one Gemini embedding call. The live library is in
+the Worker's Durable Object, so run it on a copy such as mini-002's `data/mymind.db`.
+
 ## Backfill and checks
 
 `rust/target/release/mymind embed-library [--db path] [--limit N]` only reads the database and prints an estimate. `--run`
