@@ -112,9 +112,10 @@ export async function runAudit({ operation, expectedState, expectedJson, account
       const result = body != null && Object.hasOwn(body, 'result') ? 'present' : 'missing';
       const errors = body?.errors === undefined ? 'absent' : Array.isArray(body.errors)
         ? body.errors.length === 0 ? 'empty-array' : 'nonempty-array' : 'invalid';
+      const errorsKind = body?.errors === null ? 'null' : Array.isArray(body?.errors) ? 'array' : typeof body?.errors;
       const codes = Array.isArray(body?.errors) && body.errors.length ? body.errors.slice(0, 5)
         .map((error) => Number.isSafeInteger(error?.code) && error.code >= 0 && error.code <= 1_000_000_000 ? error.code : 'invalid').join(',') : 'none';
-      fail(`Pilot audit API read failed with HTTP ${response.status}; endpoint=${endpoint}; success=${success}; result=${result}; errors=${errors}; codes=${codes}; absence is unverified`);
+      fail(`Pilot audit API read failed with HTTP ${response.status}; endpoint=${endpoint}; success=${success}; result=${result}; errors=${errors}; errors-kind=${errorsKind}; codes=${codes}; absence is unverified`);
     }
     if (/rel\s*=\s*"?next/i.test(response.headers.get('link') ?? '') && !body.result_info) fail('Pilot audit cannot verify cursor pagination');
     return body;
