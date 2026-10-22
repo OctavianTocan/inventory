@@ -78,6 +78,48 @@ test('live audit verifies identities and bindings without emitting settings or s
   assert.equal(f.commands.length, 0);
 });
 
+test('HTTP-200 logical API failures identify a fixed endpoint without echoing response data', async () => {
+  for (const [resource, label] of [
+    ['workers/scripts', 'worker-list'],
+    ['workers/durable_objects/namespaces', 'namespace-list'],
+    ['containers/applications', 'application-list'],
+    [`workers/scripts/${expected.workerName}/settings`, 'worker-settings'],
+    [`workers/scripts/${expected.workerName}/schedules`, 'worker-schedules'],
+    [`workers/scripts/${expected.probeName}/settings`, 'probe-settings'],
+    [`workers/scripts/${expected.probeName}/schedules`, 'probe-schedules'],
+    [`containers/applications/${expected.containerApplicationId}`, 'application-detail'],
+    [`r2/buckets/${expected.bucketName}`, 'bucket-detail'],
+  ]) {
+    const f = fixture({ override: (url) => url.pathname.endsWith(`/${resource}`)
+      ? Response.json({ success: false, result: null, errors: [{ code: 971, message: secret }], unexpected: secret }) : undefined });
+    await assert.rejects(f.run(), (error) => {
+      assert.ok(error.message.includes(`endpoint=${label}; success=false; result=present; errors=nonempty-array; codes=971;`));
+      for (const value of [secret, account, expected.workerName, expected.containerApplicationId]) assert.ok(!error.message.includes(value));
+      return true;
+    });
+    assert.equal(f.commands.length, 0);
+  }
+});
+
+test('rejected audit envelopes report finite predicate states and bounded numeric codes', async () => {
+  for (const [body, metadata] of [
+    [{ result: [], errors: [] }, 'success=invalid; result=present; errors=empty-array; codes=none;'],
+    [{ success: true, errors: [] }, 'success=true; result=missing; errors=empty-array; codes=none;'],
+    [{ success: true, result: [], errors: secret }, 'success=true; result=present; errors=invalid; codes=none;'],
+    [{ success: false, result: null, errors: [{ code: secret, message: secret }] }, 'success=false; result=present; errors=nonempty-array; codes=invalid;'],
+    [{ success: false, result: null, errors: Array.from({ length: 20 }, () => ({ code: 971, message: secret })) }, 'codes=971,971,971,971,971;'],
+  ]) {
+    const f = fixture({ state: 'absent', override: () => Response.json(body) });
+    await assert.rejects(f.run({ operation: 'cleanup-images' }), (error) => {
+      assert.ok(error.message.includes(metadata));
+      assert.ok(!error.message.includes(secret));
+      assert.ok(error.message.length < 250);
+      return true;
+    });
+    assert.equal(f.commands.length, 0);
+  }
+});
+
 test('absence requires definitive reads and complete namespace pagination', async () => {
   const f = fixture({ state: 'absent', override: (url) => {
     if (!url.pathname.endsWith('/namespaces')) return;

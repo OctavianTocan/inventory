@@ -95,7 +95,27 @@ export async function runAudit({ operation, expectedState, expectedJson, account
     if (response.status === 404 && body?.success === false && Array.isArray(body.errors)
         && body.errors.length > 0 && notFound && body.errors.every(notFound)) return undefined;
     if (!response.ok || body?.success !== true || !Object.hasOwn(body, 'result')
-        || (body.errors !== undefined && (!Array.isArray(body.errors) || body.errors.length))) fail(`Pilot audit API read failed with HTTP ${response.status}; absence is unverified`);
+        || (body.errors !== undefined && (!Array.isArray(body.errors) || body.errors.length))) {
+      // Only fixed endpoint labels and predicate states may leave the response boundary.
+      const endpoint = new Map([
+        ['workers/scripts', 'worker-list'],
+        ['workers/durable_objects/namespaces', 'namespace-list'],
+        ['containers/applications', 'application-list'],
+        ...[['worker', pilot.name], ['probe', pilot.probe_name]].flatMap(([role, name]) => [
+          [`workers/scripts/${name}/settings`, `${role}-settings`],
+          [`workers/scripts/${name}/schedules`, `${role}-schedules`],
+        ]),
+        [`containers/applications/${expected.containerApplicationId}`, 'application-detail'],
+        [`r2/buckets/${expected.bucketName}`, 'bucket-detail'],
+      ]).get(resource.split('?')[0]) ?? 'unknown';
+      const success = body?.success === true ? 'true' : body?.success === false ? 'false' : 'invalid';
+      const result = body != null && Object.hasOwn(body, 'result') ? 'present' : 'missing';
+      const errors = body?.errors === undefined ? 'absent' : Array.isArray(body.errors)
+        ? body.errors.length === 0 ? 'empty-array' : 'nonempty-array' : 'invalid';
+      const codes = Array.isArray(body?.errors) && body.errors.length ? body.errors.slice(0, 5)
+        .map((error) => Number.isSafeInteger(error?.code) && error.code >= 0 && error.code <= 1_000_000_000 ? error.code : 'invalid').join(',') : 'none';
+      fail(`Pilot audit API read failed with HTTP ${response.status}; endpoint=${endpoint}; success=${success}; result=${result}; errors=${errors}; codes=${codes}; absence is unverified`);
+    }
     if (/rel\s*=\s*"?next/i.test(response.headers.get('link') ?? '') && !body.result_info) fail('Pilot audit cannot verify cursor pagination');
     return body;
   };
