@@ -123,6 +123,7 @@ fun LibraryMosaic(
     var sceneColumns by remember { mutableIntStateOf(mosaic.columns) }
     var outgoingColumns by remember { mutableStateOf<Int?>(null) }
     var sceneAlpha by remember { mutableFloatStateOf(1f) }
+    var pressedColumns by remember { mutableStateOf<Int?>(null) }
     val latestFeed by rememberUpdatedState(feed)
     val latestMore by rememberUpdatedState(onLoadMore)
     val headerItems = if (header == null) 0 else 1
@@ -185,7 +186,7 @@ fun LibraryMosaic(
                 (item.key as? String)?.removePrefix(MOSAIC_ROW)?.let(layouts.byId::get)
             } ?: 0
         fun projection(columns: Int): MosaicProjection = layouts.projection(columns, mosaic.position, pivot())
-        fun activeColumns(): Int = outgoingColumns?.takeIf { sceneAlpha < 0.5f } ?: sceneColumns
+        fun activeColumns(): Int = pressedColumns ?: outgoingColumns?.takeIf { sceneAlpha < 0.5f } ?: sceneColumns
         fun capture(focal: Offset?): MosaicAnchor? {
             if (layouts.level(1).cells.isEmpty()) return null
             val y = origin()
@@ -253,7 +254,7 @@ fun LibraryMosaic(
         val latestRows by rememberUpdatedState(rows)
         val latestHeaderItems by rememberUpdatedState(headerItems)
         val nearestScene = mosaic.position.roundToInt().coerceIn(1, 4)
-        val targetScene = if (mosaic.isPinching && mosaic.position in (sceneColumns - 0.55f)..(sceneColumns + 0.55f)) sceneColumns else nearestScene
+        val targetScene = pressedColumns ?: if (mosaic.isPinching && mosaic.position in (sceneColumns - 0.55f)..(sceneColumns + 0.55f)) sceneColumns else nearestScene
         LaunchedEffect(targetScene, moving) {
             val dominant = activeColumns()
             sceneColumns = targetScene
@@ -313,16 +314,25 @@ fun LibraryMosaic(
             .pointerInput(mosaic, state) {
                 try {
                     awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val firstDown = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        // Compose fixes the pointer hit path on down. Keep that scene and its focal node alive until up.
+                        pressedColumns = activeColumns()
                         settling?.cancel()
-                        restingX = horizontalShift(origin())
-                        anchor = null
                         var pinched = false
+                        var dragged = false
                         var pointers = emptySet<androidx.compose.ui.input.pointer.PointerId>()
                         var centroidOffset = Offset.Zero
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             val pressed = event.changes.filter { it.pressed }.map { it.id }.toSet()
+                            if (!pinched && !dragged && pressed.size == 1) {
+                                val point = event.changes.first { it.pressed }.position
+                                if ((point - firstDown.position).getDistance() > viewConfiguration.touchSlop) {
+                                    dragged = true
+                                    restingX = horizontalShift(origin())
+                                    anchor = null
+                                }
+                            }
                             if (pressed.size >= 2) {
                                 val point = event.changes.filter { it.pressed }.fold(Offset.Zero) { sum, change -> sum + change.position } / pressed.size.toFloat()
                                 if (!pinched || pressed != pointers || anchor?.cardId !in latestLayouts.byId) {
@@ -331,6 +341,7 @@ fun LibraryMosaic(
                                     pivotId = anchor?.cardId
                                     anchorXWeight = 1f
                                     centroidOffset = anchor?.viewport?.minus(point) ?: Offset.Zero
+                                    pressedColumns = null
                                     mosaic.beginPinch()
                                     scope.launch(start = CoroutineStart.UNDISPATCHED) { state.stopScroll(MutatePriority.PreventUserInput) }
                                 } else {
@@ -343,14 +354,18 @@ fun LibraryMosaic(
                             pointers = pressed
                         } while (event.changes.any { it.pressed })
                         if (pinched) {
+                            pressedColumns = null
                             mosaic.finishPinch()
                             settleLatest()
-                        } else if (mosaic.position != mosaic.columns.toFloat()) {
-                            anchor = captureLatest(null)
-                            settleLatest()
+                        } else {
+                            val needsSettle = mosaic.position != mosaic.columns.toFloat() || anchor != null
+                            if (needsSettle && anchor == null) anchor = captureLatest(null)
+                            pressedColumns = null
+                            if (needsSettle) settleLatest()
                         }
                     }
                 } finally {
+                    pressedColumns = null
                     mosaic.cancelPinch()
                 }
             }
@@ -360,7 +375,7 @@ fun LibraryMosaic(
                 contentPadding = PaddingValues(bottom = 156.dp),
             ) {
                 if (header != null) item(key = MOSAIC_HEADER, contentType = "header") {
-                    Box(Modifier.onSizeChanged { headerHeight = it.height }.padding(bottom = MOSAIC_GAP)) { header() }
+                    Column(Modifier.onSizeChanged { headerHeight = it.height }.padding(bottom = MOSAIC_GAP)) { header() }
                 }
                 // These semantic-free slots retain LazyListState and fling/viewport bookkeeping while cards regroup.
                 itemsIndexed(rows, key = { _, row -> "$MOSAIC_ROW${row.key}" }, contentType = { _, _ -> "bricks" }) { index, _ ->

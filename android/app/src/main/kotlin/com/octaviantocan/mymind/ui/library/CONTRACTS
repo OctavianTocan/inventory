@@ -22,7 +22,10 @@ within each projection, sharing one focal card's fractional X/Y point and physic
 size. A density crossing with a small hysteresis starts a 90 ms timed handoff,
 then MUST show one opaque grid even if the fingers pause or jitter at the threshold. Reduced
 motion switches the grid immediately. The focal card MUST be drawn once and only
-one projection may expose semantics or hit targets.
+one projection may expose semantics or hit targets. A new single-finger press
+MUST retain its owning projection and focal node through tap or hold. Passing drag
+slop releases focal anchoring; a second finger rebases a new pinch. Stabilizing a
+press MUST show a coherent opaque scene rather than hold a ghosted blend.
 Vertical anchoring respects scroll bounds. During a gesture, projected outer edges
 may clip or leave temporary horizontal slack; canonical stops fill the width and
 horizontal correction settles smoothly to those bounds. The profile and

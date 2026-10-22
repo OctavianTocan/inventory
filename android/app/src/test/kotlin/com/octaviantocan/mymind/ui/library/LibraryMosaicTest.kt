@@ -296,6 +296,103 @@ class LibraryMosaicTest {
     }
 
     @Test
+    fun nonfocalTapPressSurvivesTheProjectionHandoff() = pressAfterPinch(20, longPress = false)
+
+    @Test
+    fun focalTapPressSurvivesTheProjectionHandoff() = pressAfterPinch(19, longPress = false)
+
+    @Test
+    fun nonfocalLongPressSurvivesTheProjectionHandoff() = pressAfterPinch(20, longPress = true)
+
+    @Test
+    fun focalLongPressSurvivesTheProjectionHandoff() = pressAfterPinch(19, longPress = true)
+
+    private fun pressAfterPinch(number: Int, longPress: Boolean) {
+        val density = MosaicState(2)
+        val state = LazyListState(firstVisibleItemIndex = 8)
+        val opened = mutableListOf<String>()
+        val held = mutableListOf<String>()
+        compose.setContent {
+            MymindTheme(dark = true) {
+                LibraryMosaic(FeedState(cards, endReached = true), {}, { opened += it.id },
+                    state = state, mosaic = density, onLongPressCard = { held += it.id })
+            }
+        }
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        val root = gallery.fetchSemanticsNode().boundsInRoot
+        val focal = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot.center - root.topLeft
+        compose.mainClock.autoAdvance = false
+        try {
+            gallery.performTouchInput {
+                down(0, focal - Offset(width * 0.2f, 0f))
+                down(1, focal + Offset(width * 0.2f, 0f))
+                updatePointerTo(0, focal - Offset(width * 0.155f, 0f))
+                updatePointerTo(1, focal + Offset(width * 0.155f, 0f))
+                move(delayMillis = 16)
+                up(0); up(1)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            assertTrue(density.position in 2.55f..2.65f)
+            val point = compose.onNodeWithContentDescription("Photo $number").fetchSemanticsNode().boundsInRoot.center - root.topLeft
+            gallery.performTouchInput { down(0, point) }
+            val duration = if (longPress) 700L else 128L
+            compose.mainClock.advanceTimeBy(duration)
+            gallery.performTouchInput { advanceEventTime(duration); up(0) }
+            compose.runOnIdle {
+                assertEquals(if (longPress) emptyList<String>() else listOf("m$number"), opened)
+                assertEquals(if (longPress) listOf("m$number") else emptyList<String>(), held)
+            }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+        }
+    }
+
+    @Test
+    fun aPostPinchPressCanBecomeANormalDragWithoutKeepingTheFocalAnchorLocked() {
+        val density = MosaicState(2)
+        val state = LazyListState(firstVisibleItemIndex = 8)
+        val opened = mutableListOf<String>()
+        val held = mutableListOf<String>()
+        compose.setContent {
+            MymindTheme(dark = true) {
+                LibraryMosaic(FeedState(cards, endReached = true), {}, { opened += it.id }, state = state,
+                    mosaic = density, onLongPressCard = { held += it.id })
+            }
+        }
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        val root = gallery.fetchSemanticsNode().boundsInRoot
+        val focal = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot.center - root.topLeft
+        compose.mainClock.autoAdvance = false
+        try {
+            gallery.performTouchInput {
+                down(0, focal - Offset(width * 0.2f, 0f))
+                down(1, focal + Offset(width * 0.2f, 0f))
+                updatePointerTo(0, focal - Offset(width * 0.155f, 0f))
+                updatePointerTo(1, focal + Offset(width * 0.155f, 0f))
+                move(delayMillis = 16)
+                up(0); up(1)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            val before = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot
+            val point = before.center - root.topLeft
+            gallery.performTouchInput {
+                down(0, point)
+                moveTo(0, point - Offset(0f, 250f), delayMillis = 64)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            val during = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot
+            assertTrue("Passing drag slop must release focal anchoring while the finger stays down", during.center.y < before.center.y - 100f)
+            gallery.performTouchInput { up(0) }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+        }
+        assertTrue(opened.isEmpty() && held.isEmpty())
+        assertEquals(density.columns.toFloat(), density.position, 0f)
+    }
+
+    @Test
     fun projectedOverscanCannotInterceptTheUnscaledHeaderDuringSettle() {
         val density = MosaicState(2)
         var headerClicks = 0

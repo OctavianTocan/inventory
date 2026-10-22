@@ -164,7 +164,15 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         compose.onRoot().captureRoboImage("screenshots/${name}_${if (dark) "dark" else "light"}.png")
     }
 
-    @Test fun gallery() = capture(2, "gallery")
+    @Test fun gallery() {
+        show(2)
+        val account = compose.onNodeWithContentDescription("Account settings").fetchSemanticsNode().boundsInRoot
+        val heading = compose.onNodeWithText("Top of Mind").fetchSemanticsNode().boundsInRoot
+        val highlight = compose.onNodeWithContentDescription("Places to return to").fetchSemanticsNode().boundsInRoot
+        assertTrue("Top of Mind must sit below the account controls", heading.top >= account.bottom)
+        assertTrue("Highlights must sit below their heading", highlight.top >= heading.bottom)
+        compose.onRoot().captureRoboImage("screenshots/gallery_${if (dark) "dark" else "light"}.png")
+    }
     @Test fun compactGallery() = capture(4, "gallery_compact")
     @Test fun search() = capture(2, "gallery_search", searching = true)
     @Test fun differentNoteTypes() = capture(2, "gallery_notes", sample = mixedNotes, highlights = emptyList())
