@@ -1,0 +1,8 @@
+@cc [owner:OctavianTocan,label:product;design] card-reader-header-is-one-row
+Card reading MUST remain full screen. Its fixed header MUST have a 44dp cross,
+a centered raised title pill occupying the available middle width, and a 44dp
+vertical overflow menu. It MUST NOT add a second metadata row. Long titles may
+ellipsize to one line in this pill, while keeping the complete title in text
+semantics. The pill and controls MUST remain separate at narrow widths and large
+font settings. Sheet headers remain plain titles; this pill belongs to the reader.
+Source: Tavi's attached toolbar reference and one-row requirement, 22 October 2026.

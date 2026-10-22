@@ -42,5 +42,15 @@ Source: Tavi, 22 October 2026, explicit pinch-to-enlarge/reduce requirement.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-highlights-stay-above-the-bricks
 Top of Mind MUST remain above the main mosaic, in pin order, as a horizontal rail of
-large highlight cards. Profile and highlights MUST NOT scale with a mosaic pinch.
-Source: Tavi, 22 October 2026, Google Photos layout request in the Codex conversation.
+large highlight cards. The rail MUST remain horizontally scrollable and scroll
+vertically with the mosaic, without a visible "Top of Mind" text heading. Profile
+and highlights MUST NOT scale with a mosaic pinch.
+Source: Tavi, 22 October 2026, Google Photos layout request and gallery polish in the Codex conversation.
+
+@cc [owner:OctavianTocan,label:product;design] gallery-top-controls-stay-fixed
+The profile, Add and Rediscover controls MUST stay fixed above the gallery viewport
+while its pinned rail and mosaic scroll. They MUST remain available for an empty,
+loading or failed feed. Pull to refresh and mosaic gestures belong to the scrolling
+viewport below those controls; search and browsing MUST retain independent scroll
+positions.
+Source: Tavi, 22 October 2026, gallery polish in the Codex conversation.

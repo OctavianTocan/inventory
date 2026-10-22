@@ -99,7 +99,7 @@ fun EverythingScreen(
     )
 }
 
-/** Profile controls and Top of Mind scroll above the cards; search and browsing retain independent positions. */
+/** Profile controls stay fixed above the scrolling pin rail and cards; search and browsing retain independent positions. */
 @Composable
 fun EverythingContent(
     feed: FeedState,
@@ -145,13 +145,15 @@ fun EverythingContent(
                     style = LibraryStyle.title, color = colors.text)
                 SearchChips(typeChips, onChoose, Modifier.padding(bottom = 150.dp))
             }
-            else -> PullRefresh(feed.refreshing, onRefresh) {
-                LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
-                    onLongPressCard = onLongPressCard, header = {
-                        GalleryHeader(onOpenSettings, onAdd, onSerendipity, photoUrl = photoUrl, photoLoader = photoLoader)
-                        GalleryHighlights(topOfMind, onOpenCard, onLoadMore = onLoadMoreTopOfMind, onLongPressCard = onLongPressCard)
-                        if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
-                    })
+            else -> Column(Modifier.fillMaxSize()) {
+                GalleryHeader(onOpenSettings, onAdd, onSerendipity, photoUrl = photoUrl, photoLoader = photoLoader)
+                PullRefresh(feed.refreshing, onRefresh, Modifier.weight(1f).fillMaxWidth()) {
+                    LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
+                        onLongPressCard = onLongPressCard, header = {
+                            GalleryHighlights(topOfMind, onOpenCard, onLoadMore = onLoadMoreTopOfMind, onLongPressCard = onLongPressCard)
+                            if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
+                        })
+                }
             }
         }
     }

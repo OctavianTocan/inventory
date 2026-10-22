@@ -68,6 +68,35 @@ class CardHeaderLayoutTest(private val title: String, private val fontScale: Flo
         assertEquals("Keep the title centered with or without a menu", compose.onNodeWithTag("header").fetchSemanticsNode().boundsInRoot.center.x, titleBounds.center.x, 1f)
     }
 
+    @Test
+    fun readerTitleUsesOneCenteredRowWithSeparateControls() {
+        compose.setPhoneContent(false) {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
+                Box(Modifier.width(320.dp).testTag("header")) {
+                    CardHeader(title, onClose = {}, onMenu = if (hasMenu) ({}) else null, titleInPill = true)
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(100)
+        compose.waitForIdle()
+        val text = compose.onNodeWithText(title).assertIsDisplayed()
+        val layouts = mutableListOf<TextLayoutResult>()
+        text.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals("The reader title stays on one row", 1, layouts.single().lineCount)
+        val bounds = text.fetchSemanticsNode().boundsInRoot
+        val header = compose.onNodeWithTag("header").fetchSemanticsNode().boundsInRoot
+        val close = compose.onNodeWithContentDescription("Close card").fetchSemanticsNode().boundsInRoot
+        assertEquals(header.center.x, bounds.center.x, 1f)
+        assertEquals(bounds.center.y, close.center.y, 1f)
+        assertTrue(bounds.left > close.right)
+        if (hasMenu) {
+            val menu = compose.onNodeWithContentDescription("Card actions").fetchSemanticsNode().boundsInRoot
+            assertEquals(bounds.center.y, menu.center.y, 1f)
+            assertTrue(bounds.right < menu.left)
+        }
+    }
+
     companion object {
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "fontScale={1}, menu={2}, title={0}")

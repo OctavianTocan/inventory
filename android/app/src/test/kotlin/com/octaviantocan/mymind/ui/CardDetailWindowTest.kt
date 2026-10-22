@@ -78,25 +78,20 @@ class CardDetailWindowTest {
 
     @Test
     @Config(fontScale = 2f)
-    fun exceptionallyLongTitlesRemainScrollableWithControlsAndBodyVisible() {
+    fun exceptionallyLongTitlesUseOneRowWhileTheBodyAndControlsStayVisible() {
         val title = (1..20).joinToString("\n") { "Heading line $it" }
         show(LibrarySamples.article.copy(title = title))
-        val header = compose.onNode(hasText(title) and hasScrollAction()).assertIsDisplayed()
+        val header = compose.onNode(hasText(title) and !hasScrollAction()).assertIsDisplayed()
         val body = compose.onNode(hasScrollAction() and !hasText(title)).assertIsDisplayed()
-        assertTrue(header.fetchSemanticsNode().boundsInRoot.height <= PHONE_HEIGHT_PX / 4f + 1f)
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        header.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals("The complete title remains accessible in a one-row pill", 1, layouts.single().lineCount)
+        val headerBounds = header.fetchSemanticsNode().boundsInRoot
         assertTrue(body.fetchSemanticsNode().boundsInRoot.height > with(compose.density) { 100.dp.toPx() })
-        val range = header.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
-        assertTrue(range.maxValue() > 0f)
-        val readerTop = panel.fetchSemanticsNode().boundsInRoot.top
-        header.performTouchInput { swipeUp(durationMillis = 500) }
-        compose.mainClock.advanceTimeBy(1500)
-        assertTrue("A swipe scrolls the heading", range.value() > 0f)
-        assertEquals(readerTop, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
-        assertEquals(0f, body.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), 1f)
-        header.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, range.maxValue()) }
+        body.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 200f) }
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
-        assertEquals(range.maxValue(), range.value(), 1f)
+        assertEquals("Reading scrolls independently of its header", headerBounds, header.fetchSemanticsNode().boundsInRoot)
         compose.onNodeWithContentDescription("Close card").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
         compose.onNodeWithContentDescription("Card actions").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
     }

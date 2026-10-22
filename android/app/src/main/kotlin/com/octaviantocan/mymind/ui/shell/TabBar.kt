@@ -169,7 +169,9 @@ private fun GalleryNavigation(selected: Tab, onSelect: (Tab) -> Unit, onSearch: 
                             contentAlignment = Alignment.Center,
                         ) {
                             Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (showIcons) FootIcon(if (tab == Tab.Everything) R.drawable.ic_library_grid else R.drawable.ic_library_spaces, size = 20.dp)
+                                if (showIcons && index == selectedIndex) {
+                                    FootIcon(if (tab == Tab.Everything) R.drawable.ic_library_grid else R.drawable.ic_library_spaces, size = 20.dp)
+                                }
                                 Text(
                                     tab.label,
                                     Modifier.weight(1f, fill = false),

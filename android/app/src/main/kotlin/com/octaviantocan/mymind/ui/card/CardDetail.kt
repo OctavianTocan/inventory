@@ -2,6 +2,7 @@ package com.octaviantocan.mymind.ui.card
 
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
@@ -96,7 +98,7 @@ internal fun CardDetail(
             }
             .windowInsetsPadding(WindowInsets.safeDrawing)) {
             Spacer(Modifier.height(16.dp))
-            CardHeader(cardHeading(card), onClose = onClose, onMenu = onMenu, icons = headerIcons)
+            CardHeader(cardHeading(card), onClose = onClose, onMenu = onMenu, icons = headerIcons, titleInPill = true)
             val fade = with(density) { 20.dp.toPx() }
             Column(Modifier.fillMaxWidth().weight(1f)
                 .sheetEdgeFade(color = colors.paper, topStrength = { (scrollState.value / fade).coerceIn(0f, 1f) })
@@ -122,16 +124,14 @@ private fun TagChips(tags: List<Tag>, style: TextStyle, onRemove: (Tag) -> Unit)
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(tag.name.orEmpty(), Modifier.padding(vertical = 6.dp), style = style)
-                Text(
-                    "\u00D7",
-                    Modifier
-                        .semantics { contentDescription = "Remove tag ${tag.name.orEmpty()}" }
-                        .clickable(role = Role.Button) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onRemove(tag)
-                        }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    style = style,
+                Image(
+                    painterResource(com.octaviantocan.mymind.R.drawable.ic_sheet_close),
+                    contentDescription = "Remove tag ${tag.name.orEmpty()}",
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(style.color),
+                    modifier = Modifier.size(36.dp).clickable(role = Role.Button) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onRemove(tag)
+                    }.padding(9.dp),
                 )
             }
         }

@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.octaviantocan.mymind.ui.card.defaultCardHeaderIcons
 import com.octaviantocan.mymind.ui.card.CardHeader
 import com.octaviantocan.mymind.ui.card.LocalCardSheetColors
 import com.octaviantocan.mymind.ui.card.LightCardSheetColors
@@ -50,7 +51,8 @@ class CardHeaderScreenshotTest {
                         title = "A card with a title",
                         onClose = {},
                         onMenu = {},
-                        icons = flatCardHeaderIcons(),
+                        icons = defaultCardHeaderIcons(),
+                        titleInPill = true,
                     )
                 }
             }

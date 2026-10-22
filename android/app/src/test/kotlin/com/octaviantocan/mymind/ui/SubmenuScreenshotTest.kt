@@ -70,7 +70,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
                     modifier = Modifier.blur(8.dp),
                     overlay = {
                         PageTheme(PageScheme.Dark) {
-                            CardDetail(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons())
+                            CardDetail(card, onClose = {}, onMenu = {}, headerIcons = com.octaviantocan.mymind.ui.card.defaultCardHeaderIcons())
                         }
                     },
                 ) { SampleEverything() }
@@ -175,7 +175,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
         render {
             ShellFrame(Tab.Everything, onSelectTab = {}, scheme = PageScheme.Dark, overlay = {
                 PageTheme(PageScheme.Dark) {
-                    CardDetail(card, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons(), onRemoveTag = {})
+                    CardDetail(card, onClose = {}, onMenu = {}, headerIcons = com.octaviantocan.mymind.ui.card.defaultCardHeaderIcons(), onRemoveTag = {})
                 }
             }) { SampleEverything() }
         }

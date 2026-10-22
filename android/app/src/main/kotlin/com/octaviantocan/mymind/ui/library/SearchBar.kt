@@ -8,6 +8,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.res.painterResource
+import com.octaviantocan.mymind.R
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.Role
@@ -25,9 +30,6 @@ val SEARCH_BAR_HEIGHT = 55.dp
 val PAGE_GUTTER = 10.dp
 
 private val BAR_RADIUS = 6.dp
-private const val PLUS_ARM = 12.577f / 29f
-private const val PLUS_STROKE = 3.354f / 29f
-private const val PLUS_SHIFT = 0.0769f / 29f
 
 /**
  * The orange 55 dp square with a white plus.
@@ -42,6 +44,7 @@ private const val PLUS_SHIFT = 0.0769f / 29f
 @Composable
 fun AddButton(onClick: () -> Unit, modifier: Modifier = Modifier, plus: Dp = 21.dp, square: Rect? = null) {
     val accent = MymindTheme.colors.accent
+    val glyph = painterResource(R.drawable.ic_library_add)
     Canvas(
         modifier
             .size(SEARCH_BAR_HEIGHT)
@@ -52,11 +55,10 @@ fun AddButton(onClick: () -> Unit, modifier: Modifier = Modifier, plus: Dp = 21.
         val edges = Rect(exact.left.snap(), exact.top.snap(), exact.right.snap(), exact.bottom.snap())
         drawRoundRect(accent, edges.topLeft, edges.size, CornerRadius(BAR_RADIUS.toPx()))
         val plusPx = plus.toPx()
-        val centre = exact.center + Offset(plusPx * PLUS_SHIFT, plusPx * PLUS_SHIFT)
-        val arm = plusPx * PLUS_ARM
-        val stroke = plusPx * PLUS_STROKE
-        drawLine(Color.White, Offset(centre.x - arm, centre.y), Offset(centre.x + arm, centre.y), stroke, StrokeCap.Round)
-        drawLine(Color.White, Offset(centre.x, centre.y - arm), Offset(centre.x, centre.y + arm), stroke, StrokeCap.Round)
+        val centre = exact.center
+        translate(centre.x - plusPx / 2f, centre.y - plusPx / 2f) {
+            with(glyph) { draw(Size(plusPx, plusPx), colorFilter = ColorFilter.tint(Color.White)) }
+        }
     }
 }
 

@@ -93,7 +93,7 @@ internal fun CardMenuSheet(
             onBack = if (submenu != null) onBack else null, scrollState = null,
             titleContent = {
                 CardMenuPageSwitch(submenu, Modifier.fillMaxWidth(), centered = true) { page ->
-                    Text(page?.title ?: "Card actions")
+                    Text(page?.title ?: "Card actions", Modifier.fillMaxWidth())
                 }
             }) {
             CardMenuPageSwitch(submenu, Modifier.fillMaxWidth(), slow = true) { page ->
@@ -174,9 +174,16 @@ internal fun CardMenuPanel(
                     .draggable(drag, Orientation.Vertical, enabled = !position.closing,
                         onDragStopped = { position.settle(scope, it, speed, latestMotion, latestDismiss) }),
             ) {
+                if (accent != null) {
+                    Box(Modifier.fillMaxWidth().height(64.dp).background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(accent.copy(alpha = if (MymindTheme.colors.dark) 0.14f else 0.10f), androidx.compose.ui.graphics.Color.Transparent),
+                        ),
+                    ))
+                }
                 Column(Modifier.fillMaxWidth().heightIn(max = tall).imePadding()
                     .onSizeChanged { position.measuredContent(it.height, scope, motion) }) {
-                    Box(Modifier.padding(top = 10.dp, bottom = 20.dp).align(Alignment.CenterHorizontally)
+                    Box(Modifier.padding(top = 10.dp, bottom = 14.dp).align(Alignment.CenterHorizontally)
                         .size(36.dp, 4.dp).clip(CircleShape).background(colors.grabber))
                     CardHeader(title, onClose = dismiss, enabled = !position.closing, closeLabel = "Close card actions",
                         onBack = onBack, titleContent = titleContent)
