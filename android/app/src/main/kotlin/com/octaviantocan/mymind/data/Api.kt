@@ -241,13 +241,18 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
         ).map { }
 
     /**
+     * Searches by words and by meaning: a server that knows `semantic=1` also returns cards close in meaning to the
+     * query; an older one ignores it and matches words only.
+     *
      * @param query Search text in mymind's query syntax.
      * @param limit page size, 1 to 200.
      * @param cursor `next` of the previous page, or null for the first page.
      * @return One page of matching cards.
      */
-    suspend fun search(query: String, limit: Int, cursor: String?): ApiResult<CardPage> =
-        send(get("app/v1/search", "q" to query, "limit" to limit.toString(), "cursor" to cursor), CardPage.serializer())
+    suspend fun search(query: String, limit: Int, cursor: String?): ApiResult<CardPage> = send(
+        get("app/v1/search", "q" to query, "semantic" to "1", "limit" to limit.toString(), "cursor" to cursor),
+        CardPage.serializer(),
+    )
 
     /**
      * Reads the account settings and feature switches that the web page carries in its config script.

@@ -55,6 +55,13 @@ class MymindApiTest {
     }
 
     @Test
+    fun searchAsksForMeaningAsWellAsWords() = runBlocking {
+        answer("""{"cards":[],"next":null}""")
+        api.search("calm interfaces", 50, null)
+        assertEquals("/app/v1/search?q=calm%20interfaces&semantic=1&limit=50", server.takeRequest().path)
+    }
+
+    @Test
     fun tagReadsUseTheWebRoutes() = runBlocking {
         answer("""{"tags":[{"name":"recipes","count":2}]}""")
         answer("""[{"name":"travel"}]""")

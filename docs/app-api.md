@@ -51,7 +51,7 @@ bearer token.
 | `GET /app/v1/spaces` | `{"spaces": [Space]}` in the user's order. |
 | `GET /app/v1/spaces/<id>/cards?limit&cursor` | Same list shape, the space's cards in its order. |
 | `GET /app/v1/tags` | `{"tags": [{"name": "...", "count": 12}]}`, the same order as the web's tag list. |
-| `GET /app/v1/search?q=<query>&limit&cursor` | Same list shape, mymind's query syntax (`docs/search.md`). |
+| `GET /app/v1/search?q=<query>&semantic=1&limit&cursor` | Same list shape, mymind's query syntax (`docs/search.md`). With `semantic=1` the order also weighs each card's similarity to the query's words, and up to 20 cards close in meaning join without a matching word (`Search::hybrid`); without it, words only. |
 | `GET /app/v1/top-of-mind?limit&cursor` | Same list shape, the pinned cards in pin order (`pinPosition`, then newest bumped first for pins without a position). Trashed and grid-hidden cards are left out. Paged by offset, like a space. |
 
 ### Uploads from the app

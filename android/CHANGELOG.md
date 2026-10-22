@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (12), 2026-10-22
+Search that finds what you mean, not only the words you typed.
+
+### New
+- Search also brings up cards close in meaning to your words, after the words that match. It needs the updated server; until then search works as before.
+
 ## 0.6.0 (11), 2026-10-22
 Your review, applied: a new typeface, videos that play, posts that look like posts, and Pully sheets for adding and your profile.
 

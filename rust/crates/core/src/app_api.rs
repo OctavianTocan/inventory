@@ -7,7 +7,7 @@ use url::Url;
 
 use crate::http::{Headers, Response, search_param};
 use crate::render::media::image_cover;
-use crate::search::Search;
+use crate::search::{Hybrid, Search};
 use crate::sql::SqlValue;
 use crate::store::{CardRow, Cursor, GRID_HIDDEN_FLAGS, Store, iso_from_ns};
 use crate::{Error, Result};
@@ -115,7 +115,7 @@ impl AppApi {
     ///
     /// # Arguments
     /// * `store` - Open store.
-    /// * `search` - Search service whose `search(q, {})` orders the matches.
+    /// * `search` - Search service whose `search(q, {})` orders the matches, or `hybrid` for `/search?semantic=1`.
     /// * `localize` - Rewrites recorded origins to local paths in every JSON body.
     pub fn new(store: Rc<Store>, search: Rc<Search>, localize: fn(&str) -> String) -> Self {
         Self { store, search, localize }
@@ -306,7 +306,12 @@ impl AppApi {
             ["search"] => match search_param(url, "q").filter(|q| !text::trim(q).is_empty()) {
                 None => self.problem(400, "missing-query")?,
                 Some(q) => {
-                    let ids: Vec<String> = self.search.search(&q, &Value::Object(Object::new())).await?.matches.into_iter().map(|found| found.id).collect();
+                    let found = if search_param(url, "semantic").as_deref() == Some("1") {
+                        self.search.hybrid(&q, &Hybrid::default()).await?
+                    } else {
+                        self.search.search(&q, &Value::Object(Object::new())).await?
+                    };
+                    let ids: Vec<String> = found.matches.into_iter().map(|found| found.id).collect();
                     self.offset_page(url, &self.store.cards_by_ids(&ids, None)?)?
                 }
             },

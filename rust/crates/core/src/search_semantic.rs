@@ -1,7 +1,8 @@
 //! Port of `lib/search-semantic.mjs`: cosine search over the stored 768-float embeddings.
 
+use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
 use mm_js::{Value, locale_compare, obj, url};
@@ -9,10 +10,13 @@ use mm_js::{Value, locale_compare, obj, url};
 use crate::ai::{Ai, AiItem, EmbedKind, cosine};
 use crate::host::Fetch;
 use crate::runtime;
+use crate::sql::SqlExt;
 use crate::store::{GRID_HIDDEN_FLAGS, Store};
 use crate::{Error, Result};
 
 const DIMENSIONS: usize = 768;
+/// How many recent query embeddings [`Semantic::search_cached`] keeps.
+const QUERY_CACHE: usize = 64;
 
 /// A card and its similarity score.
 #[derive(Clone, Debug, PartialEq)]
@@ -79,6 +83,7 @@ pub struct Semantic {
     store: Rc<Store>,
     fetch: Option<Rc<dyn Fetch>>,
     offline: bool,
+    queries: RefCell<VecDeque<(String, Rc<[f32]>)>>,
 }
 
 impl Semantic {
@@ -89,7 +94,21 @@ impl Semantic {
     /// * `fetch` - Outbound HTTP for query embeddings; `None` makes [`Semantic::search`] always answer empty.
     /// * `offline` - Hosted API policy, as in [`embeddings_enabled`].
     pub fn new(store: Rc<Store>, fetch: Option<Rc<dyn Fetch>>, offline: bool) -> Self {
-        Self { store, fetch, offline }
+        Self { store, fetch, offline, queries: RefCell::new(VecDeque::new()) }
+    }
+
+    fn has_vectors(&self) -> Result<bool> {
+        Ok(self
+            .store
+            .db()
+            .one(
+                &format!(
+                    "SELECT 1 FROM embeddings e JOIN cards c ON c.id = e.card_id
+      WHERE e.user_id = ? AND c.user_id = e.user_id AND c.deleted_ns IS NULL AND (c.flags & {GRID_HIDDEN_FLAGS}) = 0 LIMIT 1"
+                ),
+                &[self.store.default_user_id()?.into()],
+            )?
+            .is_some())
     }
 
     fn vectors(&self) -> Result<Vec<(String, Option<Vec<u8>>)>> {
@@ -154,13 +173,56 @@ impl Semantic {
     /// # Errors
     /// The database's error.
     pub async fn search(&self, q: &str, take: &Value, eligible: Eligible<'_>) -> Result<Vec<Match>> {
-        if mm_js::text::trim(q).is_empty() || !embeddings_enabled(self.offline) || self.vectors()?.is_empty() {
+        self.nearest_to_query(q, take, eligible, false).await
+    }
+
+    /// [`Semantic::search`] that reuses the embeddings of the last 64 distinct query texts, so paging through one
+    /// query's results asks Gemini once. Failed embeddings are not kept.
+    ///
+    /// # Arguments
+    /// * `q` - Query text, the cache key as given.
+    /// * `take` - Result count, as in [`Semantic::search`].
+    /// * `eligible` - Which cards may be returned.
+    ///
+    /// # Returns
+    /// Matches by score descending, empty in the same cases as [`Semantic::search`].
+    ///
+    /// # Errors
+    /// The database's error.
+    pub async fn search_cached(&self, q: &str, take: &Value, eligible: Eligible<'_>) -> Result<Vec<Match>> {
+        self.nearest_to_query(q, take, eligible, true).await
+    }
+
+    async fn nearest_to_query(&self, q: &str, take: &Value, eligible: Eligible<'_>, cached: bool) -> Result<Vec<Match>> {
+        if mm_js::text::trim(q).is_empty() || !embeddings_enabled(self.offline) || !self.has_vectors()? {
             return Ok(Vec::new());
         }
-        let Some(fetch) = self.fetch.as_deref() else { return Ok(Vec::new()) };
-        let item = AiItem { text: Some(q.to_owned()), ..AiItem::default() };
-        let Ok(vector) = Ai::new(fetch).embed(&item, EmbedKind::Query).await else { return Ok(Vec::new()) };
+        let Some(vector) = self.query_vector(q, cached).await else { return Ok(Vec::new()) };
         Ok(self.nearest(&vector, take, &eligible, None).unwrap_or_default())
+    }
+
+    // The query's embedding, from the cache when allowed; `None` without a transport or when the call fails.
+    async fn query_vector(&self, q: &str, cached: bool) -> Option<Rc<[f32]>> {
+        if cached {
+            let mut queries = self.queries.borrow_mut();
+            if let Some(at) = queries.iter().position(|(text, _)| text == q) {
+                let entry = queries.remove(at)?;
+                let vector = Rc::clone(&entry.1);
+                queries.push_back(entry);
+                return Some(vector);
+            }
+        }
+        let fetch = self.fetch.as_deref()?;
+        let item = AiItem { text: Some(q.to_owned()), ..AiItem::default() };
+        let vector: Rc<[f32]> = Ai::new(fetch).embed(&item, EmbedKind::Query).await.ok()?.into();
+        if cached {
+            let mut queries = self.queries.borrow_mut();
+            queries.push_back((q.to_owned(), Rc::clone(&vector)));
+            if queries.len() > QUERY_CACHE {
+                queries.pop_front();
+            }
+        }
+        Some(vector)
     }
 
     /// Cards whose stored vector is nearest to a card's own (`related`).
