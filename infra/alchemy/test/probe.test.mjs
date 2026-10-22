@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 import probe from '../probe.mjs';
 
@@ -7,6 +8,9 @@ function fixture({ mediaStatus = 201, readStatus = 200 } = {}) {
   const objects = new Map();
   const requests = [];
   let revoked = true;
+  let library = 'alchemy-staging-synthetic';
+  const account = 'password:alchemy-staging-synthetic';
+  const generatedLibrary = `u-alchemy-staging-synthetic-${createHash('sha256').update(account).digest('hex')}`;
   const env = {
     ADMIN_TOKEN: 'synthetic-admin', PILOT_PASSWORD: 'synthetic-password', PILOT_HASH: 'synthetic-hash', PILOT_RUN: 'synthetic-first',
     RESULTS: {
@@ -25,7 +29,10 @@ function fixture({ mediaStatus = 201, readStatus = 200 } = {}) {
           if (request.headers.get('authorization') !== 'Bearer synthetic-admin') return new Response(null, { status: 401 });
           const body = await request.json();
           if (url.pathname === '/_admin/auth/user') assert.equal(body.username, 'alchemy-staging-synthetic');
-          else assert.equal(body.library, 'alchemy-staging-synthetic');
+          else {
+            assert.equal(body.account, account);
+            library = body.library;
+          }
           return new Response(null, { status: 204 });
         }
         if (url.pathname === '/signin/password') {
@@ -36,7 +43,10 @@ function fixture({ mediaStatus = 201, readStatus = 200 } = {}) {
         assert.equal(request.headers.get('cookie'), 'session=synthetic');
         if (url.pathname === '/signout') { revoked = true; return new Response(null, { status: 302 }); }
         if (url.pathname === '/app/v1/me') return Response.json({}, { status: revoked ? 401 : 200 });
-        if (url.pathname === '/uploads/authorize') return Response.json({ url: '/uploads/synthetic', token: 'synthetic-upload-token' });
+        if (url.pathname === '/uploads/authorize') {
+          if (library !== generatedLibrary) return new Response(null, { status: 500 });
+          return Response.json({ url: '/uploads/synthetic', token: 'synthetic-upload-token' });
+        }
         if (url.pathname === '/uploads/synthetic') {
           assert.equal(request.headers.get('x-upload-token'), 'synthetic-upload-token');
           return Response.json({ done: true, id: 'synthetic-upload' });
@@ -49,8 +59,17 @@ function fixture({ mediaStatus = 201, readStatus = 200 } = {}) {
       },
     },
   };
-  return { env, requests, objects, result: () => JSON.parse(objects.get(`pilot/results/${env.PILOT_RUN}.json`)) };
+  return { env, requests, objects, library: () => library, generatedLibrary, result: () => JSON.parse(objects.get(`pilot/results/${env.PILOT_RUN}.json`)) };
 }
+
+test('synthetic setup repairs an existing unseedable library assignment before uploading', async () => {
+  const f = fixture();
+  assert.notEqual(f.library(), f.generatedLibrary);
+  await probe.scheduled({}, f.env);
+  assert.equal(f.library(), f.generatedLibrary);
+  assert.equal(f.result().passed, true);
+  assert.ok(f.requests.indexOf('POST /_admin/auth/library') < f.requests.indexOf('POST /uploads/authorize'));
+});
 
 test('a scheduled success records status-only evidence and stops repeating work', async () => {
   const f = fixture();
