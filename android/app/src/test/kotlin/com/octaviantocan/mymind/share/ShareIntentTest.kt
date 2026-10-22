@@ -26,6 +26,27 @@ class ShareIntentTest {
     }
 
     @Test
+    fun aLinkSharedWithWordsSavesTheLinkWithTheWordsAsItsNote() {
+        val send = { text: String -> parse(ShareRequest("android.intent.action.SEND", "text/plain", null, text, null)) }
+        assertEquals(ShareState.Ready(listOf(ShareItem.Text("https://vm.tiktok.com/abc/", "Check out this video!"))), send("Check out this video! https://vm.tiktok.com/abc/"))
+        assertEquals(ShareState.Ready(listOf(ShareItem.Text("https://maps.app.goo.gl/x1", "Café Lumen\nRue Verte 4"))), send("Café Lumen\nRue Verte 4\nhttps://maps.app.goo.gl/x1"))
+        assertEquals(ShareState.Ready(listOf(ShareItem.Text("https://example.com/a", "Read"))), send("Read https://example.com/a."))
+        assertEquals(ShareState.Ready(listOf(ShareItem.Text("https://example.com/b", "(see"))), send("(see https://example.com/b)"))
+    }
+
+    @Test
+    fun aLinkKeepsBracketsItOpensAndTextWithSeveralLinksStaysText() {
+        val send = { text: String -> parse(ShareRequest("android.intent.action.SEND", "text/plain", null, text, null)) }
+        assertEquals(ShareState.Ready(listOf(ShareItem.Text("https://en.wikipedia.org/wiki/Foo_(bar)"))), send("https://en.wikipedia.org/wiki/Foo_(bar)"))
+        assertEquals(ShareState.Ready(listOf(ShareItem.Text("https://example.com"))), send("https://example.com!"))
+        assertEquals(ShareState.Ready(listOf(ShareItem.Text("https://a.test and https://b.test"))), send("https://a.test and https://b.test"))
+        assertEquals(
+            ShareState.Ready(listOf(ShareItem.Text("Selected words https://a.test"))),
+            parse(ShareRequest(ACTION_PROCESS_TEXT, "text/plain", null, "Selected words https://a.test", null)),
+        )
+    }
+
+    @Test
     fun textFallsBackToTheIntentData() {
         assertEquals(ShareState.Ready(listOf(ShareItem.Text("https://a.test"))), parse(ShareRequest("android.intent.action.VIEW", "", null, null, "https://a.test")))
     }

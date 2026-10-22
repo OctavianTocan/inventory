@@ -4,6 +4,7 @@ import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.ui.library.FakeLibrary
+import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.update.UploadActivity
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -32,6 +33,17 @@ class ShareControllerTest {
             listOf("content:https://example.com:clipboard:null", "tag:$id:read", "tag:$id:later", "note:$id:a note", "space:s1:$id"),
             library.calls,
         )
+    }
+
+    @Test
+    fun wordsSharedWithALinkBecomeItsNoteUnlessItHasOne() = runTest(dispatcher) {
+        val library = FakeLibrary()
+        val fresh = "card-${"https://a.test".hashCode()}"
+        val saved = "card-${"https://b.test".hashCode()}"
+        library.cardsById = mapOf(fresh to testCard(fresh), saved to testCard(saved, note = "mine"))
+        ShareController(this, library, dispatcher) { null }.start(listOf(ShareItem.Text("https://a.test", "Café Lumen"), ShareItem.Text("https://b.test", "Other words")))
+        advanceUntilIdle()
+        assertEquals(listOf("note:$fresh:Café Lumen"), library.calls.filter { it.startsWith("note:") })
     }
 
     @Test
