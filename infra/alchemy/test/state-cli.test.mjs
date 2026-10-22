@@ -20,8 +20,11 @@ function fixture(t, options = {}) {
   for (const name of ['state.mjs', 'contract.mjs']) copyFileSync(new URL(`../scripts/${name}`, import.meta.url), path.join(project, 'scripts', name));
   copyFileSync(new URL('./fixtures/gh-state.mjs', import.meta.url), path.join(root, 'bin/gh'));
   chmodSync(path.join(root, 'bin/gh'), 0o755);
+  const artifacts = options.artifacts ?? [{ id: 1, name: ARTIFACT_NAME, expired: false, workflow_run: { id: 42 }, created_at: '2026-10-21T12:01:00Z' }];
+  const pages = [];
+  for (let start = 0; start < artifacts.length || start === 0; start += 100) pages.push({ total_count: artifacts.length, artifacts: artifacts.slice(start, start + 100) });
   writeFileSync(path.join(root, 'github.json'), JSON.stringify({
-    artifacts: options.artifacts ?? [{ id: 1, name: ARTIFACT_NAME, expired: false, workflow_run: { id: 42 }, created_at: '2026-10-21T12:01:00Z' }],
+    artifacts, pages: options.pages ?? pages,
     deployments: options.deployments ?? [{ payload: { run_id: '42' }, created_at: '2026-10-21T12:00:00Z' }],
     workflow: options.workflow ?? '.github/workflows/alchemy-pilot.yml',
   }));
@@ -64,6 +67,46 @@ test('the actual restore/seal CLI preserves nested state and checkpoints new wri
   assert.ok(!archive.includes(changed));
   const decoded = unseal(archive, KEY);
   assert.deepEqual(Buffer.from(decoded.files[STATE_FILE], 'base64'), changed);
+});
+
+test('the actual restore CLI reads later pages and selects the newer lower-ID checkpoint matching the latest marker', (t) => {
+  const older = Array.from({ length: 100 }, (_, index) => ({ id: 200 - index, name: ARTIFACT_NAME, expired: false,
+    workflow_run: { id: 42 }, created_at: new Date(Date.UTC(2026, 9, 21, 10, 0, index)).toISOString() }));
+  const newer = { id: 1, name: ARTIFACT_NAME, expired: false, workflow_run: { id: 43 }, created_at: '2026-10-21T12:03:00Z' };
+  const f = fixture(t, { artifacts: [...older, newer], deployments: [{ payload: { run_id: '43' }, created_at: '2026-10-21T12:02:00Z' }] });
+  const restored = f.run('restore', { GITHUB_RUN_ID: '44' });
+  assert.equal(restored.status, 0, restored.stderr);
+  assert.deepEqual(readFileSync(path.join(f.project, '.alchemy/state', STATE_FILE)), ORIGINAL);
+  const calls = readFileSync(path.join(f.root, 'calls'), 'utf8');
+  assert.match(calls, /artifacts\?.*--paginate --slurp/);
+  assert.match(calls, /actions\/runs\/43\n/);
+  assert.match(calls, /artifacts\/1\/zip\n/);
+  assert.equal(JSON.parse(readFileSync(path.join(f.root, 'marker.json'), 'utf8')).payload.run_id, '44');
+});
+
+const checkpoint = { id: 1, name: ARTIFACT_NAME, expired: false, workflow_run: { id: 42 }, created_at: '2026-10-21T12:01:00Z' };
+const hundred = Array.from({ length: 100 }, (_, index) => ({ ...checkpoint, id: index + 101 }));
+for (const [label, options, message] of [
+  ['newest expired lower-ID checkpoint', { artifacts: [{ ...checkpoint, id: 2 }, { ...checkpoint, expired: true, created_at: '2026-10-21T12:03:00Z' }] }, /expired/],
+  ['newest expired checkpoint on a later page', { artifacts: [...hundred, { ...checkpoint, expired: true, created_at: '2026-10-21T12:03:00Z' }] }, /expired/],
+  ['malformed checkpoint timestamp', { artifacts: [{ ...checkpoint, created_at: 'invalid' }] }, /timestamp is invalid/],
+  ['ambiguous newest timestamp', { artifacts: [checkpoint, { ...checkpoint, id: 2, workflow_run: { id: 43 } }] }, /ambiguous timestamps/],
+  ['newest checkpoint from a different operation', { artifacts: [{ ...checkpoint, id: 2 }, { ...checkpoint, workflow_run: { id: 43 }, created_at: '2026-10-21T12:03:00Z' }] }, /authoritative checkpoint/],
+  ['missing page', { pages: [{ total_count: 101, artifacts: [checkpoint] }] }, /pagination/],
+  ['changed page totals', { pages: [{ total_count: 101, artifacts: hundred }, { total_count: 102, artifacts: [checkpoint] }] }, /pagination/],
+  ['short nonterminal page', { pages: [{ total_count: 101, artifacts: hundred.slice(0, 99) }, { total_count: 101, artifacts: [checkpoint, { ...checkpoint, id: 2 }] }] }, /pagination/],
+  ['duplicated artifact record', { pages: [{ total_count: 2, artifacts: [checkpoint, checkpoint] }] }, /pagination/],
+  ['malformed page', { pages: [{ total_count: 0, artifacts: null }] }, /pagination/],
+  ['missing slurp pages', { pages: [] }, /pagination/],
+  ['unslurped response', { pages: { total_count: 1, artifacts: [checkpoint] } }, /pagination/],
+]) test(`the actual restore CLI rejects ${label} without downloading or marking an operation`, (t) => {
+  const f = fixture(t, options);
+  const result = f.run('restore');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, message);
+  assert.equal(existsSync(path.join(f.root, 'marker.json')), false);
+  assert.equal(existsSync(path.join(f.project, '.alchemy/state')), false);
+  assert.ok(!readFileSync(path.join(f.root, 'calls'), 'utf8').includes('/zip'));
 });
 
 for (const [label, options, environment, message] of [

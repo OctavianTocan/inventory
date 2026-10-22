@@ -31,17 +31,51 @@ export function unseal(payload, password) {
   return JSON.parse(Buffer.concat([decipher.update(payload.subarray(48)), decipher.final()]).toString());
 }
 
-/** Choose the newest artifact and refuse an expired recovery point.
+/** Choose the newest artifact by creation time and refuse ambiguous or expired recovery points.
  * @param {Array<object>} artifacts GitHub artifact records.
  * @param {boolean} initialize Explicit first deployment flag.
  * @returns {object | undefined} The exact newest state artifact, or no first-run state.
  */
 export function selectArtifact(artifacts, initialize) {
-  const latest = artifacts.filter((item) => item.name === ARTIFACT_NAME).sort((a, b) => b.id - a.id)[0];
+  const checkpoints = artifacts.filter((item) => item.name === ARTIFACT_NAME).map((item) => {
+    const stamp = typeof item.created_at === 'string' && /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.exec(item.created_at);
+    const time = stamp ? Date.parse(item.created_at) : NaN;
+    const day = stamp ? Date.parse(`${stamp[1]}T00:00:00Z`) : NaN;
+    if (!Number.isFinite(time) || !Number.isFinite(day) || new Date(day).toISOString().slice(0, 10) !== stamp[1]) {
+      throw new Error('Pilot state artifact timestamp is invalid; recover the authoritative checkpoint');
+    }
+    if (!Number.isSafeInteger(item.id) || item.id <= 0 || typeof item.expired !== 'boolean') throw new Error('Pilot state artifact metadata is invalid');
+    return { item, time };
+  }).sort((a, b) => b.time - a.time);
+  const newest = checkpoints[0];
+  if (newest && checkpoints.some(({ item, time }) => time === newest.time
+      && (item.id !== newest.item.id || item.workflow_run?.id !== newest.item.workflow_run?.id))) {
+    throw new Error('Newest pilot state artifacts have ambiguous timestamps; recover the authoritative checkpoint');
+  }
+  const latest = newest?.item;
   if (!latest && !initialize) throw new Error('State artifact is missing; recover original state or explicitly initialize a never-deployed pilot');
   if (latest?.expired) throw new Error('Newest pilot state artifact expired; recover it instead of using older state');
   if (latest && initialize) throw new Error('Initialize is forbidden after a state artifact exists');
   return latest;
+}
+
+// Verify the complete, stable per_page=100 listing before choosing any checkpoint.
+function artifactPages(pages) {
+  const fail = () => { throw new Error('Pilot state artifact pagination is incomplete or invalid'); };
+  if (!Array.isArray(pages) || pages.length === 0) fail();
+  const total = pages[0]?.total_count;
+  if (!Number.isSafeInteger(total) || total < 0 || pages.length !== Math.max(1, Math.ceil(total / 100))) fail();
+  const seen = new Set();
+  return pages.flatMap((page, index) => {
+    if (!page || typeof page !== 'object' || Array.isArray(page) || page.total_count !== total || !Array.isArray(page.artifacts)
+        || page.artifacts.length !== Math.min(100, Math.max(0, total - index * 100))) fail();
+    for (const item of page.artifacts) {
+      if (!item || typeof item !== 'object' || Array.isArray(item) || typeof item.name !== 'string'
+          || !Number.isSafeInteger(item.id) || item.id <= 0 || seen.has(item.id)) fail();
+      seen.add(item.id);
+    }
+    return page.artifacts;
+  });
 }
 
 /** Refuse checkpoints predating the latest operation, including canceled runs.
@@ -94,8 +128,8 @@ async function main() {
     if (existsSync(stateDir)) throw new Error('Restore requires a clean runner state directory');
     const meta = JSON.parse(gh(['api', `repos/${repository}`]));
     if (!meta.private) throw new Error('Pilot infrastructure state requires a private repository');
-    const listing = JSON.parse(gh(['api', `repos/${repository}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100`]));
-    const artifact = selectArtifact(listing.artifacts, process.env.MYMIND_ALCHEMY_INITIALIZE === 'true');
+    const listing = JSON.parse(gh(['api', `repos/${repository}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100`, '--paginate', '--slurp']));
+    const artifact = selectArtifact(artifactPages(listing), process.env.MYMIND_ALCHEMY_INITIALIZE === 'true');
     const history = JSON.parse(gh(['api', `repos/${repository}/deployments?environment=mymind-alchemy-staging&per_page=1`]));
     assertCheckpoint(artifact, history[0]);
     if (!process.env.GITHUB_SHA || !/^\d+$/.test(process.env.GITHUB_RUN_ID ?? '')) throw new Error('State restore requires an explicit GitHub commit and workflow run ID');
