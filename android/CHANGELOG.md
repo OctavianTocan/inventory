@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.3 (14), 2026-10-22
+Your whole library on your phone, so the app works without internet.
+
+### New
+- The app keeps a copy of all your cards on your phone and brings it up to date when you open it, pull to refresh or change something.
+- Without internet the app stays open on your cards with a small Offline pill under the top buttons, instead of the full-screen notice.
+- Offline, search finds your words in titles, notes, tags and saved text, and cards and spaces still open.
+- It needs the updated server; until then the app works as in 0.6.2.
+
 ## 0.6.2 (13), 2026-10-22
 The app opens on your cards at once, even before the server answers.
 

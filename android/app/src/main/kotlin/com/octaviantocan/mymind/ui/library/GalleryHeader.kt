@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,9 +16,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -54,7 +57,7 @@ fun GalleryTitle(text: String, modifier: Modifier = Modifier, start: Dp = 20.dp,
 
 /**
  * Add, Rediscover and the account, fixed over the scrolling page; their own raised circles and shadows replace a solid
- * header strip.
+ * header strip. While [LocalOffline] is true an [OfflinePill] hangs under them.
  *
  * @param onSettings Called when the account is tapped.
  * @param onAdd Called when Add is tapped.
@@ -73,21 +76,42 @@ fun GalleryControls(
     photoLoader: ImageLoader? = null,
 ) {
     val colors = LibraryStyle.colors
-    Row(modifier.padding(end = 16.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FootCircleButton(R.drawable.ic_library_add, "Add", onAdd, size = 44.dp)
-        FootCircleButton(R.drawable.ic_library_shuffle, "Rediscover cards", onSerendipity, size = 44.dp)
-        FootPressTheme {
-            Box(Modifier.size(44.dp).footShadow(CircleShape).clip(CircleShape)
-                .background(colors.selected).border(2.dp, colors.accent, CircleShape)
-                .semantics { contentDescription = "Account settings" }
-                .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button, onClick = onSettings)
-                .padding(4.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
-                Image(painterResource(R.drawable.ic_library_profile), null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(colors.text))
-                if (photoUrl != null && photoLoader != null) AsyncImage(model = photoUrl, imageLoader = photoLoader, contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+    Column(modifier.padding(end = 16.dp, top = 12.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FootCircleButton(R.drawable.ic_library_add, "Add", onAdd, size = 44.dp)
+            FootCircleButton(R.drawable.ic_library_shuffle, "Rediscover cards", onSerendipity, size = 44.dp)
+            FootPressTheme {
+                Box(Modifier.size(44.dp).footShadow(CircleShape).clip(CircleShape)
+                    .background(colors.selected).border(2.dp, colors.accent, CircleShape)
+                    .semantics { contentDescription = "Account settings" }
+                    .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button, onClick = onSettings)
+                    .padding(4.dp).clip(CircleShape), contentAlignment = Alignment.Center) {
+                    Image(painterResource(R.drawable.ic_library_profile), null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(colors.text))
+                    if (photoUrl != null && photoLoader != null) AsyncImage(model = photoUrl, imageLoader = photoLoader, contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
             }
         }
+        if (LocalOffline.current) OfflinePill()
+    }
+}
+
+/** True while the phone has no internet; the gallery then runs from the phone's copy. */
+val LocalOffline = compositionLocalOf { false }
+
+/** A small raised pill under the controls saying the app is working without internet. */
+@Composable
+fun OfflinePill(modifier: Modifier = Modifier) {
+    val colors = LibraryStyle.colors
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier.height(28.dp).footShadow(shape).clip(shape).background(colors.raised).padding(horizontal = 12.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(colors.muted))
+        Text("Offline", style = LibraryStyle.label, color = colors.text)
     }
 }
 

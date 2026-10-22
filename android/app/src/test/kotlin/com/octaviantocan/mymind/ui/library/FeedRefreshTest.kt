@@ -4,6 +4,7 @@ import com.octaviantocan.mymind.data.CardPage
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.ui.menu.CardMenuAction
 import com.octaviantocan.mymind.ui.menu.CardMenuItem
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -82,6 +83,57 @@ class FeedRefreshTest {
         assertEquals(listOf("a"), feed.state.value.cards.map { it.id })
         assertFalse(feed.state.value.refreshing)
         assertEquals(null, feed.state.value.error)
+    }
+
+    @Test
+    fun aRereadReplacesTheListOnlyWhenAPageChanged() = runTest(dispatcher) {
+        val library = FakeLibrary(
+            pages = mapOf(
+                null to CardPage(listOf(testCard("a"), testCard("b")), next = "p2"),
+                "p2" to CardPage(listOf(testCard("c")), next = "p3"),
+                "p3" to CardPage(listOf(testCard("d"))),
+            ),
+        )
+        val feed = CardFeed(this) { library.cards(it) }
+        feed.loadMore()
+        advanceUntilIdle()
+        feed.loadMore()
+        advanceUntilIdle()
+        val before = feed.state.value.cards
+        feed.reread()
+        advanceUntilIdle()
+        assertSame(before, feed.state.value.cards)
+        library.pages = library.pages + ("p2" to CardPage(listOf(testCard("c", title = "Changed")), next = "p3"))
+        library.calls.clear()
+        feed.reread()
+        assertEquals(before, feed.state.value.cards)
+        advanceUntilIdle()
+        assertEquals(listOf("Card a", "Card b", "Changed"), feed.state.value.cards.map { it.title })
+        assertEquals(listOf("cards:null", "cards:p2"), library.calls)
+        assertFalse(feed.state.value.endReached)
+        feed.loadMore()
+        advanceUntilIdle()
+        assertEquals(listOf("a", "b", "c", "d"), feed.state.value.cards.map { it.id })
+    }
+
+    @Test
+    fun aRefreshWhosePreparationChangedThingsRereadsEveryPage() = runTest(dispatcher) {
+        val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(testCard("a")), next = "p2"), "p2" to CardPage(listOf(testCard("b")))))
+        val feed = CardFeed(this) { library.cards(it) }
+        feed.loadMore()
+        advanceUntilIdle()
+        feed.loadMore()
+        advanceUntilIdle()
+        val synced = CompletableDeferred<Boolean>()
+        library.pages = library.pages + ("p2" to CardPage(listOf(testCard("b", title = "Changed"))))
+        feed.refresh { synced.await() }
+        advanceUntilIdle()
+        assertTrue(feed.state.value.refreshing)
+        synced.complete(true)
+        advanceUntilIdle()
+        assertFalse(feed.state.value.refreshing)
+        assertEquals(listOf("Card a", "Changed"), feed.state.value.cards.map { it.title })
+        assertTrue(feed.state.value.endReached)
     }
 
     @Test

@@ -62,6 +62,12 @@ class Repository(private val api: MymindApi, private val session: Session, priva
 
     override suspend fun pageConfig(): ApiResult<PageConfig> = api.pageConfig()
 
+    /**
+     * @param since `next` of the previous answer, or null to read the whole library.
+     * @return One answer of the changes feed.
+     */
+    suspend fun changes(since: String?): ApiResult<ChangesPage> = api.changes(since, CHANGES_SIZE)
+
     override suspend fun searchSuggestions(query: String): ApiResult<List<Suggestion>> = api.searchSuggestions(query)
 
     override suspend fun tagSuggestions(query: String): ApiResult<List<String>> = api.tagSuggestions(query).map { tags -> tags.map { it.name } }
@@ -131,6 +137,7 @@ class Repository(private val api: MymindApi, private val session: Session, priva
 
     private companion object {
         const val PAGE_SIZE = 50
+        const val CHANGES_SIZE = 100
     }
 }
 

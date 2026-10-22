@@ -5,6 +5,8 @@ import com.octaviantocan.mymind.data.AuthInterceptor
 import com.octaviantocan.mymind.data.Connectivity
 import com.octaviantocan.mymind.data.KeystoreTokenStore
 import com.octaviantocan.mymind.data.LibraryCopy
+import com.octaviantocan.mymind.data.LibrarySync
+import com.octaviantocan.mymind.data.LocalFirstLibrary
 import com.octaviantocan.mymind.data.MymindApi
 import com.octaviantocan.mymind.data.PrivateAccountProfileStore
 import com.octaviantocan.mymind.data.Repository
@@ -33,12 +35,16 @@ class AppContainer(context: Context) {
     val httpClient: OkHttpClient = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session, BuildConfig.SERVER_URL)).build()
     val repository = Repository(MymindApi(httpClient, BuildConfig.SERVER_URL), session, PrivateAccountProfileStore(context))
 
-    // The phone's copy of the gallery belongs to one session and is wiped whenever the app is signed out.
+    // The phone's copy of the library belongs to one session and is wiped whenever the app is signed out.
     val libraryCopy = LibraryCopy(context, session).also { copy ->
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             session.state.collect { if (it == SessionState.SignedOut) copy.clear() }
         }
     }
+    val librarySync = LibrarySync(libraryCopy, repository::changes)
+
+    /** The library the signed-in screens use: the phone's copy first where it has what they need, the server otherwise. */
+    val library = LocalFirstLibrary(repository, libraryCopy, librarySync)
     val downloads = DownloadsSaver(context.applicationContext.contentResolver)
     val updatePrefs = UpdatePrefs(context)
     val updateNotifier = UpdateNotifier(context.applicationContext)
