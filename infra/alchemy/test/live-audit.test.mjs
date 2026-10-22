@@ -93,7 +93,7 @@ test('HTTP-200 logical API failures identify a fixed endpoint without echoing re
     const f = fixture({ override: (url) => url.pathname.endsWith(`/${resource}`)
       ? Response.json({ success: false, result: null, errors: [{ code: 971, message: secret }], unexpected: secret }) : undefined });
     await assert.rejects(f.run(), (error) => {
-      assert.ok(error.message.includes(`endpoint=${label}; success=false; result=present; errors=nonempty-array; codes=971;`));
+      assert.ok(error.message.includes(`endpoint=${label}; success=false; result=present; errors=nonempty-array; errors-kind=array; codes=971;`));
       for (const value of [secret, account, expected.workerName, expected.containerApplicationId]) assert.ok(!error.message.includes(value));
       return true;
     });
@@ -103,10 +103,14 @@ test('HTTP-200 logical API failures identify a fixed endpoint without echoing re
 
 test('rejected audit envelopes report finite predicate states and bounded numeric codes', async () => {
   for (const [body, metadata] of [
-    [{ result: [], errors: [] }, 'success=invalid; result=present; errors=empty-array; codes=none;'],
-    [{ success: true, errors: [] }, 'success=true; result=missing; errors=empty-array; codes=none;'],
-    [{ success: true, result: [], errors: secret }, 'success=true; result=present; errors=invalid; codes=none;'],
-    [{ success: false, result: null, errors: [{ code: secret, message: secret }] }, 'success=false; result=present; errors=nonempty-array; codes=invalid;'],
+    [{ result: [], errors: [] }, 'success=invalid; result=present; errors=empty-array; errors-kind=array; codes=none;'],
+    [{ success: true, errors: [] }, 'success=true; result=missing; errors=empty-array; errors-kind=array; codes=none;'],
+    [{ success: true, result: [], errors: null }, 'errors=invalid; errors-kind=null; codes=none;'],
+    [{ success: true, result: [], errors: { message: secret } }, 'errors=invalid; errors-kind=object; codes=none;'],
+    [{ success: true, result: [], errors: secret }, 'errors=invalid; errors-kind=string; codes=none;'],
+    [{ success: true, result: [], errors: 971 }, 'errors=invalid; errors-kind=number; codes=none;'],
+    [{ success: true, result: [], errors: false }, 'errors=invalid; errors-kind=boolean; codes=none;'],
+    [{ success: false, result: null, errors: [{ code: secret, message: secret }] }, 'success=false; result=present; errors=nonempty-array; errors-kind=array; codes=invalid;'],
     [{ success: false, result: null, errors: Array.from({ length: 20 }, () => ({ code: 971, message: secret })) }, 'codes=971,971,971,971,971;'],
   ]) {
     const f = fixture({ state: 'absent', override: () => Response.json(body) });
