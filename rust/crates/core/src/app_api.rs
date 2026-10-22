@@ -5,15 +5,17 @@ use std::rc::Rc;
 use mm_js::{Object, Value, base64, json, number, obj, text, uri};
 use url::Url;
 
+use crate::app_sync::{changed_after, install_app_sync};
 use crate::http::{Headers, Response, search_param};
 use crate::render::media::image_cover;
 use crate::search::{Hybrid, Search};
-use crate::sql::SqlValue;
+use crate::sql::{SqlExt, SqlValue};
 use crate::store::{CardRow, Cursor, GRID_HIDDEN_FLAGS, Store, iso_from_ns};
 use crate::{Error, Result};
 
 const DEFAULT_LIMIT: f64 = 50.0;
 const MAX_LIMIT: f64 = 200.0;
+const CHANGES_LIMIT: f64 = 100.0;
 
 /// The `/app/v1` endpoints over a store and its search.
 pub struct AppApi {
@@ -85,17 +87,41 @@ fn read_cursor(source: &str, keyset: bool) -> Result<After> {
     Err(bad("bad-cursor"))
 }
 
-fn paging(url: &Url, keyset: bool) -> Result<(usize, After)> {
-    let limit = search_param(url, "limit").map_or(DEFAULT_LIMIT, |raw| number::string_to_number(&raw));
+fn limit_of(url: &Url, default: f64) -> Result<usize> {
+    let limit = search_param(url, "limit").map_or(default, |raw| number::string_to_number(&raw));
     if limit.fract() != 0.0 || !limit.is_finite() || !(1.0..=MAX_LIMIT).contains(&limit) {
         return Err(bad("bad-limit"));
     }
+    Ok(limit as usize)
+}
+
+fn paging(url: &Url, keyset: bool) -> Result<(usize, After)> {
+    let limit = limit_of(url, DEFAULT_LIMIT)?;
     let after = match search_param(url, "cursor") {
         None if keyset => After::Keyset(None),
         None => After::Offset(None),
         Some(cursor) => read_cursor(&cursor, keyset)?,
     };
-    Ok((limit as usize, after))
+    Ok((limit, after))
+}
+
+fn changes_token(epoch: &str, seq: i64) -> Result<String> {
+    let raw = json::stringify(&Value::Array(vec![Value::String(epoch.to_owned()), Value::String(seq.to_string())]))?.unwrap_or_default();
+    Ok(base64::encode_url(raw.as_bytes()))
+}
+
+// The epoch and log position a `since` token names.
+fn read_changes_token(source: &str) -> Result<(String, i64)> {
+    let decoded = String::from_utf8_lossy(&base64::decode(source)).into_owned();
+    if let Ok(Value::Array(items)) = json::parse(&decoded)
+        && let [Value::String(epoch), Value::String(seq)] = items.as_slice()
+        && !seq.is_empty()
+        && seq.chars().all(|c| c.is_ascii_digit())
+        && let Ok(seq) = seq.parse::<i64>()
+    {
+        return Ok((epoch.clone(), seq));
+    }
+    Err(bad("bad-cursor"))
 }
 
 fn present(entries: Vec<(&str, Value)>) -> Object {
@@ -230,6 +256,74 @@ impl AppApi {
         self.json(200, &obj! { "cards" => self.cards_json(page)?, "next" => next }.into())
     }
 
+    fn spaces_json(&self) -> Result<Value> {
+        let spaces = self.store.spaces(None)?;
+        Ok(Value::Array(
+            spaces
+                .iter()
+                .map(|space| {
+                    obj! {
+                        "id" => space.id.as_str(),
+                        "name" => space.name.as_str(),
+                        "color" => space.color.as_str(),
+                        "position" => space.position as f64,
+                        "smart" => space.query.as_ref().is_some_and(Value::truthy),
+                        "count" => space.objects.len() as f64,
+                    }
+                    .into()
+                })
+                .collect(),
+        ))
+    }
+
+    // One page of the change log: the changed cards as `/cards` sends them, with `pinPosition` read from the pin order
+    // Top of Mind uses, and the ids of cards trashed or deleted since. The last page also carries the spaces.
+    fn changes_page(&self, url: &Url) -> Result<Response> {
+        let limit = limit_of(url, CHANGES_LIMIT)?;
+        let since = search_param(url, "since").map(|token| read_changes_token(&token)).transpose()?;
+        let db = self.store.db();
+        let epoch = install_app_sync(&**db)?;
+        let (reset, after) = match since {
+            Some((from, seq)) if from == epoch => (false, seq),
+            Some(_) => (true, 0),
+            None => (false, 0),
+        };
+        let mut logged = changed_after(&**db, after, limit + 1)?;
+        let more = logged.len() > limit;
+        logged.truncate(limit);
+        let ids: Vec<String> = logged.iter().map(|entry| entry.card_id.clone()).collect();
+        let mut rows: std::collections::HashMap<String, CardRow> = self.store.cards_by_ids(&ids, None)?.into_iter().map(|row| (row.id.clone(), row)).collect();
+        let (mut cards, mut removed) = (Vec::new(), Vec::new());
+        for id in ids {
+            match rows.remove(&id).filter(|row| row.deleted_ns.is_none()) {
+                Some(row) => {
+                    let mut card = self.card_json(&row)?;
+                    let pin = db.one("SELECT position FROM pins WHERE card_id = ?", &[id.as_str().into()])?.and_then(|found| found.number("position"));
+                    match pin {
+                        Some(position) => card.set("pinPosition", position),
+                        None => {
+                            card.remove("pinPosition");
+                        }
+                    }
+                    cards.push(card);
+                }
+                None => removed.push(Value::String(id)),
+            }
+        }
+        let last = logged.last().map_or(after, |entry| entry.seq);
+        let mut body = obj! {
+            "cards" => Value::Array(cards),
+            "removed" => Value::Array(removed),
+            "next" => changes_token(&epoch, last)?,
+            "more" => more,
+            "reset" => reset,
+        };
+        if !more {
+            body.insert("spaces", self.spaces_json()?);
+        }
+        self.json(200, &body.into())
+    }
+
     /// Answer a request under `/app/v1` (`handle`).
     ///
     /// # Arguments
@@ -238,8 +332,9 @@ impl AppApi {
     ///
     /// # Returns
     /// `Some(response)` for `GET /app/v1/cards`, `/cards/<id>`, `/trash`, `/spaces`, `/spaces/<id>/cards`, `/tags`,
-    /// `/search` and `/top-of-mind` (pinned cards in pin order, paged like a space), a 405 for other methods on those,
-    /// and `None` for any other request.
+    /// `/search`, `/top-of-mind` (pinned cards in pin order, paged like a space) and `/changes` (the cards changed
+    /// since a `since` token, starting the change log on first use), a 405 for other methods on those, and `None`
+    /// for any other request.
     ///
     /// # Errors
     /// Any failure other than a 400, which is answered as a problem body.
@@ -257,7 +352,7 @@ impl AppApi {
 
     async fn route(&self, method: &str, url: &Url, path: &str) -> Result<Option<Response>> {
         let head = path[1..].split('/').next().unwrap_or("");
-        if !["cards", "trash", "spaces", "tags", "search", "top-of-mind"].contains(&head) {
+        if !["cards", "trash", "spaces", "tags", "search", "top-of-mind", "changes"].contains(&head) {
             return Ok(None);
         }
         if method != "GET" {
@@ -268,28 +363,12 @@ impl AppApi {
             ["cards"] => self.keyset_page(url, false)?,
             ["trash"] => self.keyset_page(url, true)?,
             ["top-of-mind"] => self.offset_page(url, &self.store.pinned_cards(None)?)?,
+            ["changes"] => self.changes_page(url)?,
             ["cards", id] if !id.is_empty() => match self.store.card(&uri::decode_uri_component(id)?, None)? {
                 Some(row) => self.json(200, &self.card_json(&row)?)?,
                 None => self.problem(404, "not-found")?,
             },
-            ["spaces"] => {
-                let spaces = self.store.spaces(None)?;
-                let list: Vec<Value> = spaces
-                    .iter()
-                    .map(|space| {
-                        obj! {
-                            "id" => space.id.as_str(),
-                            "name" => space.name.as_str(),
-                            "color" => space.color.as_str(),
-                            "position" => space.position as f64,
-                            "smart" => space.query.as_ref().is_some_and(Value::truthy),
-                            "count" => space.objects.len() as f64,
-                        }
-                        .into()
-                    })
-                    .collect();
-                self.json(200, &obj! { "spaces" => list }.into())?
-            }
+            ["spaces"] => self.json(200, &obj! { "spaces" => self.spaces_json()? }.into())?,
             ["spaces", id, "cards"] if !id.is_empty() => {
                 let id = uri::decode_uri_component(id)?;
                 if self.store.space(&id)?.is_some() {
