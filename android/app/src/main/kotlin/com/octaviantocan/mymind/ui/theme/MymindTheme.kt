@@ -98,28 +98,28 @@ fun MymindTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -
         LocalMymindFonts provides fonts,
         LocalPageColors provides if (dark) DarkPageColors else LightPageColors,
     ) {
-        MaterialTheme(colorScheme = scheme, typography = geistTypography(fonts), content = content)
+        MaterialTheme(colorScheme = scheme, typography = appTypography(fonts), content = content)
     }
 }
 
-private fun geistTypography(fonts: MymindFonts): Typography {
+private fun appTypography(fonts: MymindFonts): Typography {
     val base = Typography()
-    fun TextStyle.geist() = copy(fontFamily = fonts.body)
+    fun TextStyle.appFont() = copy(fontFamily = fonts.body)
     return Typography(
-        displayLarge = base.displayLarge.geist(),
-        displayMedium = base.displayMedium.geist(),
-        displaySmall = base.displaySmall.geist(),
-        headlineLarge = base.headlineLarge.geist(),
-        headlineMedium = base.headlineMedium.geist(),
-        headlineSmall = base.headlineSmall.geist(),
-        titleLarge = base.titleLarge.geist(),
-        titleMedium = base.titleMedium.geist(),
-        titleSmall = base.titleSmall.geist(),
-        bodyLarge = base.bodyLarge.geist(),
-        bodyMedium = base.bodyMedium.geist(),
-        bodySmall = base.bodySmall.geist(),
-        labelLarge = base.labelLarge.geist(),
-        labelMedium = base.labelMedium.geist(),
-        labelSmall = base.labelSmall.geist(),
+        displayLarge = base.displayLarge.appFont(),
+        displayMedium = base.displayMedium.appFont(),
+        displaySmall = base.displaySmall.appFont(),
+        headlineLarge = base.headlineLarge.appFont(),
+        headlineMedium = base.headlineMedium.appFont(),
+        headlineSmall = base.headlineSmall.appFont(),
+        titleLarge = base.titleLarge.appFont(),
+        titleMedium = base.titleMedium.appFont(),
+        titleSmall = base.titleSmall.appFont(),
+        bodyLarge = base.bodyLarge.appFont(),
+        bodyMedium = base.bodyMedium.appFont(),
+        bodySmall = base.bodySmall.appFont(),
+        labelLarge = base.labelLarge.appFont(),
+        labelMedium = base.labelMedium.appFont(),
+        labelSmall = base.labelSmall.appFont(),
     )
 }

@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -34,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.text.HtmlCompat
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Scale
 import com.octaviantocan.mymind.BuildConfig
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
@@ -53,11 +56,21 @@ internal fun GalleryTile(
     onLongClick: (() -> Unit)? = null,
     enabled: Boolean = true,
     highlight: Boolean = false,
+    imageRequestSizePx: Int? = null,
 ) {
     val colors = LibraryStyle.colors
     val accent = cardAccent(card) ?: colors.selected
     val kind = tileKind(card)
     val picture = galleryPicture(card)
+    val context = LocalContext.current
+    val imageModel = remember(picture, imageRequestSizePx, context) {
+        picture?.let {
+            val url = resolveMediaUrl(BuildConfig.SERVER_URL, it)
+            if (imageRequestSizePx == null) url else ImageRequest.Builder(context).data(url)
+                .size(imageRequestSizePx.coerceAtLeast(1)).scale(Scale.FIT)
+                .memoryCacheKey(url).placeholderMemoryCacheKey(url).build()
+        }
+    }
     val text = remember(card) { galleryText(card) }
     val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card)
     val paper = lerp(colors.raised, accent, 0.13f)
@@ -67,23 +80,23 @@ internal fun GalleryTile(
         Box(
             modifier.fillMaxSize().clip(RoundedCornerShape(if (highlight) 28.dp else 3.dp)).background(background)
                 .semantics(mergeDescendants = true) { contentDescription = heading }
-                .combinedClickable(
-                    interactionSource = null, indication = CardSheetIndication, enabled = enabled, role = Role.Button,
+                .then(if (enabled) Modifier.combinedClickable(
+                    interactionSource = null, indication = CardSheetIndication, role = Role.Button,
                     onLongClickLabel = "Card actions", onLongClick = onLongClick, onClick = onClick,
-                ),
+                ) else Modifier),
         ) {
             if (mixed) {
                 Column(Modifier.fillMaxSize()) {
                     GalleryTextPreview(card, text, highlight, Modifier.weight(0.56f).fillMaxWidth())
                     AsyncImage(
-                        model = resolveMediaUrl(BuildConfig.SERVER_URL, picture), contentDescription = "Image preview",
+                        model = imageModel, contentDescription = "Image preview",
                         contentScale = ContentScale.Crop, modifier = Modifier.weight(0.44f).fillMaxWidth(),
                     )
                 }
                 Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
             } else if (picture != null) {
                 AsyncImage(
-                    model = resolveMediaUrl(BuildConfig.SERVER_URL, picture), contentDescription = null,
+                    model = imageModel, contentDescription = null,
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                 )
                 if (highlight || kind !in setOf(TileKind.Media, TileKind.Video)) {
