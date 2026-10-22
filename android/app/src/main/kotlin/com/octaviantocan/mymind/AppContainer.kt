@@ -4,10 +4,12 @@ import android.content.Context
 import com.octaviantocan.mymind.data.AuthInterceptor
 import com.octaviantocan.mymind.data.Connectivity
 import com.octaviantocan.mymind.data.KeystoreTokenStore
+import com.octaviantocan.mymind.data.LibraryCopy
 import com.octaviantocan.mymind.data.MymindApi
 import com.octaviantocan.mymind.data.PrivateAccountProfileStore
 import com.octaviantocan.mymind.data.Repository
 import com.octaviantocan.mymind.data.Session
+import com.octaviantocan.mymind.data.SessionState
 import com.octaviantocan.mymind.ui.menu.DownloadsSaver
 import com.octaviantocan.mymind.update.AutoInstaller
 import com.octaviantocan.mymind.update.SessionApkInstaller
@@ -20,6 +22,7 @@ import com.octaviantocan.mymind.update.WhatsNew
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import java.io.File
 
@@ -29,6 +32,13 @@ class AppContainer(context: Context) {
     val session = Session(KeystoreTokenStore(context))
     val httpClient: OkHttpClient = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session, BuildConfig.SERVER_URL)).build()
     val repository = Repository(MymindApi(httpClient, BuildConfig.SERVER_URL), session, PrivateAccountProfileStore(context))
+
+    // The phone's copy of the gallery belongs to one session and is wiped whenever the app is signed out.
+    val libraryCopy = LibraryCopy(context, session).also { copy ->
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            session.state.collect { if (it == SessionState.SignedOut) copy.clear() }
+        }
+    }
     val downloads = DownloadsSaver(context.applicationContext.contentResolver)
     val updatePrefs = UpdatePrefs(context)
     val updateNotifier = UpdateNotifier(context.applicationContext)

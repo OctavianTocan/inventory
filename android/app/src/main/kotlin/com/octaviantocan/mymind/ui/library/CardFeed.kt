@@ -3,6 +3,8 @@ package com.octaviantocan.mymind.ui.library
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.CardPage
+import com.octaviantocan.mymind.data.FEED_MEMORY_CARDS
+import com.octaviantocan.mymind.data.FeedMemory
 import com.octaviantocan.mymind.ui.describe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -34,14 +36,27 @@ data class FeedState(
 /**
  * A list of cards read page by page from the server.
  *
+ * With a [memory], the first load shows the cards kept from last time at once and then checks them against the server's
+ * first page: when that page starts the list as kept, the list stays and paging goes on after it; otherwise the list
+ * becomes the fresh page. Whatever the list then shows is kept for next time.
+ *
  * @param scope Scope the fetches run in.
+ * @param memory Where the list's first cards are kept between launches, or null to keep nothing.
  * @param load Reads the page after a cursor; null asks for the first page.
  */
-class CardFeed(private val scope: CoroutineScope, private val load: suspend (cursor: String?) -> ApiResult<CardPage>) {
+class CardFeed(
+    private val scope: CoroutineScope,
+    private val memory: FeedMemory? = null,
+    private val load: suspend (cursor: String?) -> ApiResult<CardPage>,
+) {
     private val mutableState = MutableStateFlow(FeedState())
     private var cursor: String? = null
     private var job: Job? = null
     private var refreshJob: Job? = null
+    private var rememberJob: Job? = null
+    private var remembered: List<Card>? = null
+    private var restored = false
+    private var unconfirmed = false
 
     /** The cards and the loading state. */
     val state: StateFlow<FeedState> = mutableState
@@ -52,17 +67,38 @@ class CardFeed(private val scope: CoroutineScope, private val load: suspend (cur
         if (current.loading || current.endReached) return
         mutableState.value = current.copy(loading = true, error = null)
         job = scope.launch {
+            if (!restored) {
+                restored = true
+                val kept = memory?.read().orEmpty()
+                if (kept.isNotEmpty() && mutableState.value.cards.isEmpty()) {
+                    unconfirmed = true
+                    remembered = kept
+                    mutableState.update { it.copy(cards = kept.distinctBy { card -> card.id }) }
+                }
+            }
             when (val result = load(cursor)) {
                 is ApiResult.Ok -> {
-                    cursor = result.value.next
-                    mutableState.update { state ->
-                        val known = state.cards.mapTo(HashSet()) { it.id }
-                        state.copy(
-                            cards = state.cards + result.value.cards.filter { it.id !in known },
-                            loading = false,
-                            endReached = result.value.next == null,
-                        )
+                    val page = result.value
+                    cursor = page.next
+                    if (unconfirmed) {
+                        unconfirmed = false
+                        val shown = mutableState.value.cards
+                        mutableState.value = if (startsWith(shown, page)) {
+                            mutableState.value.copy(loading = false, endReached = page.next == null)
+                        } else {
+                            FeedState(cards = page.cards.distinctBy { it.id }, endReached = page.next == null)
+                        }
+                    } else {
+                        mutableState.update { state ->
+                            val known = state.cards.mapTo(HashSet()) { it.id }
+                            state.copy(
+                                cards = state.cards + page.cards.filter { it.id !in known },
+                                loading = false,
+                                endReached = page.next == null,
+                            )
+                        }
                     }
+                    remember()
                 }
                 is ApiResult.Failed -> mutableState.update { it.copy(loading = false, error = describe(result.failure)) }
             }
@@ -74,6 +110,7 @@ class CardFeed(private val scope: CoroutineScope, private val load: suspend (cur
         job?.cancel()
         refreshJob?.cancel()
         cursor = null
+        unconfirmed = false
         mutableState.value = FeedState()
         loadMore()
     }
@@ -91,14 +128,19 @@ class CardFeed(private val scope: CoroutineScope, private val load: suspend (cur
             when (val result = load(null)) {
                 is ApiResult.Ok -> {
                     val fresh = result.value
-                    val shown = mutableState.value.cards
-                    val unchanged = shown.take(fresh.cards.size) == fresh.cards && (fresh.next != null || shown.size == fresh.cards.size)
-                    if (unchanged) {
+                    if (startsWith(mutableState.value.cards, fresh) && unconfirmed) {
+                        job?.cancel()
+                        unconfirmed = false
+                        cursor = fresh.next
+                        mutableState.update { it.copy(refreshing = false, loading = false, error = null, endReached = fresh.next == null) }
+                    } else if (startsWith(mutableState.value.cards, fresh)) {
                         mutableState.update { it.copy(refreshing = false) }
                     } else {
                         job?.cancel()
                         cursor = fresh.next
+                        unconfirmed = false
                         mutableState.value = FeedState(cards = fresh.cards.distinctBy { it.id }, endReached = fresh.next == null)
+                        remember()
                     }
                 }
                 is ApiResult.Failed -> mutableState.update { it.copy(refreshing = false) }
@@ -113,6 +155,7 @@ class CardFeed(private val scope: CoroutineScope, private val load: suspend (cur
      */
     fun prepend(card: Card) {
         mutableState.update { state -> state.copy(cards = listOf(card) + state.cards.filterNot { it.id == card.id }) }
+        remember()
     }
 
     /**
@@ -122,6 +165,7 @@ class CardFeed(private val scope: CoroutineScope, private val load: suspend (cur
      */
     fun remove(cardId: String) {
         mutableState.update { state -> state.copy(cards = state.cards.filterNot { it.id == cardId }) }
+        remember()
     }
 
     /**
@@ -131,5 +175,20 @@ class CardFeed(private val scope: CoroutineScope, private val load: suspend (cur
      */
     fun replace(card: Card) {
         mutableState.update { state -> state.copy(cards = state.cards.map { if (it.id == card.id) card else it }) }
+        remember()
     }
+
+    // Keeps the list's first cards for next time, when they changed; a newer list replaces a write still waiting.
+    private fun remember() {
+        val memory = memory ?: return
+        val first = mutableState.value.cards.take(FEED_MEMORY_CARDS)
+        if (first == remembered) return
+        remembered = first
+        rememberJob?.cancel()
+        rememberJob = scope.launch { memory.write(first) }
+    }
+
+    // True when the list already starts with the first page, and holds no more than it when the page is the last.
+    private fun startsWith(shown: List<Card>, first: CardPage): Boolean =
+        shown.take(first.cards.size) == first.cards && (first.next != null || shown.size == first.cards.size)
 }
