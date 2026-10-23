@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui.library
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.MutatePriority
@@ -40,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -47,6 +49,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -58,12 +61,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.ScrollAxisRange
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.scrollToIndex
-import androidx.compose.ui.semantics.testTag as projectionTestTag
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.verticalScrollAxisRange
 import androidx.compose.ui.unit.Constraints
@@ -87,6 +88,7 @@ private val MOSAIC_GAP = 3.dp
 private const val MOSAIC_HEADER = "gallery-header"
 private const val MOSAIC_ROW = "row:"
 private const val SCENE_HYSTERESIS = 0.05f
+private const val HANDOFF_NANOS = CardSheetMotion.FAST * 1_000_000L
 private data class MosaicAnchor(val cardId: String, val viewport: Offset, val fraction: Offset)
 private data class MosaicBodyShape(val top: Float, val bottom: Float) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline =
@@ -123,7 +125,7 @@ fun LibraryMosaic(
     var pivotId by remember { mutableStateOf<String?>(null) }
     var sceneColumns by remember { mutableIntStateOf(mosaic.columns) }
     var outgoingColumns by remember { mutableStateOf<Int?>(null) }
-    var sceneAlpha by remember { mutableFloatStateOf(1f) }
+    var morph by remember { mutableFloatStateOf(1f) }
     var pressedColumns by remember { mutableStateOf<Int?>(null) }
     val latestFeed by rememberUpdatedState(feed)
     val latestMore by rememberUpdatedState(onLoadMore)
@@ -200,17 +202,22 @@ fun LibraryMosaic(
             val high = -projected.offset.x
             return if (low <= high) shift.coerceIn(low, high) else (low + high) / 2f
         }
-        fun activeColumns(): Int = pressedColumns ?: outgoingColumns?.takeIf { sceneAlpha < 0.5f } ?: sceneColumns
+        fun activeColumns(): Int = pressedColumns ?: outgoingColumns?.takeIf { morph < 0.5f } ?: sceneColumns
+        fun frame(): MosaicFrame {
+            val y = origin()
+            val shift = horizontalShift(y)
+            val scene = projection(sceneColumns)
+            val outgoing = outgoingColumns?.takeIf { morph < 1f }?.let(::projection)
+            return MosaicFrame(scene, coverShift(scene, shift), outgoing, outgoing?.let { coverShift(it, shift) } ?: 0f, morph, y)
+        }
         fun capture(focal: Offset?): MosaicAnchor? {
             if (layouts.level(1).cells.isEmpty()) return null
-            val y = origin()
-            val projected = projection(activeColumns())
-            val x = coverShift(projected, horizontalShift(y))
+            val drawn = frame()
             val point = focal?.takeIf { it.x.isFinite() && it.y.isFinite() } ?: Offset.Zero
             var nearest = -1
             var distance = Float.MAX_VALUE
-            for (index in projected.window(y, height)) {
-                val cell = projected.cell(index).translate(Offset(x, -y))
+            for (index in drawn.window(height)) {
+                val cell = drawn.cell(index)
                 if (cell.bottom <= 0f || cell.top >= height) continue
                 val dx = point.x - point.x.coerceIn(cell.left, cell.right)
                 val dy = point.y - point.y.coerceIn(cell.top, cell.bottom)
@@ -220,7 +227,7 @@ fun LibraryMosaic(
                 }
             }
             if (nearest < 0) return null
-            val cell = projected.cell(nearest).translate(Offset(x, -y))
+            val cell = drawn.cell(nearest)
             val at = Offset(point.x.coerceIn(cell.left, cell.right), point.y.coerceIn(cell.top, cell.bottom))
             return MosaicAnchor(layouts.cards[nearest].id, at,
                 Offset((at.x - cell.left) / cell.width, (at.y - cell.top) / cell.height))
@@ -268,17 +275,27 @@ fun LibraryMosaic(
         val latestRows by rememberUpdatedState(rows)
         val latestHeaderItems by rememberUpdatedState(headerItems)
         // A pinch keeps its grid a little past the stop it rests on, so fingers jittering there cannot flip grids.
-        val targetScene = pressedColumns ?: if (mosaic.isPinching && mosaic.position > sceneColumns - 1 &&
+        val targetScene = if (mosaic.isPinching && mosaic.position > sceneColumns - 1 &&
             mosaic.position <= sceneColumns + SCENE_HYSTERESIS) sceneColumns else pinchScene(mosaic.position)
         LaunchedEffect(targetScene, moving) {
-            val dominant = activeColumns()
+            val dominant = outgoingColumns?.takeIf { morph < 0.5f } ?: sceneColumns
             sceneColumns = targetScene
-            outgoingColumns = dominant.takeIf { it != targetScene }
-            sceneAlpha = if (outgoingColumns == null || !moving) 1f else 0f
-            if (outgoingColumns != null && moving) {
-                animate(0f, 1f, animationSpec = tween(90)) { value, _ -> sceneAlpha = value }
+            outgoingColumns = dominant.takeIf { it != targetScene && moving }
+            morph = if (outgoingColumns == null) 1f else 0f
+            if (outgoingColumns != null) {
+                // Each card moves from its place in the old grid to its place in the new one. A press holds the
+                // cards where they are until it ends, so the card under the finger stays there.
+                var elapsed = 0L
+                var last = withFrameNanos { it }
+                while (elapsed < HANDOFF_NANOS) {
+                    val now = withFrameNanos { it }
+                    if (pressedColumns == null) elapsed += now - last
+                    last = now
+                    morph = FastOutSlowInEasing.transform((elapsed.toFloat() / HANDOFF_NANOS).coerceAtMost(1f))
+                }
             }
             outgoingColumns = null
+            morph = 1f
         }
         DisposableEffect(mosaic, state) {
             onDispose {
@@ -416,18 +433,10 @@ fun LibraryMosaic(
                     shape = MosaicBodyShape(top, bottom)
                     clip = true
                 }) {
-                    val active = activeColumns()
                     val focalIndex = anchor?.cardId?.let(layouts.byId::get)
-                    for (columns in listOfNotNull(outgoingColumns, sceneColumns).distinct()) key(columns) {
-                        val alpha = if (columns == sceneColumns) sceneAlpha else 1f
-                        ProjectedMosaicCards(layouts, mosaic, state, height, focalIndex,
-                            projection = { projection(columns) }, origin = ::origin,
-                            shiftX = { coverShift(projection(columns), horizontalShift(origin())) },
-                            activeInteraction = columns == active,
-                            modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha }.background(colors.background)
-                                .then(if (columns == active) Modifier.testTag("mosaic-projection") else Modifier.clearAndSetSemantics { projectionTestTag = "mosaic-projection" }),
-                            onOpenCard = onOpenCard, onLongPressCard = onLongPressCard)
-                    }
+                    ProjectedMosaicCards(layouts, mosaic, height, focalIndex, frame = ::frame,
+                        modifier = Modifier.fillMaxSize().background(colors.background).testTag("mosaic-projection"),
+                        onOpenCard = onOpenCard, onLongPressCard = onLongPressCard)
                     if (focalIndex != null) key("focal", layouts.cards[focalIndex].id) {
                         val card = layouts.cards[focalIndex]
                         val imageCell = layouts.level(mosaic.columns).cells[focalIndex]
@@ -436,11 +445,9 @@ fun LibraryMosaic(
                                 enabled = !mosaic.isPinching, onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
                                 imageRequestSizePx = maxOf(imageCell.width, imageCell.height).roundToInt().coerceAtLeast(1))
                         }) { children, constraints ->
-                            val cell = layouts.cell(focalIndex, mosaic.position)
+                            val cell = frame().cell(focalIndex)
                             val child = children.single().measure(Constraints.fixed(cell.width.roundToInt().coerceAtLeast(1), cell.height.roundToInt().coerceAtLeast(1)))
-                            val y = origin()
-                            val x = coverShift(projection(active), horizontalShift(y))
-                            layout(constraints.maxWidth, constraints.maxHeight) { child.place((cell.left + x).roundToInt(), (cell.top - y).roundToInt()) }
+                            layout(constraints.maxWidth, constraints.maxHeight) { child.place(cell.left.roundToInt(), cell.top.roundToInt()) }
                         }
                     }
                 }
@@ -449,39 +456,58 @@ fun LibraryMosaic(
     }
 }
 
-/** Draws one intact grid; the other projection never supplies this grid's card positions. */
+/**
+ * Where each card is drawn now, in viewport pixels: on the scene's grid, or on its way there from the outgoing grid
+ * while the two hand over.
+ */
+private class MosaicFrame(
+    val scene: MosaicProjection, val sceneX: Float, val outgoing: MosaicProjection?, val outgoingX: Float,
+    val progress: Float, val y: Float,
+) {
+    fun cell(index: Int): Rect {
+        val to = scene.cell(index).translate(Offset(sceneX, -y))
+        val from = outgoing?.cell(index)?.translate(Offset(outgoingX, -y)) ?: return to
+        return lerp(from, to, progress)
+    }
+
+    /** The cards either grid shows around the viewport, so a card sliding in or out is drawn the whole way. */
+    fun window(viewport: Float): IntRange {
+        val to = scene.window(y, viewport)
+        val from = outgoing?.window(y, viewport) ?: return to
+        return when {
+            from.isEmpty() -> to
+            to.isEmpty() -> from
+            else -> minOf(from.first, to.first)..maxOf(from.last, to.last)
+        }
+    }
+}
+
+/** Draws every card but the focal one once, at its place in the current [MosaicFrame]. */
 @Composable
 private fun ProjectedMosaicCards(
-    layouts: MosaicLayouts, mosaic: MosaicState, state: LazyListState, height: Float, focalIndex: Int?,
-    projection: () -> MosaicProjection, origin: () -> Float, shiftX: () -> Float, activeInteraction: Boolean, modifier: Modifier,
+    layouts: MosaicLayouts, mosaic: MosaicState, height: Float, focalIndex: Int?, frame: () -> MosaicFrame, modifier: Modifier,
     onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
 ) {
-    val latestProjection by rememberUpdatedState(projection)
-    val latestOrigin by rememberUpdatedState(origin)
-    val window by remember(layouts, state, height) { derivedStateOf { latestProjection().window(latestOrigin(), height) } }
+    val latestFrame by rememberUpdatedState(frame)
+    val window by remember(layouts, height) { derivedStateOf { latestFrame().window(height) } }
     val drawn = window.filter { it != focalIndex }
     Layout(modifier = modifier, content = {
         for (index in drawn) key(layouts.cards[index].id) {
             val card = layouts.cards[index]
             val imageCell = layouts.level(mosaic.columns).cells[index]
-            GalleryTile(card, { if (activeInteraction && !mosaic.isPinching) onOpenCard(card) },
-                modifier = Modifier.fillMaxSize(), enabled = activeInteraction && !mosaic.isPinching,
-                onLongClick = onLongPressCard?.let { press -> { if (activeInteraction && !mosaic.isPinching) press(card) } },
-                imageRequestSizePx = maxOf(imageCell.width, imageCell.height).roundToInt().coerceAtLeast(1), playVideo = activeInteraction)
+            GalleryTile(card, { if (!mosaic.isPinching) onOpenCard(card) },
+                modifier = Modifier.fillMaxSize(), enabled = !mosaic.isPinching,
+                onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
+                imageRequestSizePx = maxOf(imageCell.width, imageCell.height).roundToInt().coerceAtLeast(1))
         }
     }) { children, constraints ->
-        val projected = projection()
-        val y = origin()
-        val x = shiftX()
+        val current = frame()
+        val cells = drawn.map(current::cell)
         val measured = children.mapIndexed { at, child ->
-            val cell = projected.cell(drawn[at])
-            child.measure(Constraints.fixed(cell.width.roundToInt().coerceAtLeast(1), cell.height.roundToInt().coerceAtLeast(1)))
+            child.measure(Constraints.fixed(cells[at].width.roundToInt().coerceAtLeast(1), cells[at].height.roundToInt().coerceAtLeast(1)))
         }
         layout(constraints.maxWidth, constraints.maxHeight) {
-            measured.forEachIndexed { at, child ->
-                val cell = projected.cell(drawn[at])
-                child.place((cell.left + x).roundToInt(), (cell.top - y).roundToInt())
-            }
+            measured.forEachIndexed { at, child -> child.place(cells[at].left.roundToInt(), cells[at].top.roundToInt()) }
         }
     }
 }

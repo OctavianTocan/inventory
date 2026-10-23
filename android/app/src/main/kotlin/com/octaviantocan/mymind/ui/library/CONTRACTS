@@ -1,8 +1,17 @@
 @cc [owner:OctavianTocan,label:product;design] gallery-keeps-card-order
 The library mosaic MUST preserve the server's card order and every card ID when it
-regroups cards into variable-width brick rows. Images fill their bricks; text cards
-retain a readable preview. Tap and hold MUST target the same card at every density.
-Source: Tavi, 22 October 2026, Google Photos layout request in the Codex conversation.
+lays cards out. At two to four columns cards share square cells in bands of one or two
+rows, filled row by row, as Google Photos breaks up its squares: screenshots and other
+tall pictures stand two squares high, about half the wide pictures lie two across, and
+about one picture in seven is big, two by two, chosen by the card's id so it keeps its
+shape across reloads. Text, posts and pictures with words take one square. A band MUST
+NOT leave a hole before the last card. One column shows each card across the width at
+its own proportions. Images fill their cells; text cards retain a readable preview. Tap
+and hold MUST target the same card at every density.
+Source: Tavi, 22 October 2026, Google Photos layout request in the Codex conversation;
+the recorded review of 23 October 2026 ("they use all these shapes to break up the
+layout so that you don't just have like a bunch of squares", "the screenshots are kind
+of taking the aspect ratio of screenshots", "some of these images are just bigger").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-mixed-cards-keep-text-and-images
 A note, social post, article or saved link with text and a picture MUST show both in its gallery
@@ -16,18 +25,20 @@ Source: Tavi, 22 October 2026, preserve text and images in small note previews.
 A two-finger pinch on the mosaic MUST continuously change tile size through multiple
 density levels and reverse while the fingers remain down. Density stops
 MUST offer distinct sizes for uniform portrait, square and landscape cards, with one
-to four cards per row at their stops. Text MUST retain its size and wrapping when
+to four columns at their stops. Text MUST retain its size and wrapping when
 releasing at a stop. Adjacent cached grids MUST remain coherent and nonoverlapping
 within each projection, sharing one focal card's fractional X/Y point and physical
 size. Each stop holds briefly before the fingers move on, and the grid shown between
 two stops MUST be the denser one enlarged, never a sparser one shrunk below its size,
-so no empty band appears. A crossing starts a 90 ms timed handoff, then MUST show one
-opaque grid even if the fingers pause or jitter at the threshold. Reduced motion
+so no empty band appears. A crossing starts a 250 ms handoff in which every card, drawn
+once, glides from its place in the old grid to its place in the new one, never a
+crossfade of two grids; it then MUST show one grid even if the fingers pause or
+jitter at the threshold. Reduced motion
 switches the grid immediately. The focal card MUST be drawn once and only
 one projection may expose semantics or hit targets. A new single-finger press
 MUST retain its owning projection and focal node through tap or hold. Passing drag
-slop releases focal anchoring; a second finger rebases a new pinch. Stabilizing a
-press MUST show a coherent opaque scene rather than hold a ghosted blend.
+slop releases focal anchoring; a second finger rebases a new pinch. A press during a
+handoff holds every card where it is until the press ends.
 Vertical anchoring respects scroll bounds. The focal point stays where the fingers
 met: moving both fingers together MUST NOT pan the gallery. At every moment of a
 gesture the projected grid MUST cover the full width, clipping its outer edges
@@ -43,7 +54,9 @@ a gesture or settle MUST synchronously save a canonical density and anchored scr
 request, so reusing its state cannot restore a fractional transition.
 Source: Tavi, 22 October 2026, explicit pinch-to-enlarge/reduce requirement; the
 recorded review of the same day, with Google Photos as the reference ("the
-intermediate state where there is emptiness", "I shouldn't be able to pan").
+intermediate state where there is emptiness", "I shouldn't be able to pan"); the
+recorded review of 23 October 2026 ("then they reorganize completely, which is weird
+and doesn't feel good").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-highlights-stay-above-the-bricks
 Top of Mind MUST remain above the main mosaic, in pin order, as a horizontal rail of

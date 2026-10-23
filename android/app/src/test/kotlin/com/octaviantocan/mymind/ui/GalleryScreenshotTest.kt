@@ -234,7 +234,8 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         assertEquals(heldPosition(2.56f), mosaicState.position, 0.02f)
         compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeBy(40)
-        compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(2)
+        // The handoff moves each card once to its new place; it never draws a second grid over the first.
+        compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
         frame("handoff_transient")
         repeat(4) {
             // Jitter where the denser grid hands back to the held stop.

@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
@@ -25,6 +26,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.octaviantocan.mymind.data.Cover
@@ -313,6 +315,47 @@ class LibraryMosaicTest {
         compose.waitForIdle()
         assertTrue(!density.isPinching)
         assertEquals(density.columns.toFloat(), density.position, 0f)
+    }
+
+    @Test
+    fun crossingAStopGlidesEachCardToItsNewPlaceInsteadOfSwappingGrids() {
+        val density = MosaicState(2)
+        val state = LazyListState(firstVisibleItemIndex = 8)
+        compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(cards, endReached = true), {}, {}, state = state, mosaic = density) } }
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        fun shown(): Map<String, androidx.compose.ui.geometry.Rect> = (10..36).mapNotNull { n ->
+            compose.onAllNodesWithContentDescription("Photo $n").fetchSemanticsNodes().also { assertTrue("Photo $n is drawn once", it.size <= 1) }
+                .firstOrNull()?.let { "Photo $n" to androidx.compose.ui.geometry.Rect(it.positionInRoot, it.size.toSize()) }
+        }.toMap()
+        compose.mainClock.autoAdvance = false
+        try {
+            gallery.performTouchInput {
+                down(0, Offset(width * 0.1f, height * 0.3f))
+                down(1, Offset(width * 0.9f, height * 0.3f))
+                updatePointerTo(0, Offset(width * 0.19f, height * 0.3f))
+                updatePointerTo(1, Offset(width * 0.81f, height * 0.3f))
+                move(delayMillis = 16)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.mainClock.advanceTimeByFrame()
+            val start = shown()
+            compose.mainClock.advanceTimeBy(100)
+            val middle = shown()
+            compose.mainClock.advanceTimeBy(400)
+            val end = shown()
+            val moved = start.keys.filter { it in middle && it in end && (end.getValue(it).topLeft - start.getValue(it).topLeft).getDistance() > 40f }
+            assertTrue("Crossing a stop must move cards to new places", moved.isNotEmpty())
+            for (name in moved) {
+                val (a, m, b) = Triple(start.getValue(name), middle.getValue(name), end.getValue(name))
+                assertTrue("$name must be on its way midway", (m.topLeft - a.topLeft).getDistance() > 4f && (b.topLeft - m.topLeft).getDistance() > 4f)
+                assertTrue("$name must lie between its two places midway",
+                    m.left in minOf(a.left, b.left) - 1f..maxOf(a.left, b.left) + 1f && m.top in minOf(a.top, b.top) - 1f..maxOf(a.top, b.top) + 1f)
+            }
+            gallery.performTouchInput { up(0); up(1) }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+        }
     }
 
     @Test

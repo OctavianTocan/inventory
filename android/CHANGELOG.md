@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.7 (18), 2026-10-23
+The gallery breaks up its squares like Google Photos, and pinching moves cards instead of swapping grids.
+
+### Changed
+- At two to four columns the gallery uses square cells with a few shapes mixed in: screenshots and other tall pictures stand two squares high, about half the wide pictures lie two across, and about one picture in seven is shown big. Which pictures get which shape stays the same each time you open the app.
+- Notes, posts and pictures with words stay one square, and every row is full except at the very end.
+- When a pinch passes a size, each card glides from its old place to its new one instead of the whole grid fading into another.
+
 ## 0.6.6 (17), 2026-10-23
 Videos play like in Google Photos, and the gallery text and bottom bar look calmer.
 
