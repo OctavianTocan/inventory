@@ -303,4 +303,12 @@ class LibraryModelsTest {
         assertEquals(CardMenuOutcome.OpenSubmenu(CardSubmenu.Tags), outcome)
         assertEquals(TagChoices(listOf("b", "a"), listOf("a")), viewModel.tagChoices.value)
     }
+
+    @Test
+    fun aKindLabelThatRepeatsTheTilesWordsIsLeftOut() {
+        assertTrue(sameWords("example.test", "https://www.example.test/"))
+        assertTrue(sameWords("Note", " note"))
+        assertFalse(sameWords("X", "A saved post"))
+        assertFalse(sameWords("", ""))
+    }
 }

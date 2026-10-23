@@ -22,7 +22,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +69,10 @@ private val REPOSITORY_NARROW = 194.dp
 private val REPOSITORY_LABEL = Color(0xFF909CAE)
 private const val REPOSITORY_RATIO = 164f / 154f
 private const val ARTICLE_COVER_RATIO = 162f / 64f
+private const val DEFAULT_RATIO = 1.5f
+
+// The reader shows any picture whole; beyond these proportions it gains bands rather than a cut.
+private val WHOLE_RATIOS = 0.5f..3f
 private const val POST_MAX_LINES = 25
 private const val NOTE_MAX_LINES = 40
 private const val NUNITO_NORMAL_LINE = 1.364f
@@ -136,10 +143,14 @@ fun TileCaption(text: String, modifier: Modifier = Modifier) {
  * @param card Card whose cover is drawn.
  * @param play True draws the play mark of video tiles over it.
  * @param modifier Modifier for the picture box.
+ * @param whole True shows the whole picture at the proportions it loads with, as the reader does, never cropping it;
+ *   false fills the box at the stored proportions, as grid tiles do.
  */
 @Composable
-fun CardPicture(card: Card, play: Boolean, modifier: Modifier = Modifier) {
-    val ratio = pictureRatio(card)
+fun CardPicture(card: Card, play: Boolean, modifier: Modifier = Modifier, whole: Boolean = false) {
+    val src = galleryPicture(card)
+    var loaded by remember(src) { mutableStateOf<Float?>(null) }
+    val ratio = if (whole) (loaded ?: storedRatio(card) ?: DEFAULT_RATIO).coerceIn(WHOLE_RATIOS) else pictureRatio(card)
     Box(
         modifier
             .fillMaxWidth()
@@ -147,7 +158,16 @@ fun CardPicture(card: Card, play: Boolean, modifier: Modifier = Modifier) {
             .clip(RoundedCornerShape(IMAGE_RADIUS))
             .background(pictureBackground(card)),
     ) {
-        PictureImage(card)
+        if (src != null) AsyncImage(
+            model = resolveMediaUrl(BuildConfig.SERVER_URL, src),
+            contentDescription = null,
+            contentScale = if (whole) ContentScale.Fit else ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+            onSuccess = { state ->
+                val image = state.result.image
+                if (whole && image.width > 0 && image.height > 0) loaded = image.width.toFloat() / image.height
+            },
+        )
         if (play) PlayMark(Modifier.align(Alignment.Center))
     }
 }
@@ -165,10 +185,13 @@ private fun PictureImage(card: Card, modifier: Modifier = Modifier) {
 }
 
 /** Width over height of the card's cover, kept between tall portrait and wide banner. */
-private fun pictureRatio(card: Card): Float {
+private fun pictureRatio(card: Card): Float = storedRatio(card)?.coerceIn(0.4f, 3f) ?: DEFAULT_RATIO
+
+/** Width over height the card's cover or file was saved with, or null when it was not. */
+private fun storedRatio(card: Card): Float? {
     val w = card.cover?.width ?: card.blob?.width
     val h = card.cover?.height ?: card.blob?.height
-    return if (w != null && h != null && w > 0 && h > 0) (w.toFloat() / h).coerceIn(0.4f, 3f) else 1.5f
+    return if (w != null && h != null && w > 0 && h > 0) w.toFloat() / h else null
 }
 
 /** Colour shown behind a cover while it loads. */

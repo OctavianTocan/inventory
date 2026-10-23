@@ -112,6 +112,7 @@ internal fun FootCircleButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 52.dp,
+    iconSize: Dp = 22.dp,
 ) {
     val colors = LibraryStyle.colors
     FootPressTheme {
@@ -120,6 +121,6 @@ internal fun FootCircleButton(
                 .semantics { contentDescription = label }
                 .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button, onClick = onClick),
             contentAlignment = Alignment.Center,
-        ) { FootIcon(icon) }
+        ) { FootIcon(icon, size = iconSize) }
     }
 }

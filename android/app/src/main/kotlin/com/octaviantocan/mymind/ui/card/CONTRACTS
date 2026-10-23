@@ -23,6 +23,24 @@ just tint only the bottom sheet", "some tags which look really weird").
 @cc [owner:OctavianTocan,label:product] card-reader-opens-its-source
 A card with a web link MUST open it from a tap on its picture and from a source pill
 naming the site under the picture. Holding the picture MUST open the card's actions.
-A card without a link MUST NOT show the source pill.
+A card without a link MUST NOT show the source pill. A video the server keeps plays in
+place instead (`card-reader-plays-videos`), and the source pill still opens its link.
 Source: Tavi's recorded review, 22 October 2026 ("especially the preview, I should be
 taken to the source").
+
+@cc [owner:OctavianTocan,label:product;design] card-reader-shows-the-whole-picture
+The reader MUST show a card's picture whole, at its own proportions (kept between a
+tall phone screenshot and a wide banner), never cropped to a fixed frame.
+Source: Tavi's recorded review, 23 October 2026 ("the image is half cut", "it's not even
+like complete").
+
+@cc [owner:OctavianTocan,label:product;design;motion] card-reader-plays-videos
+A video the library server keeps MUST open in the reader as a video player, as Google
+Photos does: it starts by itself with sound over its still, a tap on the video pauses
+or resumes it, and under it sit play or pause, the time played of the whole, sound on
+or off, and a bar to move through it. It MUST pause when the app leaves the screen and
+stop when the reader closes, and it MUST only request media from the library server.
+Videos on other sites keep their still picture, which opens the source.
+Source: Tavi's recorded review, 23 October 2026 ("we should be showing things like kind
+of more similar to how Google Photos shows a video", "they open kind of a video player,
+which makes far more sense for a video").

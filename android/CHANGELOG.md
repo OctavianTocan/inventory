@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.6 (17), 2026-10-23
+Videos play like in Google Photos, and the gallery text and bottom bar look calmer.
+
+### New
+- Opening a video kept on your server shows a real player: it starts with sound, a tap pauses it, and below it are play, the time, sound on or off and a bar to skip through.
+- Videos saved without a cover show a still from the video in the gallery and play quietly there, instead of an empty "Video" tile.
+
+### Changed
+- Every tile's text has the same size and weight, so long notes no longer shrink and no tile looks bold.
+- A link tile no longer repeats its address above itself.
+- The video badge is the Google Photos one: the length and a white play circle on the picture, with no YouTube logo.
+- The bottom bar's highlight hugs the chosen tab, the labels are a little bolder and darker, the chosen tab has a filled icon and Search shows a sparkle.
+
+### Fixed
+- A card's picture shows whole in the card instead of cut in half.
+
 ## 0.6.5 (16), 2026-10-22
 Links shared with words around them are saved as links.
 

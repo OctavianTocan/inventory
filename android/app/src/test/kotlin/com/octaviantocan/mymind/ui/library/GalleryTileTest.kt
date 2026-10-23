@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
@@ -83,7 +85,7 @@ class GalleryTileTest(private val width: Int) {
         assertBoth(body)
     }
 
-    @Test fun anAnnotatedVideoKeepsItsNoteCoverAndYouTubeMark() {
+    @Test fun anAnnotatedVideoKeepsItsNoteCoverAndBadge() {
         val body = "A short film worth watching again."
         render(testCard("annotated-video", type = "YouTubeVideo", title = "A saved film", note = body)
             .copy(cover = Cover(source, 1200, 800)))
@@ -99,6 +101,16 @@ class GalleryTileTest(private val width: Int) {
         render(card, previews)
         val badge = if (width >= 96) "Video, 1:05" else "Video"
         compose.onNodeWithContentDescription(badge, useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun aVideoKeptWithoutACoverShowsAStillAndItsBadge() {
+        render(testCard("raw", type = "Video", title = "raw.mp4").copy(blob = Blob("u/raw", "video/mp4", 1080, 1920)))
+        compose.onNodeWithContentDescription("Video", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun aLinkWhoseOnlyTextIsItsAddressShowsItOnce() {
+        render(testCard("bare-link", type = "WebPage", url = "https://example.test/", title = "example.test").copy(domain = "example.test"))
+        compose.onAllNodesWithText("example.test", useUnmergedTree = true).assertCountEquals(1)
     }
 
     @Test fun aTextOnlyNoteKeepsItsBody() {

@@ -12,14 +12,16 @@
   "license_sha256": "ddbe6082ec3cf979db47e5af549d2849c5d6182b3e005ef91ce1dbb9eb122f11",
   "conversion": "Copy every SVG fill path unchanged into an Android vector with a 256 by 256 viewport. Resolve currentColor to each existing drawable color; retain intrinsic dp size, tint and autoMirrored attributes. No stroke expansion, shape reconstruction or geometry edits.",
   "mapping_decisions": {
-    "everything": "images for both the navigation capsule and legacy tab resource",
-    "spaces": "squares-four throughout selection and creation interfaces",
+    "everything": "images for both the navigation capsule and legacy tab resource; the selected capsule tab uses images fill",
+    "spaces": "squares-four throughout selection and creation interfaces; the selected capsule tab uses squares-four fill",
     "reader_overflow": "dots-three-vertical",
     "sheet_navigation": "x for close; arrow-left for back with autoMirrored retained",
     "upload_progress": "circle-notch retains the existing continuous ring spinner geometry",
     "top_of_mind": "push-pin and push-pin-slash",
     "same_vibe": "sparkle",
-    "notification_icons": "download-simple and upload-simple with white fill and transparent background for Android notification alpha silhouettes"
+    "notification_icons": "download-simple and upload-simple with white fill and transparent background for Android notification alpha silhouettes",
+    "search": "magnifying-glass; the gallery's Search circle pairs the bold glass with star-four for search by meaning",
+    "video_player": "play and pause fill, speaker-high and speaker-slash bold for the reader's video controls"
   },
   "excluded_resources": {
     "ic_launcher_background": "Launcher artwork",
@@ -298,6 +300,18 @@
       "path_count": 1
     },
     {
+      "resource": "ic_library_grid_fill",
+      "icon": "images",
+      "weight": "fill",
+      "source_path": "assets/fill/images-fill.svg",
+      "source_sha256": "075f1302fddbea8de0b59cab35127b1dff0883e5ef952568fa5260a0f39a4573",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FF000000",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_library_profile",
       "icon": "user-circle",
       "weight": "regular",
@@ -322,6 +336,19 @@
       "path_count": 1
     },
     {
+      "resource": "ic_library_search_spark",
+      "icon": "magnifying-glass + star-four",
+      "weight": "bold + fill",
+      "source_path": "assets/bold/magnifying-glass-bold.svg; assets/fill/star-four-fill.svg",
+      "source_sha256": "b73e393b20bff0aaee96b9e325d0276fe1ab5fc81b5080633a95827bd14ebae6; 2e323dacc3116d0fdd2e5748297a868469cdaedcd973b76b87fc127bb8082f91",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FF000000",
+      "root_attributes": {},
+      "path_count": 2,
+      "composition": "Both paths unchanged; the glass is scaled 0.8 and moved (10, 40), the star scaled 0.36 and moved (152, 14), as the search-with-sparkle mark of Google Photos."
+    },
+    {
       "resource": "ic_library_shuffle",
       "icon": "shuffle",
       "weight": "regular",
@@ -339,6 +366,18 @@
       "weight": "regular",
       "source_path": "assets/regular/squares-four.svg",
       "source_sha256": "f70d6b20e08e028ab5b1714077681910a2431092cf7a23b82366ddaec554ab87",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FF000000",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_library_spaces_fill",
+      "icon": "squares-four",
+      "weight": "fill",
+      "source_path": "assets/fill/squares-four-fill.svg",
+      "source_sha256": "728b2dbfa447ec3fec54f0f8b3b52cec573c51da00c00a6d73f699027758340c",
       "android_width": "24dp",
       "android_height": "24dp",
       "fill_color": "#FF000000",
@@ -366,6 +405,18 @@
       "android_width": "24dp",
       "android_height": "24dp",
       "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_pause_fill",
+      "icon": "pause",
+      "weight": "fill",
+      "source_path": "assets/fill/pause-fill.svg",
+      "source_sha256": "156d3cdfa5cea803caec50b35f49bc635070c8bd84e7fe78df94b025017ccee1",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FF000000",
       "root_attributes": {},
       "path_count": 1
     },
@@ -456,6 +507,30 @@
       "path_count": 1
     },
     {
+      "resource": "ic_speaker_high",
+      "icon": "speaker-high",
+      "weight": "bold",
+      "source_path": "assets/bold/speaker-high-bold.svg",
+      "source_sha256": "f0fc825cb96958238882b98aea55afdb63da92c4c5c8b499c0e1068e9abb299e",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FF000000",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_speaker_slash",
+      "icon": "speaker-slash",
+      "weight": "bold",
+      "source_path": "assets/bold/speaker-slash-bold.svg",
+      "source_sha256": "19f3d5a5a4b3012c43dbc712b9a48a81fb458ec4ba3f3a9a9565a0c6526ff315",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FF000000",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_tab_everything",
       "icon": "images",
       "weight": "regular",
@@ -524,18 +599,6 @@
       "android_width": "20dp",
       "android_height": "20dp",
       "fill_color": "#a7b4c7",
-      "root_attributes": {},
-      "path_count": 1
-    },
-    {
-      "resource": "ic_youtube",
-      "icon": "youtube-logo",
-      "weight": "fill",
-      "source_path": "assets/fill/youtube-logo-fill.svg",
-      "source_sha256": "fce097e65d0df0cb2bb84cd282bb6cc08ccb47ec18d41b7c22870830257065be",
-      "android_width": "24dp",
-      "android_height": "24dp",
-      "fill_color": "#FFFFFF",
       "root_attributes": {},
       "path_count": 1
     },
