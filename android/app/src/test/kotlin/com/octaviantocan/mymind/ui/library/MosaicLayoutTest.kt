@@ -5,47 +5,89 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.roundToInt
 
 class MosaicLayoutTest {
     private val cards = (1..53).map { n ->
         testCard("m$n", type = "Image").copy(cover = Cover(width = if (n % 3 == 0) 1600 else 800, height = 1000))
     }
 
+    private fun photo(id: String, width: Int, height: Int) = testCard(id, type = "Image")
+        .copy(cover = Cover("/media/$id.jpg", width = width, height = height))
+
     @Test
-    fun rowsKeepEveryCardInOrderAndFitTheViewport() {
+    fun bandsKeepEveryCardInOrderAndFitTheViewport() {
         for (columns in 1..4) {
-            val rows = mosaicRows(cards, width = 1080f, columns = columns, gap = 8f)
-            assertEquals(cards.map { it.id }, rows.flatMap { it.cards }.map { it.id })
-            rows.forEach { row ->
-                assertTrue(row.height.isFinite() && row.height > 0f)
-                assertTrue(row.widths.all { it.isFinite() && it > 0f })
-                assertTrue(row.widths.sum() + 8f * (row.cards.size - 1) <= 1080.01f)
+            val level = mosaicLevel(cards, width = 1080f, columns = columns, gap = 8f)
+            assertEquals(cards.map { it.id }, level.rows.flatMap { it.cards }.map { it.id })
+            assertTrue(level.rows.all { it.height.isFinite() && it.height > 0f })
+            assertTrue(level.cells.all { it.left >= -0.01f && it.right <= 1080.01f && it.width > 0f && it.height > 0f })
+            assertTrue(level.cells.zipWithNext().all { (a, b) -> a.top <= b.top })
+        }
+    }
+
+    @Test
+    fun picturesTakeShapesLikeGooglePhotos() {
+        assertEquals(MosaicSpan(1, 2), mosaicSpan(photo("screenshot", 1080, 2400)))
+        assertEquals(MosaicSpan(1, 1), mosaicSpan(testCard("note", type = "Note", note = "A thought")))
+        assertEquals(MosaicSpan(1, 1), mosaicSpan(photo("noted", 1080, 2400).copy(note = "Words beside it")))
+        val wide = (1..40).map { mosaicSpan(photo("wide$it", 1920, 1080)) }
+        assertTrue("About half the wide pictures lie two across", wide.count { it == MosaicSpan(2, 1) } in 10..30)
+        val square = (1..140).map { mosaicSpan(photo("square$it", 1000, 1000)) }
+        assertTrue("A few pictures are big", square.count { it == MosaicSpan(2, 2) } in 8..40)
+        assertTrue(square.none { it == MosaicSpan(2, 1) || it == MosaicSpan(1, 2) })
+    }
+
+    @Test
+    fun aScreenshotStandsTwoSquaresHighAndTheBandAroundItHasNoHoles() {
+        val square = (1..20).map { photo("square$it", 1000, 1000) }.first { mosaicSpan(it) == MosaicSpan(1, 1) }
+        val sample = listOf(square, photo("shot", 1080, 2400)) + (1..6).map { testCard("t$it", type = "Note", note = "Note $it") }
+        val level = mosaicLevel(sample, 1080f, 3, 8f)
+        val unit = (1080f - 16f) / 3
+        assertEquals(2 * unit + 8f, level.cells[1].height, 0.01f)
+        assertEquals(listOf(0, 0, 0, 0, 0), level.rowOf.take(5).toList())
+        assertEquals(level.rows.first().height, level.cells[1].height, 0.01f)
+    }
+
+    @Test
+    fun everyBandButTheLastFillsItsSquares() {
+        val mixed = (1..90).map { n ->
+            when (n % 5) {
+                0 -> photo("shot$n", 1080, 2400)
+                1 -> photo("wide$n", 1920, 1080)
+                2 -> testCard("note$n", type = "Note", note = "Note $n")
+                else -> photo("photo$n", 1000, 1000)
+            }
+        }
+        for (columns in 2..4) {
+            val level = mosaicLevel(mixed, 1080f, columns, 8f)
+            val unit = (1080f - 8f * (columns - 1)) / columns
+            level.rows.dropLast(1).forEachIndexed { band, row ->
+                val squares = (level.starts[band] until level.starts[band] + row.cards.size).sumOf { index ->
+                    val cell = level.cells[index]
+                    ((cell.width + 8f) / (unit + 8f)).roundToInt() * ((cell.height + 8f) / (unit + 8f)).roundToInt()
+                }
+                assertEquals("Band $band at $columns columns", columns * ((row.height + 8f) / (unit + 8f)).roundToInt(), squares)
+            }
+            for (a in level.cells.indices) for (b in a + 1 until level.cells.size) {
+                val overlap = level.cells[a].intersect(level.cells[b])
+                assertTrue("$columns columns collided: $a/$b", overlap.width <= 0f || overlap.height <= 0f)
             }
         }
     }
 
     @Test
-    fun theBrickRowsUseDifferentWidthsForDifferentPictures() {
-        val row = mosaicRows(cards.take(2), 1080f, 2, 8f).single()
-        val varied = mosaicRows(listOf(cards[0], cards[2]), 1080f, 2, 8f).single()
-        assertEquals(row.widths[0], row.widths[1], 0.01f)
-        assertTrue(varied.widths[1] > varied.widths[0] * 1.5f)
-    }
-
-    @Test
     fun everyDensityStopChangesTileSizeForPortraitAndLandscapePhotos() {
         for (ratio in listOf(0.65f, 1f, 1.15f, 1.8f)) {
-            val photos = (1..24).map { testCard("photo$it", type = "Image")
-                .copy(cover = Cover(width = (1000 * ratio).toInt(), height = 1000)) }
-            var previousWidth = Float.POSITIVE_INFINITY
+            val photos = (1..24).map { photo("photo$it-$ratio", (1000 * ratio).toInt(), 1000) }
+            var previousUnit = Float.POSITIVE_INFINITY
             for (columns in 1..4) {
-                val rows = mosaicRows(photos, 1080f, columns, 8f)
-                assertTrue("$columns columns must make $ratio-aspect photos smaller", rows.first().widths.first() < previousWidth)
-                assertTrue(rows.all { it.cards.size == columns })
-                previousWidth = rows.first().widths.first()
+                val level = mosaicLevel(photos, 1080f, columns, 8f)
+                val unit = level.cells.minOf { it.width }
+                assertTrue("$columns columns must make $ratio-aspect photos smaller", unit < previousUnit)
+                assertEquals(columns, level.cells.map { it.left.roundToInt() }.distinct().size)
+                previousUnit = unit
             }
-            val finalRow = mosaicRows(photos.take(1), 1080f, 4, 8f).single()
-            assertTrue("A short last row must keep landscape thumbnails small", finalRow.widths.single() <= 270f)
         }
     }
 
@@ -56,18 +98,20 @@ class MosaicLayoutTest {
             testCard("b", type = "Image").copy(cover = Cover(width = 0, height = -1)),
             testCard("c", type = "Image").copy(cover = Cover(width = Int.MAX_VALUE, height = 1)),
         )
-        val rows = mosaicRows(broken, 384f, 3, 3f)
-        assertEquals(3, rows.sumOf { it.cards.size })
-        assertTrue(rows.all { it.height.isFinite() && it.height > 0f })
+        for (columns in 1..4) {
+            val rows = mosaicRows(broken, 384f, columns, 3f)
+            assertEquals(3, rows.sumOf { it.cards.size })
+            assertTrue(rows.all { it.height.isFinite() && it.height > 0f })
+        }
         assertTrue(mosaicRows(broken, 0f, 2, 3f).isEmpty())
         assertTrue(mosaicRows(broken, Float.NaN, 2, 3f).isEmpty())
     }
 
     @Test
-    fun anIncompleteLastRowDoesNotTurnOnePhotoIntoAHero() {
-        val row = mosaicRows(cards.take(1), 1080f, 4, 8f).single()
-        assertTrue(row.widths.single() <= 1080f / 4)
-        assertTrue(row.widths.single() < 1080f / 2)
+    fun anIncompleteLastBandDoesNotTurnOnePhotoIntoAHero() {
+        val lone = (1..20).map { photo("lone$it", 800, 1000) }.first { mosaicSpan(it) == MosaicSpan(1, 1) }
+        val cell = mosaicLevel(listOf(lone), 1080f, 4, 8f).cells.single()
+        assertTrue(cell.width <= 1080f / 4)
     }
 
     @Test
@@ -77,7 +121,8 @@ class MosaicLayoutTest {
             val cells = cards.indices.map { layouts.cell(it, position) }
             assertTrue(cells.all { it.left >= -0.01f && it.right <= 1080.01f && it.width > 0f && it.height > 0f })
             assertTrue(cells.zipWithNext().all { (a, b) -> a.top <= b.top })
-            assertEquals(cells.last().bottom, layouts.height(position), 0.01f)
+            assertTrue(cells.maxOf { it.bottom } <= layouts.height(position) + 0.01f)
+            if (position % 1f == 0f) assertEquals(cells.maxOf { it.bottom }, layouts.height(position), 0.01f)
             if (position % 1f == 0f) assertEquals(layouts.level(position.toInt()).cells, cells)
         }
     }
@@ -106,7 +151,7 @@ class MosaicLayoutTest {
                 assertEquals(desired.left, cells[focal].left, 0.01f)
                 assertEquals(desired.top, cells[focal].top, 0.01f)
                 assertEquals(desired.width, cells[focal].width, 0.01f)
-                assertEquals(desired.height, cells[focal].height, 0.01f)
+                assertEquals(layouts.level(columns).cells[focal].height * projection.scale, cells[focal].height, 0.01f)
                 assertTrue(cells.zipWithNext().all { (a, b) -> a.top <= b.top })
                 for (a in cells.indices) for (b in a + 1 until cells.size) {
                     val overlap = cells[a].intersect(cells[b])

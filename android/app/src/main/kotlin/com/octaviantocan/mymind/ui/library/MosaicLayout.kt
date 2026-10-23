@@ -14,39 +14,122 @@ import androidx.compose.ui.geometry.Offset
 import com.octaviantocan.mymind.data.Card
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** One justified row, in pixels, in the server's original card order. */
+/** One band of the gallery, in pixels, in the server's original card order: a lazy-list slot of one or two rows. */
 internal data class MosaicRow(val cards: List<Card>, val widths: List<Float>, val height: Float) {
     val key: String get() = cards.first().id
 }
 
-/** Packs variable-width bricks around the selected tile size without reordering or dropping cards. */
-internal fun mosaicRows(cards: List<Card>, width: Float, columns: Int, gap: Float): List<MosaicRow> {
-    if (cards.isEmpty() || !width.isFinite() || width <= 0f) return emptyList()
-    val across = columns.coerceIn(1, 4)
-    val space = gap.takeIf { it.isFinite() }?.coerceIn(0f, width / 16f) ?: 0f
-    val ratios = cards.map(::mosaicAspectRatio)
-    val rows = ArrayList<MosaicRow>()
-    var start = 0
-    while (start < cards.size) {
-        val count = min(across, cards.size - start)
-        val sum = (start until start + count).sumOf { ratios[it].toDouble() }.toFloat()
-        val justified = (width - space * (count - 1)) / sum
-        val height = if (count < across) min(justified, (width - space * (across - 1)) / (across * sum / count)) else justified
-        rows += MosaicRow(cards.subList(start, start + count), (start until start + count).map { ratios[it] * height }, height)
-        start += count
+/** How many grid squares a card covers across and down at two columns or more. */
+internal data class MosaicSpan(val across: Int, val down: Int)
+
+/** Pictures this tall or taller (width over height), such as phone screenshots, stand two squares high. */
+private const val TALL_RATIO = 0.62f
+
+/** Pictures this wide or wider may lie two squares across. */
+private const val WIDE_RATIO = 1.6f
+
+/**
+ * The card's shape in the grid, as Google Photos breaks up its squares: screenshots and other tall pictures stand two
+ * squares high, about half the wide pictures lie two across, and about one picture in seven is shown big, two by two.
+ * Text, posts and pictures with words stay one square. The choice is fixed by the card's id, so a card keeps its shape
+ * at every density and across reloads.
+ */
+internal fun mosaicSpan(card: Card): MosaicSpan {
+    if (galleryKeepsText(card) || galleryPicture(card) == null) return MosaicSpan(1, 1)
+    val ratio = storedRatio(card) ?: return MosaicSpan(1, 1)
+    val pick = card.id.hashCode().let { (it xor (it ushr 16)) and Int.MAX_VALUE }
+    return when {
+        ratio <= TALL_RATIO -> MosaicSpan(1, 2)
+        ratio >= WIDE_RATIO && pick % 2 == 0 -> MosaicSpan(2, 1)
+        pick % 7 == 3 -> MosaicSpan(2, 2)
+        else -> MosaicSpan(1, 1)
     }
-    return rows
 }
 
-/** Uses cover proportions where possible, and readable proportions for text cards. */
-private fun mosaicAspectRatio(card: Card): Float {
-    if (galleryKeepsText(card) && galleryPicture(card) != null) return 0.9f
+/** Width over height of the card's stored picture, or null when it has no usable size. */
+private fun storedRatio(card: Card): Float? {
     val width = card.cover?.width ?: card.blob?.width
     val height = card.cover?.height ?: card.blob?.height
-    if (width != null && height != null && width > 0 && height > 0) return (width.toFloat() / height).coerceIn(0.65f, 1.8f)
+    return if (width != null && height != null && width > 0 && height > 0) width.toFloat() / height else null
+}
+
+/** The bands of [mosaicLevel], for callers that only need which cards share a slot. */
+internal fun mosaicRows(cards: List<Card>, width: Float, columns: Int, gap: Float): List<MosaicRow> =
+    mosaicLevel(cards, width, columns, gap).rows
+
+/**
+ * Lays the cards out at one density without reordering or dropping any. One column shows each card across the whole
+ * width at its own proportions. Two to four columns share square cells in bands of one or two rows, filled row by row
+ * in card order: a card two squares high starts a two-row band, and a card that does not fit where it falls takes one
+ * square there, so a band is never left with a hole before the last card. Card tops never decrease with the order.
+ */
+internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Float): MosaicLayouts.Level {
+    if (cards.isEmpty() || !width.isFinite() || width <= 0f) return MosaicLayouts.Level(emptyList(), emptyList(), emptyList(), IntArray(0), 0f, 0f)
+    val across = columns.coerceIn(1, 4)
+    val space = gap.takeIf { it.isFinite() }?.coerceIn(0f, width / 16f) ?: 0f
+    val cells = ArrayList<Rect>(cards.size)
+    val rows = ArrayList<MosaicRow>()
+    val starts = ArrayList<Int>()
+    val rowOf = IntArray(cards.size)
+    var top = 0f
+    if (across == 1) {
+        cards.forEachIndexed { index, card ->
+            val height = width / mosaicAspectRatio(card)
+            starts += index
+            rowOf[index] = index
+            cells += Rect(0f, top, width, top + height)
+            rows += MosaicRow(listOf(card), listOf(width), height)
+            top += height + space
+        }
+    } else {
+        val unit = (width - space * (across - 1)) / across
+        val step = unit + space
+        val spans = cards.map(::mosaicSpan)
+        var index = 0
+        while (index < cards.size) {
+            val start = index
+            val taken = Array(2) { BooleanArray(across) }
+            var down = 1
+            var row = 0
+            var column = 0
+            while (index < cards.size) {
+                while (row < down && taken[row][column]) {
+                    column++
+                    if (column == across) { column = 0; row++ }
+                }
+                if (row >= down) break
+                val span = spans[index]
+                var tall = if (row == 0) span.down else 1
+                var wide = span.across
+                fun free(w: Int, h: Int) = column + w <= across && (row until row + h).all { r -> (column until column + w).none { taken[r][it] } }
+                if (!free(wide, tall)) {
+                    wide = 1
+                    if (!free(1, tall)) tall = 1
+                }
+                for (r in row until row + tall) for (c in column until column + wide) taken[r][c] = true
+                if (tall == 2) down = 2
+                rowOf[index] = rows.size
+                cells += Rect(column * step, top + row * step, column * step + wide * unit + (wide - 1) * space,
+                    top + row * step + tall * unit + (tall - 1) * space)
+                index++
+                column += wide
+                if (column >= across) { column = 0; row++ }
+            }
+            val height = down * unit + (down - 1) * space
+            starts += start
+            rows += MosaicRow(cards.subList(start, index), cells.subList(start, index).map { it.width }, height)
+            top += height + space
+        }
+    }
+    return MosaicLayouts.Level(rows, cells, starts, rowOf, (top - space).coerceAtLeast(0f), rows.maxOf { it.height })
+}
+
+/** Readable proportions for the one-column gallery: the picture's own, else one that suits the card's text. */
+private fun mosaicAspectRatio(card: Card): Float {
+    if (galleryKeepsText(card) && galleryPicture(card) != null) return 0.9f
+    storedRatio(card)?.let { return it.coerceIn(0.65f, 1.8f) }
     return when (tileKind(card)) {
         TileKind.Note -> 0.95f
         TileKind.Post -> 1.05f
@@ -59,28 +142,11 @@ private fun mosaicAspectRatio(card: Card): Float {
 internal class MosaicLayouts(val cards: List<Card>, val width: Float, gap: Float) {
     internal class Level(val rows: List<MosaicRow>, val cells: List<Rect>, val starts: List<Int>, val rowOf: IntArray, val height: Float, val tallest: Float)
     val byId = cards.mapIndexed { index, card -> card.id to index }.toMap()
-    val levels = (1..4).map { columns ->
-        val rows = mosaicRows(cards, width, columns, gap)
-        val cells = ArrayList<Rect>(cards.size)
-        val starts = ArrayList<Int>(rows.size)
-        val rowOf = IntArray(cards.size)
-        var y = 0f
-        rows.forEachIndexed { rowIndex, row ->
-            starts += cells.size
-            var x = 0f
-            row.widths.forEach { w ->
-                rowOf[cells.size] = rowIndex
-                cells += Rect(x, y, x + w, y + row.height)
-                x += w + gap
-            }
-            y += row.height + gap
-        }
-        Level(rows, cells, starts, rowOf, (y - gap).coerceAtLeast(0f), rows.maxOfOrNull { it.height } ?: 0f)
-    }
+    val levels = (1..4).map { columns -> mosaicLevel(cards, width, columns, gap) }
 
     fun level(columns: Int): Level = levels[columns.coerceIn(1, 4) - 1]
 
-    /** Projects a whole canonical grid around one shared focal rectangle; row neighbours never cross. */
+/** Projects a whole canonical grid around one shared focal rectangle; row neighbours never cross. */
     fun projection(columns: Int, position: Float, focalIndex: Int): MosaicProjection {
         val base = level(columns).cells[focalIndex]
         val focal = cell(focalIndex, position)
