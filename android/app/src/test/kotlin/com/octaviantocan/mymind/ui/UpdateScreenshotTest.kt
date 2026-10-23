@@ -115,12 +115,15 @@ class UpdateScreenshotTest {
         // The newest version's badge, and the New section of each version that has one.
         compose.onAllNodesWithText("New").assertCountEquals(1 + entries.count { entry -> entry.groups.any { it.title == "New" } })
         val body = compose.onNode(hasScrollAction() and hasAnyDescendant(hasText("0.1.0")))
-        repeat(6) {
+        // The history grows with every release, so swipe until its oldest version shows.
+        val oldest = compose.onNodeWithText("0.1.0")
+        repeat(20) {
+            if (runCatching { oldest.assertIsDisplayed() }.isSuccess) return@repeat
             body.performTouchInput { swipeUp(durationMillis = 500) }
             compose.mainClock.advanceTimeBy(500)
             compose.waitForIdle()
         }
-        compose.onNodeWithText("0.1.0").assertIsDisplayed()
+        oldest.assertIsDisplayed()
         assertEquals(before, close.fetchSemanticsNode().boundsInRoot)
         close.performClick()
         compose.mainClock.advanceTimeBy(1500)

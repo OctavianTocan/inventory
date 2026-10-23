@@ -45,6 +45,7 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.ui.library.CardPicture
+import com.octaviantocan.mymind.ui.library.LocalVideoPreviews
 import com.octaviantocan.mymind.ui.library.TileKind
 import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.library.cardHeading
@@ -52,6 +53,7 @@ import com.octaviantocan.mymind.ui.library.galleryPicture
 import com.octaviantocan.mymind.ui.library.noteText
 import com.octaviantocan.mymind.ui.library.postText
 import com.octaviantocan.mymind.ui.library.proseText
+import com.octaviantocan.mymind.ui.library.readerVideo
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
@@ -155,8 +157,13 @@ private fun CardBody(card: Card, onRemoveTag: ((Tag) -> Unit)?, onOpenSource: ((
     val body = TextStyle(color = LocalCardSheetColors.current.text, fontSize = 19.sp, lineHeight = 1.5.em, fontFamily = MymindTheme.fonts.body)
     Column(Modifier.fillMaxWidth().padding(horizontal = BODY_SIDE).padding(top = 20.dp, bottom = 30.dp)) {
         val kind = tileKind(card)
-        if (galleryPicture(card) != null) {
-            CardPicture(card, play = kind == TileKind.Video, modifier = Modifier
+        val previews = LocalVideoPreviews.current
+        val video = remember(card) { readerVideo(card) }
+        if (video != null && previews != null) {
+            CardVideo(card, video, previews)
+            Spacer(Modifier.height(16.dp))
+        } else if (galleryPicture(card) != null) {
+            CardPicture(card, play = kind == TileKind.Video, whole = true, modifier = Modifier
                 .semantics { contentDescription = "Preview" }
                 .combinedClickable(
                     interactionSource = null, indication = CardSheetIndication, role = Role.Button,

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,6 +31,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -49,6 +50,8 @@ import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
 private val GITHUB_REPOSITORY = Regex("""https://(?:www\.)?github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?(?:[?#].*)?""")
 private val VISUAL_CARD_TYPES = setOf("Image", "Screenshot", "Video", "YouTubeVideo", "InstagramReel")
+private val TILE_TEXT = 13.sp
+private val HIGHLIGHT_TEXT = 17.sp
 
 /** A gallery brick keeps both the words and picture of a mixed card visible at every density. */
 @Composable
@@ -121,8 +124,8 @@ internal fun GalleryTile(
                         card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card),
                         Modifier.align(Alignment.BottomStart).padding(if (highlight) 18.dp else 12.dp).clearAndSetSemantics {},
                         color = Color.White, style = LibraryStyle.body.copy(
-                            fontSize = if (highlight) 18.sp else 14.sp,
-                            lineHeight = if (highlight) 24.sp else 20.sp,
+                            fontSize = if (highlight) HIGHLIGHT_TEXT else TILE_TEXT,
+                            lineHeight = if (highlight) 23.sp else 18.sp,
                         ),
                         maxLines = if (highlight) 3 else 2, overflow = TextOverflow.Ellipsis,
                     )
@@ -160,8 +163,8 @@ private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Co
     val colors = LibraryStyle.colors
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 110.dp
-        val inset = if (highlight) 16.dp else if (compact) 6.dp else 12.dp
-        val author = (card.post?.author ?: card.author)?.takeIf { it.isNotBlank() && !compact && maxHeight >= 160.dp }
+        val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
+        val author =(card.post?.author ?: card.author)?.takeIf { it.isNotBlank() && !compact && maxHeight >= 160.dp }
         val words = text.ifBlank { if (picture == null) cardHeading(card) else "" }
         val showKind = !compact && maxHeight >= 112.dp
         val wordsHeight = maxHeight * 0.55f
@@ -171,8 +174,7 @@ private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Co
                 Spacer(Modifier.height(6.dp))
             }
             if (words.isNotBlank()) {
-                TileText(card, words, highlight, compact,
-                    if (picture == null) Modifier.weight(1f) else Modifier.heightIn(max = wordsHeight))
+                TileText(words, highlight, if (picture == null) Modifier.weight(1f) else Modifier.heightIn(max = wordsHeight))
             }
             if (picture != null) Box(Modifier.padding(top = if (words.isBlank()) 0.dp else 8.dp).fillMaxWidth().weight(1f)
                 .clip(RoundedCornerShape(if (compact) 4.dp else 8.dp))) {
@@ -192,16 +194,19 @@ private fun KindLabel(kind: String) {
         style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
-/** A tile's words at their usual size, shrinking a step at a time so a long text shows more of itself before it is cut. */
+/**
+ * A tile's words at the gallery's one text size and weight, so every tile reads alike and its text keeps its size
+ * while a pinch changes the tile. A word too long for the line breaks with a hyphen.
+ */
 @Composable
-private fun TileText(card: Card, text: String, highlight: Boolean, compact: Boolean, modifier: Modifier) {
-    val (largest, smallest) = if (highlight) 18f to 14f else if (compact) 12f to 10f else 14f to 11f
+private fun TileText(text: String, highlight: Boolean, modifier: Modifier) {
     Text(
         text, modifier, color = LibraryStyle.colors.text,
-        style = LibraryStyle.body.copy(fontSize = largest.sp, lineHeight = (if (highlight) 1.34f else 1.42f).em),
-        fontWeight = if (tileKind(card) in setOf(TileKind.Repository, TileKind.Article, TileKind.Plain)) FontWeight.Medium else FontWeight.Normal,
+        style = LibraryStyle.body.copy(
+            fontSize = if (highlight) HIGHLIGHT_TEXT else TILE_TEXT, lineHeight = (if (highlight) 1.34f else 1.42f).em,
+            fontWeight = FontWeight.Normal, hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph,
+        ),
         overflow = TextOverflow.Ellipsis,
-        autoSize = TextAutoSize.StepBased(minFontSize = smallest.sp, maxFontSize = largest.sp, stepSize = 1.sp),
     )
 }
 
@@ -210,25 +215,41 @@ private fun TileText(card: Card, text: String, highlight: Boolean, compact: Bool
 private fun GalleryTextPreview(card: Card, text: String, highlight: Boolean, modifier: Modifier) {
     BoxWithConstraints(modifier) {
         val compact = maxWidth < 110.dp
-        val inset = if (highlight) 16.dp else if (compact) 6.dp else 12.dp
-        val showKind = !compact && maxHeight >= 112.dp
+        val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
+        val words = text.ifBlank { cardHeading(card) }
+        val kind = galleryKind(card)
+        val showKind = !compact && maxHeight >= 112.dp && !sameWords(kind, words)
         Column(Modifier.fillMaxSize().padding(inset)) {
             if (showKind) {
-                KindLabel(galleryKind(card))
+                KindLabel(kind)
                 Spacer(Modifier.height(6.dp))
             }
-            TileText(card, text.ifBlank { cardHeading(card) }, highlight, compact, Modifier.weight(1f))
+            TileText(words, highlight, Modifier.weight(1f))
         }
     }
 }
 
-/** Only image files are sent to Coil; video cards use their cover rather than the video blob, and moving covers a still of it. */
+/**
+ * @param label A tile's site or kind line.
+ * @param words The tile's text.
+ * @return True when the text only repeats the label, such as a page titled with its own address.
+ */
+internal fun sameWords(label: String, words: String): Boolean {
+    fun plain(text: String) = text.trim().lowercase().removePrefix("https://").removePrefix("http://").removePrefix("www.").trimEnd('/')
+    return plain(label).isNotEmpty() && plain(label) == plain(words)
+}
+
+/**
+ * Only image files are sent to Coil: video cards use their cover rather than the video file, and a moving cover or a
+ * video kept on the library server shows a still the server makes of it.
+ */
 internal fun galleryPicture(card: Card): String? = card.cover?.let { cover ->
     cover.src?.takeIf { it.isNotBlank() }?.let { if (cover.type == "video") videoPoster(it) else it }
 }
     ?: card.post?.gallery?.firstOrNull()?.src?.takeIf { it.isNotBlank() }
     ?: card.blob?.takeIf { it.type?.startsWith("image/") == true || (it.type == null && card.type in setOf("Image", "Screenshot")) }
         ?.path?.takeIf { it.isNotBlank() }
+    ?: serverVideo(card)?.let(::videoPoster)
     ?: repositoryCover(card)
 
 /** GitHub's own preview picture of a saved public repository, for repositories saved before captures kept one. */

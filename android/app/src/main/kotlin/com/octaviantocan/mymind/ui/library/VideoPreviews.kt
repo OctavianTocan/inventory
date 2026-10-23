@@ -3,13 +3,10 @@ package com.octaviantocan.mymind.ui.library
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -20,16 +17,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -83,6 +83,20 @@ class VideoPreviews(private val context: Context, client: OkHttpClient) {
         return player
     }
 
+    /**
+     * A player of its own for the reader, outside the three previews: it plays [url] once, with sound, and takes the
+     * audio focus from other apps. The caller releases it.
+     *
+     * @param url The video to play.
+     * @return The player, already preparing [url].
+     */
+    fun player(url: String): ExoPlayer = ExoPlayer.Builder(context).setMediaSourceFactory(sources).build().apply {
+        setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
+        setMediaItem(MediaItem.fromUri(url))
+        prepare()
+        playWhenReady = true
+    }
+
     /** Stops [player] and keeps it for the next tile, or frees it once the previews are closed. */
     fun release(player: ExoPlayer) {
         playing--
@@ -118,10 +132,25 @@ val LocalVideoPreviews = staticCompositionLocalOf<VideoPreviews?> { null }
  */
 internal fun previewVideo(card: Card): String? {
     val cover = card.cover?.takeIf { it.type == "video" }?.src
-    val file = card.blob?.takeIf { it.type?.startsWith("video/") == true }?.path?.takeIf { !it.startsWith("http") }
-        ?.let { "/media/${it.removePrefix("/media/").trimStart('/')};$CLIP" }
-    val src = (cover ?: file)?.takeIf { it.isNotBlank() && !it.startsWith("http") } ?: return null
+    val src = (cover ?: serverVideo(card)?.let { "$it;$CLIP" })?.takeIf { it.isNotBlank() && !it.startsWith("http") } ?: return null
     return resolveMediaUrl(BuildConfig.SERVER_URL, src)
+}
+
+/**
+ * @param card A card.
+ * @return The `/media/…` path of the video file the library server keeps for it, or null when it keeps none.
+ */
+internal fun serverVideo(card: Card): String? = card.blob?.takeIf { it.type?.startsWith("video/") == true }?.path
+    ?.takeIf { it.isNotBlank() && !it.startsWith("http") }?.let { "/media/${it.removePrefix("/media/").trimStart('/')}" }
+
+/**
+ * @param card A card.
+ * @return The address of the video the reader plays with sound: the file the library server keeps, else a moving cover
+ *   kept there; null for videos on other sites such as YouTube.
+ */
+internal fun readerVideo(card: Card): String? {
+    val src = serverVideo(card) ?: card.cover?.takeIf { it.type == "video" }?.src?.takeIf { it.isNotBlank() && !it.startsWith("http") }
+    return src?.let { resolveMediaUrl(BuildConfig.SERVER_URL, it) }
 }
 
 /**
@@ -171,25 +200,28 @@ internal fun VideoPreview(url: String, previews: VideoPreviews, onLength: (Long)
 }
 
 /**
- * The corner badge of a video tile: the YouTube mark for YouTube, else a play mark, then the length when known.
+ * The corner badge of a video tile, as Google Photos draws one: the length when known, then a play-circle outline, in
+ * white over a soft shade so it reads on light pictures.
  *
- * @param youtube True for a YouTube video.
+ * @param youtube True for a YouTube video, which only changes what screen readers hear.
  * @param millis The video's length in milliseconds, or null.
  * @param modifier Modifier for the badge; callers align it to a corner.
  */
 @Composable
 internal fun VideoBadge(youtube: Boolean, millis: Long?, modifier: Modifier = Modifier) {
+    val shade = Shadow(Color.Black.copy(alpha = 0.55f), blurRadius = 6f)
     Row(
-        modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 7.dp, vertical = 3.dp)
-            .clearAndSetSemantics {
-                contentDescription = listOfNotNull(if (youtube) "YouTube video" else "Video", millis?.let(::videoLength)).joinToString(", ")
-            },
+        modifier.clearAndSetSemantics {
+            contentDescription = listOfNotNull(if (youtube) "YouTube video" else "Video", millis?.let(::videoLength)).joinToString(", ")
+        },
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(painterResource(if (youtube) R.drawable.ic_youtube else R.drawable.ic_play_fill), null,
-            Modifier.size(if (youtube) 16.dp else 12.dp), colorFilter = ColorFilter.tint(Color.White))
-        if (millis != null) Text(videoLength(millis), color = Color.White, style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp))
+        if (millis != null) Text(videoLength(millis), color = Color.White,
+            style = LibraryStyle.label.copy(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, shadow = shade))
+        Image(painterResource(R.drawable.ic_play_circle), null,
+            Modifier.size(18.dp).drawBehind { drawCircle(Color.Black.copy(alpha = 0.22f), radius = size.minDimension * 0.4f) },
+            colorFilter = ColorFilter.tint(Color.White))
     }
 }
 

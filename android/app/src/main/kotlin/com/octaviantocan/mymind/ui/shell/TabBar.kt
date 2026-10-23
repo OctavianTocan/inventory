@@ -1,10 +1,11 @@
 package com.octaviantocan.mymind.ui.shell
 
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,7 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -35,25 +36,34 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private val NAVIGATION_HEIGHT = 56.dp
 private val NAVIGATION_GAP = 8.dp
 private val NAVIGATION_INSET = 8.dp
+private val TAB_SIDE = 16.dp
 private val LIBRARY_TABS = listOf(Tab.Everything, Tab.Spaces)
 
 /** Registers the gallery's navigation with Pully's one root bar, or renders in place in a standalone preview. */
@@ -129,14 +139,18 @@ fun LibraryFootBar(
     }
 }
 
-/** Pully CapsuleTabs' one sliding highlight, adapted to the Photos capsule and separate search circle. */
+/**
+ * Pully CapsuleTabs' one sliding highlight, adapted to the Photos capsule and separate search circle: as in Google
+ * Photos, the highlight hugs the chosen tab's icon and label, while each tab still takes half the capsule to tap.
+ */
 @Composable
 private fun GalleryNavigation(selected: Tab, onSelect: (Tab) -> Unit, onSearch: () -> Unit) {
     val colors = LibraryStyle.colors
     val haptic = LocalHapticFeedback.current
     val moving = rememberFootMotionEnabled()
     val selectedIndex = if (selected == Tab.Spaces) 1 else 0
-    val fontScale = LocalDensity.current.fontScale
+    val density = LocalDensity.current
+    val fontScale = density.fontScale
     FootPressTheme {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(NAVIGATION_GAP)) {
             BoxWithConstraints(
@@ -145,38 +159,58 @@ private fun GalleryNavigation(selected: Tab, onSelect: (Tab) -> Unit, onSearch: 
                     .pointerInput(Unit) { detectTapGestures { } }
                     .padding(NAVIGATION_INSET).selectableGroup(),
             ) {
-                val segment = maxWidth / LIBRARY_TABS.size
-                val x by animateDpAsState(
-                    segment * selectedIndex,
-                    tween(if (moving) FootMotion.FAST else 0, easing = FootMotion.SmoothOut),
-                    label = "library-navigation-highlight",
+                val segment = constraints.maxWidth / LIBRARY_TABS.size
+                val spans = remember { mutableStateMapOf<Int, IntRange>() }
+                val highlight = remember { Animatable(0f) to Animatable(0f) }
+                val target = spans[selectedIndex]
+                LaunchedEffect(target, moving) {
+                    if (target == null) return@LaunchedEffect
+                    val (x, width) = highlight
+                    val first = width.value == 0f
+                    if (first || !moving) {
+                        x.snapTo(target.first.toFloat())
+                        width.snapTo((target.last - target.first).toFloat())
+                    } else coroutineScope {
+                        val spec = tween<Float>(FootMotion.FAST, easing = FootMotion.SmoothOut)
+                        launch { x.animateTo(target.first.toFloat(), spec) }
+                        launch { width.animateTo((target.last - target.first).toFloat(), spec) }
+                    }
+                }
+                Box(
+                    Modifier.offset { IntOffset(highlight.first.value.roundToInt(), 0) }
+                        .width(with(density) { highlight.second.value.toDp() }).fillMaxHeight().clip(CircleShape).background(colors.selected),
                 )
-                Box(Modifier.offset(x = x).width(segment).fillMaxHeight().clip(CircleShape).background(colors.selected))
                 val showIcons = maxWidth >= 256.dp && fontScale <= 1.2f
                 Row(Modifier.fillMaxSize()) {
                     LIBRARY_TABS.forEachIndexed { index, tab ->
+                        val chosen = index == selectedIndex
+                        val press = remember { MutableInteractionSource() }
                         Box(
-                            Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
-                                .selectable(
-                                    selected = index == selectedIndex,
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = CardSheetIndication,
-                                    role = Role.Tab,
-                                ) {
+                            Modifier.weight(1f).fillMaxHeight()
+                                .selectable(selected = chosen, interactionSource = press, indication = null, role = Role.Tab) {
                                     haptic.performHapticFeedback(HapticFeedbackType.Confirm)
                                     onSelect(tab)
                                 },
-                            contentAlignment = Alignment.Center,
+                            contentAlignment = if (index == 0) Alignment.CenterStart else Alignment.CenterEnd,
                         ) {
-                            Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (showIcons && index == selectedIndex) {
-                                    FootIcon(if (tab == Tab.Everything) R.drawable.ic_library_grid else R.drawable.ic_library_spaces, size = 20.dp)
+                            Row(
+                                Modifier.fillMaxHeight()
+                                    .onPlaced { spot ->
+                                        val start = segment * index + spot.positionInParent().x.roundToInt()
+                                        spans[index] = start..start + spot.size.width
+                                    }
+                                    .clip(CircleShape).indication(press, CardSheetIndication).padding(horizontal = TAB_SIDE),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                if (showIcons && chosen) {
+                                    FootIcon(if (tab == Tab.Everything) R.drawable.ic_library_grid_fill else R.drawable.ic_library_spaces_fill, size = 18.dp)
                                 }
                                 Text(
                                     tab.label,
                                     Modifier.weight(1f, fill = false),
-                                    style = LibraryStyle.body.copy(fontSize = 16.sp, lineHeight = 22.sp),
-                                    color = if (index == selectedIndex) colors.text else colors.muted,
+                                    style = LibraryStyle.body.copy(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+                                    color = if (chosen) colors.text else lerp(colors.muted, colors.text, 0.45f),
                                     maxLines = 1,
                                     softWrap = false,
                                     overflow = TextOverflow.Ellipsis,
@@ -186,7 +220,7 @@ private fun GalleryNavigation(selected: Tab, onSelect: (Tab) -> Unit, onSearch: 
                     }
                 }
             }
-            FootCircleButton(R.drawable.ic_library_search, "Search", onSearch, size = NAVIGATION_HEIGHT)
+            FootCircleButton(R.drawable.ic_library_search_spark, "Search", onSearch, size = NAVIGATION_HEIGHT, iconSize = 24.dp)
         }
     }
 }

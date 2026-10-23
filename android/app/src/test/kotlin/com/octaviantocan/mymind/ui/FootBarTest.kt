@@ -152,6 +152,18 @@ class FootBarTest {
         compose.runOnIdle { assertEquals(1, expanded); assertEquals(0, behind) }
     }
 
+    @Test fun eachTabKeepsHalfTheCapsuleToTapWhileItsLabelSitsAtItsOuterEdge() {
+        var selected by mutableStateOf(Tab.Everything)
+        show(FootBars()) { MymindTabBar(selected, onSelect = { selected = it }) }
+        val everything = compose.onNodeWithText("Everything").fetchSemanticsNode().boundsInRoot
+        val spaces = compose.onNodeWithText("Spaces").fetchSemanticsNode().boundsInRoot
+        val label = compose.onNodeWithText("Spaces", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals(everything.width, spaces.width, 1f)
+        assertTrue("The last label sits at the end of its half", spaces.right - label.right < spaces.width / 3)
+        compose.onRoot().performTouchInput { click(Offset(spaces.left + 6f, spaces.center.y)) }
+        compose.runOnIdle { assertEquals(Tab.Spaces, selected) }
+    }
+
     @Test fun navigationRespondsWithSystemAnimationsDisabled() {
         val resolver = ApplicationProvider.getApplicationContext<android.content.Context>().contentResolver
         val previous = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)

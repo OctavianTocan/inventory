@@ -85,14 +85,17 @@ Source: Tavi's recorded review, 22 October 2026 ("the background should be the s
 @cc [owner:OctavianTocan,label:product;design;motion] gallery-videos-play-quietly
 Video tiles MUST NOT show a camera icon. A video kept on the library server MUST play
 muted and looping in its tile while the app is in front and system animations are on,
-at most three at once, over its still cover until the first frame shows; videos on other
-sites such as YouTube keep their still cover. Every video tile with a picture MUST show a
-corner badge: the YouTube mark for YouTube, else a play mark, followed by the length
-(m:ss, or h:mm:ss) once a player has read it and the tile has room. Previews MUST only
+at most three at once, over its still until the first frame shows; one saved without a
+cover MUST show a still the server takes from the video, never an empty "Video" tile.
+Videos on other sites such as YouTube keep their still cover. Every video tile with a
+picture MUST show the Google Photos corner badge: the length (m:ss, or h:mm:ss) once a
+player has read it and the tile has room, then a white play circle, drawn straight on
+the picture with a soft shadow, with no pill and no site logo. Previews MUST only
 request media from the library server.
-Source: Tavi's recorded review, 22 October 2026 ("I don't really like this camera icon",
+Source: Tavi's recorded reviews, 22 October 2026 ("I don't really like this camera icon",
 "videos autoplay ... They don't play with sound", "this icon with the time is actually
-much more helpful", "we can actually use the icon for YouTube").
+much more helpful") and 23 October 2026 ("that YouTube icon, if you look at the Google
+Photos ... it was a lot more interesting", "the videos aren't auto playing").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-posts-look-like-posts
 A social post tile MUST read as the post itself: the platform, the post's words, its own
@@ -102,12 +105,15 @@ NOT appear as text in the tile or the reader.
 Source: Tavi's recorded review, 22 October 2026 ("if we have a link for the thing, I
 don't think we should put it on the thing", "I think we can just probably show the tweet").
 
-@cc [owner:OctavianTocan,label:product;design] gallery-long-text-shows-more
-Tile text MUST shrink a step at a time, down to about three quarters of its usual size,
-before it is cut, so a long note or post shows as much of itself as the tile can hold.
-Short text keeps its usual size.
-Source: Tavi's recorded review, 22 October 2026 ("I don't want to see just the first
-part. It's okay if the text is smaller and you show me the actual thing").
+@cc [owner:OctavianTocan,label:product;design] gallery-text-is-one-size
+All gallery tile text MUST use one size and one regular weight, so neighbouring tiles
+read alike; only a highlight card's text is larger. Long text wraps with hyphenation and
+fills the tile before it is cut with an ellipsis; it never shrinks to fit. A tile's kind
+label MUST NOT repeat the words shown under it, such as a link whose only text is its
+own address.
+Source: Tavi's recorded review, 23 October 2026 ("some fonts are bigger, some fonts are
+smaller ... this is just weird", "some of them are bold"), replacing the shrinking text
+of 22 October.
 
 @cc [owner:OctavianTocan,label:product;design;privacy] gallery-repositories-have-covers
 A GitHub repository card without a stored cover MUST show GitHub's generated preview
