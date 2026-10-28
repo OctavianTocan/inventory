@@ -256,6 +256,10 @@ internal fun galleryPicture(card: Card): String? = card.cover?.let { cover ->
 private fun repositoryCover(card: Card): String? = card.url?.takeIf { tileKind(card) == TileKind.Repository }
     ?.let(GITHUB_REPOSITORY::matchEntire)?.let { "https://opengraph.githubassets.com/1/${it.groupValues[1]}/${it.groupValues[2]}" }
 
+/** Whether [card]'s gallery tile is only its picture, with no words, so a pinch may cut it to any cell. */
+internal fun galleryTileIsPicture(card: Card): Boolean =
+    galleryPicture(card) != null && !galleryKeepsText(card) && tileKind(card).let { it == TileKind.Media || it == TileKind.Video }
+
 /** Saved links keep their headline; visual cards also keep any note the user wrote alongside the image. */
 internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_TYPES
     || !card.note.isNullOrBlank() || card.prose?.let(::proseText)?.isNotBlank() == true

@@ -52,15 +52,19 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.ScrollAxisRange
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -434,20 +438,25 @@ fun LibraryMosaic(
                     clip = true
                 }) {
                     val focalIndex = anchor?.cardId?.let(layouts.byId::get)
-                    ProjectedMosaicCards(layouts, mosaic, height, focalIndex, frame = ::frame,
-                        modifier = Modifier.fillMaxSize().background(colors.background).testTag("mosaic-projection"),
+                    ProjectedMosaicCards(layouts, mosaic, height, focalIndex, frame = ::frame, scene = sceneColumns, leaving = outgoingColumns,
+                        handoff = { morph }, modifier = Modifier.fillMaxSize().background(colors.background).testTag("mosaic-projection"),
                         onOpenCard = onOpenCard, onLongPressCard = onLongPressCard)
                     if (focalIndex != null) key("focal", layouts.cards[focalIndex].id) {
                         val card = layouts.cards[focalIndex]
-                        val imageCell = layouts.level(mosaic.columns).cells[focalIndex]
+                        val words = !galleryTileIsPicture(card)
+                        val imageSize = imageRequestSize(layouts, mosaic, focalIndex)
+                        val leaving = outgoingColumns?.takeIf { words }?.let { layouts.leavingFrame(focalIndex, it, sceneColumns) }
                         Layout(modifier = Modifier.fillMaxSize(), content = {
-                            GalleryTile(card, { if (!mosaic.isPinching) onOpenCard(card) },
-                                enabled = !mosaic.isPinching, onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
-                                imageRequestSizePx = maxOf(imageCell.width, imageCell.height).roundToInt().coerceAtLeast(1))
+                            HandoffTile(card, leaving, { morph }, imageSize) {
+                                GalleryTile(card, { if (!mosaic.isPinching) onOpenCard(card) },
+                                    enabled = !mosaic.isPinching, onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
+                                    imageRequestSizePx = imageSize)
+                            }
                         }) { children, constraints ->
-                            val cell = frame().cell(focalIndex)
-                            val child = children.single().measure(Constraints.fixed(cell.width.roundToInt().coerceAtLeast(1), cell.height.roundToInt().coerceAtLeast(1)))
-                            layout(constraints.maxWidth, constraints.maxHeight) { child.place(cell.left.roundToInt(), cell.top.roundToInt()) }
+                            val current = frame()
+                            val cell = current.cell(focalIndex)
+                            val tile = children.single().measureTile(cell, layouts.wordsFrame(focalIndex, current.scene.columns).takeIf { words })
+                            layout(constraints.maxWidth, constraints.maxHeight) { placeTile(tile, cell, words) }
                         }
                     }
                 }
@@ -482,32 +491,101 @@ private class MosaicFrame(
     }
 }
 
-/** Draws every card but the focal one once, at its place in the current [MosaicFrame]. */
+/**
+ * Draws every card but the focal one once, at its place in the current [MosaicFrame]. While the grid hands over from the
+ * [leaving] stop to the [scene] stop, a card with words whose shape changes also draws its old layout under it (see
+ * [HandoffTile]).
+ */
 @Composable
 private fun ProjectedMosaicCards(
-    layouts: MosaicLayouts, mosaic: MosaicState, height: Float, focalIndex: Int?, frame: () -> MosaicFrame, modifier: Modifier,
-    onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
+    layouts: MosaicLayouts, mosaic: MosaicState, height: Float, focalIndex: Int?, frame: () -> MosaicFrame, scene: Int,
+    leaving: Int?, handoff: () -> Float, modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
 ) {
     val latestFrame by rememberUpdatedState(frame)
     val window by remember(layouts, height) { derivedStateOf { latestFrame().window(height) } }
     val drawn = window.filter { it != focalIndex }
+    val words = drawn.map { !galleryTileIsPicture(layouts.cards[it]) }
     Layout(modifier = modifier, content = {
-        for (index in drawn) key(layouts.cards[index].id) {
-            val card = layouts.cards[index]
-            val imageCell = layouts.level(mosaic.columns).cells[index]
-            GalleryTile(card, { if (!mosaic.isPinching) onOpenCard(card) },
-                modifier = Modifier.fillMaxSize(), enabled = !mosaic.isPinching,
-                onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
-                imageRequestSizePx = maxOf(imageCell.width, imageCell.height).roundToInt().coerceAtLeast(1))
+        drawn.forEachIndexed { at, index ->
+            key(layouts.cards[index].id) {
+                val card = layouts.cards[index]
+                val imageSize = imageRequestSize(layouts, mosaic, index)
+                HandoffTile(card, leaving?.takeIf { words[at] }?.let { layouts.leavingFrame(index, it, scene) }, handoff, imageSize) {
+                    GalleryTile(card, { if (!mosaic.isPinching) onOpenCard(card) },
+                        modifier = Modifier.fillMaxSize(), enabled = !mosaic.isPinching,
+                        onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
+                        imageRequestSizePx = imageSize)
+                }
+            }
         }
     }) { children, constraints ->
         val current = frame()
         val cells = drawn.map(current::cell)
         val measured = children.mapIndexed { at, child ->
-            child.measure(Constraints.fixed(cells[at].width.roundToInt().coerceAtLeast(1), cells[at].height.roundToInt().coerceAtLeast(1)))
+            child.measureTile(cells[at], layouts.wordsFrame(drawn[at], current.scene.columns).takeIf { words[at] })
         }
         layout(constraints.maxWidth, constraints.maxHeight) {
-            measured.forEachIndexed { at, child -> child.place(cells[at].left.roundToInt(), cells[at].top.roundToInt()) }
+            measured.forEachIndexed { at, tile -> placeTile(tile, cells[at], words[at]) }
         }
+    }
+}
+
+/** The size gallery pictures are decoded at: the card's cell at the resting density, so a pinch never changes it. */
+private fun imageRequestSize(layouts: MosaicLayouts, mosaic: MosaicState, index: Int): Int =
+    layouts.level(mosaic.columns).cells[index].let { maxOf(it.width, it.height) }.roundToInt().coerceAtLeast(1)
+
+/** The frame a tile with words leaves while the grid hands over from [from] to [to], or null when its shape stays. */
+private fun MosaicLayouts.leavingFrame(index: Int, from: Int, to: Int): Size? =
+    wordsFrame(index, from).takeIf { it != wordsFrame(index, to) }
+
+/**
+ * A card's [tile], laid out by its parent. While the grid hands over from another stop, the card's layout at that
+ * stop's [leaving] frame is drawn under the tile, scaled to the same size and without semantics or touches, and the
+ * tile fades in over it as [handoff] goes from 0 to 1, so a tile whose shape changes swaps its lines once.
+ */
+@Composable
+private fun HandoffTile(card: Card, leaving: Size?, handoff: () -> Float, imageRequestSizePx: Int, tile: @Composable () -> Unit) {
+    Layout(content = {
+        if (leaving != null) Box(Modifier.fillMaxSize().clearAndSetSemantics {}) {
+            GalleryTile(card, {}, enabled = false, imageRequestSizePx = imageRequestSizePx, playVideo = false)
+        }
+        tile()
+    }) { children, constraints ->
+        val main = children.last().measure(constraints)
+        val under = if (leaving == null) null else children.first().measure(leaving.fixed())
+        layout(main.width, main.height) {
+            if (under == null) main.place(0, 0) else {
+                under.placeWithLayer(0, 0) {
+                    transformOrigin = TransformOrigin(0f, 0f)
+                    scaleX = main.width.toFloat() / under.width
+                    scaleY = main.height.toFloat() / under.height
+                }
+                main.placeWithLayer(0, 0) { alpha = handoff() }
+            }
+        }
+    }
+}
+
+/**
+ * Measures a tile for [cell]. A picture is cut to the cell itself; a tile with words is laid out at its [frame]
+ * ([MosaicLayouts.wordsFrame]), so its words keep their lines however far the fingers move.
+ */
+private fun Measurable.measureTile(cell: Rect, frame: Size?): Placeable = measure((frame ?: cell.size).fixed())
+
+/** Exact constraints for a size in whole pixels. */
+private fun Size.fixed(): Constraints = Constraints.fixed(width.roundToInt().coerceAtLeast(1), height.roundToInt().coerceAtLeast(1))
+
+/** Places a tile measured by [measureTile] in [cell]; a tile with words is scaled from its frame, as a picture zooms. */
+private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, words: Boolean) {
+    val x = cell.left.roundToInt()
+    val y = cell.top.roundToInt()
+    if (!words) {
+        tile.place(x, y)
+        return
+    }
+    tile.placeWithLayer(x, y) {
+        transformOrigin = TransformOrigin(0f, 0f)
+        scaleX = cell.width / tile.width
+        scaleY = cell.height / tile.height
     }
 }
