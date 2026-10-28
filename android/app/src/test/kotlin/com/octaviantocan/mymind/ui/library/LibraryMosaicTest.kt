@@ -47,6 +47,9 @@ import org.robolectric.annotation.Config
 class LibraryMosaicTest {
     @get:Rule val compose = createComposeRule()
     private val cards = (1..70).map { testCard("m$it", type = "Image", title = "Photo $it") }
+    private val longNote = "Send your landing page to five people who have never heard of you and ask them what you sell. " +
+        "If they cannot say it in one sentence, the page is not done."
+    private val notes = (1..40).map { testCard("note-$it", type = "Note", title = "Note $it", note = if (it == 6) longNote else "A short note, number $it.") }
 
     private fun pinch(inward: Boolean, yFraction: Float = 0.48f) {
         compose.onNodeWithContentDescription("Card gallery").performTouchInput {
@@ -363,18 +366,10 @@ class LibraryMosaicTest {
 
     @Test
     fun aNoteZoomsWithoutRewrappingBetweenStops() {
-        val body = "Send your landing page to five people who have never heard of you and ask them what you sell. " +
-            "If they cannot say it in one sentence, the page is not done."
-        val notes = (1..40).map { testCard("note-$it", type = "Note", title = "Note $it", note = if (it == 6) body else "A short note, number $it.") }
         val density = MosaicState(4)
         compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(notes, endReached = true), {}, {}, mosaic = density) } }
         val gallery = compose.onNodeWithContentDescription("Card gallery")
-        fun lines(): List<Int> {
-            val results = mutableListOf<TextLayoutResult>()
-            compose.onNodeWithText(body, useUnmergedTree = true).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
-            val layout = results.single()
-            return (0 until layout.lineCount).map { layout.getLineEnd(it, visibleEnd = true) }
-        }
+        fun lines() = noteLines()
         fun bounds() = compose.onNodeWithContentDescription("Note 6").fetchSemanticsNode().boundsInRoot
         val root = gallery.fetchSemanticsNode().boundsInRoot
         val focal = bounds().center - root.topLeft
@@ -399,6 +394,29 @@ class LibraryMosaicTest {
         assertTrue("The note must grow with the fingers: $width -> $widths", widths.zipWithNext().all { (a, b) -> b > a } && widths.last() > width + 8f)
         gallery.performTouchInput { up(0); up(1) }
         compose.waitForIdle()
+    }
+
+    @Test
+    fun aNoteKeepsItsLinesAtEveryDensity() {
+        val density = MosaicState(3)
+        compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(notes, endReached = true), {}, {}, mosaic = density) } }
+        fun width() = compose.onNodeWithContentDescription("Note 6").fetchSemanticsNode().boundsInRoot.width
+        val before = noteLines()
+        val small = width()
+        val gallery = compose.onNodeWithContentDescription("Card gallery").fetchSemanticsNode()
+        compose.runOnIdle { gallery.config[SemanticsActions.CustomActions].first { it.label == "Larger cards" }.action() }
+        compose.waitForIdle()
+        assertEquals(2, density.columns)
+        assertEquals("A note is a picture of itself, with the same lines at every density", before, noteLines())
+        assertTrue("The note must be drawn larger: $small -> ${width()}", width() > small * 1.4f)
+    }
+
+    /** Where each line of [longNote] ends in its tile's layout. */
+    private fun noteLines(): List<Int> {
+        val results = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(longNote, useUnmergedTree = true).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+        val layout = results.single()
+        return (0 until layout.lineCount).map { layout.getLineEnd(it, visibleEnd = true) }
     }
 
     @Test

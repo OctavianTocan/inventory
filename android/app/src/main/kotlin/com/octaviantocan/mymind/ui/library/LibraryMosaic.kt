@@ -438,15 +438,16 @@ fun LibraryMosaic(
                     clip = true
                 }) {
                     val focalIndex = anchor?.cardId?.let(layouts.byId::get)
-                    ProjectedMosaicCards(layouts, mosaic, height, focalIndex, frame = ::frame, leaving = outgoingColumns,
+                    ProjectedMosaicCards(layouts, mosaic, height, focalIndex, frame = ::frame, scene = sceneColumns, leaving = outgoingColumns,
                         handoff = { morph }, modifier = Modifier.fillMaxSize().background(colors.background).testTag("mosaic-projection"),
                         onOpenCard = onOpenCard, onLongPressCard = onLongPressCard)
                     if (focalIndex != null) key("focal", layouts.cards[focalIndex].id) {
                         val card = layouts.cards[focalIndex]
                         val words = !galleryTileIsPicture(card)
                         val imageSize = imageRequestSize(layouts, mosaic, focalIndex)
+                        val leaving = outgoingColumns?.takeIf { words }?.let { layouts.leavingFrame(focalIndex, it, sceneColumns) }
                         Layout(modifier = Modifier.fillMaxSize(), content = {
-                            HandoffTile(card, outgoingColumns?.takeIf { words }?.let { layouts.level(it).cells[focalIndex] }, { morph }, imageSize) {
+                            HandoffTile(card, leaving, { morph }, imageSize) {
                                 GalleryTile(card, { if (!mosaic.isPinching) onOpenCard(card) },
                                     enabled = !mosaic.isPinching, onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
                                     imageRequestSizePx = imageSize)
@@ -454,7 +455,7 @@ fun LibraryMosaic(
                         }) { children, constraints ->
                             val current = frame()
                             val cell = current.cell(focalIndex)
-                            val tile = children.single().measureTile(cell, layouts.level(current.scene.columns).cells[focalIndex].takeIf { words })
+                            val tile = children.single().measureTile(cell, layouts.wordsFrame(focalIndex, current.scene.columns).takeIf { words })
                             layout(constraints.maxWidth, constraints.maxHeight) { placeTile(tile, cell, words) }
                         }
                     }
@@ -492,12 +493,13 @@ private class MosaicFrame(
 
 /**
  * Draws every card but the focal one once, at its place in the current [MosaicFrame]. While the grid hands over from the
- * [leaving] stop, a card with words also draws its layout at that stop under it (see [HandoffTile]).
+ * [leaving] stop to the [scene] stop, a card with words whose shape changes also draws its old layout under it (see
+ * [HandoffTile]).
  */
 @Composable
 private fun ProjectedMosaicCards(
-    layouts: MosaicLayouts, mosaic: MosaicState, height: Float, focalIndex: Int?, frame: () -> MosaicFrame, leaving: Int?,
-    handoff: () -> Float, modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
+    layouts: MosaicLayouts, mosaic: MosaicState, height: Float, focalIndex: Int?, frame: () -> MosaicFrame, scene: Int,
+    leaving: Int?, handoff: () -> Float, modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
 ) {
     val latestFrame by rememberUpdatedState(frame)
     val window by remember(layouts, height) { derivedStateOf { latestFrame().window(height) } }
@@ -508,7 +510,7 @@ private fun ProjectedMosaicCards(
             key(layouts.cards[index].id) {
                 val card = layouts.cards[index]
                 val imageSize = imageRequestSize(layouts, mosaic, index)
-                HandoffTile(card, leaving?.takeIf { words[at] }?.let { layouts.level(it).cells[index] }, handoff, imageSize) {
+                HandoffTile(card, leaving?.takeIf { words[at] }?.let { layouts.leavingFrame(index, it, scene) }, handoff, imageSize) {
                     GalleryTile(card, { if (!mosaic.isPinching) onOpenCard(card) },
                         modifier = Modifier.fillMaxSize(), enabled = !mosaic.isPinching,
                         onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
@@ -519,8 +521,9 @@ private fun ProjectedMosaicCards(
     }) { children, constraints ->
         val current = frame()
         val cells = drawn.map(current::cell)
-        val stop = layouts.level(current.scene.columns)
-        val measured = children.mapIndexed { at, child -> child.measureTile(cells[at], stop.cells[drawn[at]].takeIf { words[at] }) }
+        val measured = children.mapIndexed { at, child ->
+            child.measureTile(cells[at], layouts.wordsFrame(drawn[at], current.scene.columns).takeIf { words[at] })
+        }
         layout(constraints.maxWidth, constraints.maxHeight) {
             measured.forEachIndexed { at, tile -> placeTile(tile, cells[at], words[at]) }
         }
@@ -531,13 +534,17 @@ private fun ProjectedMosaicCards(
 private fun imageRequestSize(layouts: MosaicLayouts, mosaic: MosaicState, index: Int): Int =
     layouts.level(mosaic.columns).cells[index].let { maxOf(it.width, it.height) }.roundToInt().coerceAtLeast(1)
 
+/** The frame a tile with words leaves while the grid hands over from [from] to [to], or null when its shape stays. */
+private fun MosaicLayouts.leavingFrame(index: Int, from: Int, to: Int): Size? =
+    wordsFrame(index, from).takeIf { it != wordsFrame(index, to) }
+
 /**
- * A card's [tile], laid out by its parent. While the grid hands over from another stop, the card's layout at that stop's
- * [leaving] cell is drawn under the tile, scaled to the same size and without semantics or touches, and the tile fades
- * in over it as [handoff] goes from 0 to 1, so the words swap their lines once instead of rewrapping.
+ * A card's [tile], laid out by its parent. While the grid hands over from another stop, the card's layout at that
+ * stop's [leaving] frame is drawn under the tile, scaled to the same size and without semantics or touches, and the
+ * tile fades in over it as [handoff] goes from 0 to 1, so a tile whose shape changes swaps its lines once.
  */
 @Composable
-private fun HandoffTile(card: Card, leaving: Rect?, handoff: () -> Float, imageRequestSizePx: Int, tile: @Composable () -> Unit) {
+private fun HandoffTile(card: Card, leaving: Size?, handoff: () -> Float, imageRequestSizePx: Int, tile: @Composable () -> Unit) {
     Layout(content = {
         if (leaving != null) Box(Modifier.fillMaxSize().clearAndSetSemantics {}) {
             GalleryTile(card, {}, enabled = false, imageRequestSizePx = imageRequestSizePx, playVideo = false)
@@ -560,15 +567,15 @@ private fun HandoffTile(card: Card, leaving: Rect?, handoff: () -> Float, imageR
 }
 
 /**
- * Measures a tile for [cell]. A picture is cut to the cell itself; a tile with words is laid out at [stop], its cell in
- * the grid of the stop it shows, so its words keep their lines however far the fingers move.
+ * Measures a tile for [cell]. A picture is cut to the cell itself; a tile with words is laid out at its [frame]
+ * ([MosaicLayouts.wordsFrame]), so its words keep their lines however far the fingers move.
  */
-private fun Measurable.measureTile(cell: Rect, stop: Rect?): Placeable = measure((stop ?: cell).fixed())
+private fun Measurable.measureTile(cell: Rect, frame: Size?): Placeable = measure((frame ?: cell.size).fixed())
 
-/** Exact constraints for a cell's size in whole pixels. */
-private fun Rect.fixed(): Constraints = Constraints.fixed(width.roundToInt().coerceAtLeast(1), height.roundToInt().coerceAtLeast(1))
+/** Exact constraints for a size in whole pixels. */
+private fun Size.fixed(): Constraints = Constraints.fixed(width.roundToInt().coerceAtLeast(1), height.roundToInt().coerceAtLeast(1))
 
-/** Places a tile measured by [measureTile] in [cell]; a tile with words is scaled from its stop's layout, as a picture zooms. */
+/** Places a tile measured by [measureTile] in [cell]; a tile with words is scaled from its frame, as a picture zooms. */
 private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, words: Boolean) {
     val x = cell.left.roundToInt()
     val y = cell.top.roundToInt()
