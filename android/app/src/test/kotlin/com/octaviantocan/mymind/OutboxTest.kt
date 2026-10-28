@@ -17,6 +17,7 @@ import com.octaviantocan.mymind.data.TokenStore
 import com.octaviantocan.mymind.data.refusedNotice
 import com.octaviantocan.mymind.ui.library.FakeLibrary
 import com.octaviantocan.mymind.ui.library.testCard
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -71,6 +72,48 @@ class OutboxTest {
         assertEquals(SyncOutcome.Done(changed = false), sync.sync())
         assertEquals(listOf("pin:a:true", "trash:b", "space:s2:a", "note:a:later"), server.calls)
         assertTrue(outbox.isEmpty())
+    }
+
+    @Test
+    fun anOnlineChangeShowsAtOnceAndReachesTheServerInTheBackground() = runBlocking {
+        val answer = CompletableDeferred<Unit>()
+        val slow = object : Library by server {
+            override suspend fun setPinned(cardId: String, pinned: Boolean): ApiResult<Unit> {
+                answer.await()
+                return server.setPinned(cardId, pinned)
+            }
+        }
+        val slowOutbox = Outbox(copy, slow)
+        val slowSync = LibrarySync(copy, { since -> feed[since] ?: ApiResult.Failed(ApiFailure.Network) }, slowOutbox::send, scope = CoroutineScope(Dispatchers.Unconfined))
+        val library = LocalFirstLibrary(slow, copy, slowSync, slowOutbox)
+        assertEquals(ApiResult.Ok(Unit), library.setPinned("a", true))
+        assertEquals(listOf("a"), copy.pinned()!!.cards.map { it.id })
+        assertEquals("the server has not answered yet", emptyList<String>(), server.calls)
+        answer.complete(Unit)
+        slowSync.sync()
+        assertEquals(listOf("pin:a:true"), server.calls)
+        assertTrue(slowOutbox.isEmpty())
+    }
+
+    @Test
+    fun aCardAddedToASpaceGoesToItsEnd() = runBlocking {
+        copy.apply(ChangesPage(listOf(testCard("b", spaces = listOf("s1")).copy(spaceRanks = mapOf("s1" to 4.0))), next = "t1"))
+        server.writeFailure = ApiFailure.Network
+        assertEquals(ApiResult.Ok(Unit), library.addToSpace("s1", "a"))
+        assertEquals(mapOf("s1" to 5.0), copy.card("a")!!.spaceRanks)
+        assertEquals(listOf("b", "a"), copy.spaceCards("s1")!!.cards.map { it.id })
+        assertEquals(ApiResult.Ok(Unit), library.removeFromSpace("s1", "a"))
+        assertNull(copy.card("a")!!.spaceRanks?.get("s1"))
+    }
+
+    @Test
+    fun withoutTheFeedAnOnlineChangeGoesStraightToTheServer() = runBlocking {
+        feed = mapOf("t1" to ApiResult.Failed(ApiFailure.Server(404)))
+        assertEquals(SyncOutcome.Unavailable, sync.sync())
+        server.writeFailure = ApiFailure.NotAllowed
+        assertEquals(ApiResult.Failed(ApiFailure.NotAllowed), library.setPinned("a", true))
+        assertTrue(outbox.isEmpty())
+        assertEquals(emptyList<String>(), copy.pinned()!!.cards.map { it.id })
     }
 
     @Test

@@ -135,6 +135,19 @@ class LibrarySyncTest {
     }
 
     @Test
+    fun changesMadeWhileASyncWaitsToFollowShareIt() = runBlocking {
+        feed = mapOf(null to answer(listOf(testCard("a")), "t1"), "t1" to answer(emptyList(), "t1"))
+        gate = CompletableDeferred()
+        val first = sync.start()
+        val after = sync.start(afterCurrent = true)
+        assertSame(after, sync.start(afterCurrent = true))
+        gate!!.complete(Unit)
+        assertEquals(SyncOutcome.Done(changed = true), first.await())
+        assertEquals(SyncOutcome.Done(changed = false), after.await())
+        assertEquals(listOf(null, "t1"), asked)
+    }
+
+    @Test
     fun theGalleryComesFromTheServerUntilTheCopyIsWhole() = runBlocking {
         val server = FakeLibrary(pages = mapOf(null to CardPage(listOf(testCard("server"))), "s2" to CardPage()))
         val library = LocalFirstLibrary(server, copy, sync, outbox)

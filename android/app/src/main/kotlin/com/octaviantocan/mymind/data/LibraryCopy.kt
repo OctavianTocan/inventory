@@ -304,12 +304,21 @@ class LibraryCopy(context: Context, private val session: Session, private val io
             }
         }
 
-    // Shows one change on its card, when the copy holds the card.
+    // Shows one change on its card, when the copy holds the card. A card joining a space goes to its end, as the server
+    // puts it.
     private fun show(db: SQLiteDatabase, edit: Edit) {
         val id = edit.cardId ?: return
         val card = cardIn(db, id) ?: return
-        card.edited(edit)?.let { keep(db, it) } ?: forget(db, id)
+        val edited = card.edited(edit) ?: return forget(db, id)
+        val joins = edit is Edit.AddToSpace && edit.spaceId !in card.spaces.orEmpty()
+        keep(db, if (joins) edited.copy(spaceRanks = edited.spaceRanks.orEmpty() + (edit.spaceId to nextRank(db, edit.spaceId))) else edited)
     }
+
+    // The place after the last card of a space, by the places the copy's cards carry.
+    private fun nextRank(db: SQLiteDatabase, spaceId: String): Double =
+        db.rawQuery("SELECT card FROM cards WHERE spaces LIKE ?", arrayOf("%,$spaceId,%")).use { rows ->
+            generateSequence { if (rows.moveToNext()) decode(rows.getString(0)) else null }.mapNotNull { it.spaceRanks?.get(spaceId) }.maxOrNull()
+        }?.plus(1) ?: 0.0
 
     // Shows the changes still waiting on cards the server's answer just replaced.
     private fun showQueued(db: SQLiteDatabase, ids: Set<String>) {

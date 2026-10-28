@@ -10,10 +10,13 @@ private const val WRITE_SYNC_WAIT_MS = 5_000L
  * pages only when the copy's cards carry their place in the space, which older servers leave out. Everything else
  * comes from the server, and the copy answers search, cards, spaces and space pages too when the network is down.
  *
- * Each write goes to the server; once it succeeds, a sync brings the copy up to date before the write returns (for at
- * most a few seconds), so a list read from the copy right after a pin or a trash shows it. A change to a card (pin,
- * trash, note, tags, spaces) made without network, or while earlier ones still wait, joins the [outbox] instead and
- * reads as done: the copy shows it at once and the server gets it, in order, once it can be reached.
+ * A change to a card (pin, trash, note, tags, spaces) joins the [outbox] and reads as done: the copy shows it at once
+ * and the server gets it in the background, in order, once it can be reached, as in a sync engine such as Zero. A server
+ * that refuses it has the last word: the outbox drops the change and reads the card again. While the server answers that
+ * it has no changes feed, a change goes straight to the server instead, unless the network is down or earlier ones wait.
+ *
+ * Other writes (new cards, uploads, making or deleting spaces) go to the server; once one succeeds, a sync brings the
+ * copy up to date before the write returns (for at most a few seconds), so a list read from the copy shows it.
  *
  * @param server The server's library.
  * @param copy The phone's copy.
@@ -91,12 +94,13 @@ class LocalFirstLibrary(
     private suspend fun <T> offline(answer: ApiResult<T>, kept: suspend () -> T?): ApiResult<T> =
         if (answer is ApiResult.Failed && answer.failure == ApiFailure.Network) kept()?.let { ApiResult.Ok(it) } ?: answer else answer
 
-    // Sends a change straight to the server while nothing waits and the network works; otherwise queues it behind the
-    // others, answers `queued` and starts a sync, which sends the outbox first.
+    // Queues every change: the copy shows it at once, the answer is `queued`, and a sync sends the outbox in the
+    // background before it reads the server's changes. While the server has no changes feed, a change goes straight to
+    // the server when nothing waits and the network works, and queues otherwise.
     private suspend fun <T> change(edit: Edit, queued: T, send: suspend () -> ApiResult<T>): ApiResult<T> {
-        val answer = if (outbox.isEmpty()) send() else null
+        val answer = if (sync.available || !outbox.isEmpty()) null else send()
         if (answer != null && !(answer is ApiResult.Failed && answer.failure == ApiFailure.Network)) return written(answer)
-        if (!outbox.queue(edit)) return answer ?: send()
+        if (!outbox.queue(edit)) return answer ?: written(send())
         sync.start(afterCurrent = true)
         return ApiResult.Ok(queued)
     }
