@@ -64,6 +64,7 @@ bearer token.
 - `removed` holds the ids of cards trashed or deleted since. `spaces` (the `/spaces` list) is only on the last page.
 - Any write to a card counts as a change: its row, tags, text, spaces or pin. `app_sync.rs` keeps the log with triggers, and it starts on the first request.
 - `reset: true` means the log started again, for example after the library was replaced by an import, so the token's position no longer applies. Drop the copy, keep the cards in this answer, and carry on paging.
+- Tokens also name the card shape (`CHANGES_FORMAT` in `app_api.rs`). When cards gain a field the phone's copy needs, as `spaceRanks` did, the format changes and older tokens answer `reset: true`, so a copy kept before fills again once.
 
 ### Uploads from the app
 
@@ -107,6 +108,7 @@ Fields are omitted when the stored card has no value; the app treats every field
   "note": "…",
   "tags": [{"id": "00000002UnE0y6CGaAn5FS", "name": "SwiftUI", "flags": 2}],
   "spaces": ["00000002UnEglwYYzqZA8E"],
+  "spaceRanks": {"00000002UnEglwYYzqZA8E": 4},
   "pinPosition": 3,
   "cover": {"src": "/media/…;600x414.mp4", "width": 600, "height": 414, "type": "video", "dominantColor": "#010101"},
   "blob": {"path": "…", "type": "image/jpeg", "width": 820, "height": 1024, "dominantColor": "#fbfbfb"},
@@ -127,6 +129,8 @@ Fields are omitted when the stored card has no value; the app treats every field
 - `prose`: the stored document tree (Note, Content). `post.bodyHtml` is the source post's sanitized HTML, the one
   place HTML reaches the app.
 - `state`: `ready`, `saving` (capture pending), `screenshot` (screenshot pending) or `failed` (capture failed).
+- `spaceRanks`: the card's place in each of its `spaces`. A space lists its cards from the smallest, the order of
+  `/spaces/<id>/cards`, so the phone can show a space from its copy.
 
 ### Space
 

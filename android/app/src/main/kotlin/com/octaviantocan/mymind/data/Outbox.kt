@@ -64,7 +64,7 @@ fun Card.edited(edit: Edit): Card? = when (edit) {
     is Edit.AddTag -> if (tags.orEmpty().any { it.name == edit.name }) this else copy(tags = tags.orEmpty() + Tag(edit.localId, edit.name))
     is Edit.RemoveTag -> copy(tags = tags.orEmpty().filterNot { it.id == edit.tagId })
     is Edit.AddToSpace -> if (edit.spaceId in spaces.orEmpty()) this else copy(spaces = spaces.orEmpty() + edit.spaceId)
-    is Edit.RemoveFromSpace -> copy(spaces = spaces.orEmpty() - edit.spaceId)
+    is Edit.RemoveFromSpace -> copy(spaces = spaces.orEmpty() - edit.spaceId, spaceRanks = spaceRanks?.minus(edit.spaceId))
 }
 
 /**

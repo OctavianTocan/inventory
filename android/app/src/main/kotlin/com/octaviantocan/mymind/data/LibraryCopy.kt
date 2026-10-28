@@ -188,13 +188,17 @@ class LibraryCopy(context: Context, private val session: Session, private val io
 
     /**
      * @param spaceId Space id.
-     * @return The space's cards from the copy, newest bumped first, or null when it cannot be read.
+     * @return The space's cards from the copy in the space's order, or null when it cannot be read. Cards that do not
+     *   carry their place in the space ([Card.spaceRanks]) come after the others, newest bumped first.
      */
     suspend fun spaceCards(spaceId: String): CardPage? = owned(null) { db ->
         db.rawQuery(
             "SELECT card FROM cards WHERE spaces LIKE ? AND (flags & $GRID_HIDDEN_FLAGS) = 0 ORDER BY bumped DESC, id DESC",
             arrayOf("%,$spaceId,%"),
-        ).use { rows -> CardPage(buildList { while (rows.moveToNext()) add(decode(rows.getString(0))) }.filter { spaceId in it.spaces.orEmpty() }) }
+        ).use { rows ->
+            val cards = buildList { while (rows.moveToNext()) add(decode(rows.getString(0))) }.filter { spaceId in it.spaces.orEmpty() }
+            CardPage(cards.sortedBy { it.spaceRanks?.get(spaceId) ?: Double.MAX_VALUE })
+        }
     }
 
     /**

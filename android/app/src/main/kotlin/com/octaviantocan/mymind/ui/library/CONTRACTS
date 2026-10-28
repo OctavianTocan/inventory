@@ -149,15 +149,21 @@ Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search"
 
 @cc [owner:OctavianTocan,label:product;privacy] gallery-works-offline
 Once the phone holds the whole library (`data/LibraryCopy.kt`, filled page by page from
-`/app/v1/changes` by `data/LibrarySync.kt`), Everything and Top of Mind MUST read from it,
-in the server's order. The copy syncs when the app starts, comes back to the screen,
-regains internet, is pulled to refresh, and after each successful change. Without
-internet the app MUST stay usable: no blocking screen, a small Offline pill under the
-top controls, and search by words, cards, spaces and space pages answered from the
-copy. A server without the changes feed MUST leave the app working as before. The copy
-belongs to its session and is wiped at sign-out, like `gallery-opens-from-the-phone`.
+`/app/v1/changes` by `data/LibrarySync.kt`), Everything, Top of Mind, the Spaces tab and
+its covers, space pages and the cards Serendipity deals MUST read from it, in the
+server's order, without waiting on the network. Space pages read from it only once its
+cards carry their place in the space (`spaceRanks`); before that they ask the server.
+Pull to refresh on the Spaces tab or in a space syncs the copy first. The copy syncs
+when the app starts, comes back to the screen, regains internet, is pulled to refresh,
+and after each successful change. Without internet the app MUST stay usable: no blocking
+screen, a small Offline pill under the top controls, and search by words, cards, spaces
+and space pages answered from the copy. A server without the changes feed MUST leave the
+app working as before. The copy belongs to its session and is wiped at sign-out, like
+`gallery-opens-from-the-phone`.
 Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search", step 3
-(sync and offline mode).
+(sync and offline mode); spaces, space pages and Serendipity added for Tavi's ask of 28
+October 2026 for a sync engine like Zero in Omar's Wholana, plan "ThyMind: a Zero-style
+sync engine", step 1.
 
 @cc [owner:OctavianTocan,label:product;privacy] gallery-keeps-offline-changes
 A pin, trash, note, tag or space change to a card made without network, or while earlier

@@ -175,6 +175,31 @@ class LibrarySyncTest {
     }
 
     @Test
+    fun aWholeCopyAnswersCardsSpacesAndSpacePagesWithoutTheServer() = runBlocking {
+        val ranked = { id: String, rank: Double -> testCard(id, spaces = listOf("s1")).copy(spaceRanks = mapOf("s1" to rank)) }
+        feed = mapOf(null to answer(listOf(ranked("late", 2.0), ranked("early", 0.0), ranked("middle", 1.0)), "t1"))
+        sync.sync()
+        val server = FakeLibrary(spaceList = listOf(Space("s1", "Server")), spacePages = mapOf("s1" to CardPage(listOf(testCard("server")))))
+        val library = LocalFirstLibrary(server, copy, sync, outbox)
+        assertEquals(SpaceList(listOf(Space("s1", "One"))), (library.spaces() as ApiResult.Ok).value)
+        assertEquals(listOf("early", "middle", "late"), (library.spaceCards("s1", null) as ApiResult.Ok).value.cards.map { it.id })
+        assertEquals("Card late", (library.card("late") as ApiResult.Ok).value.title)
+        assertEquals("nothing asked the server", emptyList<String>(), server.calls)
+        library.card("not-kept")
+        assertEquals("a card the copy lacks comes from the server", listOf("card:not-kept"), server.calls)
+    }
+
+    @Test
+    fun aSpacePageWhoseCardsLackTheirPlaceComesFromTheServer() = runBlocking {
+        feed = mapOf(null to answer(listOf(testCard("a", spaces = listOf("s1")).copy(spaceRanks = mapOf("s1" to 0.0)), testCard("b", spaces = listOf("s1"))), "t1"))
+        sync.sync()
+        val server = FakeLibrary(spacePages = mapOf("s1" to CardPage(listOf(testCard("b"), testCard("a")))))
+        val library = LocalFirstLibrary(server, copy, sync, outbox)
+        assertEquals(listOf("b", "a"), (library.spaceCards("s1", null) as ApiResult.Ok).value.cards.map { it.id })
+        assertEquals("offline, ranked cards come first", listOf("a", "b"), copy.spaceCards("s1")!!.cards.map { it.id })
+    }
+
+    @Test
     fun aWriteBringsTheCopyUpToDateBeforeItReturns() = runBlocking {
         feed = mapOf(null to answer(listOf(testCard("a")), "t1"))
         sync.sync()
@@ -198,6 +223,27 @@ class LibrarySyncTest {
             viewModel.syncNow()
             assertEquals(listOf("b", "p", "a"), viewModel.everything.state.value.cards.map { it.id })
             assertEquals(listOf("p"), viewModel.topOfMind.state.value.cards.map { it.id })
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun anOpenSpaceShowsWhatASyncBrought() = runBlocking {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        try {
+            val inSpace = { id: String, rank: Double -> testCard(id, spaces = listOf("s1")).copy(spaceRanks = mapOf("s1" to rank)) }
+            feed = mapOf(null to answer(listOf(inSpace("a", 0.0)), "t1"), "t1" to answer(emptyList(), "t1"))
+            sync.sync()
+            val server = FakeLibrary()
+            val viewModel = LibraryViewModel(LocalFirstLibrary(server, copy, sync, outbox), sync = sync)
+            val space = viewModel.spaceFeed("s1")
+            assertEquals(listOf("a"), space.state.value.cards.map { it.id })
+            feed = mapOf("t1" to answer(listOf(inSpace("b", 1.0)), "t2"))
+            viewModel.syncNow()
+            assertEquals(listOf("a", "b"), space.state.value.cards.map { it.id })
+            assertTrue("the space was read from the phone", server.calls.none { it.startsWith("spaceCards") })
         } finally {
             Dispatchers.resetMain()
         }

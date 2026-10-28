@@ -75,6 +75,8 @@ data class Card(
     val note: String? = null,
     val tags: List<Tag>? = null,
     val spaces: List<String>? = null,
+    /** The card's place in each of its [spaces], by space id: a space lists its cards from the smallest. */
+    val spaceRanks: Map<String, Double>? = null,
     val pinPosition: Long? = null,
     val cover: Cover? = null,
     val blob: Blob? = null,

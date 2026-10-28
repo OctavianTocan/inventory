@@ -5,8 +5,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val WRITE_SYNC_WAIT_MS = 5_000L
 
 /**
- * The library the screens use: the gallery and Top of Mind from the phone's copy once it holds the whole library and
- * the server still feeds it changes, the server for everything else, and the copy again for search, cards, spaces and space pages when the network is down.
+ * The library the screens use. Once the phone's copy holds the whole library and the server still feeds it changes,
+ * the gallery, Top of Mind, cards, the spaces and space pages come from the copy without waiting on the network; space
+ * pages only when the copy's cards carry their place in the space, which older servers leave out. Everything else
+ * comes from the server, and the copy answers search, cards, spaces and space pages too when the network is down.
  *
  * Each write goes to the server; once it succeeds, a sync brings the copy up to date before the write returns (for at
  * most a few seconds), so a list read from the copy right after a pin or a trash shows it. A change to a card (pin,
@@ -36,12 +38,18 @@ class LocalFirstLibrary(
     override suspend fun search(query: String, cursor: String?): ApiResult<CardPage> =
         offline(server.search(query, cursor)) { if (cursor == null) copy.search(query) else null }
 
-    override suspend fun card(cardId: String): ApiResult<Card> = offline(server.card(cardId)) { copy.card(cardId) }
+    override suspend fun card(cardId: String): ApiResult<Card> =
+        (if (wholeCopy()) copy.card(cardId) else null)?.let { ApiResult.Ok(it) } ?: offline(server.card(cardId)) { copy.card(cardId) }
 
-    override suspend fun spaces(): ApiResult<SpaceList> = offline(server.spaces()) { copy.spaces()?.let(::SpaceList) }
+    override suspend fun spaces(): ApiResult<SpaceList> =
+        (if (wholeCopy()) copy.spaces() else null)?.let { ApiResult.Ok(SpaceList(it)) } ?: offline(server.spaces()) { copy.spaces()?.let(::SpaceList) }
 
-    override suspend fun spaceCards(spaceId: String, cursor: String?): ApiResult<CardPage> =
-        offline(server.spaceCards(spaceId, cursor)) { if (cursor == null) copy.spaceCards(spaceId) else null }
+    override suspend fun spaceCards(spaceId: String, cursor: String?): ApiResult<CardPage> {
+        if (cursor == null && wholeCopy()) {
+            copy.spaceCards(spaceId)?.takeIf { page -> page.cards.all { spaceId in it.spaceRanks.orEmpty() } }?.let { return ApiResult.Ok(it) }
+        }
+        return offline(server.spaceCards(spaceId, cursor)) { if (cursor == null) copy.spaceCards(spaceId) else null }
+    }
 
     override suspend fun addTag(cardId: String, name: String): ApiResult<Tag> {
         val localId = outbox.newTagId()

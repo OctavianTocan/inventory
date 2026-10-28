@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -186,37 +187,43 @@ class LibraryViewModel(
             if (sync.sync().changedAnything()) {
                 everything.reread()
                 topOfMind.reread()
-            }
-        }
-    }
-
-    /** Pull to refresh on the Spaces list: reads the spaces and their first cards again, keeping them on show. */
-    fun refreshSpaces() {
-        if (mutableSpaces.value.refreshing || mutableSpaces.value.loading) return
-        if (!mutableSpaces.value.loaded) return loadSpaces()
-        mutableSpaces.update { it.copy(refreshing = true) }
-        viewModelScope.launch {
-            when (val answer = library.spaces()) {
-                is ApiResult.Ok -> {
-                    val fresh = answer.value.spaces
-                    fresh.map { space -> launch { readCover(space.id) } }.forEach { it.join() }
-                    mutableSpaces.update { state ->
-                        state.copy(spaces = fresh, covers = state.covers.filterKeys { id -> fresh.any { it.id == id } }, refreshing = false)
-                    }
-                }
-                is ApiResult.Failed -> mutableSpaces.update { it.copy(refreshing = false) }
+                spaceFeeds.values.forEach { it.reread() }
+                if (mutableSpaces.value.loaded && !mutableSpaces.value.loading) readSpaces()
             }
         }
     }
 
     /**
-     * Pull to refresh in an opened space: reads its first page and its entry in the Spaces list again.
+     * Pull to refresh on the Spaces list: syncs the phone's copy, then reads the spaces and their first cards again,
+     * keeping them on show.
+     */
+    fun refreshSpaces() {
+        if (mutableSpaces.value.refreshing || mutableSpaces.value.loading) return
+        if (!mutableSpaces.value.loaded) return loadSpaces()
+        mutableSpaces.update { it.copy(refreshing = true) }
+        viewModelScope.launch {
+            sync?.let { withTimeoutOrNull(REFRESH_SYNC_WAIT_MS) { it.sync() } }
+            readSpaces()
+        }
+    }
+
+    /**
+     * Pull to refresh in an opened space: syncs the phone's copy, then reads its pages and its entry in the Spaces list
+     * again.
      *
      * @param spaceId The space.
      */
     fun refreshSpaceFeed(spaceId: String) {
-        spaceFeed(spaceId).refresh()
-        refreshSpace(spaceId)
+        val sync = sync ?: return run {
+            spaceFeed(spaceId).refresh()
+            refreshSpace(spaceId)
+        }
+        val pulled = viewModelScope.async { withTimeoutOrNull(REFRESH_SYNC_WAIT_MS) { sync.sync() }.changedAnything() }
+        spaceFeed(spaceId).refresh { pulled.await() }
+        viewModelScope.launch {
+            pulled.await()
+            refreshSpace(spaceId)
+        }
     }
 
     /**
@@ -391,6 +398,20 @@ class LibraryViewModel(
         if (spaceId != null) {
             spaceFeeds[spaceId]?.refresh()
             refreshSpace(spaceId)
+        }
+    }
+
+    // Reads the spaces and their first cards again, keeping the list on show, and ends a pull to refresh.
+    private suspend fun readSpaces() = coroutineScope {
+        when (val answer = library.spaces()) {
+            is ApiResult.Ok -> {
+                val fresh = answer.value.spaces
+                fresh.map { space -> launch { readCover(space.id) } }.forEach { it.join() }
+                mutableSpaces.update { state ->
+                    state.copy(spaces = fresh, covers = state.covers.filterKeys { id -> fresh.any { it.id == id } }, refreshing = false)
+                }
+            }
+            is ApiResult.Failed -> mutableSpaces.update { it.copy(refreshing = false) }
         }
     }
 
