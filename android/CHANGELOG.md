@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.26 (37), 2026-10-28
+Your Google photo shows properly.
+
+### Fixed
+- Your Google photo on the account button and in the Profile sheet now shows the moment the app opens, stays while you're offline, and no longer drops back to the plain icon each time you open the sheet.
+- The photo is sharp: the app asks Google for one big enough for the button and the sheet instead of the small one that looked blurred.
+- The phone keeps your photo from the moment you sign in with Google. If you signed in before 0.6.0, sign out and back in once so it can keep it.
+
 ## 0.6.25 (36), 2026-10-28
 Search opens in the same bottom bar as Everything and Spaces.
 

@@ -342,6 +342,7 @@ fun MainShell(
                     onLongPressCard = { openMenu(it, null) },
                     searching = searching,
                     photoUrl = account.photoUrl,
+                    photoLoader = photoLoader,
                 )
                 Tab.Spaces -> SpacesScreen(
                     viewModel,
@@ -497,7 +498,7 @@ fun MainShell(
             onNewSpace = if (target.newSpace) ({ adding = null; newSpaceOpen = true }) else null,
         )
     }
-    if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false }, ai = ai)
+    if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false }, ai = ai, photoLoader = photoLoader)
     if (newSpaceOpen) {
         PageTheme(scheme) {
             NewSpaceDialog(

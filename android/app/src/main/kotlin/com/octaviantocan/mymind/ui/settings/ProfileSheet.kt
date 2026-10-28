@@ -67,13 +67,20 @@ const val SIGN_OUT = "Sign out"
  * @param updates Update rows of the sheet.
  * @param onClose Called once the sheet has closed.
  * @param ai The account's Claude Code and Codex, or null for a sheet without the AI rows.
+ * @param photoLoader The gallery's account-photo loader, whose memory already holds the photo, or null for one of its own.
  */
 @Composable
-fun ProfileSheetHost(settings: SettingsViewModel, updates: SettingsUpdates, onClose: () -> Unit, ai: AiAccount? = null) {
+fun ProfileSheetHost(
+    settings: SettingsViewModel,
+    updates: SettingsUpdates,
+    onClose: () -> Unit,
+    ai: AiAccount? = null,
+    photoLoader: ImageLoader? = null,
+) {
     val state by settings.state.collectAsStateWithLifecycle()
     LaunchedEffect(settings) { settings.refresh() }
     ProfileSheet(state, appVersion(LocalContext.current), updates, onSignOut = settings::signOut, onClose = onClose,
-        photoLoader = rememberPublicAccountPhotoLoader(), ai = ai)
+        photoLoader = photoLoader ?: rememberPublicAccountPhotoLoader(), ai = ai)
 }
 
 /**

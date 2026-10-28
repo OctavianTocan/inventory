@@ -51,6 +51,16 @@ class Repository(private val api: MymindApi, private val session: Session, priva
         }
     }
 
+    /**
+     * Reads no network, so the account shows at once and offline.
+     *
+     * @return The Google photo, name and email kept for this session since its sign-in, or null when none is kept.
+     */
+    fun savedAccount(): AccountProfile? {
+        val token = session.token ?: return null
+        return runCatching { profiles?.read(accountProfileSessionKey(token))?.forDisplay() }.getOrNull()
+    }
+
     override suspend fun cards(cursor: String?): ApiResult<CardPage> = api.cards(PAGE_SIZE, cursor)
 
     override suspend fun spaces(): ApiResult<SpaceList> = api.spaces()

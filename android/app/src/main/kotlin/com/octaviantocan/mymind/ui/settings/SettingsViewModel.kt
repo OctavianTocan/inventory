@@ -29,9 +29,12 @@ class SettingsViewModel(private val repository: Repository) : ViewModel() {
     /** Account shown in the profile sheet. */
     val state: StateFlow<SettingsUiState> = mutableState
 
-    /** Replaces prior display metadata only after the current account has been read successfully. */
+    /**
+     * Shows what this session keeps at once, so the photo is there as the sheet opens and offline, then the server's
+     * answer. Another session's account is never shown: one with nothing kept starts empty.
+     */
     fun refresh() {
-        mutableState.value = SettingsUiState()
+        mutableState.value = repository.savedAccount()?.let { SettingsUiState(it.email, it.photoUrl, it.displayName) } ?: SettingsUiState()
         viewModelScope.launch {
             when (val answer = repository.me()) {
                 is ApiResult.Ok -> mutableState.value = SettingsUiState(answer.value.email, answer.value.photoUrl, answer.value.displayName)

@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.ImageLoader
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.ui.shell.LoadingSpinner
@@ -74,6 +75,7 @@ fun EverythingScreen(
     onLongPressCard: ((Card) -> Unit)? = null,
     searching: Boolean = false,
     photoUrl: String? = null,
+    photoLoader: ImageLoader? = null,
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
     val pinned by viewModel.topOfMind.state.collectAsStateWithLifecycle()
@@ -99,7 +101,7 @@ fun EverythingScreen(
         topOfMind = pinned.cards, onLoadMoreTopOfMind = viewModel.topOfMind::loadMore,
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
         onLongPressCard = onLongPressCard,
-        photoUrl = photoUrl, resultsState = resultsScroll, aiNote = rank?.let(::aiNote),
+        photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, aiNote = rank?.let(::aiNote),
     )
 }
 
@@ -150,9 +152,10 @@ fun EverythingContent(
     mosaic: MosaicState = rememberMosaicState(),
     resultsState: LazyListState = rememberLazyListState(),
     aiNote: String? = null,
+    photoLoader: ImageLoader? = null,
 ) {
     val colors = LibraryStyle.colors
-    val photoLoader = if (photoUrl != null) rememberPublicAccountPhotoLoader() else null
+    val accountPhotoLoader = photoLoader ?: if (photoUrl != null) rememberPublicAccountPhotoLoader() else null
     val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
     Box(modifier.fillMaxSize().background(colors.background)) {
         when {
@@ -181,7 +184,7 @@ fun EverythingContent(
                         })
                 }
                 GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter), visible = { gridState.scrolledBy() })
-                GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd), photoUrl = photoUrl, photoLoader = photoLoader)
+                GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd), photoUrl = photoUrl, photoLoader = accountPhotoLoader)
             }
         }
     }

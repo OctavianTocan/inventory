@@ -47,12 +47,20 @@ internal fun AccountProfile.forVerifiedUser(user: User?): AccountProfile? {
     if (user == null) return null
     val verifiedEmail = user.email?.trim()?.takeIf { it.isNotBlank() } ?: return null
     if (user.kind?.equals("google", ignoreCase = true) != true || !email.trim().equals(verifiedEmail, ignoreCase = true)) return null
-    return AccountProfile(
-        email = verifiedEmail.lowercase(Locale.ROOT),
-        photoUrl = safeGooglePhoto(photoUrl),
-        displayName = displayName?.filterNot { it.isISOControl() }?.trim()?.take(120)?.takeIf { it.isNotEmpty() },
-    )
+    return copy(email = verifiedEmail.lowercase(Locale.ROOT)).forDisplay()
 }
+
+/** The profile as the screens may show it: only a safe Google photo, at [ACCOUNT_PHOTO_PX], and a plain name. */
+internal fun AccountProfile.forDisplay(): AccountProfile = copy(
+    photoUrl = safeGooglePhoto(photoUrl)?.replace(GOOGLE_PHOTO_SIZE, "=s$ACCOUNT_PHOTO_PX-c"),
+    displayName = displayName?.filterNot { it.isISOControl() }?.trim()?.take(120)?.takeIf { it.isNotEmpty() },
+)
+
+/** Pixels of the account photo asked of Google: the 52 dp card photo at the densest screens. */
+internal const val ACCOUNT_PHOTO_PX = 256
+
+// Google's sign-in hands out a 96-pixel photo (`…=s96-c`), blurred once the account button and card scale it up.
+private val GOOGLE_PHOTO_SIZE = Regex("=s\\d+(-c)?$")
 
 /** Load accepted URLs with a public image loader, never the API client that attaches the session bearer. */
 private fun safeGooglePhoto(value: String?): String? {

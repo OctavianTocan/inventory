@@ -15,7 +15,13 @@ import com.octaviantocan.mymind.data.TokenStore
 import com.octaviantocan.mymind.data.User
 import com.octaviantocan.mymind.data.accountProfileSessionKey
 import com.octaviantocan.mymind.data.forVerifiedUser
+import com.octaviantocan.mymind.ui.settings.SettingsUiState
+import com.octaviantocan.mymind.ui.settings.SettingsViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -124,6 +130,58 @@ class AccountProfileTest {
         assertEquals(candidate, candidate.forVerifiedUser(user))
         assertNull(candidate.forVerifiedUser(user.copy(kind = "password")))
         assertNull(candidate.forVerifiedUser(user.copy(email = null)))
+    }
+
+    @Test
+    fun googlesSmallPhotoIsAskedForAtTheAccountPhotoSize() {
+        val user = User(email = candidate.email, kind = "google")
+        val photo = "https://lh3.googleusercontent.com/a/ACg8oc-test"
+        assertEquals("$photo=s256-c", candidate.copy(photoUrl = "$photo=s96-c").forVerifiedUser(user)?.photoUrl)
+        assertEquals("$photo=s256-c", candidate.copy(photoUrl = "$photo=s96").forVerifiedUser(user)?.photoUrl)
+        assertEquals(candidate.photoUrl, candidate.forVerifiedUser(user)?.photoUrl)
+    }
+
+    @Test
+    fun theKeptAccountIsReadWithoutTheServer() = runBlocking {
+        assertNull(repository.savedAccount())
+        googleAnswers()
+        signIn(candidate.copy(photoUrl = "https://lh3.googleusercontent.com/a/kept=s96-c"))
+        val requests = server.requestCount
+        assertEquals(candidate.copy(photoUrl = "https://lh3.googleusercontent.com/a/kept=s256-c"), repository.savedAccount())
+        assertEquals(requests, server.requestCount)
+    }
+
+    @Test
+    fun anotherSessionNeverShowsTheKeptAccount() = runBlocking {
+        googleAnswers()
+        signIn()
+        answer("""{"token":"accepted-password-session","user":{"email":"person@example.com","kind":"password"}}""")
+        repository.signInWithPassword("person@example.com", "test-password")
+        assertNull(repository.savedAccount())
+        googleAnswers(token = "accepted-session-b")
+        signIn()
+        answer("", 500)
+        repository.signOut()
+        assertNull(repository.savedAccount())
+    }
+
+    @Test
+    fun theProfileShowsTheKeptPhotoBeforeTheServerAnswers() = runBlocking {
+        Dispatchers.setMain(StandardTestDispatcher())
+        try {
+            googleAnswers()
+            signIn()
+            val settings = SettingsViewModel(repository)
+            settings.refresh()
+            assertEquals(SettingsUiState(candidate.email, candidate.photoUrl, candidate.displayName), settings.state.value)
+
+            answer("""{"token":"accepted-password-session","user":{"email":"person@example.com","kind":"password"}}""")
+            repository.signInWithPassword("person@example.com", "test-password")
+            settings.refresh()
+            assertEquals(SettingsUiState(), settings.state.value)
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 
     @Test
