@@ -366,6 +366,44 @@ class LibraryMosaicTest {
     }
 
     @Test
+    fun theCardUnderTheFingersChangesShapeWithoutChangingLine() {
+        // A screenshot stands two squares high where it starts a band at two columns, but falls in a band's second row
+        // at three and takes one square there: the card under the fingers changes shape between the stops, not line.
+        fun shot(n: Int) = testCard("shot-$n", type = "Image", title = "Screenshot $n").copy(cover = Cover("/media/shot-$n.jpg", 1080, 2400))
+        fun note(n: Int) = testCard("note-$n", type = "Note", title = "Note $n", note = "A short note, number $n.")
+        val cards = listOf(shot(0), note(1), note(2), shot(3)) + (4..30).map { if (it % 3 == 0) shot(it) else note(it) }
+        val density = MosaicState(2)
+        compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(cards, endReached = true), {}, {}, mosaic = density) } }
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        val root = gallery.fetchSemanticsNode().boundsInRoot
+        fun drawn(): androidx.compose.ui.geometry.Rect = compose.onAllNodesWithContentDescription("Screenshot 3").fetchSemanticsNodes()
+            .also { assertEquals("Screenshot 3 has one touchable drawing", 1, it.size) }.single()
+            .let { androidx.compose.ui.geometry.Rect(it.positionInRoot, it.size.toSize()) }
+        val start = drawn()
+        assertTrue("Screenshot 3 starts two squares high: $start", start.height > 1.9f * start.width)
+        val fingers = start.center - root.topLeft
+        gallery.performTouchInput {
+            down(0, fingers - Offset(width * 0.1f, 0f))
+            down(1, fingers + Offset(width * 0.1f, 0f))
+        }
+        var left = start.left
+        for (step in 1..10) {
+            gallery.performTouchInput {
+                updatePointerTo(0, fingers - Offset(width * (0.1f - step * 0.002f), 0f))
+                updatePointerTo(1, fingers + Offset(width * (0.1f - step * 0.002f), 0f))
+                move(delayMillis = 16)
+            }
+            compose.waitForIdle()
+            assertTrue("The pinch must stay between two and three columns: ${density.position}", density.position > 2f && density.position < 3f)
+            // Its place at three columns is to the right, so it slides that way rather than out past the left edge.
+            val now = drawn()
+            assertTrue("Screenshot 3 must move steadily to its new place at ${density.position}: $now after left $left", now.left >= left - 1f)
+            left = now.left
+        }
+        gallery.performTouchInput { up(0); up(1) }
+    }
+
+    @Test
     fun aNoteZoomsWithoutRewrappingBetweenStops() {
         val density = MosaicState(4)
         compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(notes, endReached = true), {}, {}, mosaic = density) } }

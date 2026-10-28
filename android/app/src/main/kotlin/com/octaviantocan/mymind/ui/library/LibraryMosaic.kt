@@ -502,12 +502,16 @@ private class MosaicFrame(
 
     private fun place(projection: MosaicProjection, index: Int): Rect = projection.cell(index).translate(Offset(x, -y))
 
-    /** Whether card [index] changes line. Both grids scale together, so the answer holds for the whole step. */
+    /**
+     * Whether card [index] changes line. Its top decides, not its centre: a card two squares high in one grid and one in
+     * the other keeps its line, as the focal card always does. Both grids scale together, so the answer holds for the
+     * whole step.
+     */
     fun wraps(index: Int): Boolean {
         if (!moving) return false
         val a = place(from, index)
         val b = place(to, index)
-        return abs(a.center.y - b.center.y) > 0.5f * minOf(a.height, b.height)
+        return abs(a.top - b.top) > 0.5f * minOf(a.height, b.height)
     }
 
     fun draws(index: Int): MosaicDrawings {
@@ -559,10 +563,12 @@ private fun Rect.scaled(factor: Float): Rect =
 
 /**
  * Lines further down the screen start later: a card waits up to [WAVE_DELAY] of the step, by its reading order among
- * the cards either grid shows, and then makes up the rest by the end of the step.
+ * the cards either grid shows, and then makes up the rest by the end of the step. The [focal] card never waits, so it
+ * changes shape with the fingers.
  */
-private class MosaicWave(private val first: Int, private val last: Int) {
+private class MosaicWave(private val first: Int, private val last: Int, private val focal: Int) {
     fun progress(index: Int, step: Float): Float {
+        if (index == focal) return step
         val read = if (last <= first) 0f else ((index - first).toFloat() / (last - first)).coerceIn(0f, 1f)
         val wait = WAVE_DELAY * read
         return ((step - wait) / (1f - wait)).coerceIn(0f, 1f)
@@ -572,7 +578,7 @@ private class MosaicWave(private val first: Int, private val last: Int) {
 /** The [MosaicWave] of the current step, worked out once per step rather than on every pointer frame. */
 private class MosaicWaves {
     private var key: Any? = null
-    private var wave = MosaicWave(0, 0)
+    private var wave = MosaicWave(0, 0, -1)
 
     fun of(layouts: MosaicLayouts, between: MosaicBetween, focal: Int, anchor: MosaicAnchor?, viewport: Float): MosaicWave {
         val next = listOf(layouts, between.from, between.to, focal, anchor, viewport)
@@ -592,7 +598,7 @@ private class MosaicWaves {
             }
         }
         key = next
-        wave = MosaicWave(first, last)
+        wave = MosaicWave(first, last, focal)
         return wave
     }
 }

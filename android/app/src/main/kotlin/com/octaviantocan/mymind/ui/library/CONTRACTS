@@ -38,9 +38,12 @@ size. Between two stops the cards follow 60% of the finger travel and, once the
 fingers pass halfway, ease the rest in a 130 ms hop. Each card moves from its place in
 the grid of the stop the gesture started on to its place in the other grid; lower
 lines start later, each card waiting up to half the step by its reading order among
-the cards either grid shows. A card that changes line MUST slide out past one edge of
-its old line and in from the other edge of its new one, shrinking by up to a tenth
-and fading from one drawing to the other. Behind the cards both grids MUST be drawn
+the cards either grid shows, except the focal card, which MUST NOT wait. A card that
+changes line MUST slide out past one edge of its old line and in from the other edge
+of its new one, shrinking by up to a tenth and fading from one drawing to the other.
+Its top decides the line: a card that keeps its top but changes shape, such as two
+squares high in one grid and one in the other, slides, and the focal card never
+changes line. Behind the cards both grids MUST be drawn
 whole and blurred, the old one fading out, so no blank paper shows between moving
 cards. When a tile with words changes shape between the two grids (one column
 against two), its layouts in the two grids cross-fade with its progress. Only a
@@ -73,7 +76,8 @@ and doesn't feel good"); Tavi on the squares canvases, 28 October 2026 ("the car
 only move after a while of you pinching ... instead of moving while you pinch, which
 is actually what I want", "All of them have transitions that last too long", "I don't
 want to see blank spots between them"), who then picked O3b of the "Calmer steps for
-O" canvas.
+O" canvas; the web showcase's port of O3b found the focal card wrapping when it
+changed shape, fixed the same day.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-highlights-stay-above-the-bricks
 Top of Mind MUST remain above the main mosaic, in pin order, as a horizontal rail of

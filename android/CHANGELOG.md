@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.12 (23), 2026-10-28
+## 0.6.13 (24), 2026-10-28
 Cards move with your fingers while you pinch.
 
 ### Changed
@@ -10,6 +10,15 @@ Cards move with your fingers while you pinch.
 
 ### Fixed
 - No blank spaces show between the cards while you pinch: a soft, blurred copy of the gallery fills them.
+- The card under your fingers stays with them while it changes shape, such as a screenshot going from two squares high to one, instead of sliding off one edge and back in from the other.
+
+## 0.6.12 (23), 2026-10-28
+Search can ask Claude Code or Codex what you mean, signed in from your Profile as in Pully.
+
+### New
+- Your Profile has an AI search section: pick Claude Code or Codex, its model and how much effort it puts in, with the same pages as Pully.
+- Sign in to Claude Code or Codex from your Profile with your own Claude or ChatGPT subscription. Claude Code's code is picked up from the clipboard when you come back, and Codex finishes by itself once you approve its code.
+- Pressing search on the keyboard keeps the matches on screen while the chosen engine ranks them, then shows its order, with a note under the Search title. Typing still answers at once without it.
 
 ## 0.6.11 (22), 2026-10-28
 Your changes reach the server in one go, and never twice.
