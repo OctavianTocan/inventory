@@ -37,7 +37,7 @@ concurrency:
 jobs:
   verify:
     if: github.event.repository.private
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, x64, mymind-linux]
     timeout-minutes: 40
     defaults:
       run:
@@ -74,7 +74,7 @@ jobs:
     if: github.event.repository.private && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.operation != 'verify'
     needs: verify
     environment: alchemy-staging
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, x64, mymind-linux]
     timeout-minutes: 50
     permissions:
       contents: read
