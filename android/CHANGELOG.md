@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.20 (31), 2026-10-28
+An open card reads as a page of its own parts, with Share at the top and Open source at the foot.
+
+### Changed
+- An open card shows each of its parts in its own raised section: the picture with the title, who made it, where it is from, when you saved it and how long it takes to read; then its summary, tags, your note and the text from the page, each under a small heading.
+- Tapping the card's name at the top grows it into a card of its details: Copy link, Top of Mind as a switch, the spaces it is in, and the last three cards you opened, so you can go back to one or to Everything.
+- The top right button is now Share. It offers the link, a note's or post's words, and Copy link.
+- Open source and the card's actions sit at the foot of the page, and + Add in the Tags section adds tags.
+
 ## 0.6.19 (30), 2026-10-28
 A pinch no longer flickers when it lands.
 

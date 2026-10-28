@@ -175,6 +175,17 @@ fun CardPicture(card: Card, play: Boolean, modifier: Modifier = Modifier, whole:
     }
 }
 
+/**
+ * A small square of the card's picture, cropped to fill [modifier]'s box over its dominant colour, as lists show cards.
+ *
+ * @param card Card whose picture is drawn; a card without one shows only the colour.
+ * @param modifier Size and shape of the box.
+ */
+@Composable
+internal fun CardThumbnail(card: Card, modifier: Modifier = Modifier) {
+    Box(modifier.background(pictureBackground(card))) { PictureImage(card) }
+}
+
 /** Draws the card's picture (cover, post image or image file) over the whole box, cropped. */
 @Composable
 private fun PictureImage(card: Card, modifier: Modifier = Modifier) {

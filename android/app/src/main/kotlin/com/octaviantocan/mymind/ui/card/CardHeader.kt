@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.material3.LocalTextStyle
@@ -48,7 +47,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -63,16 +61,17 @@ internal val LightCardSheetColors = CardSheetColors(Color(0xFFF4F2EF), Color.Whi
 internal val DarkCardSheetColors = CardSheetColors(Color(0xFF1B1B1B), Color(0xFF1D1D1D), Color(0xFFE3E3E3), Color(0xFF3A3A3A), Color(0x99000000), Color(0x1FFFFFFF), Color.Black)
 internal val LocalCardSheetColors = compositionLocalOf { LightCardSheetColors }
 
-/** Phosphor close, vertical overflow and back glyphs. */
+/** Phosphor close, vertical overflow, back and share glyphs. */
 @Immutable
-class CardHeaderIcons(val close: Painter, val menu: Painter, val back: Painter? = null)
+class CardHeaderIcons(val close: Painter, val menu: Painter, val back: Painter? = null, val share: Painter? = null)
 
 @Composable
-fun defaultCardHeaderIcons() = CardHeaderIcons(painterResource(R.drawable.ic_sheet_close), painterResource(R.drawable.ic_sheet_more), painterResource(R.drawable.ic_sheet_back))
+fun defaultCardHeaderIcons() = CardHeaderIcons(painterResource(R.drawable.ic_sheet_close), painterResource(R.drawable.ic_sheet_more),
+    painterResource(R.drawable.ic_sheet_back), painterResource(R.drawable.ic_share))
 
-/** Pully's floating controls flanking a centered title that wraps to keep the full heading readable; the reader's pill form leads with Back. */
+/** Pully's floating controls flanking a centered title that wraps to keep the full heading readable. */
 @Composable
-fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier, onMenu: (() -> Unit)? = null, icons: CardHeaderIcons = defaultCardHeaderIcons(), enabled: Boolean = true, closeLabel: String = "Close card", onBack: (() -> Unit)? = null, titleContent: (@Composable () -> Unit)? = null, titleInPill: Boolean = false) {
+fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier, onMenu: (() -> Unit)? = null, icons: CardHeaderIcons = defaultCardHeaderIcons(), enabled: Boolean = true, closeLabel: String = "Close card", onBack: (() -> Unit)? = null, titleContent: (@Composable () -> Unit)? = null) {
     val colors = LocalCardSheetColors.current
     val density = LocalDensity.current
     var firstLineHeight by remember(title, density) { mutableFloatStateOf(with(density) { 26.sp.toPx() }) }
@@ -91,21 +90,6 @@ fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier
         color = colors.text,
     )
     val leading = if (onBack != null) icons.back ?: painterResource(R.drawable.ic_sheet_back) else icons.close
-    if (titleInPill) {
-        val shape = RoundedCornerShape(50)
-        Row(modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            // The reader returns to the gallery, so it leads with Back rather than a closing cross.
-            CardHeaderButton(icons.back ?: painterResource(R.drawable.ic_sheet_back), "Back", onBack ?: onClose, enabled)
-            Box(Modifier.weight(1f).cardSurfaceShadow(shape).clip(shape).background(colors.raised)
-                .heightIn(min = 44.dp).padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
-                Text(title, Modifier.fillMaxWidth(), style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (onMenu != null) CardHeaderButton(icons.menu, "Card actions", onMenu, enabled) else Spacer(Modifier.size(44.dp))
-        }
-        return
-    }
     Row(modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp), verticalAlignment = Alignment.Top) {
         CardHeaderButton(leading, if (onBack != null) "Back" else closeLabel, onBack ?: onClose, enabled, Modifier.padding(top = buttonTop))
         Box(Modifier.weight(1f).padding(start = 8.dp, end = 8.dp, top = titleTop, bottom = 4.dp), contentAlignment = Alignment.Center) {
@@ -123,7 +107,7 @@ fun CardHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier
 
 /** Pully's two-layer canvas shadow and flat press tint, with no ripple or press scaling. */
 @Composable
-private fun CardHeaderButton(icon: Painter, label: String, onClick: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier) {
+internal fun CardHeaderButton(icon: Painter, label: String, onClick: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier) {
     val colors = LocalCardSheetColors.current
     val fill = colors.raised
     val haptic = rememberSheetHaptics()

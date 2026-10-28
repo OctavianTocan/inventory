@@ -58,7 +58,10 @@ internal fun rememberCardMenuPosition(): CardSheetPosition {
     return remember { CardSheetPosition(haptic::land, haptic::tick) }
 }
 
-/** The card's auxiliary pages in Pully's own modal presentation, with no Material sheet underneath. */
+/**
+ * The card's auxiliary pages in Pully's own modal presentation, with no Material sheet underneath. The sheet opens on
+ * [root]: the card's actions from [items], or [rootContent] when given, and shows [submenu] as a child page of it.
+ */
 @Composable
 internal fun CardMenuSheet(
     items: List<CardMenuItem>,
@@ -70,6 +73,8 @@ internal fun CardMenuSheet(
     onBack: () -> Unit = {},
     submenuContent: @Composable (CardSubmenu) -> Unit = {},
     accent: androidx.compose.ui.graphics.Color? = null,
+    root: CardSheetRoot = CardSheetRoot.Actions,
+    rootContent: (@Composable () -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val motion = rememberSheetMotionEnabled()
@@ -80,11 +85,11 @@ internal fun CardMenuSheet(
         accent = accent,
     ) {
         val colors = cardMenuSheetColors(accent, MymindTheme.colors.dark)
-        CardMenuPanel(submenu?.title ?: "Card actions", onDismiss, position = position, accent = accent,
+        CardMenuPanel(submenu?.title ?: root.title, onDismiss, position = position, accent = accent,
             onBack = if (submenu != null) onBack else null, scrollState = null,
             titleContent = {
                 CardMenuPageSwitch(submenu, Modifier.fillMaxWidth(), centered = true) { page ->
-                    Text(page?.title ?: "Card actions", Modifier.fillMaxWidth())
+                    Text(page?.title ?: root.title, Modifier.fillMaxWidth())
                 }
             }) {
             CardMenuPageSwitch(submenu, Modifier.fillMaxWidth(), slow = true) { page ->
@@ -93,8 +98,8 @@ internal fun CardMenuSheet(
                 Column(Modifier.fillMaxWidth()
                     .sheetEdgeFade(color = colors.paper, topStrength = { (scroll.value / fade).coerceIn(0f, 1f) })
                     .verticalScroll(scroll).navigationBarsPadding()) {
-                    if (page == null) CardMenuContent(items, onSelect, icons = icons, enabled = !position.closing)
-                    else submenuContent(page)
+                    if (page != null) submenuContent(page)
+                    else rootContent?.invoke() ?: CardMenuContent(items, onSelect, icons = icons, enabled = !position.closing)
                 }
             }
         }

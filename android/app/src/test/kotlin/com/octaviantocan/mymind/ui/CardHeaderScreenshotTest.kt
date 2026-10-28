@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.ui.card.defaultCardHeaderIcons
-import com.octaviantocan.mymind.ui.card.CardHeader
+import com.octaviantocan.mymind.ui.card.ReaderHeader
 import com.octaviantocan.mymind.ui.card.LocalCardSheetColors
 import com.octaviantocan.mymind.ui.card.LightCardSheetColors
 import com.octaviantocan.mymind.ui.card.DarkCardSheetColors
@@ -47,12 +47,13 @@ class CardHeaderScreenshotTest {
                         modifier = Modifier.fillMaxWidth().height(160.dp),
                         contentScale = ContentScale.FillBounds,
                     )
-                    CardHeader(
+                    ReaderHeader(
                         title = "A card with a title",
-                        onClose = {},
-                        onMenu = {},
+                        open = false,
+                        onBack = {},
+                        onName = {},
+                        onShare = {},
                         icons = defaultCardHeaderIcons(),
-                        titleInPill = true,
                     )
                 }
             }

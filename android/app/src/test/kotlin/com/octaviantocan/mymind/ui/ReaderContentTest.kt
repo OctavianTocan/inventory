@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -13,12 +14,22 @@ import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.Post
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.card.CardDetail
-import com.octaviantocan.mymind.ui.card.readerParagraphs
+import com.octaviantocan.mymind.ui.card.ReaderActions
+import com.octaviantocan.mymind.ui.card.ReaderPart
+import com.octaviantocan.mymind.ui.card.ReaderText
+import com.octaviantocan.mymind.ui.card.bylineOf
+import com.octaviantocan.mymind.ui.card.readerSections
+import com.octaviantocan.mymind.ui.card.readingMinutes
+import com.octaviantocan.mymind.ui.card.readingTime
+import com.octaviantocan.mymind.ui.card.savedLabel
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
+import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,11 +53,29 @@ class ReaderContentTest {
     fun theReaderKeepsEveryPartOfTheCardOnceAndInOrder() {
         val prose = Json.parseToJsonElement("""{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"The README."}]}]}""")
         val repository = testCard("r1", type = "Repository", note = "Try it for demos").copy(description = "Screen recording for agents.", prose = prose)
-        assertEquals(listOf("Screen recording for agents.", "The README.", "Try it for demos"), readerParagraphs(repository))
+        assertEquals(listOf(ReaderText(ReaderPart.Summary, "Screen recording for agents."), ReaderText(ReaderPart.YourNote, "Try it for demos"),
+            ReaderText(ReaderPart.Page, "The README.")), readerSections(repository))
+        assertEquals("1 min read", readingTime(repository))
         val post = testCard("x1", type = "XPost").copy(description = "Hello", post = Post(bodyHtml = "<p>Hello</p>"))
-        assertEquals(listOf("Hello"), readerParagraphs(post))
+        assertEquals(listOf(ReaderText(ReaderPart.Post, "Hello")), readerSections(post))
+        assertNull(readingTime(post))
         val note = testCard("n1", type = "Note", title = null, note = "Just a thought")
-        assertEquals(listOf("Just a thought"), readerParagraphs(note))
+        assertEquals(listOf(ReaderText(ReaderPart.Note, "Just a thought")), readerSections(note))
+    }
+
+    @Test
+    fun theBylineSaysWhoWhereWhenAndHowLong() {
+        assertEquals(0, readingMinutes(" \n "))
+        assertEquals(1, readingMinutes(List(200) { "word" }.joinToString(" ")))
+        assertEquals(2, readingMinutes(List(201) { "word" }.joinToString("\n")))
+        val today = LocalDate.of(2026, 10, 28)
+        assertEquals("Saved 24 Oct", savedLabel("2026-10-24T09:00:00Z", today, ZoneOffset.UTC))
+        assertEquals("Saved 2 Mar 2025", savedLabel("2025-03-02T23:30:00Z", today, ZoneOffset.UTC))
+        assertNull(savedLabel("not a date", today, ZoneOffset.UTC))
+        assertEquals("Henry David Thoreau · The Atlantic",
+            bylineOf(testCard("a1", url = "https://www.theatlantic.com/x").copy(author = " Henry David Thoreau ", siteName = "The Atlantic")))
+        assertEquals("example.com", bylineOf(testCard("a2", url = "https://www.example.com/a")))
+        assertNull(bylineOf(testCard("n2", type = "Note")))
     }
 
     @Test
@@ -66,6 +95,27 @@ class ReaderContentTest {
             assertEquals(listOf("https://ultracite.ai/", "https://ultracite.ai/"), opened)
             assertEquals(1, menus)
         }
+    }
+
+    @Test
+    fun theFootOpensTheCardsActionsAndShareAndAddShowOnlyWithTheirActions() {
+        var menus = 0
+        var shares = 0
+        var adds = 0
+        val actions = mutableStateOf(ReaderActions())
+        compose.setPhoneContent(false) {
+            PageTheme(PageScheme.Dark) {
+                CardDetail(page, onClose = {}, onMenu = { menus++ }, headerIcons = flatSizedCardHeaderIcons(), onOpenSource = {}, actions = actions.value)
+            }
+        }
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithContentDescription("Share").assertDoesNotExist()
+        compose.onNodeWithText("+ Add").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Card actions").performClick()
+        compose.change { actions.value = ReaderActions(onShare = { shares++ }, onAddTags = { adds++ }) }
+        compose.onNodeWithContentDescription("Share").performClick()
+        compose.onNodeWithText("+ Add").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(listOf(1, 1, 1), listOf(menus, shares, adds)) }
     }
 
     @Test

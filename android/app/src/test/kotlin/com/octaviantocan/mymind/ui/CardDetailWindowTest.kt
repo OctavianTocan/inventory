@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -65,10 +66,10 @@ class CardDetailWindowTest {
     }
 
     @Test
-    fun crossAndActionsAreMatchingFloatingButtonsAndCrossClosesTheReader() {
+    fun backAndTheFootsActionsAreFloatingButtonsAndBackClosesTheReader() {
         show()
         compose.onNodeWithContentDescription("Back").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
-        compose.onNodeWithContentDescription("Card actions").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
+        compose.onNodeWithContentDescription("Card actions").assertIsDisplayed().assertWidthIsEqualTo(52.dp)
         compose.onNodeWithContentDescription("Back").performClick()
         compose.mainClock.advanceTimeBy(100)
         compose.waitForIdle()
@@ -81,7 +82,7 @@ class CardDetailWindowTest {
     fun exceptionallyLongTitlesUseOneRowWhileTheBodyAndControlsStayVisible() {
         val title = (1..20).joinToString("\n") { "Heading line $it" }
         show(LibrarySamples.article.copy(title = title))
-        val header = compose.onNode(hasText(title) and !hasScrollAction()).assertIsDisplayed()
+        val header = compose.onNode(hasText(title) and hasClickAction()).assertIsDisplayed()
         val body = compose.onNode(hasScrollAction() and !hasText(title)).assertIsDisplayed()
         val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
         header.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
@@ -93,7 +94,7 @@ class CardDetailWindowTest {
         compose.waitForIdle()
         assertEquals("Reading scrolls independently of its header", headerBounds, header.fetchSemanticsNode().boundsInRoot)
         compose.onNodeWithContentDescription("Back").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
-        compose.onNodeWithContentDescription("Card actions").assertIsDisplayed().assertWidthIsEqualTo(44.dp)
+        compose.onNodeWithContentDescription("Card actions").assertIsDisplayed().assertWidthIsEqualTo(52.dp)
     }
 
     @Test

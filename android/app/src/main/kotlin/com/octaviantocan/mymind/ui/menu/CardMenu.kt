@@ -1,12 +1,16 @@
 package com.octaviantocan.mymind.ui.menu
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -25,6 +29,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -147,7 +152,7 @@ private val ORGANIZE_ACTIONS = setOf(CardMenuAction.AddTags, CardMenuAction.AddT
 internal fun CardMenuHeading(label: String, first: Boolean = false) {
     Text(label, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = if (first) 12.dp else 24.dp, bottom = 2.dp)
         .semantics { heading() },
-        style = TextStyle(fontFamily = CardMenuFont, fontSize = 14.sp, lineHeight = 20.sp,
+        style = TextStyle(fontFamily = CardMenuFont, fontSize = 15.sp, lineHeight = 21.sp,
             fontWeight = FontWeight.Medium, color = menuColors().rowText.copy(alpha = 0.65f)))
 }
 
@@ -190,7 +195,7 @@ internal fun SheetTile(icon: Painter, label: String, onClick: () -> Unit, modifi
         .padding(horizontal = 8.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
         Image(icon, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(colors.rowText))
-        Text(label, style = TextStyle(fontFamily = CardMenuFont, fontSize = 14.sp, lineHeight = 20.sp, color = colors.rowText),
+        Text(label, style = TextStyle(fontFamily = CardMenuFont, fontSize = 15.sp, lineHeight = 21.sp, color = colors.rowText),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
@@ -260,8 +265,8 @@ internal fun SheetRow(
     ) {
         if (icon != null) Image(icon, contentDescription = null, modifier = Modifier.size(22.dp), colorFilter = ColorFilter.tint(iconTint ?: tint))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(label, style = TextStyle(color = tint, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont))
-            if (detail != null) Text(detail, style = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 14.sp, lineHeight = 20.sp, fontFamily = CardMenuFont))
+            Text(label, style = TextStyle(color = tint, fontSize = 17.sp, lineHeight = 22.sp, fontFamily = CardMenuFont))
+            if (detail != null) Text(detail, style = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 15.sp, lineHeight = 21.sp, fontFamily = CardMenuFont))
         }
         trailing?.invoke(this)
     }
@@ -281,4 +286,81 @@ internal fun SheetRowChevron(colors: MenuColors = menuColors()) {
 @Composable
 internal fun SheetRowDivider(start: Dp = 52.dp) {
     HorizontalDivider(Modifier.padding(start = start), color = menuColors().rowText.copy(alpha = 0.1f), thickness = 1.dp)
+}
+
+/**
+ * Pully's switch, drawn at the end of a row whose whole surface toggles it: a 52 by 32dp track with a white thumb.
+ *
+ * @param checked True slides the thumb to the end over an ink track.
+ */
+@Composable
+internal fun SheetSwitch(checked: Boolean) {
+    val colors = menuColors()
+    val dark = MymindTheme.colors.dark
+    val track by animateColorAsState(if (checked) colors.rowText else if (dark) Color(0xFF3A3A3A) else Color(0xFFE3E5E3), tween(200), label = "switchTrack")
+    val thumb by animateDpAsState(if (checked) 23.dp else 3.dp, tween(200), label = "switchThumb")
+    Box(Modifier.size(52.dp, 32.dp).clip(CircleShape).background(track)) {
+        Box(Modifier.offset(x = thumb, y = 3.dp).size(26.dp).cardSurfaceShadow(CircleShape).clip(CircleShape)
+            .background(if (checked && dark) colors.sheet else Color.White))
+    }
+}
+
+/**
+ * One of a sheet's large choices: a raised 16dp card with the icon in a round wash, the label over a muted detail,
+ * and an optional note at the end.
+ *
+ * @param icon Artwork, tinted with the row ink.
+ * @param label What choosing it does.
+ * @param detail Muted second line, or null.
+ * @param onClick Called on a tap, after the sheet's tick.
+ * @param modifier Modifier for the card.
+ * @param note Short muted word at the end, such as "Most used", or null.
+ * @param enabled False ignores taps.
+ */
+@Composable
+internal fun SheetChoice(icon: Painter, label: String, detail: String?, onClick: () -> Unit, modifier: Modifier = Modifier, note: String? = null, enabled: Boolean = true) {
+    val colors = menuColors()
+    val shape = RoundedCornerShape(16.dp)
+    val haptic = rememberSheetHaptics()
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 76.dp).cardSurfaceShadow(shape, note = true).clip(shape).background(colors.row)
+            .clickable(remember { MutableInteractionSource() }, CardSheetIndication, enabled = enabled, role = Role.Button) { haptic.tick(); onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(44.dp).clip(CircleShape).background(colors.rowText.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+            Image(icon, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(colors.rowText))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, style = TextStyle(color = colors.rowText, fontSize = 17.sp, lineHeight = 22.sp, fontFamily = CardMenuFont))
+            if (detail != null) Text(detail, style = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 15.sp, lineHeight = 21.sp, fontFamily = CardMenuFont),
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        if (note != null) Text(note, style = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 15.sp, lineHeight = 21.sp, fontFamily = CardMenuFont), maxLines = 1)
+    }
+}
+
+/**
+ * Pully's quiet 44dp pill for a sheet's lesser action, raised on the sheet's paper.
+ *
+ * @param icon Artwork before the label, or null.
+ * @param label What it does.
+ * @param onClick Called on a tap, after the sheet's tick.
+ * @param modifier Modifier for the pill.
+ */
+@Composable
+internal fun SheetPill(icon: Painter?, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = menuColors()
+    val haptic = rememberSheetHaptics()
+    Row(
+        modifier.height(44.dp).cardSurfaceShadow(CircleShape).clip(CircleShape).background(colors.row)
+            .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button) { haptic.tick(); onClick() }
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) Image(icon, null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(colors.rowText))
+        Text(label, style = TextStyle(color = colors.rowText, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, fontFamily = CardMenuFont), maxLines = 1)
+    }
 }

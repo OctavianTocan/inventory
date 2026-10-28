@@ -64,3 +64,10 @@ tinting the body or their fields. Semantic colors such as Delete and space
 selection colors remain independent of the card-type accent.
 Source: Tavi's explicit correction, 22 October 2026: "Don't paint the entire
 bottom sheets in the color of the card type, just a little hint at the top of it".
+
+@cc [owner:OctavianTocan,label:product] card-share-sheet-offers-what-the-card-has
+The reader's Share button MUST open a Share sheet in the card's sheet, titled Share,
+offering only what the card has: The link for a card with a web link, The words for
+a note or a post (a post's words carry its link), and Copy link. Each choice closes
+the sheet before it hands off to the system's share sheet or the clipboard.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026.

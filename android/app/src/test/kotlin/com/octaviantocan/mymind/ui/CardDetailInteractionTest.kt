@@ -10,16 +10,21 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeDown
 import com.octaviantocan.mymind.ui.card.CardDetail
+import com.octaviantocan.mymind.ui.card.ReaderActions
+import com.octaviantocan.mymind.ui.card.ReaderDetails
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
 import kotlinx.coroutines.runBlocking
@@ -43,7 +48,9 @@ class CardDetailInteractionTest {
     private lateinit var back: OnBackPressedDispatcher
     private val panel get() = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Card details"))
 
-    private fun open() {
+    private val nameCard get() = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "About this card"))
+
+    private fun open(actions: ReaderActions = ReaderActions(), details: ReaderDetails = ReaderDetails()) {
         compose.setPhoneContent(false) {
             back = checkNotNull(LocalOnBackPressedDispatcherOwner.current).onBackPressedDispatcher
             PageTheme(PageScheme.Dark) {
@@ -53,6 +60,8 @@ class CardDetailInteractionTest {
                     onMenu = {},
                     headerIcons = flatSizedCardHeaderIcons(),
                     scrollState = scroll,
+                    actions = actions,
+                    details = details,
                 )
             }
         }
@@ -110,9 +119,38 @@ class CardDetailInteractionTest {
     }
 
     @Test
-    fun theReaderShowsOneTitle() {
+    fun theNamePillAndTheHeadSectionEachNameTheCardOnce() {
         open()
-        compose.onAllNodesWithText(LibrarySamples.article.title!!).assertCountEquals(1)
+        compose.onAllNodesWithText(LibrarySamples.article.title!!).assertCountEquals(2)
+    }
+
+    @Test
+    fun theNameGrowsIntoItsCardAndBackHidesItBeforeClosingTheReader() {
+        val other = LibrarySamples.video
+        val opened = mutableListOf<String>()
+        var pins = 0
+        open(ReaderActions(onTogglePin = { pins++ }, onSpaces = {}, onOpenRecent = { opened += it.id }),
+            ReaderDetails(spaces = listOf("Design", "Reading"), recent = listOf(LibrarySamples.article, other)))
+        nameCard.assertDoesNotExist()
+        compose.onNode(hasText(LibrarySamples.article.title!!) and hasClickAction()).performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        nameCard.assertExists()
+        compose.onNodeWithText("Design, Reading").assertExists()
+        compose.onNodeWithText("Copy link").assertDoesNotExist()
+        compose.onNodeWithText("Top of Mind").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        nameCard.assertExists()
+        compose.change { back.onBackPressed() }
+        compose.mainClock.advanceTimeBy(1000)
+        nameCard.assertDoesNotExist()
+        assertEquals(0, closed)
+        compose.onNode(hasText(LibrarySamples.article.title!!) and hasClickAction()).performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithText(other.title!!).performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        nameCard.assertDoesNotExist()
+        assertEquals(listOf(other.id), opened)
+        assertEquals(1, pins)
     }
 
     @Test

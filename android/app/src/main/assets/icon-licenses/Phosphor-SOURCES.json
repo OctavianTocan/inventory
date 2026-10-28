@@ -21,7 +21,8 @@
     "same_vibe": "sparkle",
     "notification_icons": "download-simple and upload-simple with white fill and transparent background for Android notification alpha silhouettes",
     "search": "magnifying-glass; the gallery's Search circle pairs the bold glass with star-four for search by meaning",
-    "video_player": "play and pause fill, speaker-high and speaker-slash bold for the reader's video controls"
+    "video_player": "play and pause fill, speaker-high and speaker-slash bold for the reader's video controls",
+    "reader": "share-network for Share, link for Copy link, and text-align-left, article and quotes for the reader's summary, page and post sections"
   },
   "excluded_resources": {
     "ic_launcher_background": "Launcher artwork",
@@ -385,6 +386,18 @@
       "path_count": 1
     },
     {
+      "resource": "ic_link",
+      "icon": "link",
+      "weight": "regular",
+      "source_path": "assets/regular/link.svg",
+      "source_sha256": "526d89480e3064c614b7d46a93888c187696d7776f684527d48eb94e2d7cd5d4",
+      "android_width": "20dp",
+      "android_height": "20dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_notification_download",
       "icon": "download-simple",
       "weight": "regular",
@@ -404,6 +417,18 @@
       "source_sha256": "d2b22b75affd718a4a24d71ee71586b277cf48ddb7d52b7d7d0a85b47f8b12d1",
       "android_width": "24dp",
       "android_height": "24dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_page",
+      "icon": "article",
+      "weight": "regular",
+      "source_path": "assets/regular/article.svg",
+      "source_sha256": "25d8411c49a9f4b7ddfcb592dab55be0f817c53908f96b3012681bc1e19cc207",
+      "android_width": "20dp",
+      "android_height": "20dp",
       "fill_color": "#FFFFFF",
       "root_attributes": {},
       "path_count": 1
@@ -452,6 +477,30 @@
       "source_sha256": "6d2a75bc5700a68dec50516ebae121c307807e4e6fcca5c863e5b4af006df880",
       "android_width": "24dp",
       "android_height": "24dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_quote",
+      "icon": "quotes",
+      "weight": "regular",
+      "source_path": "assets/regular/quotes.svg",
+      "source_sha256": "e6afaa07d488b94413b5edbbe813d45fa8db5b6c9269a4de3b20bdae77d8a142",
+      "android_width": "20dp",
+      "android_height": "20dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_share",
+      "icon": "share-network",
+      "weight": "regular",
+      "source_path": "assets/regular/share-network.svg",
+      "source_sha256": "e6923db3591f797c89c36671aad3e20effd7b06e6eb400b2a7ffb6daaed0474a",
+      "android_width": "20dp",
+      "android_height": "20dp",
       "fill_color": "#FFFFFF",
       "root_attributes": {},
       "path_count": 1
@@ -527,6 +576,18 @@
       "android_width": "24dp",
       "android_height": "24dp",
       "fill_color": "#FF000000",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_summary",
+      "icon": "text-align-left",
+      "weight": "regular",
+      "source_path": "assets/regular/text-align-left.svg",
+      "source_sha256": "4d166977720d3beb386288a8607fbb36134fef06fdd99496ab09cf2d2da211b5",
+      "android_width": "20dp",
+      "android_height": "20dp",
+      "fill_color": "#FFFFFF",
       "root_attributes": {},
       "path_count": 1
     },

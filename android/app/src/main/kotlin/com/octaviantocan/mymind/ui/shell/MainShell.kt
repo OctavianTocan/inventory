@@ -23,6 +23,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,9 +48,12 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.uploadFileOf
 import com.octaviantocan.mymind.ui.card.CardDetailDialog
+import com.octaviantocan.mymind.ui.card.ReaderActions
+import com.octaviantocan.mymind.ui.card.ReaderDetails
 import com.octaviantocan.mymind.ui.describe
 import com.octaviantocan.mymind.ui.errors.ApiErrorDialog
 import com.octaviantocan.mymind.ui.library.cardAccent
+import com.octaviantocan.mymind.ui.library.pinned
 import com.octaviantocan.mymind.ui.library.EverythingScreen
 import com.octaviantocan.mymind.ui.library.GalleryControls
 import com.octaviantocan.mymind.ui.library.LibraryViewModel
@@ -60,7 +64,11 @@ import com.octaviantocan.mymind.ui.library.rememberPublicAccountPhotoLoader
 import com.octaviantocan.mymind.ui.menu.CreateSpacePage
 import com.octaviantocan.mymind.ui.menu.AddTagsPage
 import com.octaviantocan.mymind.ui.menu.CardMenuAction
+import com.octaviantocan.mymind.ui.menu.CardMenuItem
 import com.octaviantocan.mymind.ui.menu.CardMenuOutcome
+import com.octaviantocan.mymind.ui.menu.CardSheetRoot
+import com.octaviantocan.mymind.ui.menu.ShareContent
+import com.octaviantocan.mymind.ui.menu.shareText
 import com.octaviantocan.mymind.ui.menu.CardMenuSheet
 import com.octaviantocan.mymind.ui.menu.rememberCardMenuPosition
 import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
@@ -135,6 +143,9 @@ fun MainShell(
     var uploadTarget by remember { mutableStateOf(AddTarget(null)) }
     var photo by remember { mutableStateOf<File?>(null) }
     var submenu by remember { mutableStateOf<CardSubmenu?>(null) }
+    var sheetRoot by remember { mutableStateOf(CardSheetRoot.Actions) }
+    // Cards opened before the one on screen, latest first, for the reader's name card.
+    val recent = remember { mutableStateListOf<Card>() }
     var newSpaceOpen by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<Space?>(null) }
     var failure by remember { mutableStateOf<ApiFailure?>(null) }
@@ -162,7 +173,12 @@ fun MainShell(
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
     val menuProgress = if (menuOpen) sheetState.scrim else 0f
-    val openCard = { card: Card, spaceId: String? -> opened = OpenedCard(card, spaceId) }
+    val keepRecent = { card: Card -> recent.removeAll { it.id == card.id }; recent.add(0, card); if (recent.size > RECENT_KEPT) recent.removeAt(recent.lastIndex) }
+    val openCard = { card: Card, spaceId: String? ->
+        opened?.card?.takeIf { it.id != card.id }?.let(keepRecent)
+        opened = OpenedCard(card, spaceId)
+    }
+    val closeCard = { opened?.card?.let(keepRecent); opened = null }
     // The opened card follows the phone's copy too, such as a shared link the server has just read.
     val openedId = opened?.card?.id
     LaunchedEffect(openedId) {
@@ -176,9 +192,30 @@ fun MainShell(
         opened = opened?.takeIf { it.card.id == card.id }?.copy(card = card) ?: opened
         menuFor = menuFor?.takeIf { it.card.id == card.id }?.copy(card = card) ?: menuFor
     }
-    val openMenu = { card: Card, spaceId: String? ->
+    val openSheet = { card: Card, spaceId: String?, root: CardSheetRoot, page: CardSubmenu? ->
         menuFor = OpenedCard(card, spaceId)
+        sheetRoot = root
+        submenu = page
         menuOpen = true
+    }
+    val openMenu = { card: Card, spaceId: String? -> openSheet(card, spaceId, CardSheetRoot.Actions, null) }
+    val send = { text: String, subject: String? ->
+        val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+        subject?.let { intent.putExtra(Intent.EXTRA_SUBJECT, it) }
+        runCatching { context.startActivity(Intent.createChooser(intent, null)) }
+        Unit
+    }
+    val copyLink = { card: Card -> card.url?.let { url -> scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("link", url))) } }; Unit }
+    val togglePin = { card: Card ->
+        scope.launch {
+            val pin = CardMenuItem(if (card.pinned) CardMenuAction.RemoveFromTopOfMind else CardMenuAction.AddToTopOfMind)
+            when (val outcome = viewModel.perform(pin, card, null)) {
+                is CardMenuOutcome.PinChanged -> updateCard(outcome.card)
+                is CardMenuOutcome.Failed -> failure = outcome.failure
+                else -> Unit
+            }
+        }
+        Unit
     }
     val canTakePhoto = remember { Intent(MediaStore.ACTION_IMAGE_CAPTURE).resolveActivity(context.packageManager) != null }
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
@@ -223,9 +260,27 @@ fun MainShell(
                     PageTheme(scheme) {
                         CardDetailDialog(
                             open.card,
-                            onClose = { opened = null },
+                            onClose = closeCard,
                             onMenu = { openMenu(open.card, open.spaceId) },
                             actionsProgress = menuProgress,
+                            actions = ReaderActions(
+                                onShare = if (open.card.url != null || shareText(open.card) != null) {
+                                    { openSheet(open.card, open.spaceId, CardSheetRoot.Share, null) }
+                                } else null,
+                                onAddTags = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Tags) },
+                                onCopyLink = { copyLink(open.card) },
+                                onTogglePin = { togglePin(open.card) },
+                                onSpaces = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Spaces) },
+                                onOpenRecent = { openCard(it, null) },
+                                onEverything = {
+                                    closeCard()
+                                    selectTab(Tab.Everything)
+                                },
+                            ),
+                            details = ReaderDetails(
+                                spaces = spaces.spaces.filter { it.id in open.card.spaces.orEmpty() }.mapNotNull { it.name },
+                                recent = recent.toList(),
+                            ),
                             onRemoveTag = { tag ->
                                 scope.launch {
                                     when (val answer = viewModel.removeTag(open.card, tag)) {
@@ -301,7 +356,10 @@ fun MainShell(
                         is CardMenuOutcome.OpenSubmenu -> submenu = outcome.submenu
                         is CardMenuOutcome.Copy -> clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("card", outcome.text)))
                         is CardMenuOutcome.OpenUrl -> runCatching { uriHandler.openUri(outcome.url) }
-                        is CardMenuOutcome.Deleted, is CardMenuOutcome.RemovedFromSpace -> if (opened?.card?.id == target.card.id) opened = null
+                        is CardMenuOutcome.Deleted, is CardMenuOutcome.RemovedFromSpace -> {
+                            if (outcome is CardMenuOutcome.Deleted) recent.removeAll { it.id == outcome.cardId }
+                            if (opened?.card?.id == target.card.id) opened = null
+                        }
                         is CardMenuOutcome.PinChanged -> updateCard(outcome.card)
                         is CardMenuOutcome.Downloaded -> Toast.makeText(context, DOWNLOADED, Toast.LENGTH_SHORT).show()
                         is CardMenuOutcome.ShowSimilar -> {
@@ -319,6 +377,16 @@ fun MainShell(
             },
             position = sheetState,
             submenu = submenu,
+            root = sheetRoot,
+            rootContent = if (sheetRoot == CardSheetRoot.Share) ({
+                val card = target.card
+                ShareContent(
+                    card,
+                    onShareLink = card.url?.let { url -> { closeMenu(); send(url, card.title) } },
+                    onShareText = shareText(card)?.let { text -> { closeMenu(); send(text, card.title) } },
+                    onCopyLink = card.url?.let { { closeMenu(); copyLink(card) } },
+                )
+            }) else null,
             onBack = { focusManager.clearFocus(); submenu = submenu?.parent },
             submenuContent = { shown ->
                     when (shown) {
@@ -432,6 +500,10 @@ fun MainShell(
 }
 
 private const val DOWNLOADED = "Successfully downloaded"
+
+/** How many recently opened cards the shell keeps for the reader's name card. */
+private const val RECENT_KEPT = 8
+
 private const val DELETE_SPACE_TITLE = "Delete this space?"
 private const val DELETE_SPACE_TEXT = "The cards in it stay in your mind."
 

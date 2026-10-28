@@ -18,6 +18,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.ui.card.CardHeader
+import com.octaviantocan.mymind.ui.card.ReaderHeader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -74,7 +75,7 @@ class CardHeaderLayoutTest(private val title: String, private val fontScale: Flo
             val density = LocalDensity.current.density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
                 Box(Modifier.width(320.dp).testTag("header")) {
-                    CardHeader(title, onClose = {}, onMenu = if (hasMenu) ({}) else null, titleInPill = true)
+                    ReaderHeader(title, open = false, onBack = {}, onName = {}, onShare = if (hasMenu) ({}) else null)
                 }
             }
         }
@@ -91,9 +92,9 @@ class CardHeaderLayoutTest(private val title: String, private val fontScale: Flo
         assertEquals(bounds.center.y, close.center.y, 1f)
         assertTrue(bounds.left > close.right)
         if (hasMenu) {
-            val menu = compose.onNodeWithContentDescription("Card actions").fetchSemanticsNode().boundsInRoot
-            assertEquals(bounds.center.y, menu.center.y, 1f)
-            assertTrue(bounds.right < menu.left)
+            val share = compose.onNodeWithContentDescription("Share").fetchSemanticsNode().boundsInRoot
+            assertEquals(bounds.center.y, share.center.y, 1f)
+            assertTrue(bounds.right < share.left)
         }
     }
 

@@ -9,6 +9,7 @@ import com.octaviantocan.mymind.ui.library.testCard
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
@@ -130,5 +131,14 @@ class CardActionsTest {
         val library = FakeLibrary().apply { writeFailure = ApiFailure.Server(500) }
         val outcome = CardActions(library, saver).perform(CardMenuItem(CardMenuAction.DeleteCard), testCard("c"), null)
         assertEquals(CardMenuOutcome.Failed(ApiFailure.Server(500)), outcome)
+    }
+
+    @Test
+    fun shareSendsANotesWordsAndAPostsWordsWithItsLinkButNotALinksPage() {
+        assertEquals("Just a thought", shareText(testCard("n", type = "Note", title = null, note = "Just a thought")))
+        assertEquals("Hello\n\nhttps://x.com/a/1",
+            shareText(testCard("x", type = "XPost", url = "https://x.com/a/1").copy(description = "Hello")))
+        assertNull(shareText(testCard("a", type = "Article", url = "https://example.com/a")))
+        assertNull(shareText(testCard("e", type = "Note", title = null, note = " ")))
     }
 }

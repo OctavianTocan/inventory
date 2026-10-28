@@ -1,32 +1,56 @@
 @cc [owner:OctavianTocan,label:product;design] card-reader-header-is-one-row
 Card reading MUST remain full screen. Its fixed header MUST have a 44dp Back
-arrow (the reader returns to the gallery; it is not a closing action), a centered
-raised title pill occupying the available middle width, and a 44dp
-vertical overflow menu. It MUST NOT add a second metadata row. Long titles may
-ellipsize to one line in this pill, while keeping the complete title in text
-semantics. The pill and controls MUST remain separate at narrow widths and large
-font settings. Sheet headers remain plain titles; this pill belongs to the reader.
+arrow (the reader returns to the gallery; it is not a closing action), a raised
+pill with the card's name and a caret occupying the available middle width, and a
+44dp Share button; a card with nothing to share leaves that place empty. It MUST NOT
+add a second metadata row. Long names may ellipsize to one line in this pill, while
+keeping the complete name in text semantics. The pill and controls MUST remain
+separate at narrow widths and large font settings. Sheet headers remain plain
+titles; this pill belongs to the reader. The card's actions moved to the foot
+(`card-reader-foot-holds-its-actions`).
 Source: Tavi's attached toolbar reference and one-row requirement, 22 October 2026;
 the recorded review of the same day ("this icon here should actually be a back
-icon").
+icon"); Tavi's pick of F08 in the reader prototype, 28 October 2026, after his canvas
+comment on G08 ("Maybe we can just put a share button there instead").
 
 @cc [owner:OctavianTocan,label:product;design] card-reader-shows-the-whole-card
-The reader MUST show every part of a card it has: its picture (cover, post image or
-image file), the post or note body, the saved description, the captured page text
-and the user's note, each once and in that order. The card's type colour MUST wash
-the top of the reader as a faint fade, as it does on the card's sheets, and never
-tint the body. Tags are quiet pills without crosses; Edit tags reveals a cross on
-each and Done hides them again.
+The reader MUST show every part of a card it has, each once, in its own raised
+section: the picture (cover, post image or image file) with the title, who made it,
+where it is from, when it was saved and how long its page takes to read; the post or
+note body, or else the saved summary; the tags; the user's note; and the captured
+page text with its reading time. Text sections MUST carry a small muted heading.
+The card's type colour MUST wash the top of the reader as a faint fade, as it does
+on the card's sheets, and never tint the body. Tags are quiet pills without crosses;
+Edit tags reveals a cross on each and Done hides them again, and + Add opens Add
+tags.
 Source: Tavi's recorded review, 22 October 2026 ("why is there nothing here", "can't
-just tint only the bottom sheet", "some tags which look really weird").
+just tint only the bottom sheet", "some tags which look really weird"); Tavi's pick
+of F08, whose page is the prototype's 02 raised sections, 28 October 2026.
 
 @cc [owner:OctavianTocan,label:product] card-reader-opens-its-source
-A card with a web link MUST open it from a tap on its picture and from a source pill
-naming the site under the picture. Holding the picture MUST open the card's actions.
-A card without a link MUST NOT show the source pill. A video the server keeps plays in
-place instead (`card-reader-plays-videos`), and the source pill still opens its link.
+A card with a web link MUST open it from a tap on its picture and from the foot's
+Open source pill, which speaks the site's name. Holding the picture MUST open the
+card's actions. A card without a link MUST NOT show Open source. A video the server
+keeps plays in place instead (`card-reader-plays-videos`), and Open source still
+opens its link.
 Source: Tavi's recorded review, 22 October 2026 ("especially the preview, I should be
-taken to the source").
+taken to the source"); Tavi's pick of F08, 28 October 2026.
+
+@cc [owner:OctavianTocan,label:product;design] card-reader-foot-holds-its-actions
+The reader's foot MUST float Open source, a 52dp pill in the page's ink, and a 52dp
+raised round button that opens the card's actions, over a fade into the page, and
+the page MUST leave room under its last section so the foot never covers it.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026.
+
+@cc [owner:OctavianTocan,label:product;design;motion] card-reader-name-grows-into-its-card
+Tapping the reader's name MUST grow its pill into a card of the card's details over
+a light scrim: its picture beside who made it, where it is from, when it was saved
+and its reading time; then Copy link (only for a card with a link), Top of Mind as a
+switch, and Spaces naming the card's spaces; then up to three cards opened before
+it, each of which opens in its place, and Back to Everything. Copy link and Spaces
+hide the card before they act; Top of Mind keeps it open. Tapping the name, the scrim
+or system Back MUST shrink it back into the pill before Back closes the reader.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026.
 
 @cc [owner:OctavianTocan,label:product;design] card-reader-shows-the-whole-picture
 The reader MUST show a card's picture whole, at its own proportions (kept between a

@@ -4,9 +4,12 @@ import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Library
+import com.octaviantocan.mymind.ui.library.TileKind
 import com.octaviantocan.mymind.ui.library.noteText
+import com.octaviantocan.mymind.ui.library.postText
 import com.octaviantocan.mymind.ui.library.pinned
 import com.octaviantocan.mymind.ui.library.readable
+import com.octaviantocan.mymind.ui.library.tileKind
 
 /**
  * One row of the card menu.
@@ -117,6 +120,19 @@ sealed interface CardMenuOutcome {
 }
 
 /**
+ * The first page a card's sheet opens on; its child pages are [CardSubmenu]s.
+ *
+ * @property title Header title of the page.
+ */
+enum class CardSheetRoot(val title: String) {
+    /** The card's actions. */
+    Actions("Card actions"),
+
+    /** Ways to share the card. */
+    Share("Share"),
+}
+
+/**
  * The pages that replace the card menu inside its sheet.
  *
  * @property title Header title.
@@ -191,6 +207,18 @@ class CardActions(private val library: Library, private val saver: FileSaver) {
  */
 fun copyText(card: Card): String? = when (card.type) {
     "Note", "Content", "Quote", "Quotation" -> noteText(card).ifBlank { card.title }?.takeIf { it.isNotBlank() }
+    else -> null
+}
+
+/**
+ * The words Share sends as text: a note's own words, or a post's words with its link.
+ *
+ * @param card Card to share.
+ * @return The text, or null when the card has no words of its own to share, such as a saved link or a picture.
+ */
+fun shareText(card: Card): String? = when (tileKind(card)) {
+    TileKind.Note -> noteText(card).ifBlank { null }
+    TileKind.Post -> postText(card).takeIf { it.isNotBlank() }?.let { words -> listOfNotNull(words, card.url?.takeIf { it.isNotBlank() }).joinToString("\n\n") }
     else -> null
 }
 
