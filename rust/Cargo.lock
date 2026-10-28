@@ -1105,6 +1105,7 @@ dependencies = [
 name = "mm-core"
 version = "0.1.0"
 dependencies = [
+ "ai-kit",
  "async-trait",
  "futures-core",
  "futures-executor",

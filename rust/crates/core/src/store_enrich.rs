@@ -1,5 +1,6 @@
 //! Port of `lib/store-enrich.mjs`: synchronous enrichment mutations that run inside a writer transaction.
 
+use ai_kit::embed;
 use mm_js::{Value, json, obj, text};
 
 use crate::ai_tags::curate_tags;
@@ -10,7 +11,6 @@ use crate::{Error, Result};
 const SCREENSHOT_PENDING: i32 = 2_097_152;
 const SCREENSHOT_FAILED: i32 = 4_194_304;
 const PROCESSING: i32 = 1;
-const EMBEDDING_DIMENSIONS: usize = 768;
 
 /// A card loaded for editing: the row's JSON columns decoded, as the writer's `card(id)` returns it.
 #[derive(Clone, Debug, PartialEq)]
@@ -286,10 +286,7 @@ impl<'a> Enricher<'a> {
             )?;
             hooks.emit("tag:created", obj! { "id" => tag_id, "name" => name, "objectId" => id, "flags" => 2 }.into());
         }
-        let mut bytes = Vec::with_capacity(EMBEDDING_DIMENSIONS * 4);
-        for value in &vector {
-            bytes.extend_from_slice(&value.to_le_bytes());
-        }
+        let bytes = embed::encode_vector(&vector);
         db.execute(
             "INSERT OR REPLACE INTO embeddings VALUES (?, ?, 768, ?)",
             &[id.into(), SqlValue::from(self.user.id.as_str()), bytes.into()],
@@ -360,10 +357,7 @@ impl<'a> Enricher<'a> {
             let numbers = embedding(&Value::Array(vector.iter().map(|value| Value::from(*value as f64)).collect()))?;
             let missing = db.one("SELECT 1 AS n FROM embeddings WHERE card_id = ?", &[id.into()])?.is_none();
             if missing {
-                let mut bytes = Vec::with_capacity(EMBEDDING_DIMENSIONS * 4);
-                for value in &numbers {
-                    bytes.extend_from_slice(&value.to_le_bytes());
-                }
+                let bytes = embed::encode_vector(&numbers);
                 db.execute("INSERT INTO embeddings VALUES (?, ?, 768, ?)", &[id.into(), SqlValue::from(self.user.id.as_str()), bytes.into()])?;
                 applied.embedded = true;
             }
@@ -438,7 +432,7 @@ fn embedding(value: &Value) -> Result<Vec<f32>> {
         Value::Bytes(bytes) => bytes.iter().map(|byte| f32::from(*byte)).collect(),
         _ => return Err(Error::invalid("Invalid embedding")),
     };
-    if numbers.len() != EMBEDDING_DIMENSIONS || !numbers.iter().all(|number| number.is_finite()) {
+    if numbers.len() != embed::DIMENSIONS || !numbers.iter().all(|number| number.is_finite()) {
         return Err(Error::invalid("Invalid embedding"));
     }
     Ok(numbers)

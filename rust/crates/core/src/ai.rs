@@ -11,6 +11,7 @@ use std::future::Future;
 use std::pin::{Pin, pin};
 use std::sync::{LazyLock, Mutex};
 
+use ai_kit::embed;
 use futures_util::future::{Either, select, try_join, try_join3};
 use mm_js::json;
 use mm_js::number::string_to_number;
@@ -25,10 +26,6 @@ use crate::render::access::text;
 use crate::runtime;
 use crate::Error;
 
-const EMBED_MODEL: &str = "gemini-embedding-2";
-const EMBED_DIMENSIONS: usize = 768;
-const EMBED_BATCH_SIZE: usize = 100;
-const EMBED_TEXT_CHARS: usize = 6000;
 const CHAT_TEXT_CHARS: usize = 8000;
 const JEV_TEXT_CHARS: usize = 6000;
 const JEV_MODEL: &str = "jev-latest";
@@ -575,37 +572,13 @@ fn normalize_tag(value: &Value) -> String {
     if len(&name) > 0 && len(&name) <= 40 && name.split(' ').count() <= 4 { name } else { String::new() }
 }
 
-/// V8's `Math.hypot`: scaled by the largest magnitude, with Kahan summation.
-fn hypot(values: &[f32]) -> f64 {
-    let max = values.iter().fold(0.0_f64, |max, value| max.max(f64::from(*value).abs()));
-    if max == 0.0 {
-        return 0.0;
-    }
-    let mut sum = 0.0_f64;
-    let mut compensation = 0.0_f64;
-    for value in values {
-        let n = f64::from(*value).abs() / max;
-        let summand = n * n - compensation;
-        let preliminary = sum + summand;
-        compensation = (preliminary - sum) - summand;
-        sum = preliminary;
-    }
-    sum.sqrt() * max
-}
-
+/// The answer's `values` as a unit vector; the checks and the normalising are the kit's.
 fn to_vector(values: &Value) -> std::result::Result<Vec<f32>, AiError> {
-    let Value::Array(items) = values else {
-        return Err(AiError::service(format!("gemini returned no embedding dimensions, expected {EMBED_DIMENSIONS}"), Service::Gemini));
+    let numbers = match values {
+        Value::Array(items) => Some(items.iter().map(Value::to_number).collect::<Vec<f64>>()),
+        _ => None,
     };
-    if items.len() != EMBED_DIMENSIONS {
-        return Err(AiError::service(format!("gemini returned {} embedding dimensions, expected {EMBED_DIMENSIONS}", items.len()), Service::Gemini));
-    }
-    let vector: Vec<f32> = items.iter().map(|item| item.to_number() as f32).collect();
-    if !vector.iter().all(|value| value.is_finite()) {
-        return Err(AiError::service("gemini returned a nonfinite embedding", Service::Gemini));
-    }
-    let length = hypot(&vector);
-    Ok(if length > 0.0 { vector.iter().map(|value| (f64::from(*value) / length) as f32).collect() } else { vector })
+    embed::unit_vector(numbers.as_deref()).map_err(|error| AiError::service(error.to_string(), Service::Gemini))
 }
 
 fn has_embeddable_content(item: &AiItem) -> bool {
@@ -621,15 +594,6 @@ fn gemini_headers() -> std::result::Result<Headers, AiError> {
     Ok(Headers::from([("x-goog-api-key", require_key("GEMINI_API_KEY", "Gemini embeddings and chat")?)]))
 }
 
-fn document_text_of(title: Option<&str>, body: Option<&str>) -> String {
-    let (title, body) = (clip(title, 500), clip(body, EMBED_TEXT_CHARS));
-    if title.is_empty() && body.is_empty() {
-        String::new()
-    } else {
-        format!("title: {} | text: {body}", if title.is_empty() { "none" } else { &title })
-    }
-}
-
 fn text_part(value: String) -> Value {
     obj! { "text" => value }.into()
 }
@@ -642,29 +606,11 @@ fn text_part(value: String) -> Value {
 /// # Returns
 /// Bounded document prompt, or an empty string without text.
 pub fn document_text(item: &AiItem) -> String {
-    document_text_of(item.title.as_deref(), item.text.as_deref())
+    embed::document_text(item.title.as_deref(), item.text.as_deref())
 }
 
-/// Cosine similarity of two embeddings (`cosine`).
-///
-/// # Arguments
-/// * `a` - First vector.
-/// * `b` - Second vector, the same length as `a`; a shorter one gives 0.
-///
-/// # Returns
-/// Similarity in [-1, 1]; 0 when either vector is all zeros.
-pub fn cosine<A: Copy + Into<f64>, B: Copy + Into<f64>>(a: &[A], b: &[B]) -> f64 {
-    let (mut dot, mut norm_a, mut norm_b) = (0.0_f64, 0.0_f64, 0.0_f64);
-    for (index, x) in a.iter().enumerate() {
-        let x: f64 = (*x).into();
-        let y: f64 = b.get(index).map_or(f64::NAN, |y| (*y).into());
-        dot += x * y;
-        norm_a += x * x;
-        norm_b += y * y;
-    }
-    let truthy = |norm: f64| norm != 0.0 && !norm.is_nan();
-    if truthy(norm_a) && truthy(norm_b) { dot / (norm_a * norm_b).sqrt() } else { 0.0 }
-}
+/// Cosine similarity of two embeddings (`cosine`), from the AI kit shared with Pully.
+pub use ai_kit::embed::cosine;
 
 /// Forget the vocabulary vectors computed in this process (for tests; the JS cache only ends with the process).
 pub fn forget_vocabulary() {
@@ -770,11 +716,10 @@ impl<'a> Ai<'a> {
         let mut parts = Vec::new();
         if kind == EmbedKind::Query {
             let source = item.text.as_deref().filter(|text| !text.is_empty()).or(item.title.as_deref());
-            let query = clip(source, EMBED_TEXT_CHARS);
-            if query.is_empty() {
+            let Some(query) = embed::query_text(source.unwrap_or("")) else {
                 return Err(AiError::new("embed: the query is empty"));
-            }
-            parts.push(text_part(format!("task: search result | query: {query}")));
+            };
+            parts.push(text_part(query));
         } else {
             let document = document_text(item);
             let image = embed_image(item);
@@ -788,11 +733,11 @@ impl<'a> Ai<'a> {
                 parts.push(obj! { "inline_data" => obj! { "mime_type" => mime, "data" => data } }.into());
             }
         }
-        let url = format!("{}/models/{EMBED_MODEL}:embedContent", gemini_base());
+        let url = embed::embed_url(&gemini_base());
         let body: Value = obj! {
-            "model" => format!("models/{EMBED_MODEL}"),
+            "model" => embed::MODEL_PATH,
             "content" => obj! { "parts" => parts },
-            "output_dimensionality" => EMBED_DIMENSIONS,
+            "output_dimensionality" => embed::DIMENSIONS,
         }
         .into();
         let data = self.post_json(Service::Gemini, &url, &gemini_headers()?, &body).await?;
@@ -821,7 +766,7 @@ impl<'a> Ai<'a> {
         for input in texts {
             if kind == EmbedKind::Document {
                 let formatted = match input {
-                    EmbedInput::Text(body) => document_text_of(None, Some(body)),
+                    EmbedInput::Text(body) => embed::document_text(None, Some(body)),
                     EmbedInput::Item(item) => document_text(item),
                 };
                 if formatted.is_empty() {
@@ -829,23 +774,22 @@ impl<'a> Ai<'a> {
                 }
                 prepared.push(formatted);
             } else {
-                let clean = clip(Some(match input { EmbedInput::Text(body) => body, EmbedInput::Item(_) => "[object Object]" }), EMBED_TEXT_CHARS);
-                if clean.is_empty() {
+                let Some(query) = embed::query_text(match input { EmbedInput::Text(body) => body, EmbedInput::Item(_) => "[object Object]" }) else {
                     return Err(AiError::new("embedTexts: empty text"));
-                }
-                prepared.push(format!("task: search result | query: {clean}"));
+                };
+                prepared.push(query);
             }
         }
         let mut vectors = Vec::with_capacity(prepared.len());
-        for batch in prepared.chunks(EMBED_BATCH_SIZE) {
-            let url = format!("{}/models/{EMBED_MODEL}:batchEmbedContents", gemini_base());
+        for batch in prepared.chunks(embed::BATCH_SIZE) {
+            let url = embed::batch_url(&gemini_base());
             let requests: Vec<Value> = batch
                 .iter()
                 .map(|body| {
                     obj! {
-                        "model" => format!("models/{EMBED_MODEL}"),
+                        "model" => embed::MODEL_PATH,
                         "content" => obj! { "parts" => vec![text_part(body.clone())] },
-                        "output_dimensionality" => EMBED_DIMENSIONS,
+                        "output_dimensionality" => embed::DIMENSIONS,
                     }
                     .into()
                 })
@@ -1072,7 +1016,7 @@ impl<'a> Ai<'a> {
             if name.is_empty() || !known.insert(key.clone()) {
                 continue;
             }
-            if let Some(embedding) = entry.embedding.as_ref().filter(|embedding| embedding.len() == EMBED_DIMENSIONS) {
+            if let Some(embedding) = entry.embedding.as_ref().filter(|embedding| embedding.len() == embed::DIMENSIONS) {
                 VOCABULARY.lock().expect("vocabulary lock").insert(key.clone(), embedding.iter().map(|value| *value as f32).collect());
             }
             entries.push((key, name));

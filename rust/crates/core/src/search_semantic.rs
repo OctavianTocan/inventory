@@ -14,7 +14,6 @@ use crate::sql::SqlExt;
 use crate::store::{GRID_HIDDEN_FLAGS, Store};
 use crate::{Error, Result};
 
-const DIMENSIONS: usize = 768;
 /// How many recent query embeddings [`Semantic::search_cached`] keeps.
 const QUERY_CACHE: usize = 64;
 
@@ -63,20 +62,8 @@ pub fn embeddings_enabled(offline: bool) -> bool {
     url::parse(&base, None).is_some_and(|parsed| matches!(parsed.host_str(), Some("127.0.0.1" | "localhost" | "[::1]")))
 }
 
-/// Decode a stored little-endian 768-float embedding (`decodeVector`).
-///
-/// # Arguments
-/// * `bytes` - The SQLite vector BLOB.
-///
-/// # Returns
-/// The vector, or `None` unless `bytes` is 3072 bytes of finite floats.
-pub fn decode_vector(bytes: &[u8]) -> Option<Vec<f32>> {
-    if bytes.len() != DIMENSIONS * 4 {
-        return None;
-    }
-    let vector: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|chunk| f32::from_le_bytes(*chunk)).collect();
-    vector.iter().all(|value| value.is_finite()).then_some(vector)
-}
+/// Decode a stored little-endian 768-float embedding (`decodeVector`), from the AI kit shared with Pully.
+pub use ai_kit::embed::decode_vector;
 
 /// Cosine search over a user's active vectors (`createSemantic`'s result).
 pub struct Semantic {
