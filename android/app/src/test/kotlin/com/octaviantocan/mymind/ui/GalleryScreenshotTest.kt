@@ -30,7 +30,7 @@ import com.octaviantocan.mymind.data.Post
 import com.octaviantocan.mymind.ui.library.EverythingContent
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.MosaicState
-import com.octaviantocan.mymind.ui.library.heldPosition
+import com.octaviantocan.mymind.ui.library.steppedPosition
 import com.octaviantocan.mymind.ui.library.SearchType
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.shell.LibraryFootBar
@@ -54,6 +54,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.pow
 
 /** Actual Compose gallery and Coil photo decoding, with public fixture bytes and no network requests. */
 @OptIn(coil3.annotation.DelicateCoilApi::class)
@@ -230,25 +231,29 @@ class GalleryScreenshotTest(private val dark: Boolean) {
             down(1, Offset(width * 0.9f, height * 0.22f))
         }
         compose.mainClock.autoAdvance = false
-        spread(0.1875f)
-        assertEquals(heldPosition(2.56f), mosaicState.position, 0.02f)
+        // The finger position [finger] is reached by pinching 30% per stop from the two columns the pinch began at.
+        fun spreadTo(finger: Float) = spread((1f - 0.8f * 1.3f.pow(2f - finger)) / 2f)
+        spreadTo(2.4f)
         compose.mainClock.advanceTimeByFrame()
-        compose.mainClock.advanceTimeBy(40)
-        // The handoff moves each card once to its new place; it never draws a second grid over the first.
+        assertEquals(steppedPosition(2.4f), mosaicState.position, 0.02f)
+        // Cards on their way between the two grids, with the blurred fill behind them, never a second touchable grid.
         compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
-        frame("handoff_transient")
+        frame("moving")
+        spreadTo(2.7f)
+        compose.mainClock.advanceTimeBy(48)
+        frame("hop")
         repeat(4) {
-            // Jitter where the denser grid hands back to the held stop.
-            for (position in listOf(2.09f, 2.11f)) {
-                spread(0.5f - 0.8f / position)
+            // Jitter just past a stop.
+            for (finger in listOf(2.09f, 2.11f)) {
+                spreadTo(finger)
                 compose.mainClock.advanceTimeBy(16)
             }
         }
-        compose.mainClock.advanceTimeBy(120)
+        compose.mainClock.advanceTimeBy(160)
         compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
-        assertEquals(heldPosition(2.11f), mosaicState.position, 0.02f)
+        assertEquals(steppedPosition(2.11f), mosaicState.position, 0.02f)
         val heldWidth = noteWidth()
-        frame("handoff")
+        frame("held")
         compose.mainClock.advanceTimeBy(120)
         compose.onAllNodesWithTag("mosaic-projection", useUnmergedTree = true).assertCountEquals(1)
         assertEquals("Holding the fingers must not change the live focal size", heldWidth, noteWidth(), 2f)
@@ -260,12 +265,13 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         val middle = noteWidth()
         assertTrue("The preview must shrink while both fingers remain down", middle < initial - 8f)
         frame("middle")
-        spread(0.3f)
+        // Exactly to the densest stop: past it, the pinch discards the overshoot so a reversal answers at once.
+        spreadTo(4f)
         assertTrue("One pinch must continue through more than one size", noteWidth() < middle - 8f)
         assertEquals("Additional projections must reuse cached image bytes", initialFetches, fetches[watchedUrl])
         assertEquals("Additional projections must reuse the decoded memory image", initialDecodes, decodes[watchedUrl])
         frame("dense")
-        spread(0.1f)
+        spreadTo(2f)
         assertEquals("Reversing the fingers must restore the original preview size", initial, noteWidth(), 2f)
         frame("reversed")
         gallery.performTouchInput { up(0); up(1) }

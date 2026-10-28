@@ -41,6 +41,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import kotlin.math.ln
+import kotlin.math.pow
 
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [36], qualifiers = PHONE_QUALIFIERS)
@@ -51,10 +53,12 @@ class LibraryMosaicTest {
         "If they cannot say it in one sentence, the page is not done."
     private val notes = (1..40).map { testCard("note-$it", type = "Note", title = "Note $it", note = if (it == 6) longNote else "A short note, number $it.") }
 
-    private fun pinch(inward: Boolean, yFraction: Float = 0.48f) {
+    /** Pinches by [stops] density stops (30% each) toward more columns ([inward]) or fewer. */
+    private fun pinch(inward: Boolean, yFraction: Float = 0.48f, stops: Float = 2f) {
         compose.onNodeWithContentDescription("Card gallery").performTouchInput {
-            val begin = width * if (inward) 0.32f else 0.14f
-            val end = width * if (inward) 0.14f else 0.32f
+            val scale = 1.3f.pow(stops)
+            val begin = width * if (inward) 0.32f else 0.32f / scale
+            val end = width * if (inward) 0.32f / scale else 0.32f
             val y = height * yFraction
             down(0, Offset(centerX - begin, y))
             down(1, Offset(centerX + begin, y))
@@ -112,7 +116,7 @@ class LibraryMosaicTest {
             }.filter { it.bottom > root.top && it.top < root.bottom }
             return shown.minOf { it.left } to shown.maxOf { it.right }
         }
-        for (spread in listOf(0.26f, 0.09f)) {
+        for (spread in listOf(0.18f, 0.125f)) {
             gallery.performTouchInput {
                 down(0, focal - Offset(width * 0.15f, 0f))
                 down(1, focal + Offset(width * 0.15f, 0f))
@@ -275,7 +279,7 @@ class LibraryMosaicTest {
             }
             compose.waitForIdle()
             assertTrue(compose.onNodeWithContentDescription("Photo 1").fetchSemanticsNode().boundsInRoot.width < before)
-            assertEquals(heldPosition(2.6667f), density.position, 0.01f)
+            assertEquals(steppedPosition(2f - ln(0.75f) / ln(1.3f)), density.position, 0.01f)
             gallery.performTouchInput { up(0); up(1) }
             compose.waitForIdle()
             assertEquals(3, density.columns)
@@ -314,7 +318,7 @@ class LibraryMosaicTest {
             updatePointerTo(1, Offset(width * 0.9f, height * 0.3f))
             move(delayMillis = 16)
         }
-        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(64)
         assertTrue(density.position < before - 0.2f)
         gallery.performTouchInput { up(0); up(1) }
         compose.mainClock.autoAdvance = true
@@ -324,44 +328,41 @@ class LibraryMosaicTest {
     }
 
     @Test
-    fun crossingAStopGlidesEachCardToItsNewPlaceInsteadOfSwappingGrids() {
+    fun crossingAStopMovesEachCardAcrossManyPointerFrames() {
         val density = MosaicState(2)
         val state = LazyListState(firstVisibleItemIndex = 8)
         compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(cards, endReached = true), {}, {}, state = state, mosaic = density) } }
         val gallery = compose.onNodeWithContentDescription("Card gallery")
         fun shown(): Map<String, androidx.compose.ui.geometry.Rect> = (10..36).mapNotNull { n ->
-            compose.onAllNodesWithContentDescription("Photo $n").fetchSemanticsNodes().also { assertTrue("Photo $n is drawn once", it.size <= 1) }
+            compose.onAllNodesWithContentDescription("Photo $n").fetchSemanticsNodes().also { assertTrue("Photo $n has one touchable drawing", it.size <= 1) }
                 .firstOrNull()?.let { "Photo $n" to androidx.compose.ui.geometry.Rect(it.positionInRoot, it.size.toSize()) }
         }.toMap()
-        compose.mainClock.autoAdvance = false
-        try {
+        gallery.performTouchInput {
+            down(0, Offset(width * 0.1f, height * 0.3f))
+            down(1, Offset(width * 0.9f, height * 0.3f))
+        }
+        val frames = mutableListOf(shown())
+        for (step in 1..8) {
             gallery.performTouchInput {
-                down(0, Offset(width * 0.1f, height * 0.3f))
-                down(1, Offset(width * 0.9f, height * 0.3f))
-                updatePointerTo(0, Offset(width * 0.19f, height * 0.3f))
-                updatePointerTo(1, Offset(width * 0.81f, height * 0.3f))
+                updatePointerTo(0, Offset(width * (0.1f + step * 0.011f), height * 0.3f))
+                updatePointerTo(1, Offset(width * (0.9f - step * 0.011f), height * 0.3f))
                 move(delayMillis = 16)
             }
-            compose.mainClock.advanceTimeByFrame()
-            compose.mainClock.advanceTimeByFrame()
-            val start = shown()
-            compose.mainClock.advanceTimeBy(100)
-            val middle = shown()
-            compose.mainClock.advanceTimeBy(400)
-            val end = shown()
-            val moved = start.keys.filter { it in middle && it in end && (end.getValue(it).topLeft - start.getValue(it).topLeft).getDistance() > 40f }
-            assertTrue("Crossing a stop must move cards to new places", moved.isNotEmpty())
-            for (name in moved) {
-                val (a, m, b) = Triple(start.getValue(name), middle.getValue(name), end.getValue(name))
-                assertTrue("$name must be on its way midway", (m.topLeft - a.topLeft).getDistance() > 4f && (b.topLeft - m.topLeft).getDistance() > 4f)
-                assertTrue("$name must lie between its two places midway",
-                    m.left in minOf(a.left, b.left) - 1f..maxOf(a.left, b.left) + 1f && m.top in minOf(a.top, b.top) - 1f..maxOf(a.top, b.top) + 1f)
-            }
-            gallery.performTouchInput { up(0); up(1) }
-        } finally {
-            compose.mainClock.autoAdvance = true
             compose.waitForIdle()
+            assertTrue("The pinch must stay between two and three columns: ${density.position}", density.position > 2f && density.position < 3f)
+            frames += shown()
         }
+        val moved = frames.first().keys.filter { name ->
+            frames.all { name in it } && (frames.last().getValue(name).topLeft - frames.first().getValue(name).topLeft).getDistance() > 40f
+        }
+        assertTrue("Crossing a stop must move cards to new places", moved.isNotEmpty())
+        for (name in moved) {
+            val places = frames.map { it.getValue(name).topLeft }.zipWithNext().count { (a, b) -> (b - a).getDistance() > 1f }
+            assertTrue("$name must move on several pointer frames, not all at once: $places", places >= 3)
+        }
+        gallery.performTouchInput { up(0); up(1) }
+        compose.waitForIdle()
+        assertEquals(3, density.columns)
     }
 
     @Test
@@ -435,8 +436,8 @@ class LibraryMosaicTest {
             move(delayMillis = 16)
             up(0); up(1)
         }
-        compose.mainClock.advanceTimeByFrame()
-        assertTrue(density.position in heldPosition(2.55f)..heldPosition(2.65f))
+        compose.mainClock.advanceTimeBy(48)
+        assertTrue("The gallery must still be landing: ${density.position}", density.position > 2f && density.position < 3f)
         compose.onNodeWithContentDescription("Photo 20").performTouchInput { click() }
         compose.runOnIdle { assertEquals(listOf("m20"), opened) }
         compose.mainClock.autoAdvance = true
@@ -479,8 +480,8 @@ class LibraryMosaicTest {
                 move(delayMillis = 16)
                 up(0); up(1)
             }
-            compose.mainClock.advanceTimeByFrame()
-            assertTrue(density.position in heldPosition(2.55f)..heldPosition(2.65f))
+            compose.mainClock.advanceTimeBy(48)
+            assertTrue("The gallery must still be landing: ${density.position}", density.position > 2f && density.position < 3f)
             val point = compose.onNodeWithContentDescription("Photo $number").fetchSemanticsNode().boundsInRoot.center - root.topLeft
             gallery.performTouchInput { down(0, point) }
             val duration = if (longPress) 700L else 128L
@@ -612,7 +613,7 @@ class LibraryMosaicTest {
             move(delayMillis = 16)
             up(0); up(1)
         }
-        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(48)
         assertTrue(density.position % 1f != 0f)
         compose.runOnIdle { shown = false }
         compose.mainClock.advanceTimeByFrame()
@@ -744,7 +745,7 @@ class LibraryMosaicTest {
         val state = LazyListState(firstVisibleItemIndex = 8, firstVisibleItemScrollOffset = 700)
         compose.setContent { MymindTheme(dark = false) { LibraryMosaic(FeedState(cards, endReached = true), {}, {}, state = state, mosaic = density) } }
         compose.onNodeWithContentDescription("Photo 9").assertIsDisplayed()
-        pinch(inward = true, yFraction = 0.04f)
+        pinch(inward = true, yFraction = 0.04f, stops = 1f)
         assertEquals(2, density.columns)
         val gallery = compose.onNodeWithContentDescription("Card gallery").fetchSemanticsNode().boundsInRoot
         val kept = compose.onNodeWithContentDescription("Photo 9").assertIsDisplayed().fetchSemanticsNode().boundsInRoot

@@ -32,26 +32,32 @@ to its cell at every density and between them, so it MUST NOT rewrap, change its
 inset, or show or hide its labels while the fingers move (Tavi, 28 Oct 2026: notes
 "still shift weirdly" when pinching; he picked version 13 of the design canvas).
 Adjacent cached grids MUST remain coherent and nonoverlapping within each projection, sharing one focal card's fractional X/Y point and physical
-size. Each stop holds briefly before the fingers move on, and the grid shown between
-two stops MUST be the denser one enlarged, never a sparser one shrunk below its size,
-so no empty band appears. A crossing starts a 250 ms handoff in which every card glides
-from its place in the old grid to its place in the new one, never a crossfade of
-two grids. When a tile with words changes shape between the two grids (one column
-against two), it fades from its old layout to its new one within its moving cell,
-the only time a card is drawn twice, and the old layout exposes no semantics or hit
-targets. The gallery then MUST show one grid even if the fingers pause or jitter at
-the threshold. Reduced motion switches the grid
-immediately. Apart from that fade, the focal card MUST be drawn once and only one
-projection may expose semantics or hit targets. A new single-finger press
-MUST retain its owning projection and focal node through tap or hold. Passing drag
-slop releases focal anchoring; a second finger rebases a new pinch. A press during a
-handoff holds every card where it is until the press ends.
+size. Cards MUST move with the fingers from their first movement: no stop holds them
+still and no glide starts at a threshold. One stop takes about a 30% pinch at every
+size. Between two stops the cards follow 60% of the finger travel and, once the
+fingers pass halfway, ease the rest in a 130 ms hop. Each card moves from its place in
+the grid of the stop the gesture started on to its place in the other grid; lower
+lines start later, each card waiting up to half the step by its reading order among
+the cards either grid shows. A card that changes line MUST slide out past one edge of
+its old line and in from the other edge of its new one, shrinking by up to a tenth
+and fading from one drawing to the other. Behind the cards both grids MUST be drawn
+whole and blurred, the old one fading out, so no blank paper shows between moving
+cards. When a tile with words changes shape between the two grids (one column
+against two), its layouts in the two grids cross-fade with its progress. Only a
+card's own tile exposes semantics or hit targets: its copy while it changes line, its
+layout in the other grid and the blurred fill expose none, and the focal card is
+drawn once. Reduced motion skips the hop. A new single-finger press MUST retain its
+owning projection and focal node through tap or hold, and stops a landing where it
+is until the press ends. Passing drag slop releases focal anchoring; a second finger
+rebases a new pinch.
 Vertical anchoring respects scroll bounds. The focal point stays where the fingers
 met: moving both fingers together MUST NOT pan the gallery. At every moment of a
-gesture the projected grid MUST cover the full width, clipping its outer edges
-rather than leaving horizontal slack. The profile and
-highlights keep their own scale. Release MUST settle the same geometry without an
-independent row animation; reduced motion settles synchronously. The gesture, its
+gesture the grids MUST cover the full width, clipping their outer edges rather than
+leaving horizontal slack; where moving cards leave a gap, the blurred fill shows. The
+profile and highlights keep their own scale. Release MUST land the way the fingers
+were moving once they are a quarter of the way to the next stop, settling the same
+geometry in 180 ms without an independent row animation; reduced motion settles
+synchronously. The gesture, its
 cancellation and a remaining one-finger tail MUST NOT open a card, open its action
 sheet, or trigger pull to refresh. Rendering MUST retain stable card keys and a lazy,
 bounded visible window, without scanning all cards or changing image decode sizes
@@ -63,7 +69,11 @@ Source: Tavi, 22 October 2026, explicit pinch-to-enlarge/reduce requirement; the
 recorded review of the same day, with Google Photos as the reference ("the
 intermediate state where there is emptiness", "I shouldn't be able to pan"); the
 recorded review of 23 October 2026 ("then they reorganize completely, which is weird
-and doesn't feel good").
+and doesn't feel good"); Tavi on the squares canvases, 28 October 2026 ("the cards
+only move after a while of you pinching ... instead of moving while you pinch, which
+is actually what I want", "All of them have transitions that last too long", "I don't
+want to see blank spots between them"), who then picked O3b of the "Calmer steps for
+O" canvas.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-highlights-stay-above-the-bricks
 Top of Mind MUST remain above the main mosaic, in pin order, as a horizontal rail of

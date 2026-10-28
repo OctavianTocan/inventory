@@ -46,11 +46,13 @@ import com.octaviantocan.mymind.update.updateStatusText
 import java.io.File
 import com.octaviantocan.mymind.update.ReleaseInfo
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.math.abs
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -124,7 +126,10 @@ class UpdateScreenshotTest {
             compose.waitForIdle()
         }
         oldest.assertIsDisplayed()
-        assertEquals(before, close.fetchSemanticsNode().boundsInRoot)
+        // The cross stays put while the history scrolls under it. The sheet settles to within a pixel of where it was
+        // measured, and CI has seen it a pixel higher after the swipes (28 Oct 2026), so a pixel either way passes.
+        val after = close.fetchSemanticsNode().boundsInRoot
+        assertTrue("the cross moved from $before to $after", abs(after.top - before.top) <= 1f && abs(after.left - before.left) <= 1f && after.size == before.size)
         close.performClick()
         compose.mainClock.advanceTimeBy(1500)
         assertEquals(1, closes)

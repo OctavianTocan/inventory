@@ -13,8 +13,11 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import com.octaviantocan.mymind.data.Card
+import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.exp
 import kotlin.math.floor
+import kotlin.math.ln
 import kotlin.math.roundToInt
 
 /** One band of the gallery, in pixels, in the server's original card order: a lazy-list slot of one or two rows. */
@@ -229,7 +232,23 @@ class MosaicState(initialColumns: Int = 2) {
         private set
     internal var position by mutableFloatStateOf(initialColumns.coerceIn(1, 4).toFloat())
     internal var referenceColumns by mutableIntStateOf(initialColumns.coerceIn(1, 4))
-    private var startPosition = position
+
+    /** The stop the last pinch or step started from: the grid the cards move away from (see [between]). */
+    internal var home by mutableIntStateOf(initialColumns.coerceIn(1, 4))
+        private set
+
+    /** Counts the hops a pinch has started, so the gallery eases each one with [advanceHop]. */
+    internal var hops by mutableIntStateOf(0)
+        private set
+
+    /** A hop is still easing the cards to where the fingers are. */
+    internal val hopping: Boolean get() = hopGap != 0f
+    private var startFinger = position
+    private var finger = position
+    private var stop = columns
+    private var hopGap = 0f
+    private var hopDone = 0f
+    private var direction = 0
     private var gestureScale = 1f
 
     /** Makes cards larger; returns false at the largest size. */
@@ -241,6 +260,7 @@ class MosaicState(initialColumns: Int = 2) {
     private fun changeColumns(value: Int): Boolean {
         val next = value.coerceIn(1, 4)
         if (next == columns) return false
+        home = columns
         columns = next
         position = next.toFloat()
         return true
@@ -248,25 +268,54 @@ class MosaicState(initialColumns: Int = 2) {
 
     internal fun beginPinch() {
         isPinching = true
-        startPosition = fingerPosition(position)
+        if (abs(position - position.roundToInt()) < 1e-3f) home = position.roundToInt()
+        finger = fingerPosition(position)
+        startFinger = finger
+        stop = finger.roundToInt()
+        // A pinch that interrupts a landing between the follow ranges eases from the geometry on screen.
+        startHop(position - steppedPosition(finger))
+        direction = 0
         gestureScale = 1f
     }
 
     internal fun zoomPinch(factor: Float) {
         if (!factor.isFinite() || factor <= 0f) return
         // Discard overshoot at a limit so the very next reversed pointer delta changes the geometry.
-        gestureScale = (gestureScale * factor).coerceIn(startPosition / 4f, startPosition)
-        position = heldPosition(startPosition / gestureScale)
+        gestureScale = (gestureScale * factor).coerceIn(exp((startFinger - 4f) * PINCH_STEP), exp((startFinger - 1f) * PINCH_STEP))
+        val next = (startFinger - ln(gestureScale) / PINCH_STEP).coerceIn(1f, 4f)
+        if (abs(next - finger) > 1e-4f) direction = if (next > finger) 1 else -1
+        finger = next
+        if (finger.roundToInt() != stop) {
+            stop = finger.roundToInt()
+            startHop(position - steppedPosition(finger))
+        }
+        position = steppedPosition(finger) + hopGap * (1f - hopEase(hopDone))
+    }
+
+    /** Eases the current hop to [fraction] of its length; the cards land where the fingers are at 1. */
+    internal fun advanceHop(fraction: Float) {
+        if (!isPinching || hopGap == 0f) return
+        hopDone = fraction.coerceIn(0f, 1f)
+        position = steppedPosition(finger) + hopGap * (1f - hopEase(hopDone))
+        if (hopDone >= 1f) hopGap = 0f
+    }
+
+    private fun startHop(gap: Float) {
+        hopGap = if (abs(gap) < 1e-4f) 0f else gap
+        hopDone = 0f
+        if (hopGap != 0f) hops++
     }
 
     internal fun finishPinch() {
-        columns = position.roundToInt().coerceIn(1, 4)
+        columns = releaseColumns(finger, direction)
         isPinching = false
+        hopGap = 0f
     }
 
     internal fun cancelPinch() {
         isPinching = false
         columns = position.roundToInt().coerceIn(1, 4)
+        hopGap = 0f
         gestureScale = 1f
     }
 
@@ -275,25 +324,55 @@ class MosaicState(initialColumns: Int = 2) {
     }
 }
 
-/** Share of each step between stops that the fingers travel before the next denser grid takes over. */
-private const val STOP_HOLD = 0.1f
+/**
+ * The two grids a [MosaicState.position] lies between: [from] on the side of the gesture's home stop, [to] the other,
+ * and [progress] from 0 on [from] to 1 on [to].
+ */
+internal class MosaicBetween(val from: Int, val to: Int, val progress: Float)
 
-/** Maps finger travel to a density, holding each stop briefly so the sparser grid is never shown below its own size. */
-internal fun heldPosition(finger: Float): Float {
-    val raw = finger.coerceIn(1f, 4f)
-    val stop = floor(raw)
-    return stop + ((raw - stop - STOP_HOLD) / (1f - STOP_HOLD)).coerceAtLeast(0f)
+/** Where the gallery is between its two nearest stops, seen from the stop the last gesture started at. */
+internal fun MosaicState.between(): MosaicBetween {
+    val p = position.coerceIn(1f, 4f)
+    val low = floor(p).toInt()
+    val high = minOf(4, low + 1)
+    return if (home <= low) MosaicBetween(low, high, p - low) else MosaicBetween(high, low, 1f - (p - low))
 }
 
-/** The inverse of [heldPosition], so a pinch that interrupts a settle starts from the geometry on screen. */
+/** Pinch scale, as a natural log, that moves the gallery one stop: about 30% at every size (Tavi's canvas, 28 Oct 2026). */
+private val PINCH_STEP = ln(1.3f)
+
+/** Share of the finger travel the cards follow; the rest is a quick hop when the fingers pass halfway between stops. */
+private const val FOLLOW = 0.6f
+
+/**
+ * The density drawn for a finger position: the nearest stop plus [FOLLOW] of the way the fingers have moved from it, so
+ * the cards move with the fingers from the first moment and hop the rest once the fingers pass halfway.
+ */
+internal fun steppedPosition(finger: Float): Float {
+    val f = finger.coerceIn(1f, 4f)
+    val stop = f.roundToInt()
+    return stop + (f - stop) * FOLLOW
+}
+
+/** The finger position whose [steppedPosition] is nearest [position], so a pinch that interrupts a landing starts there. */
 internal fun fingerPosition(position: Float): Float {
-    val held = position.coerceIn(1f, 4f)
-    val stop = floor(held)
-    return if (held == stop) stop else stop + STOP_HOLD + (held - stop) * (1f - STOP_HOLD)
+    val p = position.coerceIn(1f, 4f)
+    val stop = p.roundToInt()
+    return (stop + (p - stop) / FOLLOW).coerceIn(stop - 0.5f, stop + 0.5f).coerceIn(1f, 4f)
 }
 
-/** The grid drawn at [position]: the denser neighbour between stops, which is enlarged and so always fills the width. */
-internal fun pinchScene(position: Float): Int = ceil(position.coerceIn(1f, 4f)).toInt().coerceIn(1, 4)
+/** Where a released pinch lands: the way the fingers were moving, once they are a quarter of the way to the next stop. */
+internal fun releaseColumns(finger: Float, direction: Int): Int = when {
+    direction < 0 -> floor(finger + 0.25f).toInt()
+    direction > 0 -> ceil(finger - 0.25f).toInt()
+    else -> finger.roundToInt()
+}.coerceIn(1, 4)
+
+/** The ease-out curve of a hop: fast away, gentle landing. */
+private fun hopEase(fraction: Float): Float {
+    val rest = 1f - fraction.coerceIn(0f, 1f)
+    return 1f - rest * rest * rest
+}
 
 /** Keeps the selected gallery density across tab changes and activity recreation. */
 @Composable

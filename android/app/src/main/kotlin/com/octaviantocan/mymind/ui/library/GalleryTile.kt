@@ -69,15 +69,7 @@ internal fun GalleryTile(
     val accent = cardAccent(card) ?: colors.selected
     val kind = tileKind(card)
     val picture = galleryPicture(card)
-    val context = LocalContext.current
-    val imageModel = remember(picture, imageRequestSizePx, context) {
-        picture?.let {
-            val url = resolveMediaUrl(BuildConfig.SERVER_URL, it)
-            if (imageRequestSizePx == null) url else ImageRequest.Builder(context).data(url)
-                .size(imageRequestSizePx.coerceAtLeast(1)).scale(Scale.FIT)
-                .memoryCacheKey(url).placeholderMemoryCacheKey(url).build()
-        }
-    }
+    val imageModel = rememberGalleryImage(picture, imageRequestSizePx)
     val text = remember(card) { galleryText(card) }
     val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card)
     val paper = lerp(colors.raised, accent, 0.13f)
@@ -140,6 +132,37 @@ internal fun GalleryTile(
             }
             if (kind != TileKind.Post) GalleryCount(card, Modifier.align(if (mixed) Alignment.BottomEnd else Alignment.TopEnd))
         }
+    }
+}
+
+/** What a tile loads for [picture]: its address, or a request at [imageRequestSizePx] cached under that address. */
+@Composable
+private fun rememberGalleryImage(picture: String?, imageRequestSizePx: Int?): Any? {
+    val context = LocalContext.current
+    return remember(picture, imageRequestSizePx, context) {
+        picture?.let {
+            val url = resolveMediaUrl(BuildConfig.SERVER_URL, it)
+            if (imageRequestSizePx == null) url else ImageRequest.Builder(context).data(url)
+                .size(imageRequestSizePx.coerceAtLeast(1)).scale(Scale.FIT)
+                .memoryCacheKey(url).placeholderMemoryCacheKey(url).build()
+        }
+    }
+}
+
+/**
+ * A card's paper or picture without its words, labels or touches: what the blurred fill behind a pinch is drawn from,
+ * so it stays cheap. It loads the same image request as the card's [GalleryTile].
+ */
+@Composable
+internal fun GalleryTileBackdrop(card: Card, imageRequestSizePx: Int) {
+    val colors = LibraryStyle.colors
+    val picture = galleryPicture(card)
+    val paper = lerp(colors.raised, cardAccent(card) ?: colors.selected, 0.13f)
+    val onlyPicture = picture != null && tileKind(card) != TileKind.Post && !(galleryKeepsText(card) && galleryText(card).isNotBlank())
+    val imageModel = rememberGalleryImage(picture.takeIf { onlyPicture }, imageRequestSizePx)
+    val background = if (onlyPicture) parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper else paper
+    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(3.dp)).background(background).clearAndSetSemantics {}) {
+        if (imageModel != null) AsyncImage(model = imageModel, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
     }
 }
 

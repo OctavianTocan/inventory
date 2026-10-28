@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 class MosaicLayoutTest {
@@ -170,10 +171,13 @@ class MosaicLayoutTest {
         val state = MosaicState(2)
         state.beginPinch()
         state.zoomPinch(0.5f)
+        state.advanceHop(1f)
         assertEquals(4f, state.position, 0.001f)
-        state.zoomPinch(2f)
+        state.zoomPinch(1.69f)
+        state.advanceHop(1f)
         assertEquals(2f, state.position, 0.001f)
         state.zoomPinch(2f)
+        state.advanceHop(1f)
         assertEquals(1f, state.position, 0.001f)
         state.finishPinch()
         assertEquals(1, state.columns)
@@ -181,14 +185,77 @@ class MosaicLayoutTest {
     }
 
     @Test
+    fun cardsFollowTheFingersFromTheFirstMoveAndHopPastHalfway() {
+        val state = MosaicState(3)
+        state.beginPinch()
+        state.zoomPinch(1.01f)
+        assertTrue("The first pointer move must change the size: ${state.position}", state.position < 3f - 0.01f)
+        var last = state.position
+        repeat(8) {
+            state.zoomPinch(1.01f)
+            assertTrue("Every move toward fewer columns must enlarge the cards", state.position < last)
+            last = state.position
+        }
+        // One stop is a 30% pinch; the cards follow 60% of the way and hop the rest once the fingers pass halfway.
+        state.zoomPinch(1.3f / 1.01f.pow(9))
+        assertTrue("A hop must ease, not jump: ${state.position}", state.hopping && state.position > 2.6f)
+        state.advanceHop(0.5f)
+        val midway = state.position
+        state.advanceHop(1f)
+        assertEquals(2f, state.position, 0.001f)
+        assertTrue("The hop must be on its way halfway through: $midway", midway < last && midway > 2f)
+        assertFalse(state.hopping)
+    }
+
+    @Test
+    fun releaseLandsTheWayTheFingersMovedOnceAQuarterIn() {
+        assertEquals(2, releaseColumns(2.74f, -1))
+        assertEquals(3, releaseColumns(2.76f, -1))
+        assertEquals(3, releaseColumns(2.26f, 1))
+        assertEquals(2, releaseColumns(2.24f, 1))
+        assertEquals(2, releaseColumns(2.4f, 0))
+        val state = MosaicState(3)
+        state.beginPinch()
+        state.zoomPinch(1.3f.pow(0.3f))
+        state.finishPinch()
+        assertEquals("Past a quarter of the way to two columns lands there", 2, state.columns)
+        val other = MosaicState(2)
+        other.beginPinch()
+        other.zoomPinch(1.3f.pow(-0.2f))
+        other.finishPinch()
+        assertEquals("A fifth of the way to three columns falls back", 2, other.columns)
+    }
+
+    @Test
+    fun aStepRunsFromTheGesturesHomeStop() {
+        val state = MosaicState(3)
+        state.beginPinch()
+        state.zoomPinch(1.3f.pow(0.3f))
+        state.between().let {
+            assertEquals(3, it.from)
+            assertEquals(2, it.to)
+            assertEquals(0.18f, it.progress, 0.01f)
+        }
+        state.zoomPinch(1.3f.pow(1.1f))
+        state.advanceHop(1f)
+        state.between().let {
+            assertEquals(2, it.from)
+            assertEquals(1, it.to)
+        }
+        assertEquals(1.8f, steppedPosition(fingerPosition(1.8f)), 0.001f)
+    }
+
+    @Test
     fun pinchAndAccessibleStepsRespectTheDensityLimits() {
         val state = MosaicState()
         state.beginPinch()
-        state.zoomPinch(0.6f)
+        state.zoomPinch(0.8f)
         state.finishPinch()
         assertEquals(3, state.columns)
+        // The gallery lands each released pinch on its stop.
+        state.position = state.columns.toFloat()
         state.beginPinch()
-        state.zoomPinch(1.6f)
+        state.zoomPinch(1.25f)
         state.finishPinch()
         assertEquals(2, state.columns)
         repeat(10) { state.larger() }
