@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -24,7 +25,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.swipe
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
 import androidx.test.core.app.ApplicationProvider
@@ -193,7 +196,7 @@ class LibraryMosaicTest {
         }
         compose.waitForIdle()
         assertEquals(4f, density.position, 0f)
-        val smallest = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().size.width
+        val smallest = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot.width
         gallery.performTouchInput {
             updatePointerTo(0, focal - Offset(width * 0.018f, 0f))
             updatePointerTo(1, focal + Offset(width * 0.018f, 0f))
@@ -201,7 +204,7 @@ class LibraryMosaicTest {
         }
         compose.waitForIdle()
         assertTrue("Reversal must move before either finger is lifted", density.position < 3.5f)
-        val reversed = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().size.width
+        val reversed = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot.width
         assertTrue("The live card must enlarge on reversal: $smallest -> $reversed at ${density.position}", reversed > smallest + 5)
         gallery.performTouchInput { up(0); up(1) }
     }
@@ -356,6 +359,46 @@ class LibraryMosaicTest {
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
         }
+    }
+
+    @Test
+    fun aNoteZoomsWithoutRewrappingBetweenStops() {
+        val body = "Send your landing page to five people who have never heard of you and ask them what you sell. " +
+            "If they cannot say it in one sentence, the page is not done."
+        val notes = (1..40).map { testCard("note-$it", type = "Note", title = "Note $it", note = if (it == 6) body else "A short note, number $it.") }
+        val density = MosaicState(4)
+        compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(notes, endReached = true), {}, {}, mosaic = density) } }
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        fun lines(): List<Int> {
+            val results = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(body, useUnmergedTree = true).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+            val layout = results.single()
+            return (0 until layout.lineCount).map { layout.getLineEnd(it, visibleEnd = true) }
+        }
+        fun bounds() = compose.onNodeWithContentDescription("Note 6").fetchSemanticsNode().boundsInRoot
+        val root = gallery.fetchSemanticsNode().boundsInRoot
+        val focal = bounds().center - root.topLeft
+        val before = lines()
+        val width = bounds().width
+        gallery.performTouchInput {
+            down(0, focal - Offset(this.width * 0.1f, 0f))
+            down(1, focal + Offset(this.width * 0.1f, 0f))
+        }
+        val widths = mutableListOf<Float>()
+        for (step in 1..6) {
+            gallery.performTouchInput {
+                updatePointerTo(0, focal - Offset(this.width * (0.1f + step * 0.004f), 0f))
+                updatePointerTo(1, focal + Offset(this.width * (0.1f + step * 0.004f), 0f))
+                move(delayMillis = 16)
+            }
+            compose.waitForIdle()
+            assertTrue("The pinch must stay between 4 and 3 columns: ${density.position}", density.position > 3f && density.position < 4f)
+            assertEquals("The note's words must keep their lines while it grows", before, lines())
+            widths += bounds().width
+        }
+        assertTrue("The note must grow with the fingers: $width -> $widths", widths.zipWithNext().all { (a, b) -> b > a } && widths.last() > width + 8f)
+        gallery.performTouchInput { up(0); up(1) }
+        compose.waitForIdle()
     }
 
     @Test

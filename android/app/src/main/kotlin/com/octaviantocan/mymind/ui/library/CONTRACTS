@@ -26,16 +26,22 @@ A two-finger pinch on the mosaic MUST continuously change tile size through mult
 density levels and reverse while the fingers remain down. Density stops
 MUST offer distinct sizes for uniform portrait, square and landscape cards, with one
 to four columns at their stops. Text MUST retain its size and wrapping when
-releasing at a stop. Adjacent cached grids MUST remain coherent and nonoverlapping
+releasing at a stop. Between stops a tile with words MUST keep the lines of the stop
+its grid shows: it is laid out at its cell in that stop's grid and scaled to its
+cell the way a picture zooms, so it MUST NOT rewrap, change its inset, or show or
+hide its labels while the fingers move (Tavi, 28 Oct 2026: notes "still shift
+weirdly" when pinching). Adjacent cached grids MUST remain coherent and nonoverlapping
 within each projection, sharing one focal card's fractional X/Y point and physical
 size. Each stop holds briefly before the fingers move on, and the grid shown between
 two stops MUST be the denser one enlarged, never a sparser one shrunk below its size,
-so no empty band appears. A crossing starts a 250 ms handoff in which every card, drawn
-once, glides from its place in the old grid to its place in the new one, never a
-crossfade of two grids; it then MUST show one grid even if the fingers pause or
-jitter at the threshold. Reduced motion
-switches the grid immediately. The focal card MUST be drawn once and only
-one projection may expose semantics or hit targets. A new single-finger press
+so no empty band appears. A crossing starts a 250 ms handoff in which every card glides
+from its place in the old grid to its place in the new one, never a crossfade of
+two grids. Within its moving cell a tile with words fades from its lines at the old
+stop to its lines at the new one, the only time a card is drawn twice, and the old
+lines expose no semantics or hit targets. The gallery then MUST show one grid even
+if the fingers pause or jitter at the threshold. Reduced motion switches the grid
+immediately. Apart from that fade, the focal card MUST be drawn once and only one
+projection may expose semantics or hit targets. A new single-finger press
 MUST retain its owning projection and focal node through tap or hold. Passing drag
 slop releases focal anchoring; a second finger rebases a new pinch. A press during a
 handoff holds every card where it is until the press ends.

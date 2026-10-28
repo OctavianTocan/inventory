@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.10 (21), 2026-10-28
+Notes stop shifting while you pinch.
+
+### Fixed
+- While you pinch the gallery, notes, posts and other tiles with words grow and shrink like a picture instead of rewrapping their lines at every step, so the words no longer jump around.
+- When a pinch passes a size, a tile's words fade once into their new lines while the card glides to its new place.
+
 ## 0.6.9 (20), 2026-10-28
 Pins, notes, tags and space changes happen the moment you tap, even online.
 
