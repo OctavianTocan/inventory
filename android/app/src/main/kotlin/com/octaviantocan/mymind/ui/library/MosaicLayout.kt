@@ -10,6 +10,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import com.octaviantocan.mymind.data.Card
 import kotlin.math.ceil
@@ -68,7 +69,7 @@ internal fun mosaicRows(cards: List<Card>, width: Float, columns: Int, gap: Floa
 internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Float): MosaicLayouts.Level {
     if (cards.isEmpty() || !width.isFinite() || width <= 0f) return MosaicLayouts.Level(emptyList(), emptyList(), emptyList(), IntArray(0), 0f, 0f)
     val across = columns.coerceIn(1, 4)
-    val space = gap.takeIf { it.isFinite() }?.coerceIn(0f, width / 16f) ?: 0f
+    val space = mosaicGap(width, gap)
     val cells = ArrayList<Rect>(cards.size)
     val rows = ArrayList<MosaicRow>()
     val starts = ArrayList<Int>()
@@ -138,6 +139,9 @@ private fun mosaicAspectRatio(card: Card): Float {
     }
 }
 
+/** The gap [mosaicLevel] leaves between cards: [gap], kept to a sixteenth of the [width]. */
+private fun mosaicGap(width: Float, gap: Float): Float = gap.takeIf { it.isFinite() }?.coerceIn(0f, width / 16f) ?: 0f
+
 /** Cached canonical geometry. Only the visible window is interpolated during a pointer frame. */
 internal class MosaicLayouts(val cards: List<Card>, val width: Float, gap: Float) {
     internal class Level(val rows: List<MosaicRow>, val cells: List<Rect>, val starts: List<Int>, val rowOf: IntArray, val height: Float, val tallest: Float)
@@ -145,6 +149,19 @@ internal class MosaicLayouts(val cards: List<Card>, val width: Float, gap: Float
     val levels = (1..4).map { columns -> mosaicLevel(cards, width, columns, gap) }
 
     fun level(columns: Int): Level = levels[columns.coerceIn(1, 4) - 1]
+
+    /** One square's width at three columns: every tile with words is laid out this wide, at every density. */
+    private val wordsWidth = (width - 2 * mosaicGap(width, gap)) / 3
+
+    /**
+     * The size a tile with words is laid out at while the grid of [columns] is shown: [wordsWidth] wide, in the shape
+     * of its cell there. The tile is then drawn scaled to its cell, a picture of itself, so its words keep the same lines
+     * at every density and between them.
+     */
+    fun wordsFrame(index: Int, columns: Int): Size {
+        val cell = level(columns).cells[index]
+        return Size(wordsWidth, wordsWidth * cell.height / cell.width)
+    }
 
 /** Projects a whole canonical grid around one shared focal rectangle; row neighbours never cross. */
     fun projection(columns: Int, position: Float, focalIndex: Int): MosaicProjection {

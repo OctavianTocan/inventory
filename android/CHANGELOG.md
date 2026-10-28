@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.10 (21), 2026-10-28
+Notes stop shifting while you pinch.
+
+### Changed
+- A note, post or other tile with words is now a picture of itself: it keeps the same lines at every size and simply grows or shrinks with its square, like a photo. At four columns its words are smaller than before and at two or one column larger.
+
+### Fixed
+- While you pinch the gallery, tiles with words no longer rewrap their lines at every step, so the words stop jumping around.
+
 ## 0.6.9 (20), 2026-10-28
 Pins, notes, tags and space changes happen the moment you tap, even online.
 
