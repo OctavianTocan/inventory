@@ -77,6 +77,7 @@ fun testCard(
  * @param pinnedPages Pages of Top of Mind by cursor.
  * @param cardsById Cards `card` answers with; a missing id fails with 404.
  * @param deckIds Card ids of the Serendipity page, or null to fail its read with a network error.
+ * @param searchHits Cards every search answers with.
  */
 class FakeLibrary(
     var pages: Map<String?, CardPage> = mapOf(null to CardPage()),
@@ -91,6 +92,7 @@ class FakeLibrary(
     var pinnedPages: Map<String?, CardPage> = mapOf(null to CardPage()),
     var cardsById: Map<String, Card> = emptyMap(),
     var deckIds: List<String>? = emptyList(),
+    var searchHits: List<Card> = listOf(testCard("hit")),
 ) : Library {
     /** Calls in the order they arrived, such as `trash:c1`. */
     val calls = mutableListOf<String>()
@@ -123,7 +125,7 @@ class FakeLibrary(
 
     override suspend fun search(query: String, cursor: String?): ApiResult<CardPage> {
         calls += "search:$query:$cursor"
-        return ApiResult.Ok(CardPage(listOf(testCard("hit"))))
+        return ApiResult.Ok(CardPage(searchHits))
     }
 
     override suspend fun pageConfig(): ApiResult<PageConfig> {

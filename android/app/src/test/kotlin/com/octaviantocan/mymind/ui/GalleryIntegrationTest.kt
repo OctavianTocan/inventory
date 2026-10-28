@@ -6,10 +6,14 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.geometry.Offset
+import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.CardPage
 import com.octaviantocan.mymind.data.MymindApi
 import com.octaviantocan.mymind.data.Repository
@@ -45,8 +49,9 @@ class GalleryIntegrationTest {
     private var server: MockWebServer? = null
     @After fun closeServer() { server?.shutdown() }
 
-    private fun showShell(): LibraryViewModel {
-        val library = FakeLibrary(pages = mapOf(null to CardPage((1..100).map { testCard("p$it", type = "Image", title = "Photo $it") })))
+    private fun showShell(searchHits: List<Card> = listOf(testCard("hit"))): LibraryViewModel {
+        val library = FakeLibrary(pages = mapOf(null to CardPage((1..100).map { testCard("p$it", type = "Image", title = "Photo $it") })),
+            searchHits = searchHits)
         val model = LibraryViewModel(library)
         val local = MockWebServer().apply {
             dispatcher = object : Dispatcher() {
@@ -105,5 +110,25 @@ class GalleryIntegrationTest {
         compose.runOnIdle { }
         assertEquals("3 columns", gallery.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
         assertEquals(before, gallery.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), 1f)
+    }
+
+    @Test fun searchResultsPinchLikeTheGallery() {
+        // "The zoom in and stuff should work on the results too" (Tavi, 28 Oct 2026): the results open before their cards.
+        showShell(searchHits = (1..40).map { testCard("s$it", type = "Image", title = "Found $it") })
+        compose.onNodeWithContentDescription("Search").performClick()
+        compose.onNodeWithContentDescription("Search your mind").performTextInput("forest")
+        compose.onNodeWithContentDescription("Search your mind").performImeAction()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Found 1").assertExists()
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        gallery.performTouchInput {
+            down(0, Offset(width * 0.18f, height * 0.5f))
+            down(1, Offset(width * 0.82f, height * 0.5f))
+            moveTo(0, Offset(width * 0.4f, height * 0.5f), delayMillis = 120)
+            moveTo(1, Offset(width * 0.6f, height * 0.5f), delayMillis = 120)
+            up(0); up(1)
+        }
+        compose.waitForIdle()
+        assertEquals("4 columns", gallery.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
     }
 }

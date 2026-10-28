@@ -311,10 +311,12 @@ fun LibraryMosaic(
                 }
             }
         }
-        val captureLatest by rememberUpdatedState<(Offset?) -> MosaicAnchor?>(::capture)
-        val hopLatest by rememberUpdatedState<() -> Unit>(::hop)
-        val alignLatest by rememberUpdatedState<() -> Unit>(::alignAnchor)
-        val settleLatest by rememberUpdatedState<() -> Unit>(::settle)
+        // Lambdas, not references such as ::capture: the compiler keeps a local function's first reference for good, so
+        // a gallery first shown before its cards arrived found no card under the fingers and never pinched.
+        val captureLatest by rememberUpdatedState<(Offset?) -> MosaicAnchor?> { focal -> capture(focal) }
+        val hopLatest by rememberUpdatedState<() -> Unit> { hop() }
+        val alignLatest by rememberUpdatedState<() -> Unit> { alignAnchor() }
+        val settleLatest by rememberUpdatedState<() -> Unit> { settle() }
         val latestLayouts by rememberUpdatedState(layouts)
         val latestRows by rememberUpdatedState(rows)
         val latestHeaderItems by rememberUpdatedState(headerItems)
@@ -451,16 +453,17 @@ fun LibraryMosaic(
                     shape = MosaicBodyShape(top, bottom)
                     clip = true
                 }.background(colors.background)) {
-                    val latestFrame by rememberUpdatedState<() -> MosaicFrame>(::frame)
+                    val currentFrame = { frame() }
+                    val latestFrame by rememberUpdatedState(currentFrame)
                     val window by remember(layouts, height) { derivedStateOf { latestFrame().window(height) } }
                     // Which cards change line or shape decides what is composed; it changes once per step, not per frame.
                     val shape by remember(layouts, height) { derivedStateOf { latestFrame().shape(window, layouts) } }
                     val focalIndex = anchor?.cardId?.let(layouts.byId::get)
-                    if (shape != null) MosaicFill(layouts, mosaic, height, ::frame, blur = with(density) { BACKDROP_BLUR.toPx() })
-                    ProjectedMosaicCards(layouts, mosaic, window.filter { it != focalIndex }, shape, ::frame,
+                    if (shape != null) MosaicFill(layouts, mosaic, height, currentFrame, blur = with(density) { BACKDROP_BLUR.toPx() })
+                    ProjectedMosaicCards(layouts, mosaic, window.filter { it != focalIndex }, shape, currentFrame,
                         Modifier.fillMaxSize().testTag("mosaic-projection"), onOpenCard, onLongPressCard)
                     if (focalIndex != null) key("focal", layouts.cards[focalIndex].id) {
-                        ProjectedMosaicCards(layouts, mosaic, listOf(focalIndex), shape, ::frame, Modifier.fillMaxSize(), onOpenCard, onLongPressCard)
+                        ProjectedMosaicCards(layouts, mosaic, listOf(focalIndex), shape, currentFrame, Modifier.fillMaxSize(), onOpenCard, onLongPressCard)
                     }
                 }
             }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.21 (32), 2026-10-28
+Pinching works as soon as the app opens, and on search results.
+
+### Fixed
+- Right after opening the app, pinching the gallery did nothing until you went to Spaces and back. It now works at once.
+- Pinching search results now changes their size too, as it does everywhere else.
+
 ## 0.6.20 (31), 2026-10-28
 An open card reads as a page of its own parts, with Share at the top and Open source at the foot.
 

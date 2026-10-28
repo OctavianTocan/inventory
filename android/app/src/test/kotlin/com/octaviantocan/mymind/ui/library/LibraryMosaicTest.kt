@@ -71,6 +71,20 @@ class LibraryMosaicTest {
     }
 
     @Test
+    fun aGalleryShownBeforeItsCardsArrivePinchesOnceTheyDo() {
+        // Opening the app shows the gallery a moment before its cards: "the moment I open the app pinching doesnt work
+        // until I switch to spaces and back" (Tavi, 28 Oct 2026).
+        val density = MosaicState(2)
+        var feed by mutableStateOf(FeedState(loading = true))
+        compose.setContent { MymindTheme(dark = true) { LibraryMosaic(feed, {}, {}, mosaic = density) } }
+        compose.runOnIdle { feed = FeedState(cards, endReached = true) }
+        pinch(inward = true)
+        assertEquals(4, density.columns)
+        pinch(inward = false)
+        assertEquals(2, density.columns)
+    }
+
+    @Test
     fun cardsKeepFollowingTheFingersAcrossFramesBeforeRelease() {
         val density = MosaicState(2)
         val state = LazyListState(firstVisibleItemIndex = 8)

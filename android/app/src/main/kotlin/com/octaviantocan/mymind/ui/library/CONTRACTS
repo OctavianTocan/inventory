@@ -82,6 +82,15 @@ O" canvas; the web showcase's port of O3b found the focal card wrapping when it
 changed shape, fixed the same day; Tavi on the same port, 28 October 2026 ("at the
 end of the transition it all pops for a frame"): the fill vanished in one frame.
 
+@cc [owner:OctavianTocan,label:product;motion] gallery-pinches-everywhere
+Every gallery of cards, Everything, search results and an opened space, MUST pinch as
+gallery-pinches-change-tile-size describes from the moment it shows, including a gallery
+shown before its cards arrived, such as the first moments after the app opens and a
+search whose results are still on their way.
+Source: Tavi, 28 October 2026 ("the moment I open the app pinching doesnt work until I
+switch to spaces and back", "The zoom in and stuff should work on the results too.
+Pinching is a thing in this app all across the app").
+
 @cc [owner:OctavianTocan,label:product;design] gallery-highlights-stay-above-the-bricks
 Top of Mind MUST remain above the main mosaic, in pin order, as a horizontal rail of
 large highlight cards. The rail MUST remain horizontally scrollable and scroll
