@@ -11,6 +11,7 @@ import com.octaviantocan.aikit.CliCatalog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.time.LocalDate
 
 /** The engine, model and effort AI search runs with, kept on this phone, and the model last chosen for each engine. */
 class AiPrefs(private val prefs: SharedPreferences) {
@@ -69,16 +70,23 @@ class AiPrefs(private val prefs: SharedPreferences) {
     }
 }
 
-/** Ranks a pressed search with Claude Code or Codex. */
+/** Reads, ranks and answers a pressed search with Claude Code or Codex. */
 interface AiRanking {
     /** @return The chosen engine's name, such as "Claude Code", when it is signed in and can rank; otherwise null. */
     suspend fun engine(): String?
 
     /**
      * @param query Search text in mymind's query syntax.
-     * @return The library's matches for [query], the ones the engine ranked first.
+     * @return What the engine reads the search as.
      */
-    suspend fun search(query: String): AiSearchAnswer
+    suspend fun understand(query: String): AiUnderstood
+
+    /**
+     * @param query Search text in mymind's query syntax.
+     * @param understood What [understand] read it as, or null to rank the query's own matches.
+     * @return The cards found, the ones the engine ranked first, and the answer to a question.
+     */
+    suspend fun search(query: String, understood: AiUnderstood?): AiSearchAnswer
 }
 
 /**
@@ -135,9 +143,14 @@ class AiAccount(private val client: AiClient, val prefs: AiPrefs, private val se
         return cli.title.takeIf { known.account && known[cli].signedIn }
     }
 
-    override suspend fun search(query: String): AiSearchAnswer {
+    override suspend fun understand(query: String): AiUnderstood {
         current() ?: throw CancellationException("Signed out.")
-        return client.search(query, prefs.choice.value)
+        return client.understand(query, prefs.choice.value, LocalDate.now().toString())
+    }
+
+    override suspend fun search(query: String, understood: AiUnderstood?): AiSearchAnswer {
+        current() ?: throw CancellationException("Signed out.")
+        return client.search(query, prefs.choice.value, understood)
     }
 
     /**

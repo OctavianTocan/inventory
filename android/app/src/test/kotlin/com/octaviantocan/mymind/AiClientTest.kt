@@ -8,12 +8,18 @@ import com.octaviantocan.aikit.AiSignIn
 import com.octaviantocan.aikit.AiSignIns
 import com.octaviantocan.aikit.CliCatalog
 import com.octaviantocan.aikit.CliModel
+import com.octaviantocan.mymind.data.AiAnswer
 import com.octaviantocan.mymind.data.AiChoice
 import com.octaviantocan.mymind.data.AiClient
 import com.octaviantocan.mymind.data.AiPrefs
+import com.octaviantocan.mymind.data.AiPart
 import com.octaviantocan.mymind.data.AiProblem
+import com.octaviantocan.mymind.data.AiSpace
+import com.octaviantocan.mymind.data.AiUnderstood
+import com.octaviantocan.mymind.data.AppJson
 import com.octaviantocan.mymind.data.CODEX
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonObject
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -69,6 +75,24 @@ class AiClientTest {
         val sent = server.takeRequest()
         assertEquals("/app/v1/ai/search", sent.path)
         assertEquals("""{"q":"calm lake","engine":"codex","model":"gpt-6-sol","effort":"high"}""", sent.body.readUtf8())
+    }
+
+    @Test
+    fun understandingSendsTheDateAndTheSearchSendsTheReadingBack() = runBlocking {
+        answer("""{"understood":{"label":"Walking essays","parts":[{"kind":"type","label":"Articles","query":"type:article"}],"searches":["type:article walking"],"tags":["walks"],"spaces":[{"id":"s1","name":"Reading"}],"question":true}}""")
+        val understood = ai.understand("the walking essay", AiChoice(), "2026-10-28")
+        assertEquals(AiUnderstood("Walking essays", listOf(AiPart("type", "Articles", "type:article")), listOf("type:article walking"),
+            listOf("walks"), listOf(AiSpace("s1", "Reading")), question = true), understood)
+        val asked = server.takeRequest()
+        assertEquals("/app/v1/ai/search/understand", asked.path)
+        assertEquals("""{"q":"the walking essay","engine":"claude-code","today":"2026-10-28"}""", asked.body.readUtf8())
+
+        answer("""{"cards":[{"id":"c1","type":"Article","flags":0,"created":"2026-10-01T00:00:00Z","modified":"2026-10-01T00:00:00Z","bumped":"2026-10-01T00:00:00Z"}],"next":null,"ranked":1,"understood":{"label":"Walking essays"},"answer":{"text":"You saved one, in spring.","ids":["c1"]}}""")
+        val found = ai.search("the walking essay", AiChoice(), understood)
+        assertEquals(AiAnswer("You saved one, in spring.", listOf("c1")), found.answer)
+        assertEquals("Walking essays", found.understood?.label)
+        val sent = AppJson.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+        assertEquals(understood, AppJson.decodeFromJsonElement(AiUnderstood.serializer(), sent.getValue("understood")))
     }
 
     @Test

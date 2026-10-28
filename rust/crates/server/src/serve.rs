@@ -53,8 +53,8 @@ impl Server {
         }
     }
 
-    /// Claude Code and Codex (`mm_ai`) for the signed-in account, with the library's own search for the cards an AI
-    /// search ranks.
+    /// Claude Code and Codex (`mm_ai`) for the signed-in account, with the library's own routes for what an AI search
+    /// reads: its searches, tags and spaces.
     async fn answer_ai(&self, request: &mut Request) -> mm_core::Result<Response> {
         let login = mm_ai::login_for(request.header("x-mymind-email"));
         let body = request.take_body().bytes_within(64 * 1024).await?;
@@ -62,18 +62,21 @@ impl Server {
         let mut headers = request.headers.clone();
         headers.remove("content-type");
         headers.remove("content-length");
-        let candidates = |target: String| async move {
-            let mut search = Request::new("GET", &format!("{origin}{target}")).map_err(|error| anyhow::anyhow!(error.to_js_string()))?;
-            search.headers = headers;
-            let response = match self.library(&mut search).await {
-                Ok(Some(response)) if response.status == 200 => response,
-                Ok(_) => anyhow::bail!("The library search did not answer."),
-                Err(error) => anyhow::bail!(error.to_js_string()),
-            };
-            let bytes = response.body.bytes().await.map_err(|error| anyhow::anyhow!(error.to_js_string()))?;
-            Ok(serde_json::from_slice(&bytes)?)
+        let library = |target: String| {
+            let (origin, headers) = (&origin, headers.clone());
+            async move {
+                let mut search = Request::new("GET", &format!("{origin}{target}")).map_err(|error| anyhow::anyhow!(error.to_js_string()))?;
+                search.headers = headers;
+                let response = match self.library(&mut search).await {
+                    Ok(Some(response)) if response.status == 200 => response,
+                    Ok(_) => anyhow::bail!("The library did not answer."),
+                    Err(error) => anyhow::bail!(error.to_js_string()),
+                };
+                let bytes = response.body.bytes().await.map_err(|error| anyhow::anyhow!(error.to_js_string()))?;
+                Ok(serde_json::from_slice(&bytes)?)
+            }
         };
-        let reply = mm_ai::answer(&login, &request.method, &request.url, &body, candidates)
+        let reply = mm_ai::answer(&login, &request.method, &request.url, &body, library)
             .await
             .unwrap_or_else(|| unreachable!("answer_ai runs only for the paths mm_ai serves"));
         let headers = Headers::from([("content-type", "application/json"), ("cache-control", "no-store")]);

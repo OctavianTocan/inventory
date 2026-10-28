@@ -1,7 +1,10 @@
 package com.octaviantocan.mymind.ui.library
 
+import com.octaviantocan.mymind.data.AiAnswer
 import com.octaviantocan.mymind.data.AiRanking
 import com.octaviantocan.mymind.data.AiSearchAnswer
+import com.octaviantocan.mymind.data.AiSpace
+import com.octaviantocan.mymind.data.AiUnderstood
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,12 +29,23 @@ class AiSearchTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private class Ranker(var engine: String? = "Claude Code", var answer: () -> AiSearchAnswer = { AiSearchAnswer() }) : AiRanking {
+    private class Ranker(
+        var engine: String? = "Claude Code",
+        var reading: () -> AiUnderstood = { AiUnderstood() },
+        var answer: () -> AiSearchAnswer = { AiSearchAnswer() },
+    ) : AiRanking {
         val asked = mutableListOf<String>()
+        val readings = mutableListOf<AiUnderstood?>()
         var gate: CompletableDeferred<Unit>? = null
+        var reads: CompletableDeferred<Unit>? = null
         override suspend fun engine() = engine
-        override suspend fun search(query: String): AiSearchAnswer {
+        override suspend fun understand(query: String): AiUnderstood {
+            reads?.await()
+            return reading()
+        }
+        override suspend fun search(query: String, understood: AiUnderstood?): AiSearchAnswer {
             asked += query
+            readings += understood
             gate?.await()
             return answer()
         }
@@ -47,13 +61,46 @@ class AiSearchTest {
         advanceUntilIdle()
         // The library's own search answers while the engine is still ranking.
         assertEquals(listOf("hit"), search.results.value.state.value.cards.map { it.id })
-        assertEquals(AiRank.Ranking("Claude Code"), search.rank.value)
+        assertEquals(AiRank.Ranking("Claude Code", AiUnderstood()), search.rank.value)
         ranker.gate!!.complete(Unit)
         advanceUntilIdle()
         assertEquals(listOf("calm places"), ranker.asked)
         assertEquals(listOf("lake", "hit"), search.results.value.state.value.cards.map { it.id })
-        assertEquals(AiRank.Ranked("Claude Code", 1), search.rank.value)
+        assertEquals(AiRank.Ranked("Claude Code", 1, AiUnderstood()), search.rank.value)
         assertEquals("Ranked by Claude Code", aiNote(search.rank.value!!))
+    }
+
+    @Test
+    fun theEngineReadsTheSearchThenAnswersItsQuestionFromTheFoundCards() = runTest(dispatcher) {
+        val reading = AiUnderstood("Walking essays", tags = listOf("walks"), spaces = listOf(AiSpace("s1", "Reading")), question = true)
+        val ranker = Ranker(reading = { reading }, answer = {
+            AiSearchAnswer(listOf(testCard("essay"), testCard("hit")), ranked = 1, answer = AiAnswer("You saved one, in spring.", listOf("essay", "gone")))
+        }).apply { reads = CompletableDeferred() }
+        val search = SearchModel(this, FakeLibrary(), ranker)
+        search.setQuery("when did I save the walking essay")
+        search.submit()
+        advanceUntilIdle()
+        assertEquals(AiRank.Understanding("Claude Code"), search.rank.value)
+        assertEquals("Claude Code is reading what you mean…", aiNote(search.rank.value!!))
+        ranker.reads!!.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf<AiUnderstood?>(reading), ranker.readings)
+        val ranked = search.rank.value as AiRank.Ranked
+        assertEquals(reading, ranked.understood)
+        assertEquals("You saved one, in spring.", ranked.answer)
+        assertEquals(listOf("essay"), ranked.sources.map { it.id })
+        assertEquals(listOf("essay", "hit"), search.results.value.state.value.cards.map { it.id })
+    }
+
+    @Test
+    fun aFailedReadingStillRanksTheSearchsOwnMatches() = runTest(dispatcher) {
+        val ranker = Ranker(reading = { throw IllegalStateException("busy") }, answer = { AiSearchAnswer(listOf(testCard("hit")), ranked = 1) })
+        val search = SearchModel(this, FakeLibrary(), ranker)
+        search.setQuery("calm")
+        search.submit()
+        advanceUntilIdle()
+        assertEquals(listOf<AiUnderstood?>(null), ranker.readings)
+        assertEquals(AiRank.Ranked("Claude Code", 1), search.rank.value)
     }
 
     @Test

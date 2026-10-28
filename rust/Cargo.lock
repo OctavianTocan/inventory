@@ -1096,6 +1096,7 @@ version = "0.1.0"
 dependencies = [
  "ai-kit",
  "anyhow",
+ "futures-util",
  "serde_json",
  "tokio",
  "url",

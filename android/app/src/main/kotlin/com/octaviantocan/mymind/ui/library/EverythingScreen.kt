@@ -15,14 +15,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
+import com.octaviantocan.mymind.data.AiSpace
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.ui.shell.LoadingSpinner
@@ -75,6 +74,7 @@ fun EverythingScreen(
     onLongPressCard: ((Card) -> Unit)? = null,
     searching: Boolean = false,
     photoUrl: String? = null,
+    onOpenSpace: (AiSpace) -> Unit = {},
     photoLoader: ImageLoader? = null,
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
@@ -101,20 +101,10 @@ fun EverythingScreen(
         topOfMind = pinned.cards, onLoadMoreTopOfMind = viewModel.topOfMind::loadMore,
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
         onLongPressCard = onLongPressCard,
-        photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, aiNote = rank?.let(::aiNote),
+        photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, ai = rank,
+        onAiTag = { tag -> viewModel.search.choose(Suggestion("tag", tag, "tag:$tag")); focusManager.clearFocus() },
+        onOpenSpace = { focusManager.clearFocus(); onOpenSpace(it) },
     )
-}
-
-/**
- * The line under the Search title while Claude Code or Codex ranks a pressed search, and after.
- *
- * @param rank What the ranking is doing.
- * @return The words to show.
- */
-fun aiNote(rank: AiRank): String = when (rank) {
-    is AiRank.Ranking -> "${rank.engine} is ranking these by what you mean…"
-    is AiRank.Ranked -> if (rank.count > 0) "Ranked by ${rank.engine}" else "${rank.engine} found nothing closer to what you mean"
-    is AiRank.Failed -> rank.message
 }
 
 /** Height of the fixed controls' row over the top of a library page. */
@@ -151,7 +141,9 @@ fun EverythingContent(
     photoUrl: String? = null,
     mosaic: MosaicState = rememberMosaicState(),
     resultsState: LazyListState = rememberLazyListState(),
-    aiNote: String? = null,
+    ai: AiRank? = null,
+    onAiTag: (String) -> Unit = {},
+    onOpenSpace: (AiSpace) -> Unit = {},
     photoLoader: ImageLoader? = null,
 ) {
     val colors = LibraryStyle.colors
@@ -163,8 +155,7 @@ fun EverythingContent(
                 LibraryMosaic(searchResults, onLoadMoreResults, onOpenCard, state = resultsState, mosaic = mosaic,
                     onLongPressCard = onLongPressCard, header = {
                         Text("Search", Modifier.padding(20.dp).semantics { heading() }, style = LibraryStyle.title, color = colors.text)
-                        if (aiNote != null) Text(aiNote, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
-                            style = LibraryStyle.body, color = colors.muted)
+                        if (ai != null) AiSearchNote(ai, onAiTag, onOpenSpace, onOpenCard)
                         ResultChips(filter, suggestions, onChoose, onRemoveFilter)
                         if (searchResults.cards.isEmpty()) GalleryFeedNotice(searchResults, onLoadMoreResults, search = true)
                     })
@@ -220,7 +211,7 @@ fun SearchChips(chips: List<Suggestion>, onSelect: (Suggestion) -> Unit, modifie
 private fun ResultChips(filter: SearchFilter?, suggestions: List<Suggestion>, onChoose: (Suggestion) -> Unit, onRemoveFilter: () -> Unit) {
     if (filter == null && suggestions.isEmpty()) return
     ChipFlow(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 20.dp)) {
-        filter?.let { SearchChip(it.label, true, onRemoveFilter) }
+        filter?.let { SearchChip(it.label, true, onClick = onRemoveFilter) }
         suggestions.filter { it.queryText != filter?.queryText }.forEach { chip ->
             SearchChip(if (chip.type == "type") chip.text else chip.text.lowercase(), false) { onChoose(chip) }
         }
@@ -229,15 +220,16 @@ private fun ResultChips(filter: SearchFilter?, suggestions: List<Suggestion>, on
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ChipFlow(modifier: Modifier, content: @Composable () -> Unit) {
+internal fun ChipFlow(modifier: Modifier, content: @Composable () -> Unit) {
     FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
 }
 
 @Composable
-private fun SearchChip(label: String, chosen: Boolean, onClick: () -> Unit) {
+internal fun SearchChip(label: String, chosen: Boolean, onRaised: Boolean = false, onClick: () -> Unit) {
     val colors = LibraryStyle.colors
     FootPressTheme {
-    Box(Modifier.heightIn(min = 44.dp).clip(CircleShape).background(if (chosen) colors.selected else colors.raised)
+    // On a raised panel the chip takes the page's colour so it still stands out.
+    Box(Modifier.heightIn(min = 44.dp).clip(CircleShape).background(if (chosen) colors.selected else if (onRaised) colors.background else colors.raised)
         .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button, onClick = onClick)
         .padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
         Text(label, style = LibraryStyle.label, color = colors.text)

@@ -376,6 +376,10 @@ fun MainShell(
                     onLongPressCard = { openMenu(it, null) },
                     searching = searching,
                     photoUrl = account.photoUrl,
+                    onOpenSpace = { found ->
+                        openSpace = viewModel.spaces.value.spaces.firstOrNull { it.id == found.id } ?: Space(found.id, found.name)
+                        selectTab(Tab.Spaces)
+                    },
                     photoLoader = photoLoader,
                 )
                 Tab.Spaces -> SpacesScreen(

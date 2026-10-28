@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.AiRanking
+import com.octaviantocan.mymind.data.AiUnderstood
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.CardPage
@@ -575,21 +576,45 @@ data class SearchFilter(val label: String, val queryText: String) {
 /** Label of the Same Vibe filter, as on the web. */
 const val SAME_VIBE_LABEL = "Same Vibe"
 
-/** What Claude Code or Codex is doing with the shown results of a pressed search. */
+/** What Claude Code or Codex is doing with a pressed search, whose instant results stay on show meanwhile. */
 sealed interface AiRank {
-    /** [engine] is ranking the results. */
-    data class Ranking(val engine: String) : AiRank
+    /** [engine] is reading what the search means. */
+    data class Understanding(val engine: String) : AiRank
 
-    /** [engine] ranked [count] of the results first. */
-    data class Ranked(val engine: String, val count: Int) : AiRank
+    /** [engine] read the search as [understood], or could not read it when null, and is ranking what that finds. */
+    data class Ranking(val engine: String, val understood: AiUnderstood? = null) : AiRank
+
+    /**
+     * [engine] ranked [count] of the results first.
+     *
+     * @property understood What it read the search as, or null.
+     * @property answer Its answer when the search asks a question, or null.
+     * @property sources The found cards the answer draws from, in its order.
+     */
+    data class Ranked(
+        val engine: String,
+        val count: Int,
+        val understood: AiUnderstood? = null,
+        val answer: String? = null,
+        val sources: List<Card> = emptyList(),
+    ) : AiRank
 
     /** The ranking failed, in the server's words. */
     data class Failed(val message: String) : AiRank
 }
 
+/** What the engine read the search as, while it ranks and after, or null. */
+val AiRank.understood: AiUnderstood?
+    get() = when (this) {
+        is AiRank.Ranking -> understood
+        is AiRank.Ranked -> understood
+        else -> null
+    }
+
 /**
  * Search text, an optional filter, the suggestion chips and the matching cards. Typing searches by words and meaning
- * at once; pressing search also has the account's Claude Code or Codex rank the matches, when one is signed in.
+ * at once; pressing search also has the account's Claude Code or Codex read what it means, search for that, rank what
+ * it finds and answer a question, when one is signed in.
  *
  * @param scope Scope the searches run in.
  * @param library Source of the results and suggestions.
@@ -621,15 +646,16 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
     /** Cards matching the current text and filter; empty while both are blank. */
     val results: StateFlow<CardFeed> = mutableResults
 
-    /** What the AI ranking of a pressed search is doing, or null when the results are not being ranked. */
+    /** What the AI is doing with a pressed search, or null when it is not at work on these results. */
     val rank: StateFlow<AiRank?> = mutableRank
 
     /** True when there is something to search for. */
     val active: Boolean get() = mutableQuery.value.isNotBlank() || mutableFilter.value != null
 
     /**
-     * Searches at once, then has the account's Claude Code or Codex rank the matches by what the search means and
-     * shows them in that order. Does nothing more without a signed-in engine, for Same Vibe or for an empty search.
+     * Searches at once, then has the account's Claude Code or Codex read what the search means, search for that, rank
+     * what it finds and, for a question, answer it, and shows the cards in that order. A failed reading still ranks
+     * the search's own matches. Does nothing more without a signed-in engine, for Same Vibe or for an empty search.
      */
     fun submit() {
         val text = searchText()
@@ -639,15 +665,25 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
         val shown = pending
         ranking = scope.launch {
             val engine = ai.engine() ?: return@launch
-            mutableRank.value = AiRank.Ranking(engine)
+            mutableRank.value = AiRank.Understanding(engine)
             mutableRank.value = try {
-                val answer = ai.search(text)
+                val understood = try {
+                    ai.understand(text)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+                mutableRank.value = AiRank.Ranking(engine, understood)
+                val answer = ai.search(text, understood)
                 // The search started above shows first; the ranked cards then take its place.
                 shown?.join()
                 val feed = CardFeed(scope) { cursor -> ApiResult.Ok(if (cursor == null) CardPage(answer.cards) else CardPage()) }
                 mutableResults.value = feed
                 feed.loadMore()
-                AiRank.Ranked(engine, answer.ranked)
+                val byId = answer.cards.associateBy { it.id }
+                AiRank.Ranked(engine, answer.ranked, answer.understood ?: understood, answer.answer?.text,
+                    answer.answer?.ids.orEmpty().mapNotNull(byId::get))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

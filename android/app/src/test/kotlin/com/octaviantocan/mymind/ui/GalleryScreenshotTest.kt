@@ -24,15 +24,19 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.octaviantocan.mymind.data.AiSpace
+import com.octaviantocan.mymind.data.AiUnderstood
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
+import com.octaviantocan.mymind.ui.library.AiRank
 import com.octaviantocan.mymind.ui.library.EverythingContent
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.MosaicState
 import com.octaviantocan.mymind.ui.library.steppedPosition
 import com.octaviantocan.mymind.ui.library.SearchType
+import com.octaviantocan.mymind.ui.library.sourceLabel
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.shell.LibraryFootBar
 import com.octaviantocan.mymind.ui.shell.ShellFrame
@@ -196,6 +200,32 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         compose.onRoot().captureRoboImage("screenshots/gallery_scrolled_top_blur_${if (dark) "dark" else "light"}.png")
     }
     @Test fun search() = capture(2, "gallery_search", searching = true)
+
+    @Test fun searchAnsweredByTheEngine() {
+        mosaicState = MosaicState(2)
+        val reading = AiUnderstood("Walking essays saved in spring", tags = listOf("walks"), spaces = listOf(AiSpace("s1", "Reading")),
+            question = true)
+        val rank = AiRank.Ranked("Claude Code", 2, reading, "You saved the walking essay in April, with two photos of the same trail.",
+            cards.take(1))
+        compose.setPhoneContent(dark) {
+            ShellFrame(Tab.Everything, {}, PageScheme.System, footer = {
+                LibraryFootBar(Tab.Everything, {}, true, "when did I save the walking essay", {}, {}, {})
+            }) {
+                EverythingContent(FeedState(cards, endReached = true), true, FeedState(cards, endReached = true),
+                    SearchType.entries.map { it.suggestion }, null, emptyList(), {}, {}, {}, {}, {}, {}, {}, {},
+                    mosaic = remember { mosaicState }, ai = rank)
+            }
+        }
+        compose.mainClock.autoAdvance = true
+        compose.mainClock.advanceTimeBy(1200)
+        compose.waitForIdle()
+        compose.onNodeWithText("Walking essays saved in spring").assertExists()
+        compose.onNodeWithText("Ranked by Claude Code").assertExists()
+        compose.onNodeWithText("#walks").assertExists()
+        compose.onNodeWithText("Space: Reading").assertExists()
+        compose.onNodeWithText(sourceLabel(cards.first())).assertExists()
+        compose.onRoot().captureRoboImage("screenshots/gallery_search_answered_${if (dark) "dark" else "light"}.png")
+    }
     @Test fun differentNoteTypes() = capture(2, "gallery_notes", sample = mixedNotes, highlights = emptyList())
     @Test fun compactNoteTypes() = capture(4, "gallery_notes_compact", sample = mixedNotes, highlights = emptyList())
 

@@ -88,7 +88,7 @@ fn forward(url: &str, method: &str, headers: &Headers, body: Option<web_sys::Rea
     web_sys::Request::new_with_str_and_init(url, &init).map_err(js_error)
 }
 
-async fn send(stub: worker::Stub, request: web_sys::Request) -> Result<Response> {
+async fn send(stub: &worker::Stub, request: web_sys::Request) -> Result<Response> {
     let response = stub.fetch_with_request(worker::Request::from(request)).await.map_err(worker_error)?;
     let response: web_sys::Response = response.into();
     response_into(&response)
@@ -109,7 +109,7 @@ async fn auth_call(env: &Env, call: &str, body: Option<String>) -> Result<Respon
         init.set_body(&JsValue::from_str(&body));
     }
     let request = web_sys::Request::new_with_str_and_init(&format!("http://auth/{call}"), &init).map_err(js_error)?;
-    send(auth_stub(env)?, request).await
+    send(&auth_stub(env)?, request).await
 }
 
 async fn body_text(request: &web_sys::Request) -> Result<String> {
@@ -154,7 +154,7 @@ async fn admin(request: &web_sys::Request, env: &Env, url: &url::Url) -> Result<
     if area == "library" && rest.len() == 2 && !rest[0].is_empty() && rest[0].bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-') {
         let headers = Headers::from([("x-mymind-library", rest[0]), ("x-mymind-admin", rest[1]), ("content-type", "application/json")]);
         let stub = env.durable_object("LIBRARY").map_err(worker_error)?.get_by_name(rest[0]).map_err(worker_error)?;
-        return send(stub, forward(url.as_str(), &method, &headers, request.body())?).await;
+        return send(&stub, forward(url.as_str(), &method, &headers, request.body())?).await;
     }
     if area == "auth" && rest.is_empty() && method == "GET" {
         return auth_call(env, "summary", None).await;
@@ -218,7 +218,7 @@ async fn download(request: &web_sys::Request, env: &Env, url: &url::Url, user: &
 }
 
 /// Claude Code and Codex for the signed-in account (`mm_ai`), its sign-ins kept by its `AgentHome`, with its library's
-/// own search for the cards an AI search ranks.
+/// own routes for what an AI search reads: its searches, tags and spaces.
 async fn ai(request: &web_sys::Request, env: &Env, url: &url::Url, headers: &Headers, library: worker::Stub) -> Result<Response> {
     ai_kit::home::install(env, "AGENT_HOME").map_err(worker_error)?;
     ai_kit::rt::env::set(runtime::bindings(env));
@@ -229,13 +229,16 @@ async fn ai(request: &web_sys::Request, env: &Env, url: &url::Url, headers: &Hea
     for name in ["content-type", "content-length", "transfer-encoding"] {
         search.remove(name);
     }
-    let candidates = |target: String| async move {
-        let failed = |error: Error| anyhow::anyhow!(error.to_string());
-        let response = send(library, forward(&format!("{origin}{target}"), "GET", &search, None).map_err(failed)?).await.map_err(failed)?;
-        anyhow::ensure!(response.status == 200, "The library search did not answer.");
-        Ok(serde_json::from_slice(&response.body.bytes().await.map_err(failed)?)?)
+    let library = |target: String| {
+        let (library, origin, search) = (&library, &origin, &search);
+        async move {
+            let failed = |error: Error| anyhow::anyhow!(error.to_string());
+            let response = send(library, forward(&format!("{origin}{target}"), "GET", search, None).map_err(failed)?).await.map_err(failed)?;
+            anyhow::ensure!(response.status == 200, "The library did not answer.");
+            Ok(serde_json::from_slice(&response.body.bytes().await.map_err(failed)?)?)
+        }
     };
-    let reply = mm_ai::answer(&login, &request.method(), url, &body, candidates)
+    let reply = mm_ai::answer(&login, &request.method(), url, &body, library)
         .await
         .unwrap_or_else(|| unreachable!("ai runs only for the paths mm_ai serves"));
     Ok(Response::new(reply.status, Headers::from([("content-type", "application/json"), ("cache-control", "no-store")]), reply.body.to_string()))
@@ -273,7 +276,7 @@ async fn route(request: web_sys::Request, env: Env) -> Result<Reply> {
         gate_headers.remove("content-length");
         gate_headers.remove("transfer-encoding");
     }
-    let gate = send(auth_stub(&env)?, forward(url.as_str(), &method, &gate_headers, if with_body { request.body() } else { None })?).await?;
+    let gate = send(&auth_stub(&env)?, forward(url.as_str(), &method, &gate_headers, if with_body { request.body() } else { None })?).await?;
     let Some(library) = gate.headers.get("x-mymind-library").map(str::to_owned) else {
         let listing = url.path() == "/download" || url.path() == "/download/";
         if listing && gate.status == 401 {

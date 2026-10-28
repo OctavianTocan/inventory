@@ -277,11 +277,19 @@ Source: Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Whol
 @cc [owner:OctavianTocan,label:product] search-ranks-with-claude-or-codex-on-submit
 Typing in search MUST keep answering at once from words and meaning, with no AI call.
 Pressing search on the keyboard with the chosen engine signed in MUST keep those matches
-on screen, say under the Search title that the engine is ranking them, then show the
-engine's order: the cards it ranked first, then the rest of the matches, with a note
-naming the engine. A failed ranking MUST keep the matches and say why. Typing again or
-changing the filter MUST drop the ranking. Same vibe is never ranked, and without a
+on screen while the engine first reads what the search means: its words, card types,
+dates against the phone's today, and the person's own tags and spaces. The library then
+runs the searches the engine wrote and the matching spaces, and the engine ranks what
+they found. Under the Search title the page MUST say which step the engine is on, then
+what it is looking for in plain words, with chips for the matching tags (a tap filters by
+the tag) and spaces (a tap opens the space). The results MUST then show the cards it
+ranked first, then the rest of the matches, with a note naming the engine. When the
+search asks a question, the engine MUST answer it from the found cards alone, above the
+results, naming the cards it drew from. A failed reading MUST still rank the search's own
+matches, and a failed ranking MUST keep the matches and say why. Typing again or changing
+the filter MUST drop the engine's work. Same vibe is never ranked, and without a
 signed-in engine pressing search changes nothing.
 Source: Tavi, 28 October 2026 ("we will modify how the search works so that we use
 Claude or Codex", combined with the embedding search of the plan "ThyMind: instant app
-and better search").
+and better search"); Tavi, 28 October 2026 ("lets make sure that the search your mind
+search is actually super useful and uses llms as needed").

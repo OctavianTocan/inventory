@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.30 (41), 2026-10-28
+Search your mind understands what you mean and answers questions.
+
+### Changed
+- Pressing search on the keyboard, with Claude Code or Codex signed in, now has it read what you mean first: the kind of thing, what it is about, when you saved it, and which of your tags and spaces fit. It searches for that, ranks what it finds, and shows what it looked for, with your matching tags and spaces as chips: a tag narrows the search, a space opens it.
+- Ask a question, such as "when did I save that essay about walking", and it answers in a few sentences from your own cards, with the cards it used under the answer.
+- If reading the search fails, it still ranks what your words found. This works once your server is updated for 0.6.30.
+
 ## 0.6.29 (40), 2026-10-28
 Letting go of a pinch partway lands smoothly.
 
