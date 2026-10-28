@@ -19,6 +19,7 @@ import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /** One band of the gallery, in pixels, in the server's original card order: a lazy-list slot of one or two rows. */
 internal data class MosaicRow(val cards: List<Card>, val widths: List<Float>, val height: Float) {
@@ -320,9 +321,10 @@ class MosaicState(initialColumns: Int = 2) {
         hopGap = 0f
     }
 
+    /** Ends a pinch the gallery lost, on the stop nearest where it is; a landing already under way keeps its stop. */
     internal fun cancelPinch() {
+        if (isPinching) columns = position.roundToInt().coerceIn(1, 4)
         isPinching = false
-        columns = position.roundToInt().coerceIn(1, 4)
         hopGap = 0f
         gestureScale = 1f
     }
@@ -386,6 +388,63 @@ internal fun releaseColumns(finger: Float, direction: Int): Int = when {
     direction > 0 -> ceil(finger - 0.25f).toInt()
     else -> finger.roundToInt()
 }.coerceIn(1, 4)
+
+/**
+ * How long a landing of [way] stops takes: 250 ms for a whole stop, the pace of one Larger or Smaller step, and longer
+ * than its share for a short way, so the last fifth of a stop after a hop eases in about 100 ms instead of snapping.
+ */
+internal fun settleMillis(way: Float): Float = 250f * sqrt(abs(way))
+
+/**
+ * How far a landing has come at [fraction] of its time: a cubic that starts at [lead] times its average speed and comes
+ * to rest, so the cards keep the speed they had when the fingers let go instead of jumping to the landing's own. A
+ * [lead] of 0 starts from still; 3, the most it takes, is the plain ease-out. It never overshoots.
+ */
+internal fun settleProgress(fraction: Float, lead: Float): Float {
+    val t = fraction.coerceIn(0f, 1f)
+    val m = lead.coerceIn(0f, 3f)
+    return m * t * (1f - t) * (1f - t) + t * t * (3f - 2f * t)
+}
+
+/**
+ * The [settleProgress] lead of a landing [way] stops long that takes [millis] and starts while the density moves at
+ * [speed] stops per millisecond: 0 when the cards were still or moving away from where they land.
+ */
+internal fun settleLead(speed: Float, way: Float, millis: Float): Float =
+    if (way == 0f || millis <= 0f) 0f else (speed * millis / way).coerceIn(0f, 3f)
+
+/** The density's speed as a pinch ends, in stops per millisecond, measured over about its last [SPEED_WINDOW_MILLIS]. */
+internal class MosaicSpeed {
+    private val times = ArrayDeque<Long>()
+    private val positions = ArrayDeque<Float>()
+
+    fun clear() {
+        times.clear()
+        positions.clear()
+    }
+
+    /** Records that the density was at [position] at [time], in milliseconds. */
+    fun add(time: Long, position: Float) {
+        times.addLast(time)
+        positions.addLast(position)
+        while (times.size > 1 && time - times.first() > 4 * SPEED_WINDOW_MILLIS) {
+            times.removeFirst()
+            positions.removeFirst()
+        }
+    }
+
+    /**
+     * The speed that brought the density to [position] at [time]: from the first sample in the window before it, or the
+     * last sample when none is that recent, so fingers held still before letting go give 0.
+     */
+    fun at(time: Long, position: Float): Float {
+        val index = times.indexOfFirst { time - it <= SPEED_WINDOW_MILLIS }.takeIf { it >= 0 } ?: times.lastIndex
+        if (index < 0 || time <= times[index]) return 0f
+        return (position - positions[index]) / (time - times[index])
+    }
+}
+
+private const val SPEED_WINDOW_MILLIS = 50L
 
 /** The ease-out curve of a hop: fast away, gentle landing. */
 private fun hopEase(fraction: Float): Float {

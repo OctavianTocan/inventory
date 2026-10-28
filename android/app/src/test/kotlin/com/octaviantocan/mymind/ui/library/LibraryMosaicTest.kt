@@ -14,8 +14,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.click
@@ -377,6 +379,87 @@ class LibraryMosaicTest {
         gallery.performTouchInput { up(0); up(1) }
         compose.waitForIdle()
         assertEquals(3, density.columns)
+    }
+
+    /**
+     * Pinches a gallery of photos and notes from [from] columns until the fingers are at [finger], lets go after holding
+     * still ([hold]) or while still moving, and steps the landing frame by frame. Returns the density on each pinch and
+     * landing frame, and checks that no photo moves once the landing has reached its stop.
+     */
+    private fun landPartway(from: Int, finger: Float, hold: Boolean): List<Float> {
+        val mixed = cards.take(40).zip(notes) { photo, note -> listOf(photo, note) }.flatten()
+        val density = MosaicState(from)
+        val state = LazyListState(firstVisibleItemIndex = 8)
+        compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(mixed, endReached = true), {}, {}, state = state, mosaic = density) } }
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        val span = if (from == 2) 0.8f else 0.5f
+        fun inset(at: Float) = (1f - span * 1.3f.pow(from - at)) / 2f
+        fun photos(): Map<String, androidx.compose.ui.geometry.Rect> = compose.onAllNodes(hasContentDescription("Photo ", substring = true))
+            .fetchSemanticsNodes().associate { it.config[SemanticsProperties.ContentDescription].first() to it.boundsInRoot }
+        gallery.performTouchInput {
+            down(0, Offset(width * inset(from.toFloat()), height * 0.4f))
+            down(1, Offset(width * (1f - inset(from.toFloat())), height * 0.4f))
+        }
+        compose.mainClock.autoAdvance = false
+        val positions = mutableListOf<Float>()
+        try {
+            compose.mainClock.advanceTimeByFrame()
+            for (step in 1..6) {
+                val at = inset(from + (finger - from) * step / 6)
+                gallery.performTouchInput {
+                    updatePointerTo(0, Offset(width * at, height * 0.4f))
+                    updatePointerTo(1, Offset(width * (1f - at), height * 0.4f))
+                    move(delayMillis = 16)
+                }
+                compose.mainClock.advanceTimeByFrame()
+                positions += density.position
+            }
+            if (hold) repeat(12) { compose.mainClock.advanceTimeByFrame() }
+            gallery.performTouchInput { up(0); up(1) }
+            while (density.position != density.columns.toFloat()) {
+                assertTrue("The landing must end: ${density.position}", positions.size < 60)
+                compose.mainClock.advanceTimeByFrame()
+                positions += density.position
+            }
+            val landed = photos()
+            assertTrue(landed.isNotEmpty())
+            repeat(4) { frame ->
+                compose.mainClock.advanceTimeByFrame()
+                for ((name, place) in photos()) landed[name]?.let {
+                    assertEquals("$name must stay where the landing left it, frame $frame (top)", it.top, place.top, 1.5f)
+                    assertEquals("$name must stay where the landing left it, frame $frame (left)", it.left, place.left, 1.5f)
+                }
+            }
+            assertEquals(density.columns, density.referenceColumns)
+        } finally {
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+        }
+        return positions
+    }
+
+    @Test
+    fun aPinchLetGoBeforeTheNextSizeLandsThereWithoutAJump() {
+        // "It's when I pinch and let go without fully getting to the next stage. Then it pops, instead of being smooth"
+        // (Tavi, 28 Oct 2026). The list took the new size's rows a frame after the scroll position meant for them.
+        val positions = landPartway(2, 2.35f, hold = true)
+        assertEquals(3f, positions.last(), 0f)
+        // The fingers were still, so the landing starts from still rather than at its fastest.
+        assertTrue("The landing's first frame must start slowly: $positions", positions[6] - positions[5] < 0.03f)
+        assertTrue("No frame of the landing may lurch: $positions", positions.drop(5).zipWithNext().all { (a, b) -> b - a < 0.12f })
+    }
+
+    @Test
+    fun aPinchOutLetGoBeforeTheNextSizeLandsThereWithoutAJump() {
+        assertEquals(2f, landPartway(3, 2.65f, hold = true).last(), 0f)
+    }
+
+    @Test
+    fun aLandingStartsAtTheSpeedTheCardsHad() {
+        val positions = landPartway(2, 2.35f, hold = false)
+        val pinching = positions[5] - positions[4]
+        val landing = positions[6] - positions[5]
+        assertTrue("The landing must carry on at about the pinch's speed: $pinching then $landing", landing > 0.5f * pinching && landing < 2f * pinching)
     }
 
     @Test

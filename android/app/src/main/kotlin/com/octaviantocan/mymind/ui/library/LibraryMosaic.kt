@@ -1,8 +1,5 @@
 package com.octaviantocan.mymind.ui.library
 
-import androidx.compose.animation.core.Easing
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -86,6 +83,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
@@ -97,8 +95,6 @@ private const val MOSAIC_HEADER = "gallery-header"
 private const val MOSAIC_ROW = "row:"
 private const val HOP_NANOS = 130 * 1_000_000L
 private const val FRAME_NANOS = 16_666_667L
-private const val SETTLE_MILLIS = 180
-private val SettleEasing = Easing { 1f - (1f - it) * (1f - it) * (1f - it) }
 private val BACKDROP_BLUR = 14.dp
 private const val WAVE_DELAY = 0.5f
 private data class MosaicAnchor(val cardId: String, val viewport: Offset, val fraction: Offset)
@@ -150,6 +146,7 @@ internal fun LibraryMosaic(
     var anchorXWeight by remember { mutableFloatStateOf(1f) }
     var pivotId by remember { mutableStateOf<String?>(null) }
     val waves = remember { MosaicWaves() }
+    val pinchSpeed = remember { MosaicSpeed() }
     val latestFeed by rememberUpdatedState(feed)
     val latestMore by rememberUpdatedState(onLoadMore)
     val headerItems = if (header == null) 0 else 1
@@ -159,9 +156,6 @@ internal fun LibraryMosaic(
         val gap = with(density) { MOSAIC_GAP.toPx() }
         val bottomPadding = with(density) { 156.dp.toPx() }
         val layouts = remember(feed.cards, width, gap, tiles) { MosaicLayouts(feed.cards, width, gap, tiles) }
-        // The slots measure against the rows composed here, never a newer reference whose rows are not composed yet.
-        val referenceColumns = mosaic.referenceColumns
-        val rows = layouts.level(referenceColumns).rows
 
         fun clampOrigin(value: Float): Float {
             val first = if (header == null) 0f else -headerHeight.toFloat()
@@ -266,15 +260,28 @@ internal fun LibraryMosaic(
             return MosaicAnchor(layouts.cards[nearest].id, at,
                 Offset((at.x - cell.left) / cell.width, (at.y - cell.top) / cell.height))
         }
-        fun settle() {
+        /** Lands on the current columns from where the gallery is, starting at [speed] stops per millisecond. */
+        fun settle(speed: Float = 0f) {
             settling?.cancel()
             settling = scope.launch {
                 val start = mosaic.position
                 val xWeight = anchorXWeight
-                if (moving) {
-                    animate(0f, 1f, animationSpec = tween(SETTLE_MILLIS, easing = SettleEasing)) { value, _ ->
-                        mosaic.position = start + (mosaic.columns - start) * value
-                        anchorXWeight = xWeight * (1f - value)
+                val way = mosaic.columns - start
+                val millis = settleMillis(way)
+                if (moving && millis >= 1f) {
+                    val lead = settleLead(speed, way, millis)
+                    // The frame that shows the landing counts as its first, as a hop's does, so the cards never stand
+                    // still for a frame between the fingers and the landing.
+                    var began = -1L
+                    var done = 0f
+                    while (done < 1f) {
+                        val now = withFrameNanos { it }
+                        // A frame already sent can arrive after the gallery is gone; it must not undo the stop it saved.
+                        ensureActive()
+                        if (began < 0) began = now - FRAME_NANOS
+                        done = settleProgress((now - began) / (millis * 1_000_000f), lead)
+                        mosaic.position = start + way * done
+                        anchorXWeight = xWeight * (1f - done)
                         alignAnchor()
                     }
                 } else {
@@ -329,9 +336,8 @@ internal fun LibraryMosaic(
         val captureLatest by rememberUpdatedState<(Offset?) -> MosaicAnchor?> { focal -> capture(focal) }
         val hopLatest by rememberUpdatedState<() -> Unit> { hop() }
         val alignLatest by rememberUpdatedState<() -> Unit> { alignAnchor() }
-        val settleLatest by rememberUpdatedState<() -> Unit> { settle() }
+        val settleLatest by rememberUpdatedState<(Float) -> Unit> { speed -> settle(speed) }
         val latestLayouts by rememberUpdatedState(layouts)
-        val latestRows by rememberUpdatedState(rows)
         val latestHeaderItems by rememberUpdatedState(headerItems)
         DisposableEffect(mosaic, state) {
             onDispose {
@@ -354,7 +360,7 @@ internal fun LibraryMosaic(
             snapshotFlow {
                 val current = latestFeed
                 MosaicLoadPosition(current.cards.size, state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
-                    latestRows.size + latestHeaderItems, !current.loading && !current.refreshing && !current.endReached && current.error == null)
+                    latestLayouts.level(mosaic.referenceColumns).rows.size + latestHeaderItems, !current.loading && !current.refreshing && !current.endReached && current.error == null)
             }.distinctUntilChanged().filter { it.ready && it.last >= it.total - 3 }.collect { latestMore() }
         }
         Box(Modifier.fillMaxSize().clipToBounds()
@@ -367,7 +373,7 @@ internal fun LibraryMosaic(
                     reverseScrolling = false,
                 )
                 scrollToIndex { index ->
-                    if (index < 0 || index >= rows.size + headerItems) false else {
+                    if (index < 0 || index >= layouts.level(mosaic.referenceColumns).rows.size + headerItems) false else {
                         scope.launch { state.scrollToItem(index) }
                         true
                     }
@@ -387,9 +393,11 @@ internal fun LibraryMosaic(
                         settling?.cancel()
                         var pinched = false
                         var dragged = false
+                        var released = firstDown.uptimeMillis
                         var pointers = emptySet<androidx.compose.ui.input.pointer.PointerId>()
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
+                            released = event.changes.maxOf { it.uptimeMillis }
                             val pressed = event.changes.filter { it.pressed }.map { it.id }.toSet()
                             if (!pinched && !dragged && pressed.size == 1) {
                                 val point = event.changes.first { it.pressed }.position
@@ -408,12 +416,15 @@ internal fun LibraryMosaic(
                                     anchorXWeight = 1f
                                     mosaic.beginPinch()
                                     hopLatest()
+                                    pinchSpeed.clear()
+                                    pinchSpeed.add(released, mosaic.position)
                                     scope.launch(start = CoroutineStart.UNDISPATCHED) { state.stopScroll(MutatePriority.PreventUserInput) }
                                 } else {
                                     // The focal point stays where the fingers met: a pinch resizes but never pans.
                                     mosaic.zoomPinch(event.calculateZoom())
                                     alignLatest()
                                     hopLatest()
+                                    pinchSpeed.add(released, mosaic.position)
                                 }
                             }
                             if (pinched) event.changes.forEach { it.consume() }
@@ -421,11 +432,11 @@ internal fun LibraryMosaic(
                         } while (event.changes.any { it.pressed })
                         if (pinched) {
                             mosaic.finishPinch()
-                            settleLatest()
+                            settleLatest(pinchSpeed.at(released, mosaic.position))
                         } else {
                             val needsSettle = mosaic.position != mosaic.columns.toFloat() || anchor != null
                             if (needsSettle && anchor == null) anchor = captureLatest(null)
-                            if (needsSettle) settleLatest()
+                            if (needsSettle) settleLatest(0f)
                         }
                     }
                 } finally {
@@ -440,10 +451,13 @@ internal fun LibraryMosaic(
                 if (header != null) item(key = MOSAIC_HEADER, contentType = "header") {
                     Column(Modifier.onSizeChanged { headerHeight = it.height }.padding(bottom = MOSAIC_GAP)) { header() }
                 }
-                // These semantic-free slots retain LazyListState and fling/viewport bookkeeping while cards regroup.
-                itemsIndexed(rows, key = { _, row -> "$MOSAIC_ROW${row.key}" }, contentType = { _, _ -> "bricks" }) { index, _ ->
+                // These semantic-free slots retain LazyListState and fling/viewport bookkeeping while cards regroup. The
+                // list reads its rows as it measures, so a landing's new rows and its scroll request reach it in the same
+                // pass: read while composing, the request met the old rows and the gallery jumped once it had landed.
+                val reference = mosaic.referenceColumns
+                itemsIndexed(layouts.level(reference).rows, key = { _, row -> "$MOSAIC_ROW${row.key}" }, contentType = { _, _ -> "bricks" }) { index, _ ->
                     Layout(content = {}, modifier = Modifier.fillMaxWidth()) { _, constraints ->
-                        layout(constraints.maxWidth, layouts.slotHeight(index, referenceColumns, mosaic.position).roundToInt()) {}
+                        layout(constraints.maxWidth, layouts.slotHeight(index, reference, mosaic.position).roundToInt()) {}
                     }
                 }
                 if (feed.cards.isNotEmpty() && (feed.loading || feed.error != null)) item(key = "gallery-footer", contentType = "footer") {

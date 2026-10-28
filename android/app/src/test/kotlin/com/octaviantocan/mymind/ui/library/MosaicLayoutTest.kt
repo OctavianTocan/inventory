@@ -282,4 +282,37 @@ class MosaicLayoutTest {
         assertEquals(4, state.columns)
         assertFalse(state.isPinching)
     }
+
+    @Test
+    fun aLandingStartsAtTheCardsSpeedAndComesToRestWithoutOvershooting() {
+        for (lead in listOf(0f, 0.5f, 1f, 3f, 7f)) {
+            assertEquals(0f, settleProgress(0f, lead), 0f)
+            assertEquals(1f, settleProgress(1f, lead), 1e-6f)
+            val curve = (0..100).map { settleProgress(it / 100f, lead) }
+            assertTrue("Lead $lead must never turn back or overshoot", curve.zipWithNext().all { (a, b) -> b >= a - 1e-6f } && curve.max() <= 1f + 1e-6f)
+            // It leaves at the lead's speed and arrives at rest.
+            assertEquals(lead.coerceAtMost(3f), settleProgress(0.001f, lead) / 0.001f, 0.01f)
+            assertEquals(0f, (1f - settleProgress(0.999f, lead)) / 0.001f, 0.01f)
+        }
+        assertEquals(250f, settleMillis(1f), 1e-3f)
+        assertEquals(250f, settleMillis(-1f), 1e-3f)
+        assertEquals("The last of a stop after a hop is not rushed", 103f, settleMillis(0.17f), 1f)
+        // At the most it takes, it is the plain ease-out.
+        assertEquals(1f - 0.5f * 0.5f * 0.5f, settleProgress(0.5f, 3f), 1e-6f)
+        // 0.3 stops per 100 ms toward a stop 0.6 away, landed in 150 ms: the cards leave at 0.75 times the average speed.
+        assertEquals(0.75f, settleLead(0.003f, 0.6f, 150f), 1e-4f)
+        assertEquals("Moving away from the stop starts from still", 0f, settleLead(0.003f, -0.6f, 150f), 0f)
+        assertEquals(3f, settleLead(1f, 0.6f, 150f), 0f)
+    }
+
+    @Test
+    fun aPinchsSpeedIsTheDensitysLastMoveAndZeroAfterAHold() {
+        val speed = MosaicSpeed()
+        assertEquals(0f, speed.at(100, 2f), 0f)
+        for (frame in 0..10) speed.add(frame * 16L, 2f + frame * 0.016f)
+        assertEquals(0.001f, speed.at(160, 2.16f), 1e-5f)
+        assertEquals("Fingers held still before letting go give no speed", 0f, speed.at(400, 2.16f), 0f)
+        speed.clear()
+        assertEquals(0f, speed.at(400, 2.16f), 0f)
+    }
 }

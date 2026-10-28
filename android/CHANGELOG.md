@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.29 (40), 2026-10-28
+Letting go of a pinch partway lands smoothly.
+
+### Fixed
+- Letting go of a pinch before the next size no longer pops. The cards carry on at the speed they had under your fingers, or start gently if you held still, instead of leaping off at full speed.
+- The gallery no longer jumps a row, or further, just after a pinch lands on a new size.
+- A landing takes a quarter of a second for a whole size and less for a short way, without snapping.
+
 ## 0.6.28 (39), 2026-10-28
 An open card now does everything the chosen design does: hold any part for its own actions, write your note, read in Reader Mode, and share the picture or the whole card as an image.
 

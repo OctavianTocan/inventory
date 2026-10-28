@@ -60,16 +60,22 @@ gesture the grids MUST cover the full width, clipping their outer edges rather t
 leaving horizontal slack; where moving cards leave a gap, the blurred fill shows. The
 profile and highlights keep their own scale. Release MUST land the way the fingers
 were moving once they are a quarter of the way to the next stop, settling the same
-geometry in 180 ms without an independent row animation; reduced motion settles
+geometry without an independent row animation, in 250 ms for a whole stop (the pace of
+a Larger or Smaller step) and 250 ms times the square root of a shorter way, so a short
+way is quick but never snaps. The landing MUST start at the speed the cards had as
+the fingers let go, from still when they were held, and come to rest without
+overshooting; the frame that shows it already moves. Reduced motion settles
 synchronously. The gesture, its
 cancellation and a remaining one-finger tail MUST NOT open a card, open its action
 sheet, or trigger pull to refresh. Rendering MUST retain stable card keys and a lazy,
 bounded visible window, without scanning all cards or changing image decode sizes
 on each pointer frame. Ending a landing MUST draw every frame, even when the new size
-has fewer rows than the list still holds. Equivalent larger/smaller actions MUST be accessible, and
+has fewer rows than the list still holds, and MUST leave every card where the
+landing's last frame drew it: the list takes the new size's rows and its scroll
+position in the same pass. Equivalent larger/smaller actions MUST be accessible, and
 each tab MUST retain its density and scroll position. Removing the gallery during
-a gesture or settle MUST synchronously save a canonical density and anchored scroll
-request, so reusing its state cannot restore a fractional transition.
+a gesture or settle MUST synchronously save a canonical density, the stop a landing
+was headed for, and an anchored scroll request, so reusing its state cannot restore a fractional transition.
 Source: Tavi, 22 October 2026, explicit pinch-to-enlarge/reduce requirement; the
 recorded review of the same day, with Google Photos as the reference ("the
 intermediate state where there is emptiness", "I shouldn't be able to pan"); the
@@ -80,7 +86,11 @@ is actually what I want", "All of them have transitions that last too long", "I 
 want to see blank spots between them"), who then picked O3b of the "Calmer steps for
 O" canvas; the web showcase's port of O3b found the focal card wrapping when it
 changed shape, fixed the same day; Tavi on the same port, 28 October 2026 ("at the
-end of the transition it all pops for a frame"): the fill vanished in one frame.
+end of the transition it all pops for a frame"): the fill vanished in one frame; Tavi,
+28 October 2026 ("It's when I pinch and let go without fully getting to the next stage.
+Then it pops, instead of being smooth"): the landing started at three times its average
+speed, and the gallery jumped once it had landed. The pace and curve match the web
+showcase's fix of the same day.
 
 @cc [owner:OctavianTocan,label:product;motion] gallery-pinches-everywhere
 Every gallery of cards, Everything, search results and an opened space, MUST pinch as
