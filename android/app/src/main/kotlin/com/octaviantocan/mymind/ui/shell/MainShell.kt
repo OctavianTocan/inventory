@@ -68,6 +68,17 @@ import com.octaviantocan.mymind.ui.library.LibraryViewModel
 import com.octaviantocan.mymind.ui.library.NewSpaceDialog
 import com.octaviantocan.mymind.ui.library.SpacesScreen
 import com.octaviantocan.mymind.ui.library.rememberPublicAccountPhotoLoader
+import androidx.compose.ui.graphics.asAndroidBitmap
+import com.octaviantocan.mymind.ui.card.PartAction
+import com.octaviantocan.mymind.ui.card.partText
+import com.octaviantocan.mymind.ui.library.galleryPicture
+import com.octaviantocan.mymind.ui.menu.CardImagePage
+import com.octaviantocan.mymind.ui.menu.NotePage
+import com.octaviantocan.mymind.ui.menu.PartContent
+import com.octaviantocan.mymind.ui.menu.cacheImage
+import com.octaviantocan.mymind.ui.menu.loadPicture
+import com.octaviantocan.mymind.ui.menu.sharePicture
+import com.octaviantocan.mymind.ui.menu.sharedImageName
 import com.octaviantocan.mymind.ui.menu.AllSpacesPage
 import com.octaviantocan.mymind.ui.menu.InlineSpaces
 import com.octaviantocan.mymind.ui.menu.SpaceChoices
@@ -110,8 +121,9 @@ private val MENU_BLUR = 8.dp
  *
  * @property card The card.
  * @property spaceId Space it was opened from, or null.
+ * @property reading True while it shows in Reader Mode.
  */
-data class OpenedCard(val card: Card, val spaceId: String?)
+data class OpenedCard(val card: Card, val spaceId: String?, val reading: Boolean = false)
 
 /**
  * Where the + button was tapped.
@@ -153,7 +165,7 @@ fun MainShell(
     var uploadTarget by remember { mutableStateOf(AddTarget(null)) }
     var photo by remember { mutableStateOf<File?>(null) }
     var submenu by remember { mutableStateOf<CardSubmenu?>(null) }
-    var sheetRoot by remember { mutableStateOf(CardSheetRoot.Actions) }
+    var sheetRoot by remember { mutableStateOf<CardSheetRoot>(CardSheetRoot.Actions) }
     // Cards opened before the one on screen, latest first, for the reader's name card.
     val recent = remember { mutableStateListOf<Card>() }
     var newSpaceOpen by remember { mutableStateOf(false) }
@@ -195,6 +207,13 @@ fun MainShell(
         opened = OpenedCard(card, spaceId)
     }
     val closeCard = { opened?.card?.let(keepRecent); opened = null }
+    val read = { card: Card, spaceId: String? ->
+        if (opened?.card?.id == card.id) opened = opened?.copy(reading = true)
+        else {
+            openCard(card, spaceId)
+            opened = opened?.copy(reading = true)
+        }
+    }
     // The opened card follows the phone's copy too, such as a shared link the server has just read.
     val openedId = opened?.card?.id
     LaunchedEffect(openedId) {
@@ -225,6 +244,20 @@ fun MainShell(
         Unit
     }
     val copyLink = { card: Card -> card.url?.let { url -> scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("link", url))) } }; Unit }
+    // Copies the card's picture or hands it to another app, through a file in the cache the app's provider lends out.
+    val pictureOut = { card: Card, copy: Boolean ->
+        scope.launch {
+            val bitmap = loadPicture(context, card)
+            if (bitmap == null) {
+                Toast.makeText(context, NO_PICTURE, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val uri = cacheImage(context, bitmap, sharedImageName(card, ".jpg"), png = false)
+            if (copy) clipboard.setClipEntry(ClipEntry(ClipData.newUri(context.contentResolver, "picture", uri)))
+            else sharePicture(context, uri, "image/jpeg")
+        }
+        Unit
+    }
     val togglePin = { card: Card ->
         scope.launch {
             val pin = CardMenuItem(if (card.pinned) CardMenuAction.RemoveFromTopOfMind else CardMenuAction.AddToTopOfMind)
@@ -282,10 +315,9 @@ fun MainShell(
                             onMenu = { openMenu(open.card, open.spaceId) },
                             actionsProgress = menuProgress,
                             shrink = shrink,
+                            reading = open.reading,
                             actions = ReaderActions(
-                                onShare = if (open.card.url != null || shareText(open.card) != null) {
-                                    { openSheet(open.card, open.spaceId, CardSheetRoot.Share, null) }
-                                } else null,
+                                onShare = { openSheet(open.card, open.spaceId, CardSheetRoot.Share, null) },
                                 onAddTags = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Tags) },
                                 onCopyLink = { copyLink(open.card) },
                                 onTogglePin = { togglePin(open.card) },
@@ -295,6 +327,8 @@ fun MainShell(
                                     closeCard()
                                     selectTab(Tab.Everything)
                                 },
+                                onPart = { part -> openSheet(open.card, open.spaceId, CardSheetRoot.Part(part), null) },
+                                onReading = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(reading = on) ?: opened },
                             ),
                             details = ReaderDetails(
                                 spaces = spaces.spaces.filter { it.id in open.card.spaces.orEmpty() }.mapNotNull { it.name },
@@ -410,6 +444,7 @@ fun MainShell(
                         }
                         is CardMenuOutcome.PinChanged -> updateCard(outcome.card)
                         is CardMenuOutcome.Downloaded -> Toast.makeText(context, DOWNLOADED, Toast.LENGTH_SHORT).show()
+                        is CardMenuOutcome.Read -> read(outcome.card, target.spaceId)
                         is CardMenuOutcome.ShowSimilar -> {
                             opened = null
                             tab = Tab.Everything
@@ -426,15 +461,59 @@ fun MainShell(
             position = sheetState,
             submenu = submenu,
             root = sheetRoot,
-            rootContent = if (sheetRoot == CardSheetRoot.Share) ({
-                val card = target.card
-                ShareContent(
-                    card,
-                    onShareLink = card.url?.let { url -> { closeMenu(); send(url, card.title) } },
-                    onShareText = shareText(card)?.let { text -> { closeMenu(); send(text, card.title) } },
-                    onCopyLink = card.url?.let { { closeMenu(); copyLink(card) } },
-                )
-            }) else null,
+            rootContent = when (val root = sheetRoot) {
+                CardSheetRoot.Share -> ({
+                    val card = target.card
+                    ShareContent(
+                        card,
+                        onShareLink = card.url?.let { url -> { closeMenu(); send(url, card.title) } },
+                        onShareText = shareText(card)?.let { text -> { closeMenu(); send(text, card.title) } },
+                        onCopyLink = card.url?.let { { closeMenu(); copyLink(card) } },
+                        onSharePicture = galleryPicture(card)?.let { { closeMenu(); pictureOut(card, false) } },
+                        onCardImage = { submenu = CardSubmenu.CardImage },
+                    )
+                })
+                is CardSheetRoot.Part -> ({
+                    val card = target.card
+                    PartContent(root.part, card) { choice ->
+                        when (choice.action) {
+                            PartAction.Copy -> partText(root.part, card)?.let { text ->
+                                closeMenu()
+                                scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(root.part.heading, text))) }
+                            }
+                            PartAction.Share -> partText(root.part, card)?.let { text -> closeMenu(); send(text, card.title) }
+                            PartAction.EditTags -> {
+                                viewModel.loadTagChoices()
+                                submenu = CardSubmenu.Tags
+                            }
+                            PartAction.EditNote -> submenu = CardSubmenu.Note
+                            PartAction.Read -> {
+                                closeMenu()
+                                read(card, target.spaceId)
+                            }
+                            PartAction.SavePicture -> {
+                                closeMenu()
+                                scope.launch {
+                                    when (val outcome = viewModel.perform(CardMenuItem(CardMenuAction.Download), card, target.spaceId)) {
+                                        is CardMenuOutcome.Downloaded -> Toast.makeText(context, DOWNLOADED, Toast.LENGTH_SHORT).show()
+                                        is CardMenuOutcome.Failed -> failure = outcome.failure
+                                        else -> Unit
+                                    }
+                                }
+                            }
+                            PartAction.CopyPicture -> {
+                                closeMenu()
+                                pictureOut(card, true)
+                            }
+                            PartAction.SharePicture -> {
+                                closeMenu()
+                                pictureOut(card, false)
+                            }
+                        }
+                    }
+                })
+                CardSheetRoot.Actions -> null
+            },
             spaces = {
                 InlineSpaces(choices, target.card, onToggle = toggleSpace, onAll = {
                     viewModel.acknowledgeCardSpaceCreation()
@@ -466,6 +545,25 @@ fun MainShell(
                             onCreate = { name, color -> viewModel.createCardSpace(name, color, menuFor?.card) },
                             onAcknowledge = viewModel::acknowledgeCardSpaceCreation,
                         )
+                        CardSubmenu.Note -> NotePage(target.card.note.orEmpty(), onSave = { text ->
+                            focusManager.clearFocus()
+                            closeMenu()
+                            scope.launch {
+                                val card = menuFor?.card ?: return@launch
+                                when (val answer = viewModel.setNote(card, text)) {
+                                    is ApiResult.Ok -> updateCard(answer.value)
+                                    is ApiResult.Failed -> failure = answer.failure
+                                }
+                            }
+                        })
+                        CardSubmenu.CardImage -> CardImagePage(target.card) { image ->
+                            val card = target.card
+                            closeMenu()
+                            scope.launch {
+                                val uri = cacheImage(context, image.asAndroidBitmap(), sharedImageName(card, ".png"), png = true)
+                                sharePicture(context, uri, "image/png")
+                            }
+                        }
                     }
             },
         )
@@ -534,6 +632,7 @@ fun MainShell(
 }
 
 private const val DOWNLOADED = "Successfully downloaded"
+private const val NO_PICTURE = "The picture could not be loaded"
 
 /** How many recently opened cards the shell keeps for the reader's name card. */
 private const val RECENT_KEPT = 8

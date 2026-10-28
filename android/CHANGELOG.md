@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.28 (39), 2026-10-28
+An open card now does everything the chosen design does: hold any part for its own actions, write your note, read in Reader Mode, and share the picture or the whole card as an image.
+
+### Added
+- Holding a part of an open card opens a small sheet named after it, with only what that part can do. The picture offers Save picture, Copy picture and Share picture; a summary, post or note offers Copy and Share; Tags offers Edit tags and Copy tags; the page's text offers Read in Reader Mode and Copy text. The page ends with a line saying any part can be held.
+- Your note shows on every card that is not itself a note, even before you write one. Holding it offers Write a note, or Edit note and Copy note, and Done saves it.
+- Reader Mode shows only the page's text at reading size, under the card's title and who wrote it, and the text can be selected. A thin line in the name's pill fills as you read, and Back (or Back to the card at the end) returns to the card. It opens from Choose one and from the page text's sheet.
+- Share now also offers The picture and The card as an image. The card as an image shows the picture, title and, if you want, your note and tags, and Share image sends it.
+
+### Changed
+- Reader Mode in Choose one is no longer locked; it shows for any card with page text.
+- The Share button is in the reader's header for every card.
 ## 0.6.26 (37), 2026-10-28
 Your Google photo shows properly.
 

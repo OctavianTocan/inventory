@@ -317,6 +317,7 @@ class LibraryViewModel(
             is CardMenuOutcome.OpenSubmenu -> when (outcome.submenu) {
                 CardSubmenu.Tags -> loadTagChoices()
                 CardSubmenu.Spaces -> if (!mutableSpaces.value.loaded) loadSpaces()
+                CardSubmenu.Note, CardSubmenu.CardImage -> Unit
             }
             else -> Unit
         }
@@ -354,6 +355,21 @@ class LibraryViewModel(
         val updated = card.copy(tags = tags)
         if (tags != card.tags.orEmpty()) replaceEverywhere(updated)
         return failure ?: ApiResult.Ok(updated)
+    }
+
+    /**
+     * Writes the user's note on a card and updates every list holding it.
+     *
+     * @param card Card the note is on.
+     * @param text The whole note; blank takes the note off.
+     * @return The card with its new note, or the failure.
+     */
+    suspend fun setNote(card: Card, text: String): ApiResult<Card> {
+        val note = text.trim()
+        return when (val answer = library.setNote(card.id, note)) {
+            is ApiResult.Ok -> ApiResult.Ok(card.copy(note = note).also(::replaceEverywhere))
+            is ApiResult.Failed -> answer
+        }
     }
 
     /**

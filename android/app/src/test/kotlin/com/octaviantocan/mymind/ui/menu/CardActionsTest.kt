@@ -7,6 +7,7 @@ import com.octaviantocan.mymind.ui.library.FakeLibrary
 import com.octaviantocan.mymind.ui.library.pinned
 import com.octaviantocan.mymind.ui.library.testCard
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -35,10 +36,12 @@ class CardActionsTest {
     }
 
     @Test
-    fun readableArticleGetsALockedReaderRow() {
-        val items = cardMenuItems(testCard("a", type = "Article", flags = 1 shl 1), spaceId = null)
-        assertEquals(CardMenuItem(CardMenuAction.ReaderMode, locked = true), items.first())
-        assertTrue(cardMenuItems(testCard("a", type = "Article", flags = 1 shl 1), null, setOf("reader")).none { it.action == CardMenuAction.ReaderMode })
+    fun aCardWithPageTextOpensReaderModeFirst() = runTest {
+        val prose = Json.parseToJsonElement("""{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Words."}]}]}""")
+        val article = testCard("a", type = "Article").copy(prose = prose)
+        assertEquals(CardMenuItem(CardMenuAction.ReaderMode), cardMenuItems(article, spaceId = null).first())
+        assertTrue(cardMenuItems(testCard("a", type = "Article", flags = 1 shl 1), null).none { it.action == CardMenuAction.ReaderMode })
+        assertEquals(CardMenuOutcome.Read(article), CardActions(FakeLibrary(), saver).perform(CardMenuItem(CardMenuAction.ReaderMode), article, null))
     }
 
     @Test

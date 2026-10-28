@@ -486,16 +486,7 @@ private fun NewSpaceForm(creation: CardSpaceCreationState, onCreate: (name: Stri
             }
         }
         if (error != null) Text(error, style = mutedStyle(colors).copy(color = colors.dangerText))
-        Row(
-            Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(colors.rowText.copy(alpha = if (ready) 1f else 0.4f))
-                .clickable(enabled = ready, role = Role.Button) { submit() },
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (!busy) Image(painterResource(R.drawable.ic_library_add), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(colors.sheet))
-            Text(if (busy) "Creating…" else "Create and add", style = TextStyle(color = colors.sheet, fontSize = 17.sp, lineHeight = 22.sp,
-                fontWeight = FontWeight.Medium, fontFamily = CardMenuFont))
-        }
+        SheetCta(if (busy) "Creating…" else "Create and add", if (busy) null else R.drawable.ic_library_add, enabled = ready) { submit() }
     }
 }
 

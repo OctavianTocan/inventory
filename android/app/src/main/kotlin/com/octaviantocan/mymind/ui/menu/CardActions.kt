@@ -4,11 +4,12 @@ import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Library
+import com.octaviantocan.mymind.ui.card.ReaderPart
+import com.octaviantocan.mymind.ui.card.partText
 import com.octaviantocan.mymind.ui.library.TileKind
 import com.octaviantocan.mymind.ui.library.noteText
 import com.octaviantocan.mymind.ui.library.postText
 import com.octaviantocan.mymind.ui.library.pinned
-import com.octaviantocan.mymind.ui.library.readable
 import com.octaviantocan.mymind.ui.library.tileKind
 
 /**
@@ -24,12 +25,12 @@ data class CardMenuItem(val action: CardMenuAction, val locked: Boolean = false)
  *
  * @param card Card the menu is for.
  * @param spaceId Space the card was opened from, or null outside a space.
- * @param features Plan features of the account, such as `sameVibe` and `reader`, from the web page config.
+ * @param features Plan features of the account, such as `sameVibe`, from the web page config.
  * @return The rows, top to bottom.
  */
 fun cardMenuItems(card: Card, spaceId: String?, features: Set<String> = emptySet()): List<CardMenuItem> = buildList {
     if (card.type == "Image") add(CardMenuItem(CardMenuAction.SameVibe, locked = "sameVibe" !in features))
-    if (card.readable && "reader" !in features) add(CardMenuItem(CardMenuAction.ReaderMode, locked = true))
+    if (partText(ReaderPart.Page, card) != null) add(CardMenuItem(CardMenuAction.ReaderMode))
     if (card.blob != null) add(CardMenuItem(CardMenuAction.Download))
     if (!card.url.isNullOrBlank()) add(CardMenuItem(CardMenuAction.ViewSource))
     if (canCopy(card)) add(CardMenuItem(CardMenuAction.Copy))
@@ -98,6 +99,13 @@ sealed interface CardMenuOutcome {
     data class ShowSimilar(val card: Card) : CardMenuOutcome
 
     /**
+     * The card should open in Reader Mode.
+     *
+     * @property card Card to read.
+     */
+    data class Read(val card: Card) : CardMenuOutcome
+
+    /**
      * The menu should switch to a submenu.
      *
      * @property submenu Submenu to show.
@@ -124,12 +132,19 @@ sealed interface CardMenuOutcome {
  *
  * @property title Header title of the page.
  */
-enum class CardSheetRoot(val title: String) {
+sealed class CardSheetRoot(val title: String) {
     /** The card's actions: Choose one. */
-    Actions("Choose one"),
+    data object Actions : CardSheetRoot("Choose one")
 
     /** Ways to share the card. */
-    Share("Share"),
+    data object Share : CardSheetRoot("Share")
+
+    /**
+     * The few things one part of the reader offers, opened by holding it.
+     *
+     * @property part The part that was held.
+     */
+    data class Part(val part: ReaderPart) : CardSheetRoot(part.heading)
 }
 
 /**
@@ -143,7 +158,13 @@ enum class CardSubmenu(val title: String, val parent: CardSubmenu? = null) {
     Tags("Add tags"),
 
     /** Every space, to put the card in or take it out, with New space in place. */
-    Spaces("Add to space");
+    Spaces("Add to space"),
+
+    /** The user's note on the card, to write or change. */
+    Note("Your note"),
+
+    /** The card drawn as a picture to share, with the user's note and tags as choices. */
+    CardImage("The card as an image");
 
     /** Navigation depth determines the direction of the sheet page transition. */
     val depth: Int get() = (parent?.depth ?: 0) + 1
@@ -180,7 +201,8 @@ class CardActions(private val library: Library, private val saver: FileSaver) {
                 val space = spaceId ?: return CardMenuOutcome.NotAvailable(item.action)
                 library.removeFromSpace(space, card.id).then { CardMenuOutcome.RemovedFromSpace(space, card.id) }
             }
-            CardMenuAction.ReaderMode -> CardMenuOutcome.NotAvailable(item.action)
+            CardMenuAction.ReaderMode ->
+                if (partText(ReaderPart.Page, card) != null) CardMenuOutcome.Read(card) else CardMenuOutcome.NotAvailable(item.action)
         }
     }
 

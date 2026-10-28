@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.data.Card
@@ -37,6 +39,7 @@ import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -154,6 +157,27 @@ class LibraryScreenshotTest(private val dark: Boolean) {
             }) { SampleEverything() }
         }
         capture("card_detail")
+    }
+
+    @Test
+    fun readerMode() {
+        val scheme = if (dark) PageScheme.Dark else PageScheme.Light
+        val prose = Json.parseToJsonElement(
+            """{"type":"doc","content":[""" + (1..8).joinToString(",") {
+                """{"type":"paragraph","content":[{"type":"text","text":"A paragraph of the saved page, number $it, long enough to wrap over a few lines of the reader."}]}"""
+            } + "]}",
+        )
+        val article = LibrarySamples.article.copy(prose = prose)
+        render {
+            ShellFrame(Tab.Everything, onSelectTab = {}, scheme = scheme, overlay = {
+                PageTheme(scheme) { CardDetail(article, onClose = {}, onMenu = {}, reading = true) }
+            }) { SampleEverything() }
+        }
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithText("number 8", substring = true).performScrollTo()
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(SETTLE_MS)
+        capture("S15_reader_mode")
     }
 
     private fun menu(card: Card, name: String, icons: @Composable () -> CardMenuIcons = { defaultCardMenuIcons() }) {

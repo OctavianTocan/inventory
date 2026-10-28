@@ -2,8 +2,8 @@
 Card reading MUST remain full screen. Its fixed header MUST have a 44dp Back
 arrow (the reader returns to the gallery; it is not a closing action), a raised
 pill with the card's name and a caret occupying the available middle width, and a
-44dp Share button; a card with nothing to share leaves that place empty. It MUST NOT
-add a second metadata row. Long names may ellipsize to one line in this pill, while
+44dp Share button, which every card has since any card can be shared as an image
+(`card-share-sheet-offers-what-the-card-has`). It MUST NOT add a second metadata row. Long names may ellipsize to one line in this pill, while
 keeping the complete name in text semantics. The pill and controls MUST remain
 separate at narrow widths and large font settings. Sheet headers remain plain
 titles; this pill belongs to the reader. The card's actions moved to the foot
@@ -22,15 +22,17 @@ page text with its reading time. Text sections MUST carry a small muted heading.
 The card's type colour MUST wash the top of the reader as a faint fade, as it does
 on the card's sheets, and never tint the body. Tags are quiet pills without crosses;
 Edit tags reveals a cross on each and Done hides them again, and + Add opens Add
-tags.
+tags. A card that is not itself a note MUST show Your note even before one is
+written, inviting one, and the page ends with a line saying any part can be held.
 Source: Tavi's recorded review, 22 October 2026 ("why is there nothing here", "can't
 just tint only the bottom sheet", "some tags which look really weird"); Tavi's pick
 of F08, whose page is the prototype's 02 raised sections, 28 October 2026.
 
 @cc [owner:OctavianTocan,label:product] card-reader-opens-its-source
 A card with a web link MUST open it from a tap on its picture and from the foot's
-Open source pill, which speaks the site's name. Holding the picture MUST open the
-card's actions. A card without a link MUST NOT show Open source. A video the server
+Open source pill, which speaks the site's name. Holding the picture MUST open its
+own sheet (`card-reader-parts-are-held`). A card without a link MUST NOT show Open
+source. A video the server
 keeps plays in place instead (`card-reader-plays-videos`), and Open source still
 opens its link.
 Source: Tavi's recorded review, 22 October 2026 ("especially the preview, I should be
@@ -41,6 +43,27 @@ The reader's foot MUST float Open source, a 52dp pill in the page's ink, and a 5
 raised round button that opens the card's actions, over a fade into the page, and
 the page MUST leave room under its last section so the foot never covers it.
 Source: Tavi's pick of F08 in the reader prototype, 28 October 2026.
+
+@cc [owner:OctavianTocan,label:product] card-reader-parts-are-held
+Holding a part of the reader MUST open a sheet titled with the part's name that
+offers only what that part has: the picture offers Save picture (for a picture
+file), Copy picture and Share picture; a summary, post or note offers Copy and
+Share; Tags offers Edit tags and Copy tags; Your note offers Write a note, or Edit
+note and Copy note; the page text offers Read in Reader Mode and Copy text. Edit
+tags and Edit note open their page in the same sheet, and Your note saves with
+Done, an emptied note taking the note off. Each hold MUST also be offered to
+accessibility services as an action.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M20, hold a
+part for a small menu with few options).
+
+@cc [owner:OctavianTocan,label:product;design] card-reader-mode
+Reader Mode MUST show only the page's text, selectable and at the reading size,
+under the card's title and byline, ending with Back to the card. The foot hides and
+the name's pill draws a thin line that fills as the text is read. The header's Back
+and system Back MUST return to the card rather than close it. Reader Mode opens from
+Choose one and from the page text's sheet, for any card with page text.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M27, Reader
+Mode, "definitely").
 
 @cc [owner:OctavianTocan,label:product;design;motion] card-reader-name-grows-into-its-card
 Tapping the reader's name MUST grow its pill into a card of the card's details over

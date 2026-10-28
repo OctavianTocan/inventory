@@ -36,6 +36,11 @@ import com.octaviantocan.mymind.ui.menu.AllSpacesPage
 import com.octaviantocan.mymind.ui.menu.SpaceChoices
 import com.octaviantocan.mymind.ui.menu.SpaceSuggestion
 import com.octaviantocan.mymind.ui.menu.UndoDeleteBar
+import com.octaviantocan.mymind.ui.card.ReaderPart
+import com.octaviantocan.mymind.ui.menu.CardImagePage
+import com.octaviantocan.mymind.ui.menu.ShareContent
+import com.octaviantocan.mymind.ui.menu.NotePage
+import com.octaviantocan.mymind.ui.menu.PartContent
 import com.octaviantocan.mymind.ui.upload.UPLOAD_STRIP_BOTTOM
 import com.octaviantocan.mymind.ui.library.CardSpaceCreationState
 import com.octaviantocan.mymind.ui.shell.ShellFrame
@@ -66,7 +71,14 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
         compose.mainClock.advanceTimeBy(SETTLE_MS)
     }
 
-    private fun submenu(name: String, card: Card = LibrarySamples.grid[1], page: CardSubmenu = CardSubmenu.Tags, content: @Composable () -> Unit) {
+    private fun submenu(
+        name: String,
+        card: Card = LibrarySamples.grid[1],
+        page: CardSubmenu = CardSubmenu.Tags,
+        title: String = page.title,
+        back: Boolean = true,
+        content: @Composable () -> Unit,
+    ) {
         render {
             Box(Modifier.fillMaxSize()) {
                 ShellFrame(
@@ -80,7 +92,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
                         }
                     },
                 ) { SampleEverything() }
-                CardMenuPanel(page.title, onDismiss = {}, accent = cardAccent(card), onBack = {}) { content() }
+                CardMenuPanel(title, onDismiss = {}, accent = cardAccent(card), onBack = if (back) ({}) else null) { content() }
             }
         }
         capture(name)
@@ -122,6 +134,31 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
     @Test
     fun selectSpaceEmpty() = submenu("S12_select_space_empty", page = CardSubmenu.Spaces) {
         AllSpacesPage(SpaceChoices(emptyList(), selected = emptySet()), CardSpaceCreationState(), onToggle = {}, onCreate = { _, _ -> })
+    }
+
+    @Test
+    fun pictureSheet() = submenu("S14_part_picture", PICTURED, title = ReaderPart.Picture.heading, back = false) {
+        PartContent(ReaderPart.Picture, PICTURED, onChoice = {})
+    }
+
+    @Test
+    fun noteSheet() = submenu("S14_part_note", PICTURED, title = ReaderPart.YourNote.heading, back = false) {
+        PartContent(ReaderPart.YourNote, PICTURED, onChoice = {})
+    }
+
+    @Test
+    fun writeNote() = submenu("S14_write_note", PICTURED, page = CardSubmenu.Note) {
+        NotePage(PICTURED.note.orEmpty(), onSave = {}, focusOnOpen = false)
+    }
+
+    @Test
+    fun shareSheet() = submenu("S14_share", PICTURED, title = "Share", back = false) {
+        ShareContent(PICTURED, onShareLink = {}, onShareText = null, onCopyLink = {}, onSharePicture = {}, onCardImage = {})
+    }
+
+    @Test
+    fun cardAsImage() = submenu("S14_card_image", PICTURED, page = CardSubmenu.CardImage) {
+        CardImagePage(PICTURED, onShare = {})
     }
 
     private fun newSpace(name: String, step: Int) {
@@ -206,6 +243,10 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
         private const val SETTLE_MS = 1_500L
         private val TAGS = listOf("recipes", "reading", "references", "travel", "design", "research", "weekend", "red", "pre-order")
         private val RECENT = listOf("weekend", "design", "recipes")
+        private val PICTURED = testCard("a1", type = "Article", url = "https://www.theatlantic.com/walking", title = "Walking",
+            tags = listOf(Tag("t1", "walks"), Tag("t2", "essays"), Tag("t3", "nature")))
+            .copy(description = "An essay on walking.", note = "Reread the part about walking west.",
+                cover = Cover(src = "/media/walking.jpg", width = 1600, height = 1067, dominantColor = "#c9b79c"))
 
         /** System light and system dark. */
         @JvmStatic

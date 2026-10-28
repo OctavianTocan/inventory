@@ -2,6 +2,7 @@ package com.octaviantocan.mymind.ui.card
 
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.ui.library.TileKind
+import com.octaviantocan.mymind.ui.library.galleryPicture
 import com.octaviantocan.mymind.ui.library.noteText
 import com.octaviantocan.mymind.ui.library.postText
 import com.octaviantocan.mymind.ui.library.proseText
@@ -13,8 +14,11 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.ceil
 
-/** The parts of a card the reader shows as its own sections, under the picture and title. */
+/** The parts of a card the reader shows as its own sections; [readerSections] gives the ones made of words. */
 enum class ReaderPart(val heading: String) {
+    /** The card's picture, over its title. */
+    Picture("Picture"),
+
     /** A social post's own words. */
     Post("Post"),
 
@@ -29,6 +33,9 @@ enum class ReaderPart(val heading: String) {
 
     /** The text captured from the page. */
     Page("From the page"),
+
+    /** The card's tags. */
+    Tags("Tags"),
 }
 
 /**
@@ -54,6 +61,88 @@ fun readerSections(card: Card): List<ReaderText> {
     val seen = mutableSetOf<String>()
     return parts.mapNotNull { (part, text) -> text?.trim()?.takeIf { it.isNotEmpty() && seen.add(it) }?.let { ReaderText(part, it) } }
 }
+
+/** What a row of a part's sheet does. */
+enum class PartAction {
+    /** Puts the part's words on the clipboard. */
+    Copy,
+
+    /** Hands the part's words to another app. */
+    Share,
+
+    /** Opens Add tags. */
+    EditTags,
+
+    /** Opens the user's note to write or change it. */
+    EditNote,
+
+    /** Opens Reader Mode. */
+    Read,
+
+    /** Saves the card's picture file to Downloads. */
+    SavePicture,
+
+    /** Puts the card's picture on the clipboard. */
+    CopyPicture,
+
+    /** Hands the card's picture to another app. */
+    SharePicture,
+}
+
+/**
+ * One row of a part's sheet.
+ *
+ * @property action What it does.
+ * @property label What it says.
+ */
+data class PartChoice(val action: PartAction, val label: String)
+
+/**
+ * The few things holding a part of the reader offers, in order.
+ *
+ * @param part The part held.
+ * @param card The card it belongs to.
+ * @return Its sheet's rows; none for a part the card does not have.
+ */
+fun partChoices(part: ReaderPart, card: Card): List<PartChoice> {
+    val words = partText(part, card)
+    return when (part) {
+        ReaderPart.Post, ReaderPart.Note, ReaderPart.Summary -> {
+            if (words == null) return emptyList()
+            val name = part.heading.lowercase()
+            listOf(PartChoice(PartAction.Copy, "Copy $name"), PartChoice(PartAction.Share, "Share $name"))
+        }
+        ReaderPart.YourNote -> if (words == null) listOf(PartChoice(PartAction.EditNote, "Write a note"))
+            else listOf(PartChoice(PartAction.EditNote, "Edit note"), PartChoice(PartAction.Copy, "Copy note"))
+        ReaderPart.Page -> if (words == null) emptyList()
+            else listOf(PartChoice(PartAction.Read, "Read in Reader Mode"), PartChoice(PartAction.Copy, "Copy text"))
+        ReaderPart.Tags -> listOfNotNull(PartChoice(PartAction.EditTags, "Edit tags"), words?.let { PartChoice(PartAction.Copy, "Copy tags") })
+        ReaderPart.Picture -> if (galleryPicture(card) == null) emptyList() else listOfNotNull(
+            PartChoice(PartAction.SavePicture, "Save picture").takeIf { card.blob?.path != null },
+            PartChoice(PartAction.CopyPicture, "Copy picture"),
+            PartChoice(PartAction.SharePicture, "Share picture"),
+        )
+    }
+}
+
+/**
+ * @param part A part of the reader.
+ * @param card The card it belongs to.
+ * @return The part's words as Copy and Share hand them over (tags joined by commas), or null when it has none.
+ */
+fun partText(part: ReaderPart, card: Card): String? = when (part) {
+    ReaderPart.Tags -> card.tags.orEmpty().mapNotNull { it.name?.trim()?.takeIf(String::isNotEmpty) }.joinToString(", ").ifEmpty { null }
+    ReaderPart.YourNote -> card.note?.trim()?.takeIf { it.isNotEmpty() }
+    ReaderPart.Picture -> null
+    else -> readerSections(card).firstOrNull { it.part == part }?.text
+}
+
+/**
+ * @param card A card.
+ * @return The page's text as Reader Mode lays it out, one paragraph per line of the capture; empty without page text.
+ */
+fun readerParagraphs(card: Card): List<String> =
+    partText(ReaderPart.Page, card)?.lines()?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
 
 /**
  * @param text Words to read.

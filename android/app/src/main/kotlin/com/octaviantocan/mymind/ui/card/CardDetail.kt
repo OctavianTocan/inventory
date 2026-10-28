@@ -12,6 +12,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -80,6 +87,8 @@ private val LEAD_PARTS = setOf(ReaderPart.Post, ReaderPart.Note, ReaderPart.Summ
  * @property onSpaces Opens the card's spaces, from the name's card.
  * @property onOpenRecent Opens a recently opened card in place of this one.
  * @property onEverything Leaves the reader for the Everything gallery.
+ * @property onPart Opens the sheet of a part that was held; null leaves the parts without one.
+ * @property onReading Turns Reader Mode on or off.
  */
 @Immutable
 class ReaderActions(
@@ -90,6 +99,8 @@ class ReaderActions(
     val onSpaces: (() -> Unit)? = null,
     val onOpenRecent: ((Card) -> Unit)? = null,
     val onEverything: (() -> Unit)? = null,
+    val onPart: ((ReaderPart) -> Unit)? = null,
+    val onReading: ((Boolean) -> Unit)? = null,
 )
 
 /**
@@ -106,6 +117,7 @@ data class ReaderDetails(val spaces: List<String> = emptyList(), val recent: Lis
  *
  * @param actionsProgress How far the card's sheet has risen over it, from 0 to 1; the reader blurs with it.
  * @param shrink How far Delete card's hold has come, from 0 to 1; the reader shrinks and fades with it.
+ * @param reading True for Reader Mode: the page's text alone, in larger type.
  */
 @Composable
 fun CardDetailDialog(
@@ -115,6 +127,7 @@ fun CardDetailDialog(
     onRemoveTag: ((Tag) -> Unit)? = null,
     actionsProgress: Float = 0f,
     shrink: Float = 0f,
+    reading: Boolean = false,
     scrollState: ScrollState = rememberScrollState(),
     actions: ReaderActions = ReaderActions(),
     details: ReaderDetails = ReaderDetails(),
@@ -138,7 +151,7 @@ fun CardDetailDialog(
         }
         Box(Modifier.fillMaxSize()) {
             CardDetail(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress).shrunk { shrink }, onRemoveTag = onRemoveTag,
-                scrollState = scrollState, actions = actions, details = details)
+                scrollState = scrollState, actions = actions, details = details, reading = reading)
         }
     }
 }
@@ -161,7 +174,8 @@ private const val DELETE_FADE = 0.45f
 /**
  * A fixed, full-height reading page: Back, the card's name and Share above the card's parts in raised sections, with
  * Open source and the card's actions at the foot. The name grows into a card of its details and recently opened cards.
- * The card's type colour washes the top edge, as it does on the card's sheets.
+ * The card's type colour washes the top edge, as it does on the card's sheets. Holding a part opens its own sheet;
+ * Reader Mode swaps the parts for the page's text alone, with a line in the name's pill for how far it has been read.
  */
 @Composable
 internal fun CardDetail(
@@ -175,6 +189,7 @@ internal fun CardDetail(
     onOpenSource: ((String) -> Unit)? = null,
     actions: ReaderActions = ReaderActions(),
     details: ReaderDetails = ReaderDetails(),
+    reading: Boolean = false,
 ) {
     val colors = if (MymindTheme.page.document.luminance() < 0.5f) DarkCardSheetColors else LightCardSheetColors
     val density = LocalDensity.current
@@ -183,7 +198,10 @@ internal fun CardDetail(
     val source = sourceUrl(card)?.let { url -> { open(url) } }
     val wash = cardAccent(card)?.copy(alpha = if (colors.paper.luminance() < 0.5f) 0.16f else 0.12f)
     var named by rememberSaveable(card.id) { mutableStateOf(false) }
-    BackHandler(onBack = onClose)
+    val readingScroll = rememberScrollState()
+    val inReader = reading && readerParagraphs(card).isNotEmpty()
+    val back = if (inReader) ({ actions.onReading?.invoke(false); Unit }) else onClose
+    BackHandler(onBack = back)
     CompositionLocalProvider(LocalCardSheetColors provides colors) {
         Box(modifier.fillMaxSize().background(colors.paper)
             .drawBehind {
@@ -195,15 +213,18 @@ internal fun CardDetail(
             }) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                 Spacer(Modifier.height(16.dp))
-                ReaderHeader(cardHeading(card), named, onBack = onClose, onName = { named = !named }, onShare = actions.onShare, icons = headerIcons)
+                ReaderHeader(cardHeading(card), named, onBack = back, onName = { named = !named }, onShare = actions.onShare, icons = headerIcons,
+                    progress = if (inReader) ({ readingScroll.value / readingScroll.maxValue.coerceAtLeast(1).toFloat() }) else null)
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     val fade = with(density) { 20.dp.toPx() }
+                    val shown = if (inReader) readingScroll else scrollState
                     Column(Modifier.fillMaxSize()
-                        .sheetEdgeFade(color = colors.paper, topStrength = { (scrollState.value / fade).coerceIn(0f, 1f) })
-                        .verticalScroll(scrollState)) {
-                        ReaderBody(card, onRemoveTag, actions.onAddTags, source, onMenu)
+                        .sheetEdgeFade(color = colors.paper, topStrength = { (shown.value / fade).coerceIn(0f, 1f) })
+                        .verticalScroll(shown)) {
+                        if (inReader) ReaderModeBody(card, onBack = back)
+                        else ReaderBody(card, onRemoveTag, actions.onAddTags, source, onMenu, actions.onPart)
                     }
-                    ReaderFoot(card, source, onMenu, Modifier.align(Alignment.BottomCenter))
+                    if (!inReader) ReaderFoot(card, source, onMenu, Modifier.align(Alignment.BottomCenter))
                 }
             }
             ReaderNameCard(named, card, details, actions, onClose = { named = false })
@@ -221,6 +242,7 @@ internal fun CardDetail(
  * @param onShare Opens the Share sheet; null leaves the place empty.
  * @param modifier Modifier for the row.
  * @param icons Back and share glyphs.
+ * @param progress How far Reader Mode has been read, from 0 to 1, drawn as a line in the pill; null draws none.
  */
 @Composable
 internal fun ReaderHeader(
@@ -231,20 +253,24 @@ internal fun ReaderHeader(
     onShare: (() -> Unit)?,
     modifier: Modifier = Modifier,
     icons: CardHeaderIcons = defaultCardHeaderIcons(),
+    progress: (() -> Float)? = null,
 ) {
     Row(modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         // The reader returns to the gallery, so it leads with Back rather than a closing cross.
         CardHeaderButton(icons.back ?: painterResource(R.drawable.ic_sheet_back), "Back", onBack, true)
-        NamePill(title, open, onName, Modifier.weight(1f))
+        NamePill(title, open, onName, Modifier.weight(1f), progress)
         if (onShare != null) CardHeaderButton(icons.share ?: painterResource(R.drawable.ic_share), "Share", onShare, true)
         else Spacer(Modifier.size(44.dp))
     }
 }
 
-/** The card's name on one line with a caret, in a raised pill; tapping it shows or hides the name's card. */
+/**
+ * The card's name on one line with a caret, in a raised pill; tapping it shows or hides the name's card. In Reader Mode
+ * a thin line along its foot fills as the page is read.
+ */
 @Composable
-private fun NamePill(title: String, open: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun NamePill(title: String, open: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, progress: (() -> Float)? = null) {
     val colors = LocalCardSheetColors.current
     val shape = RoundedCornerShape(50)
     val haptic = rememberSheetHaptics()
@@ -255,6 +281,14 @@ private fun NamePill(title: String, open: Boolean, onClick: () -> Unit, modifier
             .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button,
                 onClickLabel = if (open) "Hide card details" else "Show card details") { haptic.tick(); onClick() }
             .semantics { stateDescription = if (open) "Details shown" else "Details hidden" }
+            .then(if (progress == null) Modifier else Modifier.drawBehind {
+                val inset = 20.dp.toPx()
+                val line = 3.dp.toPx()
+                val y = size.height - 5.dp.toPx() - line
+                val width = size.width - inset * 2
+                drawRoundRect(colors.active, Offset(inset, y), Size(width, line), CornerRadius(line / 2))
+                drawRoundRect(colors.text, Offset(inset, y), Size(width * progress().coerceIn(0f, 1f), line), CornerRadius(line / 2))
+            })
             .padding(horizontal = 16.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
@@ -271,33 +305,121 @@ internal fun readerTitleStyle(colors: CardSheetColors) = TextStyle(
     fontFamily = MymindTheme.fonts.heading, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 26.sp, color = colors.text,
 )
 
-/** The card's parts, each in its own raised section: picture and title, its words, tags, the user's note and the page. */
+/**
+ * The card's parts, each in its own raised section: picture and title, its words, tags, the user's note and the page.
+ * With [onPart], each part but the picture opens its own sheet when held, a card that is not a note always shows Your
+ * note so one can be written, and a closing line says so.
+ */
 @Composable
-private fun ReaderBody(card: Card, onRemoveTag: ((Tag) -> Unit)?, onAddTags: (() -> Unit)?, onOpenSource: (() -> Unit)?, onMenu: () -> Unit) {
+private fun ReaderBody(
+    card: Card,
+    onRemoveTag: ((Tag) -> Unit)?,
+    onAddTags: (() -> Unit)?,
+    onOpenSource: (() -> Unit)?,
+    onMenu: () -> Unit,
+    onPart: ((ReaderPart) -> Unit)?,
+) {
     val sections = readerSections(card)
+    val hold = { part: ReaderPart -> onPart?.takeIf { partChoices(part, card).isNotEmpty() }?.let { open -> { open(part) } } }
+    val pictureHold = hold(ReaderPart.Picture)
+    val emptyNote = onPart != null && tileKind(card) != TileKind.Note && sections.none { it.part == ReaderPart.YourNote }
     Column(Modifier.fillMaxWidth().padding(horizontal = BODY_SIDE).padding(top = 12.dp, bottom = FOOT_ROOM),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        HeadSection(card, onOpenSource, onMenu)
-        sections.filter { it.part in LEAD_PARTS }.forEach { TextSection(it, card) }
-        TagsSection(card, onRemoveTag, onAddTags)
-        sections.filter { it.part !in LEAD_PARTS }.forEach { TextSection(it, card) }
+        HeadSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions")
+        sections.filter { it.part in LEAD_PARTS }.forEach { TextSection(it, card, hold(it.part)) }
+        TagsSection(card, onRemoveTag, onAddTags, hold(ReaderPart.Tags))
+        sections.filter { it.part == ReaderPart.YourNote }.forEach { TextSection(it, card, hold(it.part)) }
+        if (emptyNote) EmptyNoteSection(hold(ReaderPart.YourNote))
+        sections.filter { it.part == ReaderPart.Page }.forEach { TextSection(it, card, hold(it.part)) }
+        if (onPart != null) Text("Hold any part for its own actions", Modifier.fillMaxWidth().padding(top = 4.dp),
+            style = detailStyle(LocalCardSheetColors.current).copy(fontFamily = MymindTheme.fonts.body, textAlign = TextAlign.Center))
     }
 }
 
-/** A raised reading section with Pully's note shadow and 24dp corners. */
+/** A raised reading section with Pully's note shadow and 24dp corners; [onHold] opens its part's sheet when it is held. */
 @Composable
-private fun ReaderSection(padding: PaddingValues, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+private fun ReaderSection(
+    padding: PaddingValues,
+    modifier: Modifier = Modifier,
+    holdLabel: String? = null,
+    onHold: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val shape = RoundedCornerShape(24.dp)
-    Column(modifier.fillMaxWidth().cardSurfaceShadow(shape, note = true).clip(shape).background(LocalCardSheetColors.current.raised).padding(padding),
-        content = content)
+    Column(modifier.fillMaxWidth().cardSurfaceShadow(shape, note = true).clip(shape).background(LocalCardSheetColors.current.raised)
+        .held(holdLabel, onHold).padding(padding), content = content)
+}
+
+/**
+ * Opens a part's sheet from a long press, with a haptic tick, and offers the same as an accessibility action.
+ *
+ * @param label What the action says to accessibility services.
+ * @param onHold What holding does; null leaves the modifier unchanged.
+ */
+@Composable
+private fun Modifier.held(label: String?, onHold: (() -> Unit)?): Modifier {
+    if (onHold == null) return this
+    val haptic = LocalHapticFeedback.current
+    val hold by rememberUpdatedState(onHold)
+    return this
+        .pointerInput(Unit) {
+            detectTapGestures(onLongPress = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                hold()
+            })
+        }
+        .semantics { onLongClick(label) { hold(); true } }
+}
+
+/** Your note before one is written: a quiet invitation to hold it and write one. */
+@Composable
+private fun EmptyNoteSection(onHold: (() -> Unit)?) {
+    val colors = LocalCardSheetColors.current
+    ReaderSection(SECTION_PADDING, holdLabel = "Write a note", onHold = onHold) {
+        SectionHeading(partIcon(ReaderPart.YourNote), ReaderPart.YourNote.heading)
+        Spacer(Modifier.height(8.dp))
+        Text("No note yet. Hold here to write one.", style = detailStyle(colors).copy(fontFamily = MymindTheme.fonts.body))
+    }
+}
+
+/**
+ * Reader Mode: the card's title and byline over the page's text alone, in larger type that can be selected, ending
+ * with Back to the card.
+ */
+@Composable
+private fun ReaderModeBody(card: Card, onBack: () -> Unit) {
+    val colors = LocalCardSheetColors.current
+    val byline = listOfNotNull(bylineOf(card), readingTime(card)).joinToString(" · ").ifEmpty { null }
+    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 48.dp)) {
+        Text(cardHeading(card), Modifier.semantics { heading() }, style = TextStyle(fontFamily = MymindTheme.fonts.heading,
+            fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 34.sp, color = colors.text))
+        if (byline != null) Text(byline, Modifier.padding(top = 6.dp), style = detailStyle(colors).copy(fontFamily = MymindTheme.fonts.body))
+        Spacer(Modifier.height(22.dp))
+        SelectionContainer {
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                readerParagraphs(card).forEach {
+                    Text(it, style = TextStyle(color = colors.text, fontSize = 19.sp, lineHeight = 30.sp, fontFamily = MymindTheme.fonts.body))
+                }
+            }
+        }
+        val shape = RoundedCornerShape(50)
+        Row(Modifier.padding(top = 30.dp).align(Alignment.CenterHorizontally).heightIn(min = 44.dp).clip(shape).background(colors.active)
+                .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button, onClick = onBack)
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.ic_sheet_back), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(colors.text))
+            Text("Back to the card", style = TextStyle(color = colors.text, fontSize = 17.sp, lineHeight = 22.sp, fontFamily = MymindTheme.fonts.body))
+        }
+    }
 }
 
 /**
  * The picture, or the video the server keeps, over the title, who made the card and when it was saved. A tap on the
- * picture opens the source and holding it opens the card's actions. A card with neither picture nor title has none.
+ * picture opens the source and holding it calls [onHold], which says [holdLabel]. A card with neither picture nor
+ * title has none.
  */
 @Composable
-private fun HeadSection(card: Card, onOpenSource: (() -> Unit)?, onMenu: () -> Unit) {
+private fun HeadSection(card: Card, onOpenSource: (() -> Unit)?, onHold: () -> Unit, holdLabel: String) {
     val colors = LocalCardSheetColors.current
     val previews = LocalVideoPreviews.current
     val video = remember(card) { readerVideo(card) }?.takeIf { previews != null }
@@ -315,7 +437,7 @@ private fun HeadSection(card: Card, onOpenSource: (() -> Unit)?, onMenu: () -> U
                 .combinedClickable(
                     interactionSource = null, indication = CardSheetIndication, role = Role.Button,
                     onClickLabel = if (onOpenSource != null) "Open source" else null, onClick = { onOpenSource?.invoke() },
-                    onLongClickLabel = "Card actions", onLongClick = onMenu,
+                    onLongClickLabel = holdLabel, onLongClick = onHold,
                 ))
         }
         if (title != null || lines.isNotEmpty()) {
@@ -331,9 +453,9 @@ private fun HeadSection(card: Card, onOpenSource: (() -> Unit)?, onMenu: () -> U
 
 /** One part of the card's words under its small heading; the page text's heading also says how long it takes to read. */
 @Composable
-private fun TextSection(section: ReaderText, card: Card) {
+private fun TextSection(section: ReaderText, card: Card, onHold: (() -> Unit)? = null) {
     val colors = LocalCardSheetColors.current
-    ReaderSection(SECTION_PADDING) {
+    ReaderSection(SECTION_PADDING, holdLabel = "${section.part.heading} actions", onHold = onHold) {
         SectionHeading(partIcon(section.part), section.part.heading, trailing = if (section.part == ReaderPart.Page) readingTime(card) else null)
         Spacer(Modifier.height(8.dp))
         Text(section.text, style = TextStyle(color = colors.text, fontSize = 16.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body))
@@ -348,6 +470,8 @@ private fun partIcon(part: ReaderPart): Int = when (part) {
     ReaderPart.Note, ReaderPart.YourNote -> R.drawable.notes
     ReaderPart.Summary -> R.drawable.ic_summary
     ReaderPart.Page -> R.drawable.ic_page
+    ReaderPart.Tags -> R.drawable.tags
+    ReaderPart.Picture -> R.drawable.ic_image
 }
 
 /** A section's small heading: its icon and name, muted, with an optional detail or control at the end. */
@@ -373,15 +497,15 @@ private fun detailStyle(colors: CardSheetColors) = TextStyle(color = colors.text
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TagsSection(card: Card, onRemove: ((Tag) -> Unit)?, onAdd: (() -> Unit)?) {
+private fun TagsSection(card: Card, onRemove: ((Tag) -> Unit)?, onAdd: (() -> Unit)?, onHold: (() -> Unit)? = null) {
     val tags = card.tags.orEmpty().filter { !it.name.isNullOrEmpty() }
     if (tags.isEmpty() && onAdd == null) return
     val colors = LocalCardSheetColors.current
     val haptic = LocalHapticFeedback.current
     var editing by remember(card.id) { mutableStateOf(false) }
     val style = TextStyle(color = colors.text, fontSize = 15.sp, lineHeight = 21.sp, fontFamily = MymindTheme.fonts.body)
-    ReaderSection(SECTION_PADDING) {
-        SectionHeading(R.drawable.tags, "Tags", action = if (onRemove != null && tags.isNotEmpty()) ({
+    ReaderSection(SECTION_PADDING, holdLabel = "Tags actions", onHold = onHold) {
+        SectionHeading(partIcon(ReaderPart.Tags), ReaderPart.Tags.heading, action = if (onRemove != null && tags.isNotEmpty()) ({
             Box(Modifier.heightIn(min = 32.dp).clip(RoundedCornerShape(50))
                 .clickable(role = Role.Button) { editing = !editing }.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
                 Text(if (editing) "Done" else "Edit tags", style = style.copy(fontWeight = FontWeight.Medium))

@@ -97,6 +97,11 @@ bottom sheets in the color of the card type, just a little hint at the top of it
 @cc [owner:OctavianTocan,label:product] card-share-sheet-offers-what-the-card-has
 The reader's Share button MUST open a Share sheet in the card's sheet, titled Share,
 offering only what the card has: The link for a card with a web link, The words for
-a note or a post (a post's words carry its link), and Copy link. Each choice closes
-the sheet before it hands off to the system's share sheet or the clipboard.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026.
+a note or a post (a post's words carry its link), The picture for a card with one,
+The card as an image for every card, and Copy link. The card as an image MUST open
+a page in the same sheet that draws the card (its picture, title and byline) with
+Your note and Tags as choices, the note chosen when there is one, and Share image.
+Each other choice closes the sheet before it hands off to the system's share sheet
+or the clipboard.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M25, the Share
+sheet with the card as an image).

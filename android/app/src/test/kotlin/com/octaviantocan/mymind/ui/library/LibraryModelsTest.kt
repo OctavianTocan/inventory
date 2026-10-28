@@ -199,6 +199,18 @@ class LibraryModelsTest {
     }
 
     @Test
+    fun aNoteIsWrittenEverywhereTheCardIs() = runTest(dispatcher) {
+        val card = testCard("a")
+        val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(card))))
+        val viewModel = LibraryViewModel(library, io = dispatcher)
+        advanceUntilIdle()
+
+        assertEquals(ApiResult.Ok(card.copy(note = "Reread this")), viewModel.setNote(card, "  Reread this  "))
+        assertEquals("Reread this", viewModel.everything.state.value.cards.single().note)
+        assertTrue("note:a:Reread this" in library.calls)
+    }
+
+    @Test
     fun tagsAreAddedOneByOneAndRemovedByTheirId() = runTest(dispatcher) {
         val card = testCard("a", tags = listOf(Tag("t-old", "old")))
         val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(card))))

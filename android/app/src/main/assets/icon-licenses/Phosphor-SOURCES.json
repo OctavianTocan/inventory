@@ -181,6 +181,18 @@
       "path_count": 1
     },
     {
+      "resource": "ic_card_image",
+      "icon": "article",
+      "weight": "regular",
+      "source_path": "assets/regular/article.svg",
+      "source_sha256": "25d8411c49a9f4b7ddfcb592dab55be0f817c53908f96b3012681bc1e19cc207",
+      "android_width": "20dp",
+      "android_height": "20dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_caret_down",
       "icon": "caret-down",
       "weight": "regular",
