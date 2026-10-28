@@ -149,6 +149,7 @@ fun TileCaption(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun CardPicture(card: Card, play: Boolean, modifier: Modifier = Modifier, whole: Boolean = false) {
     val src = galleryPicture(card)
+    val preview = rememberPicturePreview(card)
     var loaded by remember(src) { mutableStateOf<Float?>(null) }
     val ratio = if (whole) (loaded ?: storedRatio(card) ?: DEFAULT_RATIO).coerceIn(WHOLE_RATIOS) else pictureRatio(card)
     Box(
@@ -161,6 +162,8 @@ fun CardPicture(card: Card, play: Boolean, modifier: Modifier = Modifier, whole:
         if (src != null) AsyncImage(
             model = resolveMediaUrl(BuildConfig.SERVER_URL, src),
             contentDescription = null,
+            placeholder = preview,
+            error = preview,
             contentScale = if (whole) ContentScale.Fit else ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
             onSuccess = { state ->
@@ -176,9 +179,12 @@ fun CardPicture(card: Card, play: Boolean, modifier: Modifier = Modifier, whole:
 @Composable
 private fun PictureImage(card: Card, modifier: Modifier = Modifier) {
     val src = galleryPicture(card) ?: return
+    val preview = rememberPicturePreview(card)
     AsyncImage(
         model = resolveMediaUrl(BuildConfig.SERVER_URL, src),
         contentDescription = null,
+        placeholder = preview,
+        error = preview,
         contentScale = ContentScale.Crop,
         modifier = modifier.fillMaxSize(),
     )

@@ -32,8 +32,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -81,6 +85,8 @@ data class CardSpaceCreationState(
  * @param memory What the gallery keeps on the phone, so it opens on last time's cards and page scheme; null keeps nothing.
  * @param sync Keeps the phone's copy of the library up to date: at start, on [syncNow] and on pull to refresh; null when
  *   there is no copy.
+ * @param changes Signals each change to the phone's copy while the screens read from it, which they then show without
+ *   a sync of their own asking for it; null rereads the lists after each sync [syncNow] runs instead.
  */
 class LibraryViewModel(
     private val library: Library,
@@ -89,8 +95,10 @@ class LibraryViewModel(
     uploadActivity: UploadActivity? = null,
     private val memory: LibraryMemory? = null,
     private val sync: LibrarySync? = null,
+    private val changes: Flow<Unit>? = null,
     ai: AiRanking? = null,
 ) : ViewModel() {
+    private val mutableRedrawn = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private val mutableScheme = MutableStateFlow(PageScheme.System)
     private val mutableFeatures = MutableStateFlow(emptySet<String>())
     private val mutableSpaces = MutableStateFlow(SpacesState())
@@ -129,9 +137,20 @@ class LibraryViewModel(
     /** The Serendipity deck. */
     val serendipity = SerendipityModel(viewModelScope, library)
 
+    /** One signal each time the lists redraw from the phone's copy, for screens holding a card of their own to read it again. */
+    val redrawn: SharedFlow<Unit> = mutableRedrawn
+
     init {
         everything.loadMore()
         topOfMind.loadMore()
+        changes?.let { copyChanges ->
+            viewModelScope.launch {
+                copyChanges.collect {
+                    showCopy()
+                    delay(COPY_REDRAW_GAP_MS)
+                }
+            }
+        }
         syncNow()
         var schemeRead = false
         viewModelScope.launch {
@@ -187,13 +206,25 @@ class LibraryViewModel(
     fun syncNow() {
         val sync = sync ?: return
         viewModelScope.launch {
-            if (sync.sync().changedAnything()) {
-                everything.reread()
-                topOfMind.reread()
-                spaceFeeds.values.forEach { it.reread() }
-                if (mutableSpaces.value.loaded && !mutableSpaces.value.loading) readSpaces()
-            }
+            if (sync.sync().changedAnything() && changes == null) showCopy()
         }
+    }
+
+    /**
+     * Reads a card again, as the screens show it now.
+     *
+     * @param cardId Card id.
+     * @return The card, or null when it cannot be read.
+     */
+    suspend fun cardNow(cardId: String): Card? = (library.card(cardId) as? ApiResult.Ok)?.value
+
+    // Reads every list on show again from the phone's copy, keeping each as it is when nothing in it changed.
+    private suspend fun showCopy() {
+        everything.reread()
+        topOfMind.reread()
+        spaceFeeds.values.forEach { it.reread() }
+        if (mutableSpaces.value.loaded && !mutableSpaces.value.loading) readSpaces()
+        mutableRedrawn.tryEmit(Unit)
     }
 
     /**
@@ -648,6 +679,9 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
 
 // How long pull to refresh waits for a sync before it reads what the phone has.
 private const val REFRESH_SYNC_WAIT_MS = 10_000L
+
+// The pause after the lists redraw from the copy, so a burst of changes, such as a sync's pages, redraws them twice at most.
+private const val COPY_REDRAW_GAP_MS = 250L
 
 /** True when a sync ended having changed the phone's copy; false for a failure, a missing feed or a timeout. */
 private fun SyncOutcome?.changedAnything(): Boolean = (this as? SyncOutcome.Done)?.changed == true

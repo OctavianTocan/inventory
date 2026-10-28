@@ -163,6 +163,15 @@ fun MainShell(
     val context = LocalContext.current
     val menuProgress = if (menuOpen) sheetState.scrim else 0f
     val openCard = { card: Card, spaceId: String? -> opened = OpenedCard(card, spaceId) }
+    // The opened card follows the phone's copy too, such as a shared link the server has just read.
+    val openedId = opened?.card?.id
+    LaunchedEffect(openedId) {
+        if (openedId == null) return@LaunchedEffect
+        viewModel.redrawn.collect {
+            val fresh = viewModel.cardNow(openedId) ?: return@collect
+            opened = opened?.takeIf { it.card.id == openedId && it.card != fresh }?.copy(card = fresh) ?: opened
+        }
+    }
     val updateCard = { card: Card ->
         opened = opened?.takeIf { it.card.id == card.id }?.copy(card = card) ?: opened
         menuFor = menuFor?.takeIf { it.card.id == card.id }?.copy(card = card) ?: menuFor

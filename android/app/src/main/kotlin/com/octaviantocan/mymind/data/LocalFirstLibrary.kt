@@ -1,6 +1,9 @@
 package com.octaviantocan.mymind.data
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.withTimeoutOrNull
+import java.time.Instant
 
 private const val WRITE_SYNC_WAIT_MS = 5_000L
 
@@ -10,13 +13,16 @@ private const val WRITE_SYNC_WAIT_MS = 5_000L
  * pages only when the copy's cards carry their place in the space, which older servers leave out. Everything else
  * comes from the server, and the copy answers search, cards, spaces and space pages too when the network is down.
  *
- * A change to a card (pin, trash, note, tags, spaces) joins the [outbox] and reads as done: the copy shows it at once
- * and the server gets it in the background, in order, once it can be reached, as in a sync engine such as Zero. A server
- * that refuses it has the last word: the outbox drops the change and reads the card again. While the server answers that
- * it has no changes feed, a change goes straight to the server instead, unless the network is down or earlier ones wait.
+ * A change to a card (pin, trash, note, tags, spaces) or deleting a space joins the [outbox] and reads as done: the
+ * copy shows it at once and the server gets it in the background, in order, once it can be reached, as in a sync engine
+ * such as Zero. A new space and a link or text saved as a new card do too, under an id the phone makes, once the
+ * server has taken a push and so keeps that id. A server that refuses a change has the last word: the outbox drops it
+ * and reads the card again. While the server answers that it has no changes feed, a change goes straight to the server
+ * instead, unless the network is down or earlier ones wait.
  *
- * Other writes (new cards, uploads, making or deleting spaces) go to the server; once one succeeds, a sync brings the
- * copy up to date before the write returns (for at most a few seconds), so a list read from the copy shows it.
+ * Other writes (uploads, and new spaces and cards before the server has taken a push) go to the server; once one
+ * succeeds, a sync brings the copy up to date before the write returns (for at most a few seconds), so a list read from
+ * the copy shows it.
  *
  * @param server The server's library.
  * @param copy The phone's copy.
@@ -29,6 +35,12 @@ class LocalFirstLibrary(
     private val sync: LibrarySync,
     private val outbox: Outbox,
 ) : Library by server {
+    /**
+     * One signal after each change to the copy while the screens read from it, as in Zero, where screens follow the
+     * local store: a sync, a change made on the phone or a card read again. Quiet while the screens read from the server.
+     */
+    val changes: Flow<Unit> = copy.changes.filter { wholeCopy() }
+
     override suspend fun cards(cursor: String?): ApiResult<CardPage> = when {
         cursor != null && cursor.startsWith(LOCAL_CURSOR) -> copy.page(cursor)?.let { ApiResult.Ok(it) } ?: ApiResult.Failed(ApiFailure.Server(0))
         cursor == null && wholeCopy() -> copy.page(null)?.let { ApiResult.Ok(it) } ?: server.cards(null)
@@ -68,9 +80,13 @@ class LocalFirstLibrary(
     override suspend fun addToSpace(spaceId: String, cardId: String): ApiResult<Unit> =
         change(Edit.AddToSpace(cardId, spaceId), Unit) { server.addToSpace(spaceId, cardId) }
 
-    override suspend fun createSpace(name: String, color: String): ApiResult<String> = written(server.createSpace(name, color))
+    override suspend fun createSpace(name: String, color: String): ApiResult<String> {
+        if (!outbox.pushWorks()) return written(server.createSpace(name, color))
+        val id = newPhoneId()
+        return change(Edit.CreateSpace(id, name, color), id) { server.createSpace(name, color) }
+    }
 
-    override suspend fun deleteSpace(spaceId: String): ApiResult<Unit> = written(server.deleteSpace(spaceId))
+    override suspend fun deleteSpace(spaceId: String): ApiResult<Unit> = change(Edit.DeleteSpace(spaceId), Unit) { server.deleteSpace(spaceId) }
 
     override suspend fun setPinned(cardId: String, pinned: Boolean): ApiResult<Unit> =
         change(Edit.Pin(cardId, pinned), Unit) { server.setPinned(cardId, pinned) }
@@ -83,7 +99,17 @@ class LocalFirstLibrary(
     override suspend fun createMedia(uploadId: String, spaceId: String?): ApiResult<String> = written(server.createMedia(uploadId, spaceId))
 
     override suspend fun createFromContent(content: String, source: String, spaceId: String?): ApiResult<String> =
-        written(server.createFromContent(content, source, spaceId))
+        createFromContent(content, source, spaceId, null)
+
+    override suspend fun createFromContent(content: String, source: String, spaceId: String?, note: String?): ApiResult<String> {
+        if (!outbox.pushWorks()) return written(server.createFromContent(content, source, spaceId, note))
+        val id = newPhoneId()
+        val made = change(Edit.CreateCard(id, content, source, note, Instant.now().toString()), id) {
+            server.createFromContent(content, source, spaceId, note)
+        }
+        if (spaceId != null && made == ApiResult.Ok(id)) addToSpace(spaceId, id)
+        return made
+    }
 
     override suspend fun setNote(cardId: String, text: String): ApiResult<Unit> = change(Edit.Note(cardId, text), Unit) { server.setNote(cardId, text) }
 

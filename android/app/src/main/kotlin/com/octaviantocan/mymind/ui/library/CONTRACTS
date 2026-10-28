@@ -195,10 +195,13 @@ server in the background, in the order it was made, even with the app closed. A 
 to a space shows at the end of it. Waiting changes MUST go out together through the
 server's push, each under its place in the queue, so the server applies a change sent
 twice only once; a server without the push gets them one by one. A change the server
-refuses is dropped, its card read again, and a short notice names the card. Only while the
-server answers that it has no changes feed does an online change go straight to the
-server. Waiting changes belong to the session and are wiped at sign-out. New cards,
-uploads and creating or deleting spaces still need a connection.
+refuses is dropped, its card read again, and a short notice names the card or the new
+space. Only while the server answers that it has no changes feed does an online change go
+straight to the server. Deleting a space MUST work the same way, and so MUST making one
+and saving a shared link or text once the server has taken a push, under an id the phone
+makes; before that they wait for the server. A shared link the library already holds
+makes way for the saved card, which keeps its own note. Waiting changes belong to the
+session and are wiped at sign-out. Uploads still need a connection.
 On Wi-Fi with battery to spare, the phone MUST fetch ahead the gallery pictures of Top of
 Mind and the newest 1,000 cards (`data/KeptPictures.kt`) into its picture cache, which
 holds up to 512 MB and is wiped at sign-out with the copy.
@@ -206,6 +209,35 @@ Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search"
 and his choice of "Pinned + newest 1,000, Wi-Fi" for the pictures; online changes queued
 first for Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
 "ThyMind: a Zero-style sync engine", steps 2 and 3.
+
+@cc [owner:OctavianTocan,label:product;design] gallery-pictures-blur-in
+A gallery tile's picture, and a card's picture, MUST show the blurred preview the server
+keeps for it (`thumbHash`, a ThumbHash on its cover or blob, `data/ThumbHash.kt`) over
+its dominant colour the moment it shows, until the picture loads, and keep showing it
+when the picture cannot load, as without internet. A picture without a preview keeps the
+dominant colour alone.
+Source: Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, whose
+own image server shows blurred pictures that "load right away, even with slower
+connections" (Fireflies, 26 October 2026, 1:01:12); plan "ThyMind: a Zero-style sync
+engine", step 6.
+
+@cc [owner:OctavianTocan,label:product] gallery-hears-server-changes
+While the app is on screen and signed in, the phone MUST listen on the server's `/hub`
+(`data/HubListener.kt`) and bring its copy and the open screens up to date when the server
+announces a change, such as a card saved on the web or a shared link the server has
+finished reading, without a pull to refresh. A dropped connection is tried again; the
+phone stops listening when the app leaves the screen.
+Source: Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
+"ThyMind: a Zero-style sync engine", step 4.
+
+@cc [owner:OctavianTocan,label:product;architecture] gallery-follows-the-copy
+Once the phone's copy holds the whole library, the gallery, Top of Mind, the Spaces tab,
+an open space and an opened card MUST redraw from the copy whenever it changes
+(`LibraryCopy.changes`): a sync, a change made on the phone or a card read again from the
+server all show the same way, without a screen asking the server again. Lists that did
+not change keep their place.
+Source: Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
+"ThyMind: a Zero-style sync engine", step 5.
 
 @cc [owner:OctavianTocan,label:product] search-ranks-with-claude-or-codex-on-submit
 Typing in search MUST keep answering at once from words and meaning, with no AI call.

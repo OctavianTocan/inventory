@@ -401,6 +401,22 @@ impl Writer {
     /// # Errors
     /// Status 400 for a missing upload, an invalid URL or an invalid document; the database's error.
     pub fn create(&self, body: &Value, media: &Value) -> Result<Value> {
+        self.create_as(body, media, None)
+    }
+
+    /// Create a card as [`Writer::create`] does, under an id the caller chose, such as one a phone made offline.
+    ///
+    /// # Arguments
+    /// * `body` - As for [`Writer::create`].
+    /// * `media` - As for [`Writer::create`].
+    /// * `id` - The new card's id, or `None` for the upload's id or the next id of the library's own.
+    ///
+    /// # Returns
+    /// `{status, body: {id}}`: status 201 for a new card, 200 with the existing card's id for a link already saved.
+    ///
+    /// # Errors
+    /// Status 409 `Card already exists` for a chosen id in use; otherwise as [`Writer::create`].
+    pub fn create_as(&self, body: &Value, media: &Value, id: Option<&str>) -> Result<Value> {
         if (field(body, "uploadId")?.truthy() || body.get("type").as_str() == Some("Media")) && !media.truthy() {
             return Err(fail(400, "A completed upload is required"));
         }
@@ -430,9 +446,11 @@ impl Writer {
                 return Ok(obj! { "status" => 200.0, "body" => obj! { "id" => row.id.as_str() } }.into());
             }
         }
-        let id = match media.get("id") {
-            Value::Undefined | Value::Null => self.store.new_id(IdKind::Card, None)?,
-            other => other.to_js_string(),
+        let id = match (id, media.get("id")) {
+            (Some(chosen), _) if db.one("SELECT 1 FROM cards WHERE id = ?", &[chosen.into()])?.is_some() => return Err(fail(409, "Card already exists")),
+            (Some(chosen), _) => chosen.to_owned(),
+            (None, Value::Undefined | Value::Null) => self.store.new_id(IdKind::Card, None)?,
+            (None, other) => other.to_js_string(),
         };
         let ts = self.tick()?;
         let screenshot = body.get("type").as_str() == Some("Screenshot");
@@ -839,9 +857,28 @@ impl Writer {
     /// # Errors
     /// Status 400 `Space name is required` or the filters' error; the database's error.
     pub fn create_space(&self, body: &Value) -> Result<Value> {
+        self.create_space_as(body, None)
+    }
+
+    /// Create a space as [`Writer::create_space`] does, under an id the caller chose, such as one a phone made offline.
+    ///
+    /// # Arguments
+    /// * `body` - As for [`Writer::create_space`].
+    /// * `id` - The new space's id, or `None` for the next id of the library's own.
+    ///
+    /// # Returns
+    /// The new space as `GET /spaces/<id>` returns it.
+    ///
+    /// # Errors
+    /// Status 409 `Space already exists` for a chosen id in use; otherwise as [`Writer::create_space`].
+    pub fn create_space_as(&self, body: &Value, id: Option<&str>) -> Result<Value> {
         let name = field(body, "name")?;
         let Some(label) = name.as_str().filter(|label| !text::trim(label).is_empty()) else { return Err(fail(400, "Space name is required")) };
-        let id = self.store.new_id(IdKind::Space, None)?;
+        let id = match id {
+            Some(chosen) if self.store.db().one("SELECT 1 FROM spaces WHERE id = ?", &[chosen.into()])?.is_some() => return Err(fail(409, "Space already exists")),
+            Some(chosen) => chosen.to_owned(),
+            None => self.store.new_id(IdKind::Space, None)?,
+        };
         let created = iso_from_ns(self.tick()?, 6)?;
         let query = if body.get("query").truthy() {
             let filters = body.get("query").get("filters");
@@ -1164,6 +1201,36 @@ impl Writer {
         clear_bit(&mut row.data, 8_388_608);
         self.save_default(&mut row)?;
         Ok(Value::Object(Object::new()))
+    }
+
+    /// Keep the ThumbHash of a card's gallery picture as its `thumbHash`, unless the picture changed while the hash was
+    /// read.
+    ///
+    /// # Arguments
+    /// * `id` - Card id.
+    /// * `source` - The picture the hash was read from: the cover's `src`, or the blob's `path` of a card without a
+    ///   cover.
+    /// * `hash` - The hash in base64.
+    ///
+    /// # Returns
+    /// Whether the card kept it.
+    ///
+    /// # Errors
+    /// Status 404 for an unknown card; the database's error.
+    pub fn picture_hash(&self, id: &str, source: &str, hash: &str) -> Result<bool> {
+        let mut row = self.load(id)?;
+        let (holder, key) = if row.extras.get("cover").get("src").as_str() == Some(source) {
+            (&mut row.extras, "cover")
+        } else if !row.extras.get("cover").truthy() && row.data.get("blob").get("path").as_str() == Some(source) {
+            (&mut row.data, "blob")
+        } else {
+            return Ok(false);
+        };
+        let mut picture = holder.get(key).clone();
+        picture.set("thumbHash", hash);
+        holder.set(key, picture);
+        self.save_default(&mut row)?;
+        Ok(true)
     }
 }
 

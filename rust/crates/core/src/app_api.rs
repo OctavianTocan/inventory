@@ -32,7 +32,8 @@ enum After {
     Offset(Option<usize>),
 }
 
-fn prose_text(node: &Value) -> Result<String> {
+/// A prose document or node as plain text, its blocks one per line.
+pub(crate) fn prose_text(node: &Value) -> Result<String> {
     if node.is_nullish() {
         return Err(Error::invalid("Cannot read properties of null (reading 'type')"));
     }
@@ -186,7 +187,7 @@ impl AppApi {
         };
         let blob = data.get("blob");
         let blob = if blob.truthy() {
-            Value::Object(present(["path", "type", "width", "height", "dominantColor"].map(|key| (key, blob.get(key).clone())).to_vec()))
+            Value::Object(present(["path", "type", "width", "height", "dominantColor", "thumbHash"].map(|key| (key, blob.get(key).clone())).to_vec()))
         } else {
             blob.clone()
         };

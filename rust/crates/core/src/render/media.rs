@@ -82,7 +82,7 @@ pub fn render_media(media: &Value) -> String {
 /// Derive the image cover of an uploaded blob (`imageCover`).
 ///
 /// # Arguments
-/// * `blob` - Uploaded image metadata `{path, width, height, type, dominantColor?}`.
+/// * `blob` - Uploaded image metadata `{path, width, height, type, dominantColor?, thumbHash?}`.
 ///
 /// # Returns
 /// A cover object that `render_media` accepts.
@@ -96,6 +96,7 @@ pub fn image_cover(blob: &Value) -> Result<Value> {
         "width" => size.width,
         "height" => size.height,
         "dominantColor" => blob.get("dominantColor"),
+        "thumbHash" => blob.get("thumbHash"),
         "type" => if gif { "video" } else { "image" },
         "src" => format!("/media/{};{}x{}.{}", blob.get("path").to_js_string(), number_to_string(size.width), number_to_string(size.height), if gif { "mp4" } else { "webp" }),
     }

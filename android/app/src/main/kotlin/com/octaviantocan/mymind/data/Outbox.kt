@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.net.URI
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -16,10 +17,10 @@ internal const val LOCAL_TAG = "outbox-tag:"
 // Card flag bit of a card pinned to Top of Mind.
 private const val PINNED_FLAG = 512
 
-/** A change to a card made in the app, kept on the phone until the server has it. */
+/** A change made in the app, kept on the phone until the server has it. */
 @Serializable
 sealed interface Edit {
-    /** The card changed, or null when the phone does not know it. */
+    /** The card changed, or null when the phone does not know it or the change is to a space. */
     val cardId: String?
 
     /** @property pinned True pins the card to Top of Mind, false takes it off. */
@@ -52,6 +53,64 @@ sealed interface Edit {
     /** @property spaceId Space the card leaves. */
     @Serializable @SerialName("remove-from-space")
     data class RemoveFromSpace(override val cardId: String, val spaceId: String) : Edit
+
+    /**
+     * Makes an empty space at the end of the list.
+     *
+     * @property spaceId The id the phone made for it ([newPhoneId]), which the server keeps.
+     * @property name Space name.
+     * @property color Space colour as a CSS hex colour.
+     */
+    @Serializable @SerialName("create-space")
+    data class CreateSpace(val spaceId: String, val name: String, val color: String) : Edit {
+        override val cardId: String? get() = null
+    }
+
+    /** @property spaceId Space to delete; its cards stay in the library. */
+    @Serializable @SerialName("delete-space")
+    data class DeleteSpace(val spaceId: String) : Edit {
+        override val cardId: String? get() = null
+    }
+
+    /**
+     * Saves a link or text as a new card.
+     *
+     * @property cardId The id the phone made for it ([newPhoneId]), which the server keeps unless the link is already
+     *   saved.
+     * @property content The link or the text.
+     * @property source Where the card came from.
+     * @property note Words that become its note unless a link saved before has one, or null.
+     * @property made When it was saved, as the card's times until the server's card arrives.
+     */
+    @Serializable @SerialName("create-card")
+    data class CreateCard(
+        override val cardId: String,
+        val content: String,
+        val source: String,
+        val note: String? = null,
+        val made: String,
+    ) : Edit
+}
+
+/** @return A new id for something the phone makes, such as a space: 32 lowercase hex digits, as the server's push takes. */
+fun newPhoneId(): String = UUID.randomUUID().toString().replace("-", "")
+
+// A link the server saves as a link: the whole text one web address, as the server's own test reads it.
+private val LINK = Regex("""^https?://\S+$""")
+
+/**
+ * The card the phone shows for [this] change until the server's arrives: a link waiting to be read, as the server
+ * first saves one, or a note of the text.
+ */
+fun Edit.CreateCard.placeholder(): Card {
+    val link = content.trim().takeIf { LINK.matches(it) }
+    val host = link?.let { runCatching { URI(it).host }.getOrNull() }
+    val card = Card(id = cardId, type = "Note", flags = 0, created = made, modified = made, bumped = made, note = note?.takeIf { it.isNotBlank() })
+    return if (link != null) {
+        card.copy(type = "Placeholder", url = link, domain = host, siteName = host, state = "saving")
+    } else {
+        card.copy(prose = AppJson.parseToJsonElement(proseOf(content)))
+    }
 }
 
 /**
@@ -68,16 +127,23 @@ fun Card.edited(edit: Edit): Card? = when (edit) {
     is Edit.RemoveTag -> copy(tags = tags.orEmpty().filterNot { it.id == edit.tagId })
     is Edit.AddToSpace -> if (edit.spaceId in spaces.orEmpty()) this else copy(spaces = spaces.orEmpty() + edit.spaceId)
     is Edit.RemoveFromSpace -> copy(spaces = spaces.orEmpty() - edit.spaceId, spaceRanks = spaceRanks?.minus(edit.spaceId))
+    is Edit.CreateSpace, is Edit.CreateCard -> this
+    is Edit.DeleteSpace -> copy(spaces = spaces.orEmpty() - edit.spaceId, spaceRanks = spaceRanks?.minus(edit.spaceId))
 }
 
 /**
- * The notice shown when the server refused a change made offline.
+ * The notice shown when the server refused a change made on the phone.
  *
+ * @param edit The refused change.
  * @param card The changed card as the phone had it, or null.
- * @return One sentence naming the card by its title when it has one.
+ * @return One sentence naming the space, or the card by its title when it has one.
  */
-fun refusedNotice(card: Card?): String =
-    card?.title?.takeIf { it.isNotBlank() }?.let { "Your change to “$it” could not be saved." } ?: "A change to a card could not be saved."
+fun refusedNotice(edit: Edit, card: Card?): String = when (edit) {
+    is Edit.CreateSpace -> "Your new space “${edit.name}” could not be saved."
+    is Edit.DeleteSpace -> "A space could not be deleted."
+    is Edit.CreateCard -> "Something you shared could not be saved."
+    else -> card?.title?.takeIf { it.isNotBlank() }?.let { "Your change to “$it” could not be saved." } ?: "A change to a card could not be saved."
+}
 
 /**
  * Changes made on the phone, kept in the phone's copy and sent in the order they were made once the server can be
@@ -109,6 +175,12 @@ class Outbox(
 
     /** @return True when no change waits to be sent, or the queue cannot be read. */
     suspend fun isEmpty(): Boolean = copy.firstQueued() == null
+
+    /**
+     * @return True once this copy's server has taken a push, so it keeps the ids the phone makes, as for a new space;
+     *   false before, or when the copy cannot be read.
+     */
+    suspend fun pushWorks(): Boolean = copy.pushWorks()
 
     /**
      * Queues a change and shows it in the copy.
@@ -168,22 +240,35 @@ class Outbox(
                 is ApiResult.Failed -> return if (sent.failure == ApiFailure.Server(0)) NO_PUSH else sent.failure
             }
             val last = answer.lastChangeId ?: return NO_PUSH
+            copy.markPushWorks()
             batch.forEach { (seq, edit) -> if (edit is Edit.AddTag) answer.tagIds[seq.toString()]?.let { sentTags[edit.localId] = it } }
             if (!copy.unqueueThrough(last)) return ApiFailure.Server(0)
-            batch.forEach { (seq, edit) -> if (seq in answer.refused) refuse(edit) }
+            for ((seq, edit) in batch) {
+                when {
+                    seq > last -> {}
+                    seq in answer.refused -> refuse(edit)
+                    // A link already saved keeps its own id, and a change already handled answers none: the phone's
+                    // card makes way for the server's.
+                    edit is Edit.CreateCard && answer.cardIds[seq.toString()] != edit.cardId -> reread(edit.cardId)
+                }
+            }
             if (last < batch.last().first) return ApiFailure.Server(0)
         }
     }
 
     // Puts the server's version of a refused change's card in the copy and tells [onRefused].
     private suspend fun refuse(edit: Edit) {
-        val id = edit.cardId
-        val card = id?.let { copy.card(it) }
-        if (id != null) when (val fresh = server.card(id)) {
+        val card = edit.cardId?.let { copy.card(it) }
+        edit.cardId?.let { reread(it) }
+        onRefused(edit, card)
+    }
+
+    // Puts the server's version of a card in the copy, or takes the card out when the server has none.
+    private suspend fun reread(id: String) {
+        when (val fresh = server.card(id)) {
             is ApiResult.Ok -> copy.replace(id, fresh.value)
             is ApiResult.Failed -> if (fresh.failure == ApiFailure.Server(404)) copy.replace(id, null)
         }
-        onRefused(edit, card)
     }
 
     private suspend fun deliver(edit: Edit): ApiResult<Unit> = when (edit) {
@@ -197,6 +282,9 @@ class Outbox(
         is Edit.RemoveTag -> server.removeTag(edit.tagId)
         is Edit.AddToSpace -> server.addToSpace(edit.spaceId, edit.cardId)
         is Edit.RemoveFromSpace -> server.removeFromSpace(edit.spaceId, edit.cardId)
+        // Only the push keeps the id the phone made, so a server without it cannot take the space or card.
+        is Edit.CreateSpace, is Edit.CreateCard -> ApiResult.Failed(ApiFailure.Invalid)
+        is Edit.DeleteSpace -> server.deleteSpace(edit.spaceId)
     }
 }
 

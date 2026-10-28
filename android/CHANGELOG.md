@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.6.18 (29), 2026-10-28
+Pictures show at once, blurred, while they load.
+
+### Changed
+- Every picture in the gallery and on a card shows a blurred preview of itself the moment it appears, then sharpens when the picture arrives, and keeps the preview when the picture can't load, such as offline. Your server makes a preview for each new picture as it saves it, and for your older pictures, newest first, while you use the app. This works once your server is updated for 0.6.18.
+
+## 0.6.17 (28), 2026-10-28
+Every screen keeps up with your library by itself.
+
+### Changed
+- The gallery, Top of Mind, your spaces and an open card redraw from the library on your phone whenever it changes, whether the change came from your server, from another device or from a tap on this phone.
+- A card you have open fills in as your server finishes reading it, such as a link you just shared getting its title and picture.
+
+## 0.6.16 (27), 2026-10-28
+Changes made elsewhere show up by themselves.
+
+### Changed
+- While the app is open, it hears from your server the moment something changes, such as a card saved on the web or a shared link your server has finished reading, and updates the gallery, Top of Mind and spaces without a pull to refresh.
+
+## 0.6.15 (26), 2026-10-28
+Links and text you share are saved the moment you tap, even offline.
+
+### Changed
+- Sharing a link or a piece of text to the app saves it on the phone at once: it leads your gallery straight away, offline search finds it, and the tags, note and spaces you add in the share sheet show on it too. Your server gets it in the background. This works once your server is updated for 0.6.15; until then sharing waits for the server as before.
+- A link you saved before still keeps its own note when you share it again.
+- The share sheet lists your spaces from the phone, so it shows them offline and includes spaces you just made.
+
+## 0.6.14 (25), 2026-10-28
+New and deleted spaces show the moment you tap.
+
+### Changed
+- Making or deleting a space happens on the phone at once and reaches your server in the background, even offline. A new space works this way once your server is updated for 0.6.14; until then it waits for the server as before.
+
 ## 0.6.13 (24), 2026-10-28
 Cards move with your fingers while you pinch.
 

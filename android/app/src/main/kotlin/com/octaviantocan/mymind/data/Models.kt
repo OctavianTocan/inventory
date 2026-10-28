@@ -21,6 +21,7 @@ data class Cover(
     val height: Int? = null,
     val type: String? = null,
     val dominantColor: String? = null,
+    val thumbHash: String? = null,
 )
 
 @Serializable
@@ -30,6 +31,7 @@ data class Blob(
     val width: Int? = null,
     val height: Int? = null,
     val dominantColor: String? = null,
+    val thumbHash: String? = null,
 )
 
 @Serializable
@@ -138,9 +140,16 @@ data class PushRequest(val clientId: String, val changes: List<Change>)
  *   from an older server, which answers `{}` to a push it does not know and applies nothing.
  * @property refused Ids of the changes the server turned down.
  * @property tagIds The server's id of each tag the push added, by change id.
+ * @property cardIds The id the server keeps for each card the push saved, by change id: the phone's own, or that of a
+ *   link already saved.
  */
 @Serializable
-data class PushAnswer(val lastChangeId: Long? = null, val refused: List<Long> = emptyList(), val tagIds: Map<String, String> = emptyMap())
+data class PushAnswer(
+    val lastChangeId: Long? = null,
+    val refused: List<Long> = emptyList(),
+    val tagIds: Map<String, String> = emptyMap(),
+    val cardIds: Map<String, String> = emptyMap(),
+)
 
 @Serializable
 data class Space(

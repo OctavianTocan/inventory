@@ -35,6 +35,10 @@ import com.octaviantocan.mymind.ui.shell.MainShell
 import com.octaviantocan.mymind.ui.signin.SignInScreen
 import com.octaviantocan.mymind.ui.splash.LaunchState
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import kotlinx.coroutines.delay
+
+// The pause after a sync the hub asked for, so a burst of announcements brings one more sync, not one each.
+private const val HUB_SYNC_GAP_MS = 1_000L
 
 /**
  * Root of the app: the theme around the signed-in screens and the splash and sign-in overlay. Without internet the
@@ -80,10 +84,24 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
             uploadActivity = container.uploadActivity,
             memory = container.libraryCopy,
             sync = container.librarySync,
+            changes = container.library.changes,
             ai = container.ai,
         )
     }
-    LaunchedEffect(online) { if (online) library.syncNow() }
+    LaunchedEffect(online) {
+        if (online) {
+            library.syncNow()
+            container.hub.start()
+        }
+    }
+    // A change the server announces brings the copy up to date and onto the screens; a burst of them, such as a link
+    // being read, waits out one sync before the next.
+    LaunchedEffect(Unit) {
+        container.hub.changes.collect {
+            library.syncNow()
+            delay(HUB_SYNC_GAP_MS)
+        }
+    }
     val settings = viewModel { SettingsViewModel(container.repository) }
     val context = LocalContext.current
     val updates = viewModel {
@@ -101,10 +119,15 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
             if (event == Lifecycle.Event.ON_START) {
                 updates.onResume()
                 library.syncNow()
+                container.hub.start()
             }
+            if (event == Lifecycle.Event.ON_STOP) container.hub.stop()
         }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycle.removeObserver(observer)
+            container.hub.stop()
+        }
     }
     val sheet by updates.sheet.collectAsStateWithLifecycle()
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}

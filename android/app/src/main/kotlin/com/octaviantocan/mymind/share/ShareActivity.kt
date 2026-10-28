@@ -60,13 +60,13 @@ class ShareActivity : ComponentActivity() {
     private fun SavingSheet(ready: ShareState.Ready, container: com.octaviantocan.mymind.AppContainer) {
         val scope = container.shareScope
         val controller = remember {
-            ShareController(scope, container.repository, activity = container.uploadActivity) { uri ->
+            ShareController(scope, container.library, activity = container.uploadActivity) { uri ->
                 withContext(Dispatchers.IO) { copiedUploadOf(contentResolver, Uri.parse(uri), sharedDirectory()) }
             }.also { it.start(ready.items) }
         }
         val state = remember { ShareSheetState() }
         LaunchedEffect(Unit) {
-            val library = container.repository
+            val library = container.library
             state.allTags = (library.tags() as? ApiResult.Ok)?.value.orEmpty()
             state.recentTags = (library.recentTags() as? ApiResult.Ok)?.value.orEmpty()
             state.spaces = (library.spaces() as? ApiResult.Ok)?.value?.spaces.orEmpty()

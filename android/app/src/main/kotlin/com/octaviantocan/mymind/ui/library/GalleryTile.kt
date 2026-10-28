@@ -70,6 +70,7 @@ internal fun GalleryTile(
     val kind = tileKind(card)
     val picture = galleryPicture(card)
     val imageModel = rememberGalleryImage(picture, imageRequestSizePx)
+    val preview = rememberPicturePreview(card)
     val text = remember(card) { galleryText(card) }
     val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card)
     val paper = lerp(colors.raised, accent, 0.13f)
@@ -83,11 +84,13 @@ internal fun GalleryTile(
         if (previews != null && video != null && playVideo && moving) {
             Box(pictureModifier) {
                 VideoPreview(video, previews, { length = it }) {
-                    AsyncImage(model = imageModel, contentDescription = description, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    AsyncImage(model = imageModel, contentDescription = description, placeholder = preview, error = preview,
+                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
             }
         } else {
-            AsyncImage(model = imageModel, contentDescription = description, contentScale = ContentScale.Crop, modifier = pictureModifier)
+            AsyncImage(model = imageModel, contentDescription = description, placeholder = preview, error = preview,
+                contentScale = ContentScale.Crop, modifier = pictureModifier)
         }
     }
     FootPressTheme {

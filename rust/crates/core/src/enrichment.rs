@@ -1,6 +1,8 @@
-//! Port of `lib/enrichment.mjs`: link capture and hosted AI after a save, one card at a time.
+//! Port of `lib/enrichment.mjs`: link capture and hosted AI after a save, one card at a time, and the ThumbHash of each
+//! card's gallery picture (`thumb_hash`).
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use indexmap::IndexMap;
@@ -15,7 +17,7 @@ use crate::search_document::analysis_item;
 use crate::sql::SqlExt;
 use crate::store::{CardRow, Store};
 use crate::store_write::Writer;
-use crate::{Error, Result, runtime};
+use crate::{Error, Result, runtime, thumb_hash};
 
 const HIDDEN: i64 = 131_072 | 262_144;
 const PROCESSING: i64 = 1;
@@ -45,6 +47,11 @@ struct Inner {
     pending: RefCell<IndexMap<String, bool>>,
     closed: Cell<bool>,
     running: Cell<bool>,
+    // How many more pictures without a ThumbHash the sweep may hash, whether it found none left, and the cards whose
+    // picture it could not hash for now.
+    sweep: Cell<usize>,
+    swept: Cell<bool>,
+    unhashed: RefCell<HashSet<String>>,
 }
 
 /// The post-save job queue: capture and hosted AI, serialized and coalesced per card (`createEnrichment`'s result).
@@ -126,7 +133,15 @@ impl Enrichment {
     /// # Arguments
     /// * `options` - Services and the offline and read-only policy.
     pub fn new(options: EnrichmentOptions) -> Self {
-        Self(Rc::new(Inner { options, pending: RefCell::new(IndexMap::new()), closed: Cell::new(false), running: Cell::new(false) }))
+        Self(Rc::new(Inner {
+            options,
+            pending: RefCell::new(IndexMap::new()),
+            closed: Cell::new(false),
+            running: Cell::new(false),
+            sweep: Cell::new(0),
+            swept: Cell::new(false),
+            unhashed: RefCell::default(),
+        }))
     }
 
     /// Whether hosted AI runs (`enabled`): `GEMINI_API_KEY` is set, writes are on, and offline every AI base URL is a
@@ -172,20 +187,77 @@ impl Enrichment {
         }
         let queued = inner.pending.borrow().get(id).copied().unwrap_or(false);
         inner.pending.borrow_mut().insert(id.to_owned(), capture || queued);
-        if inner.running.replace(true) {
+        self.run();
+    }
+
+    /// Give the gallery pictures of up to `limit` visible cards a ThumbHash, newest first, one card at a time whenever
+    /// no saved card waits for enrichment. New cards get theirs after capture; this sweep is for the ones saved before.
+    /// Once a sweep finds none left, later calls do nothing until the queue is made anew, and so does a picture that
+    /// failed for a reason that may pass, such as an unreachable media container.
+    ///
+    /// # Arguments
+    /// * `limit` - Most pictures this call hashes, so a host can spread the work over its requests.
+    pub fn hash_pictures(&self, limit: usize) {
+        let inner = &self.0;
+        if inner.closed.get() || inner.options.readonly || inner.swept.get() {
+            return;
+        }
+        inner.sweep.set(inner.sweep.get().max(limit));
+        self.run();
+    }
+
+    // Work through the queue on a later turn of the event loop, unless that is under way.
+    fn run(&self) {
+        if self.0.running.replace(true) {
             return;
         }
         let queue = self.clone();
         runtime::defer(async move {
             runtime::sleep(0).await;
             while !queue.0.closed.get() {
-                let Some((id, capture)) = queue.0.pending.borrow_mut().shift_remove_index(0) else { break };
-                if queue.process_card(&id, capture).await.is_err() && !queue.0.closed.get() {
-                    runtime::log("[capture] enrichment failed; saved card retained");
+                let next = queue.0.pending.borrow_mut().shift_remove_index(0);
+                match next {
+                    Some((id, capture)) => {
+                        if queue.process_card(&id, capture).await.is_err() && !queue.0.closed.get() {
+                            runtime::log("[capture] enrichment failed; saved card retained");
+                        }
+                    }
+                    None if queue.0.sweep.get() > 0 => {
+                        queue.0.sweep.set(queue.0.sweep.get() - 1);
+                        if !queue.hash_next().await {
+                            queue.0.sweep.set(0);
+                            queue.0.swept.set(true);
+                        }
+                    }
+                    None => break,
                 }
             }
             queue.0.running.set(false);
         });
+    }
+
+    // Hash the newest picture still without a ThumbHash; false when none is left.
+    async fn hash_next(&self) -> bool {
+        let inner = &self.0;
+        let skipped = inner.unhashed.borrow().len();
+        let Ok(waiting) = thumb_hash::missing(&inner.options.store, skipped + 1) else { return false };
+        let Some(id) = waiting.into_iter().find(|id| !inner.unhashed.borrow().contains(id)) else { return false };
+        if !self.hash_picture(&id).await {
+            inner.unhashed.borrow_mut().insert(id);
+        }
+        true
+    }
+
+    // Whether the card's gallery picture took a ThumbHash; a failure leaves the card as it was.
+    async fn hash_picture(&self, id: &str) -> bool {
+        let options = &self.0.options;
+        match thumb_hash::fill(&options.store, &options.writer, &*options.media, id).await {
+            Ok(hashed) => hashed,
+            Err(_) => {
+                runtime::log("[media] picture preview failed; card retained");
+                false
+            }
+        }
     }
 
     /// Wait until the queue is empty (`drain`), for tests and shutdown.
@@ -225,6 +297,10 @@ impl Enrichment {
             }
             self.processing(id, false, true)?;
         }
+        if inner.closed.get() {
+            return Ok(());
+        }
+        self.hash_picture(id).await;
         if inner.closed.get() {
             return Ok(());
         }

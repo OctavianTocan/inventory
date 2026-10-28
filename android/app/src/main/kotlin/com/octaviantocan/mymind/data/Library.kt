@@ -171,6 +171,24 @@ interface Library {
     suspend fun createFromContent(content: String, source: String, spaceId: String?): ApiResult<String>
 
     /**
+     * Saves a link or text as [createFromContent] does, with words to go with it.
+     *
+     * @param content A link or text to save.
+     * @param source Where the card came from.
+     * @param spaceId Space the new card joins, or null.
+     * @param note Words that become the card's note unless it already has one, as a link saved before does; or null.
+     * @return The card's id; a link that is already saved answers the existing card's id.
+     */
+    suspend fun createFromContent(content: String, source: String, spaceId: String?, note: String?): ApiResult<String> {
+        val saved = createFromContent(content, source, spaceId)
+        if (saved is ApiResult.Ok && note != null) {
+            val card = (card(saved.value) as? ApiResult.Ok)?.value
+            if (card != null && card.note.isNullOrBlank()) setNote(saved.value, note)
+        }
+        return saved
+    }
+
+    /**
      * @param cardId Card id.
      * @param text Note text.
      * @return Success, or the failure.

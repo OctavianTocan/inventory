@@ -7,6 +7,9 @@ import android.database.sqlite.SQLiteException
 import android.database.sqlite.SQLiteOpenHelper
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -71,6 +74,13 @@ interface LibraryMemory {
 class LibraryCopy(context: Context, private val session: Session, private val io: CoroutineDispatcher = Dispatchers.IO) : LibraryMemory {
     private val helper = Helper(context.applicationContext)
     private val lock = Mutex()
+    private val changed = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /**
+     * One signal after each change to what the copy shows: a sync that brought cards or spaces, a change queued on the
+     * phone, or a card read again from the server. A collector still busy gets one for all it missed.
+     */
+    val changes: SharedFlow<Unit> = changed
 
     override fun feed(name: String): FeedMemory = object : FeedMemory {
         override suspend fun read(): List<Card> = owned(emptyList()) { db ->
@@ -107,7 +117,19 @@ class LibraryCopy(context: Context, private val session: Session, private val io
      * @param page The answer.
      * @return True when it was kept; false when signed out or the database failed.
      */
-    suspend fun apply(page: ChangesPage): Boolean = owned(false) { db ->
+    suspend fun apply(page: ChangesPage): Boolean {
+        var shows = false
+        val kept = owned(false) { db ->
+            shows = page.reset || page.cards.isNotEmpty() || page.removed.isNotEmpty() ||
+                (page.spaces != null && page.spaces != spacesIn(db)) || (!page.more && meta(db, COMPLETE) != "1")
+            keepPage(db, page)
+        }
+        if (kept && shows) changed.tryEmit(Unit)
+        return kept
+    }
+
+    // Writes one answer of the feed into the copy, with the changes still waiting shown on top.
+    private fun keepPage(db: SQLiteDatabase, page: ChangesPage): Boolean {
         if (page.reset) {
             db.delete("cards", null, null)
             db.delete("card_text", null, null)
@@ -115,11 +137,11 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         }
         page.cards.forEach { card -> keep(db, card) }
         page.removed.forEach { id -> forget(db, id) }
+        page.spaces?.let { spaces -> setSpaces(db, spaces) }
         showQueued(db, page.cards.mapTo(HashSet()) { it.id })
-        page.spaces?.let { spaces -> setMeta(db, SPACES, AppJson.encodeToString(ListSerializer(Space.serializer()), spaces)) }
         setMeta(db, TOKEN, page.next)
         if (!page.more) setMeta(db, COMPLETE, "1")
-        true
+        return true
     }
 
     /**
@@ -182,10 +204,8 @@ class LibraryCopy(context: Context, private val session: Session, private val io
      */
     suspend fun card(id: String): Card? = owned(null) { db -> cardIn(db, id) }
 
-    /** @return The spaces as the last full answer listed them, or null. */
-    suspend fun spaces(): List<Space>? = owned(null) { db ->
-        meta(db, SPACES)?.let { AppJson.decodeFromString(ListSerializer(Space.serializer()), it) }
-    }
+    /** @return The spaces as the last full answer listed them, with the space changes still queued, or null. */
+    suspend fun spaces(): List<Space>? = owned(null) { db -> spacesIn(db) }
 
     /**
      * @param spaceId Space id.
@@ -213,7 +233,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         db.insertOrThrow("outbox", null, ContentValues().apply { put("edit", AppJson.encodeToString(Edit.serializer(), kept)) })
         show(db, kept)
         true
-    }
+    }.also { if (it) changed.tryEmit(Unit) }
 
     /** @return The change that waits longest, with its place in the queue, or null when none waits or it cannot be read. */
     suspend fun firstQueued(): Pair<Long, Edit>? = owned(null) { db -> queuedIn(db).firstOrNull() }
@@ -244,6 +264,12 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         true
     }
 
+    /** @return True once the server has answered a push for this copy; false before, or when it cannot be read. */
+    suspend fun pushWorks(): Boolean = owned(false) { db -> meta(db, PUSH) == "1" }
+
+    /** Notes that the server answered a push for this copy; the note is wiped with the queue. */
+    suspend fun markPushWorks() = owned(Unit) { db -> setMeta(db, PUSH, "1") }
+
     /**
      * @return The id this copy goes by with the server's push, made on first use and wiped with the queue, so a new
      *   queue starts a new count with the server; null when signed out or the database failed.
@@ -261,7 +287,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         db.delete("outbox", "seq = ?", arrayOf(seq.toString()))
         edit.cardId?.let { id -> cardIn(db, id) }?.let { card -> keep(db, card.copy(tags = card.tags.orEmpty().filterNot { it.id == localId })) }
         true
-    }
+    }.also { if (it) changed.tryEmit(Unit) }
 
     /**
      * Puts the server's version of one card in the copy, with the changes still queued for it on top.
@@ -269,9 +295,13 @@ class LibraryCopy(context: Context, private val session: Session, private val io
      * @param id Card id.
      * @param card The card as the server has it; null or trashed takes it out of the copy.
      */
-    suspend fun replace(id: String, card: Card?) = owned(Unit) { db ->
-        if (card == null || card.deleted != null) forget(db, id) else keep(db, card)
-        showQueued(db, setOf(id))
+    suspend fun replace(id: String, card: Card?) {
+        val kept = owned(false) { db ->
+            if (card == null || card.deleted != null) forget(db, id) else keep(db, card)
+            showQueued(db, setOf(id))
+            true
+        }
+        if (kept) changed.tryEmit(Unit)
     }
 
     /** Forgets everything the copy holds. */
@@ -328,9 +358,26 @@ class LibraryCopy(context: Context, private val session: Session, private val io
             }
         }
 
-    // Shows one change on its card, when the copy holds the card. A card joining a space goes to its end, as the server
-    // puts it.
+    // Shows one change: on its card, when the copy holds the card, or on the spaces and their cards. A card joining a
+    // space goes to its end, as the server puts it.
     private fun show(db: SQLiteDatabase, edit: Edit) {
+        when (edit) {
+            is Edit.CreateSpace -> spacesIn(db)?.let { spaces ->
+                val last = spaces.maxOfOrNull { it.position ?: 0L } ?: 0L
+                setSpaces(db, spaces.filterNot { it.id == edit.spaceId } + Space(edit.spaceId, edit.name, edit.color, last + 1, smart = false, count = 0))
+            }
+            is Edit.DeleteSpace -> {
+                spacesIn(db)?.let { spaces -> setSpaces(db, spaces.filterNot { it.id == edit.spaceId }) }
+                db.rawQuery("SELECT card FROM cards WHERE spaces LIKE ?", arrayOf("%,${edit.spaceId},%")).use { rows ->
+                    buildList { while (rows.moveToNext()) add(decode(rows.getString(0))) }
+                }.forEach { card -> card.edited(edit)?.let { keep(db, it) } }
+            }
+            is Edit.CreateCard -> if (cardIn(db, edit.cardId) == null) keep(db, edit.placeholder())
+            else -> showOnCard(db, edit)
+        }
+    }
+
+    private fun showOnCard(db: SQLiteDatabase, edit: Edit) {
         val id = edit.cardId ?: return
         val card = cardIn(db, id) ?: return
         val edited = card.edited(edit) ?: return forget(db, id)
@@ -344,9 +391,18 @@ class LibraryCopy(context: Context, private val session: Session, private val io
             generateSequence { if (rows.moveToNext()) decode(rows.getString(0)) else null }.mapNotNull { it.spaceRanks?.get(spaceId) }.maxOrNull()
         }?.plus(1) ?: 0.0
 
-    // Shows the changes still waiting on cards the server's answer just replaced.
+    // Shows the changes still waiting on cards the server's answer just replaced, and the changes that make or delete
+    // things again, since the answer may have started the copy over or brought the cards of a deleted space.
     private fun showQueued(db: SQLiteDatabase, ids: Set<String>) {
-        queuedIn(db).forEach { (_, edit) -> if (edit.cardId in ids) show(db, edit) }
+        queuedIn(db).forEach { (_, edit) ->
+            if (edit.cardId in ids || edit is Edit.CreateSpace || edit is Edit.DeleteSpace || edit is Edit.CreateCard) show(db, edit)
+        }
+    }
+
+    private fun spacesIn(db: SQLiteDatabase): List<Space>? = meta(db, SPACES)?.let { AppJson.decodeFromString(ListSerializer(Space.serializer()), it) }
+
+    private fun setSpaces(db: SQLiteDatabase, spaces: List<Space>) {
+        setMeta(db, SPACES, AppJson.encodeToString(ListSerializer(Space.serializer()), spaces))
     }
 
     // Writes a card and its keyword text, keeping its row number so the text stays joined to it.
@@ -418,6 +474,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         const val COMPLETE = "sync_complete"
         const val SPACES = "spaces"
         const val CLIENT = "client_id"
+        const val PUSH = "push_works"
         const val MAX_SEARCH_WORDS = 8
         val TABLES = listOf("feed_cards", "meta", "cards", "card_text", "outbox")
     }

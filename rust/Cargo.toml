@@ -48,6 +48,8 @@ tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring
 webpki-roots = "1.0.9"
 flate2 = "1.1.10"
 brotli-decompressor = "6.1.0"
+image-webp = "0.2.4"
+thumbhash = "0.1.0"
 
 [profile.release]
 lto = true

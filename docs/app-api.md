@@ -110,7 +110,7 @@ Fields are omitted when the stored card has no value; the app treats every field
   "spaces": ["00000002UnEglwYYzqZA8E"],
   "spaceRanks": {"00000002UnEglwYYzqZA8E": 4},
   "pinPosition": 3,
-  "cover": {"src": "/media/…;600x414.mp4", "width": 600, "height": 414, "type": "video", "dominantColor": "#010101"},
+  "cover": {"src": "/media/…;600x414.mp4", "width": 600, "height": 414, "type": "video", "dominantColor": "#010101", "thumbHash": "3wcKNJqAh4eAh4d4iHeAcAj4eA=="},
   "blob": {"path": "…", "type": "image/jpeg", "width": 820, "height": 1024, "dominantColor": "#fbfbfb"},
   "prose": {"type": "doc", "content": []},
   "post": {"bodyHtml": "<p>…</p>", "author": "by …", "hasVideo": true, "gallery": [{"src": "…", "width": 1, "height": 1}]},
@@ -126,6 +126,12 @@ Fields are omitted when the stored card has no value; the app treats every field
   `RedditPost`, `Placeholder`. The app shows an unknown type as a plain titled card instead of failing.
 - `url`: `extras.linkUrl`, else `data.source.url`. `title`: `extras.title` (full), else `data.title`.
 - `cover`: `extras.cover`; for an uploaded image without one, the rendition `imageCover(blob)` picks for the web.
+- `thumbHash` on `cover`, or on `blob` for a card without a cover: the [ThumbHash](https://evanw.github.io/thumbhash/)
+  of the gallery picture in standard base64, a blurred copy in about 25 bytes that the phone draws until the picture
+  loads (`rust/crates/core/src/thumb_hash.rs`). The server reads it from a WebP rendition of the picture right after a
+  card's capture; pictures saved before fill in newest first, all at once on a local server's start and 50 after each
+  `/app/v1/changes` request on Cloudflare. An empty string means the picture could not be read, and a missing one that
+  it has not been read yet.
 - `prose`: the stored document tree (Note, Content). `post.bodyHtml` is the source post's sanitized HTML, the one
   place HTML reaches the app.
 - `state`: `ready`, `saving` (capture pending), `screenshot` (screenshot pending) or `failed` (capture failed).
@@ -139,8 +145,10 @@ Fields are omitted when the stored card has no value; the app treats every field
 
 ## Live updates and writes
 
-- `/hub` WebSocket with `Authorization: Bearer`: the same events the web gets (`object:created`, `object:updated`,
-  …). The app re-reads `GET /app/v1/cards/<id>` for each changed id.
+- `/hub` WebSocket with `Authorization: Bearer`: the same SignalR JSON hub and events the web gets
+  (`object:created`, `object:updated`, …). The app (`data/HubListener.kt`) listens while it is on screen and, for any
+  invocation, reads the changes feed (`GET /app/v1/changes`) instead of each card, so one read covers a burst of
+  events. It connects again after a drop, waiting up to a minute, and stops trying after a 401, 403 or 404.
 - Writes: the endpoints in `docs/write-api.md`, with `Authorization: Bearer` instead of the session cookie.
 
 ### Pushing the phone's changes
@@ -159,10 +167,22 @@ Fields are omitted when the stored card has no value; the app treats every field
   retry) is skipped rather than applied twice.
 - Names and `args`: `pin` (`cardId`, `pinned`), `trash` (`cardId`), `note` (`cardId`, `text`, one paragraph per
   line), `add-tag` (`cardId`, `name`), `remove-tag` (`tagId`), `add-to-space` and `remove-from-space` (`cardId`,
-  `spaceId`). Other fields are ignored.
-- Answer: `{"lastChangeId": 12, "refused": [ids], "tagIds": {"<change id>": "<tag id>"}}`. A change the library turns
-  down (a card that is gone, a blank tag, a name the server does not know) still counts as handled and is listed in
-  `refused`; the phone drops it and reads the card again. `tagIds` gives the id of each tag the push added.
+  `spaceId`), `create-space` (`spaceId`, `name`, `color`), `delete-space` (`spaceId`) and `create-card` (`cardId`,
+  `content`, `source`, `note`). Other fields are ignored.
+- `create-space` and `create-card` keep the id the phone made, so the phone can show the space or card and change it
+  before the server answers. The id must be 32 lowercase hex digits (a UUID without its dashes): letters and digits
+  like the library's own ids, and its letters stop at `f`, so it never holds the kind code those ids carry and count
+  from. An id already in use is turned down. The phone makes spaces and cards this way only after the server has
+  answered a push; before that it uses `POST /spaces` and `POST /objects`.
+- `create-card` saves a link or text as `POST /objects` does, and schedules its enrichment the same way. A link
+  already saved is bumped instead and keeps its id; the phone's id becomes another name for it (`app_aliases`), so
+  the phone's later changes to that id reach the saved card. `note` becomes the card's note unless a link saved before
+  already has one.
+- Answer: `{"lastChangeId": 12, "refused": [ids], "tagIds": {"<change id>": "<tag id>"}, "cardIds": {"<change id>":
+  "<card id>"}}`. A change the library turns down (a card that is gone, a blank tag, a name the server does not know)
+  still counts as handled and is listed in `refused`; the phone drops it and reads the card again. `tagIds` gives the
+  id of each tag the push added and `cardIds` the id the library keeps for each card it saved; when that is not the
+  phone's id, the phone drops its own card and the changes feed brings the saved one.
 - A malformed body, or more than 100 changes, is a 400 and applies nothing. A database failure stops the push at that
   change; the ones before it stay applied and are skipped when the phone sends again.
 

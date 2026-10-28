@@ -13,11 +13,13 @@ import com.octaviantocan.mymind.data.Outbox
 import com.octaviantocan.mymind.data.PushAnswer
 import com.octaviantocan.mymind.data.PushRequest
 import com.octaviantocan.mymind.data.Session
+import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.SyncOutcome
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.data.TokenStore
 import com.octaviantocan.mymind.data.refusedNotice
 import com.octaviantocan.mymind.ui.library.FakeLibrary
+import com.octaviantocan.mymind.ui.library.cardHeading
 import com.octaviantocan.mymind.ui.library.testCard
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -211,6 +213,113 @@ class OutboxTest {
     }
 
     @Test
+    fun onceThePushWorksASpaceMadeOnThePhoneShowsAtOnceUnderItsOwnId() = runBlocking {
+        copy.apply(ChangesPage(next = "t1", spaces = listOf(Space("s1", "One", position = 4))))
+        val pushingSync = LibrarySync(copy, { since -> feed[since] ?: ApiResult.Failed(ApiFailure.Network) }, pushing::send, scope = CoroutineScope(Dispatchers.Unconfined))
+        val library = LocalFirstLibrary(server, copy, pushingSync, pushing)
+        assertEquals(ApiResult.Ok("s-new"), library.createSpace("First", "#f96"))
+        assertEquals("before a push has worked, the server makes the space", listOf("newSpace:First:#f96"), server.calls)
+        assertTrue(library.setPinned("a", true) is ApiResult.Ok)
+        server.calls.clear()
+        val id = (library.createSpace("Reading", "#75ffc0") as ApiResult.Ok).value
+        assertTrue(id.matches(Regex("[0-9a-f]{32}")))
+        assertEquals(Space(id, "Reading", "#75ffc0", 5, smart = false, count = 0), copy.spaces()!!.last())
+        val made = pushed.last().changes.single()
+        assertEquals("create-space", made.name)
+        assertEquals(JsonObject(mapOf("spaceId" to JsonPrimitive(id), "name" to JsonPrimitive("Reading"), "color" to JsonPrimitive("#75ffc0"))), made.args)
+        assertEquals(emptyList<String>(), server.calls)
+    }
+
+    @Test
+    fun aDeletedSpaceLeavesTheListAndItsCardsAtOnceAndStaysGone() = runBlocking {
+        copy.apply(ChangesPage(next = "t1", spaces = listOf(Space("s1", "One"), Space("s2", "Two"))))
+        server.writeFailure = ApiFailure.Network
+        assertEquals(ApiResult.Ok(Unit), library.deleteSpace("s1"))
+        assertEquals(listOf("s2"), copy.spaces()!!.map { it.id })
+        assertEquals(emptyList<String>(), copy.card("b")!!.spaces)
+        copy.apply(ChangesPage(listOf(testCard("b", spaces = listOf("s1", "s2"))), next = "t2", spaces = listOf(Space("s1", "One"), Space("s2", "Two"))))
+        assertEquals("the server's answer from before the delete does not bring it back", listOf("s2"), copy.spaces()!!.map { it.id })
+        assertEquals(listOf("s2"), copy.card("b")!!.spaces)
+        server.writeFailure = null
+        assertNull(outbox.send())
+        assertEquals("deleteSpace:s1", server.calls.last())
+        assertTrue(outbox.isEmpty())
+    }
+
+    @Test
+    fun aSpaceTheServerCannotTakeIsDroppedWithANotice() = runBlocking {
+        copy.apply(ChangesPage(next = "t1", spaces = listOf(Space("s1", "One"))))
+        copy.queue(Edit.CreateSpace("0a1b2c3d4e5f4a6b8c7d9e0f1a2b3c4d", "Reading", "#75ffc0"))
+        assertEquals(listOf("s1", "0a1b2c3d4e5f4a6b8c7d9e0f1a2b3c4d"), copy.spaces()!!.map { it.id })
+        assertNull(outbox.send())
+        assertEquals("Your new space “Reading” could not be saved.", refusedNotice(refused.single().first, refused.single().second))
+        assertTrue(outbox.isEmpty())
+    }
+
+    // The library over the pushing outbox, once the server has answered a push and so keeps the ids the phone makes.
+    private suspend fun pushedLibrary(): LocalFirstLibrary {
+        val pushingSync = LibrarySync(copy, { since -> feed[since] ?: ApiResult.Failed(ApiFailure.Network) }, pushing::send, scope = CoroutineScope(Dispatchers.Unconfined))
+        val library = LocalFirstLibrary(server, copy, pushingSync, pushing)
+        assertTrue(library.setPinned("a", true) is ApiResult.Ok)
+        assertTrue(pushing.pushWorks())
+        return library
+    }
+
+    @Test
+    fun onceThePushWorksASharedLinkShowsAtOnceUnderThePhonesId() = runBlocking {
+        val library = pushedLibrary()
+        pushAnswer = { ApiResult.Failed(ApiFailure.Network) }
+        val id = (library.createFromContent("https://example.com/a", "clipboard", null, "Café Lumen") as ApiResult.Ok).value
+        assertTrue(id.matches(Regex("[0-9a-f]{32}")))
+        val shown = copy.card(id)!!
+        assertEquals(listOf("Placeholder", "https://example.com/a", "example.com", "Café Lumen"), listOf(shown.type, shown.url, shown.domain, shown.note))
+        assertEquals("it leads the gallery", id, copy.page(null)!!.cards.first().id)
+        assertEquals("its tile shows the address until the server reads it", "https://example.com/a", cardHeading(shown))
+        val made = pushed.last().changes.single()
+        assertEquals("create-card", made.name)
+        assertEquals(listOf(id, "https://example.com/a", "clipboard", "Café Lumen"), listOf("cardId", "content", "source", "note").map { (made.args[it] as JsonPrimitive).content })
+        pushAnswer = { request -> ApiResult.Ok(PushAnswer(request.changes.last().id, cardIds = request.changes.associate { it.id.toString() to id })) }
+        assertNull(pushing.send())
+        assertEquals("the server keeps the phone's id", "Placeholder", copy.card(id)?.type)
+        assertEquals(emptyList<String>(), server.calls.filter { it.startsWith("content:") })
+        assertTrue(pushing.isEmpty())
+    }
+
+    @Test
+    fun aSharedLinkAlreadySavedMakesWayForTheSavedCard() = runBlocking {
+        val library = pushedLibrary()
+        pushAnswer = { ApiResult.Failed(ApiFailure.Network) }
+        val id = (library.createFromContent("https://example.com/a", "clipboard", null, null) as ApiResult.Ok).value
+        assertTrue(library.addTag(id, "later") is ApiResult.Ok)
+        assertEquals(listOf("later"), copy.card(id)!!.tags!!.map { it.name })
+        pushAnswer = { request -> ApiResult.Ok(PushAnswer(request.changes.last().id, cardIds = mapOf(request.changes.first().id.toString() to "a"))) }
+        assertNull(pushing.send())
+        assertEquals(listOf("create-card", "add-tag"), pushed.last().changes.map { it.name })
+        assertNull("the phone's card makes way for the saved one", copy.card(id))
+        assertTrue(refused.isEmpty())
+        assertTrue(pushing.isEmpty())
+    }
+
+    @Test
+    fun sharedTextShowsAsANoteThatSearchFindsOffline() = runBlocking {
+        val library = pushedLibrary()
+        pushAnswer = { ApiResult.Failed(ApiFailure.Network) }
+        val id = (library.createFromContent("Buy oat milk\nand bread", "clipboard", null, null) as ApiResult.Ok).value
+        assertEquals("Note", copy.card(id)!!.type)
+        assertEquals(listOf(id), copy.search("bread")!!.cards.map { it.id })
+        assertEquals("Something you shared could not be saved.", refusedNotice(Edit.CreateCard(id, "x", "clipboard", made = ""), null))
+    }
+
+    @Test
+    fun beforeThePushWorksASharedLinkGoesToTheServer() = runBlocking {
+        val pushingSync = LibrarySync(copy, { since -> feed[since] ?: ApiResult.Failed(ApiFailure.Network) }, pushing::send, scope = CoroutineScope(Dispatchers.Unconfined))
+        val library = LocalFirstLibrary(server, copy, pushingSync, pushing)
+        assertEquals(ApiResult.Ok("card-${"https://example.com/a".hashCode()}"), library.createFromContent("https://example.com/a", "clipboard", "s1", null))
+        assertEquals(listOf("content:https://example.com/a:clipboard:s1"), server.calls)
+        assertTrue(pushed.isEmpty())
+    }
+
+    @Test
     fun aChangeMadeOnlineWaitsBehindTheOnesQueuedBeforeIt() = runBlocking {
         server.writeFailure = ApiFailure.Network
         library.setPinned("a", true)
@@ -258,7 +367,7 @@ class OutboxTest {
         server.cardsById = mapOf("a" to testCard("a", title = "As the server has it"))
         assertNull(outbox.send())
         assertEquals(listOf(Edit.Pin("a", true)), refused.map { it.first })
-        assertEquals("Your change to “Card a” could not be saved.", refusedNotice(refused.single().second))
+        assertEquals("Your change to “Card a” could not be saved.", refusedNotice(refused.single().first, refused.single().second))
         assertEquals(emptyList<String>(), copy.pinned()!!.cards.map { it.id })
         assertEquals("As the server has it", copy.card("a")!!.title)
         assertTrue(outbox.isEmpty())

@@ -722,18 +722,20 @@ impl Api {
         Ok(Some(response))
     }
 
+    // Schedules a new or restored card's enrichment, capturing its page first while that is pending.
+    fn schedule_card(&self, id: &str) -> Result<()> {
+        let row = self.store.card(id, None)?.ok_or_else(|| Error::invalid("Cannot read properties of undefined (reading 'id')"))?;
+        let capture = parse(&row.extras)?.get("capturePending").truthy();
+        self.jobs.schedule(&row.id, capture);
+        Ok(())
+    }
+
     fn schedule_after(&self, method: &str, path: &str, mutation: &Mutation, status: u16, result: &Value) -> Result<()> {
-        let schedule_row = |row: Option<CardRow>| -> Result<()> {
-            let row = row.ok_or_else(|| Error::invalid("Cannot read properties of undefined (reading 'id')"))?;
-            let capture = parse(&row.extras)?.get("capturePending").truthy();
-            self.jobs.schedule(&row.id, capture);
-            Ok(())
-        };
         if matches!(mutation, Mutation::Create) && status == 201 {
-            return schedule_row(self.store.card(&result.get("body").get("id").to_js_string(), None)?);
+            return self.schedule_card(&result.get("body").get("id").to_js_string());
         }
         if method == "POST" && let Some(m) = captures(&RESTORE, path) {
-            return schedule_row(self.store.card(&m[1], None)?);
+            return self.schedule_card(&m[1]);
         }
         if ["PUT", "PATCH", "POST"].contains(&method) && let Some(m) = captures(&PROSE_WRITE, path)
             && let Some(row) = self.store.card(&m[1], None)?
@@ -789,8 +791,11 @@ impl Api {
             return Ok(Some(response));
         }
         if !self.readonly && method == "POST" && path == "/app/v1/push" {
-            let answer = app_push::push(&self.store, &self.writer, &request_body(request).await?)?;
-            return Ok(Some(Response::send(200, stringify(&answer)?, &json_headers())));
+            let pushed = app_push::push(&self.store, &self.writer, &request_body(request).await?)?;
+            for id in &pushed.created {
+                let _ = self.schedule_card(id);
+            }
+            return Ok(Some(Response::send(200, stringify(&pushed.answer)?, &json_headers())));
         }
         if path == "/ai/backfill" && (get || method == "POST") {
             return self.backfill_route(request, method, url).await;

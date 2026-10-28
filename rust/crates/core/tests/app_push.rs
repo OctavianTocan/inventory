@@ -1,5 +1,5 @@
 //! The app's push (`POST /app/v1/push`) over a synthetic library: changes applied in order and once, changes the
-//! library turns down, one record per phone, and malformed pushes.
+//! library turns down, one record per phone, spaces and cards made on the phone, and malformed pushes.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -7,7 +7,7 @@ use std::sync::Once;
 
 use futures_executor::block_on;
 use mm_core::app_api::AppApi;
-use mm_core::app_push::{PUSH_LIMIT, push};
+use mm_core::app_push::{PUSH_LIMIT, Pushed, push};
 use mm_core::runtime::{self, Runtime, Task};
 use mm_core::search::Search;
 use mm_core::sql::Sql;
@@ -58,8 +58,12 @@ fn change(id: f64, name: &str, args: Value) -> Value {
     obj! { "id" => id, "name" => name, "args" => args }.into()
 }
 
-fn send(library: &Library, client: &str, changes: Vec<Value>) -> Result<Value> {
+fn pushed(library: &Library, client: &str, changes: Vec<Value>) -> Result<Pushed> {
     push(&library.store, &library.writer, &obj! { "clientId" => client, "changes" => Value::Array(changes) }.into())
+}
+
+fn send(library: &Library, client: &str, changes: Vec<Value>) -> Result<Value> {
+    pushed(library, client, changes).map(|pushed| pushed.answer)
 }
 
 fn card(library: &Library, id: &str) -> Value {
@@ -144,12 +148,80 @@ fn each_phone_keeps_its_own_count() {
 }
 
 #[test]
+fn a_space_made_on_the_phone_keeps_the_phones_id() {
+    let library = library();
+    let first = library.ids[0].as_str();
+    let id = "0a1b2c3d4e5f4a6b8c7d9e0f1a2b3c4d";
+    let answer = send(
+        &library,
+        "phone-a",
+        vec![
+            change(1.0, "create-space", obj! { "spaceId" => id, "name" => "Reading", "color" => "#75ffc0" }.into()),
+            change(2.0, "add-to-space", obj! { "cardId" => first, "spaceId" => id }.into()),
+            change(3.0, "create-space", obj! { "spaceId" => id, "name" => "Again" }.into()),
+            change(4.0, "create-space", obj! { "spaceId" => "gl0000000001", "name" => "Theirs" }.into()),
+        ],
+    )
+    .unwrap();
+    assert_eq!(numbers(answer.get("refused")), vec![3.0, 4.0], "an id in use, or one shaped like the library's own, is turned down");
+    let space = library.store.space(id).unwrap().unwrap();
+    assert_eq!((space.name.as_str(), space.color.as_str()), ("Reading", "#75ffc0"));
+    assert_eq!(card(&library, first).get("spaces").at(0).as_str(), Some(id));
+    let made = library.writer.run(|writer| writer.create_space(&obj! { "name" => "Next" }.into())).unwrap();
+    assert_eq!(made.get("id").as_str(), Some("fixture0000gl000000001"), "the library's own ids keep their own count");
+
+    send(&library, "phone-a", vec![change(5.0, "delete-space", obj! { "spaceId" => id }.into())]).unwrap();
+    assert!(library.store.space(id).unwrap().is_none());
+    assert!(card(&library, first).get("spaces").as_array().is_none_or(Vec::is_empty));
+}
+
+#[test]
+fn a_card_shared_on_the_phone_keeps_the_phones_id_unless_it_is_a_link_already_saved() {
+    let library = library();
+    let [link, again, words, other] =
+        ["1a2b3c4d5e6f4a7b8c9d0e1f2a3b4c5d", "2a2b3c4d5e6f4a7b8c9d0e1f2a3b4c5d", "3a2b3c4d5e6f4a7b8c9d0e1f2a3b4c5d", "4a2b3c4d5e6f4a7b8c9d0e1f2a3b4c5d"];
+    let create = |id: f64, card: &str, content: &str, note: Option<&str>| {
+        let mut args: Value = obj! { "cardId" => card, "content" => content, "source" => "clipboard" }.into();
+        if let Some(note) = note {
+            args.set("note", note);
+        }
+        change(id, "create-card", args)
+    };
+    let done = pushed(
+        &library,
+        "phone-a",
+        vec![
+            create(1.0, link, "https://example.com/a", Some("first words")),
+            create(2.0, again, "https://example.com/a", Some("other words")),
+            change(3.0, "add-tag", obj! { "cardId" => again, "name" => "later" }.into()),
+            create(4.0, words, "line one\nline two", None),
+            create(5.0, words, "line three", None),
+            create(6.0, "gl0000000001", "line four", None),
+            create(7.0, other, "https://example.com/b", None),
+            create(8.0, "5a2b3c4d5e6f4a7b8c9d0e1f2a3b4c5d", "https://example.com/b", Some("words for b")),
+        ],
+    )
+    .unwrap();
+    assert_eq!(done.created, vec![link, words, other], "only new cards are handed on for enrichment");
+    let answer = done.answer;
+    assert_eq!(numbers(answer.get("refused")), vec![5.0, 6.0], "an id in use, or one shaped like the library's own, is turned down");
+    assert_eq!(answer.get("cardIds").get("1").as_str(), Some(link));
+    assert_eq!(answer.get("cardIds").get("2").as_str(), Some(link), "a link already saved answers the saved card");
+    let saved = card(&library, link);
+    assert_eq!((saved.get("type").as_str(), saved.get("url").as_str()), (Some("Placeholder"), Some("https://example.com/a")));
+    assert_eq!(saved.get("note").as_str(), Some("first words"), "a link saved before keeps its note");
+    assert_eq!(tag_names(&saved), vec!["later"], "a change to the phone's id reaches the saved card");
+    assert_eq!(card(&library, words).get("type").as_str(), Some("Note"));
+    assert_eq!(card(&library, other).get("note").as_str(), Some("words for b"), "a link saved without a note takes the shared words");
+}
+
+#[test]
 fn a_malformed_push_is_rejected_whole() {
     let library = library();
     let first = library.ids[0].as_str();
     let pin = |id: f64| change(id, "pin", obj! { "cardId" => first, "pinned" => true }.into());
     let status = |result: Result<Value>| result.unwrap_err().http_status();
-    assert_eq!(status(push(&library.store, &library.writer, &obj! { "changes" => Value::Array(vec![pin(1.0)]) }.into())), Some(400));
+    assert_eq!(status(push(&library.store, &library.writer, &obj! { "changes" => Value::Array(vec![pin(1.0)]) }.into()).map(|pushed| pushed.answer)), Some(400));
     assert_eq!(status(send(&library, "phone-a", vec![pin(1.0), pin(0.0)])), Some(400));
     assert_eq!(status(send(&library, "phone-a", vec![pin(1.5)])), Some(400));
     assert_eq!(status(send(&library, "phone-a", (1..=PUSH_LIMIT + 1).map(|id| pin(id as f64)).collect())), Some(400));

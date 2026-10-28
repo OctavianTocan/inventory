@@ -243,6 +243,28 @@ class LibrarySyncTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
+    fun theScreensFollowTheCopyWithoutRereadingOnTheirOwn() = runBlocking {
+        val main = UnconfinedTestDispatcher()
+        Dispatchers.setMain(main)
+        try {
+            feed = mapOf(null to answer(listOf(testCard("a")), "t1"), "t1" to answer(emptyList(), "t1"))
+            sync.sync()
+            val library = LocalFirstLibrary(FakeLibrary(), copy, sync, outbox)
+            val viewModel = LibraryViewModel(library, sync = sync, changes = library.changes)
+            assertEquals(listOf("a"), viewModel.everything.state.value.cards.map { it.id })
+            copy.apply(ChangesPage(listOf(testCard("b").copy(bumped = "2026-02-01T00:00:00Z")), next = "t2"))
+            assertEquals("a sync's answer shows at once", listOf("b", "a"), viewModel.everything.state.value.cards.map { it.id })
+            outboxServer.writeFailure = ApiFailure.Network
+            library.setPinned("a", true)
+            main.scheduler.advanceUntilIdle()
+            assertEquals("so does a change made on the phone", listOf("a"), viewModel.topOfMind.state.value.cards.map { it.id })
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
     fun anOpenSpaceShowsWhatASyncBrought() = runBlocking {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         try {

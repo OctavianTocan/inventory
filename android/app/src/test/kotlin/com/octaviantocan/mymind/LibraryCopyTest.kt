@@ -2,6 +2,7 @@ package com.octaviantocan.mymind
 
 import com.octaviantocan.mymind.data.AppJson
 import com.octaviantocan.mymind.data.ChangesPage
+import com.octaviantocan.mymind.data.Edit
 import com.octaviantocan.mymind.data.FEED_MEMORY_CARDS
 import com.octaviantocan.mymind.data.LibraryCopy
 import com.octaviantocan.mymind.data.Session
@@ -10,6 +11,7 @@ import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.data.TokenStore
 import com.octaviantocan.mymind.ui.library.testCard
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,6 +46,22 @@ class LibraryCopyTest {
         assertEquals(listOf(testCard("p", pinPosition = 1, flags = 512)), copy.feed("top-of-mind").read())
         copy.feed("everything").write(listOf(testCard("only")))
         assertEquals(listOf("only"), copy.feed("everything").read().map { it.id })
+    }
+
+    @Test
+    fun theCopySaysWhenWhatItShowsChanged() = runBlocking {
+        signIn("session-a")
+        var heard = 0
+        val listening = launch(Dispatchers.Unconfined) { copy.changes.collect { heard++ } }
+        copy.apply(ChangesPage(listOf(testCard("a")), next = "t1", spaces = listOf(Space("s1", "One"))))
+        assertEquals("cards, spaces and a copy now whole", 1, heard)
+        copy.apply(ChangesPage(next = "t1", spaces = listOf(Space("s1", "One"))))
+        assertEquals("an answer that changes nothing is quiet", 1, heard)
+        copy.queue(Edit.Pin("a", true))
+        assertEquals(2, heard)
+        copy.replace("a", testCard("a", title = "Read again"))
+        assertEquals(3, heard)
+        listening.cancel()
     }
 
     @Test

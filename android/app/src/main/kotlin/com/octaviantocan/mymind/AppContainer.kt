@@ -10,6 +10,7 @@ import com.octaviantocan.mymind.data.AiClient
 import com.octaviantocan.mymind.data.AiPrefs
 import com.octaviantocan.mymind.data.AuthInterceptor
 import com.octaviantocan.mymind.data.Connectivity
+import com.octaviantocan.mymind.data.HubListener
 import com.octaviantocan.mymind.data.KeystoreTokenStore
 import com.octaviantocan.mymind.data.LibraryCopy
 import com.octaviantocan.mymind.data.LibrarySync
@@ -66,18 +67,21 @@ class AppContainer(context: Context) {
     }
     private val main = Handler(Looper.getMainLooper())
 
-    /** Changes to cards made on the phone, sent through the server's push once it can be reached; a refused one shows a short notice. */
+    /** Changes made on the phone, sent through the server's push once it can be reached; a refused one shows a short notice. */
     val outbox = Outbox(
         libraryCopy,
         repository,
         onQueued = { OutboxWorker.schedule(context.applicationContext) },
-        onRefused = { _, card -> main.post { Toast.makeText(context.applicationContext, refusedNotice(card), Toast.LENGTH_LONG).show() } },
+        onRefused = { edit, card -> main.post { Toast.makeText(context.applicationContext, refusedNotice(edit, card), Toast.LENGTH_LONG).show() } },
         push = repository::push,
     )
     val librarySync = LibrarySync(libraryCopy, repository::changes, outbox::send, onChanged = { PictureWorker.schedule(context.applicationContext) })
 
     /** The library the signed-in screens use: the phone's copy first where it has what they need, the server otherwise. */
     val library = LocalFirstLibrary(repository, libraryCopy, librarySync, outbox)
+
+    /** The server's announcements of changes, heard while the app is on screen. */
+    val hub = HubListener(httpClient, BuildConfig.SERVER_URL, CoroutineScope(SupervisorJob() + Dispatchers.Default))
     val downloads = DownloadsSaver(context.applicationContext.contentResolver)
     val updatePrefs = UpdatePrefs(context)
     val updateNotifier = UpdateNotifier(context.applicationContext)

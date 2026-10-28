@@ -56,8 +56,9 @@ val Card.pinned: Boolean get() = (flags and PINNED_FLAG) != 0 || pinPosition != 
 /** True when [this] card is an article the reader view can show. */
 val Card.readable: Boolean get() = type == "Article" && (flags and READABLE_FLAG) != 0
 
-/** Title shown for a card: its title, else its type. */
-fun cardHeading(card: Card): String = card.title?.takeIf { it.isNotBlank() } ?: card.type
+/** Title shown for a card: its title, else the address of a link the server has not read yet, else its type. */
+fun cardHeading(card: Card): String =
+    card.title?.takeIf { it.isNotBlank() } ?: card.url?.takeIf { card.type == "Placeholder" && it.isNotBlank() } ?: card.type
 
 /**
  * @param card A card.

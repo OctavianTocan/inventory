@@ -32,6 +32,9 @@ const PING: &str = "{\"type\":6}\u{1e}";
 const RECORD: char = '\u{1e}';
 const MAX_MESSAGE: usize = 1_048_576;
 const SESSION_CHECK_MS: i64 = 60_000;
+// Pictures given a ThumbHash after each sync of a phone, a few seconds of the object's time, so the library's older
+// pictures fill in while it is in use.
+const PICTURES_PER_SYNC: usize = 50;
 
 type Opening = Shared<LocalBoxFuture<'static, Result<Rc<Hosted>>>>;
 
@@ -289,6 +292,9 @@ impl Library {
         self.prepare_member(request, library)?;
         let site = self.inner.site(library).await?;
         let mut incoming = request_from(request)?;
+        if incoming.pathname() == "/app/v1/changes" {
+            site.api().jobs().hash_pictures(PICTURES_PER_SYNC);
+        }
         match site.handle(&mut incoming).await {
             Ok(response) => Ok(response),
             Err(error) => {

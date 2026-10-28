@@ -43,6 +43,7 @@ pub mod store_member;
 pub mod store_query;
 pub mod store_schema;
 pub mod store_write;
+pub mod thumb_hash;
 pub mod uploads;
 
 pub use error::{Error, Result};

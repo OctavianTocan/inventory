@@ -113,7 +113,9 @@ async fn start(root: PathBuf) -> Result<(), String> {
             fetch: Rc::clone(&fetch),
             random: mm_core::runtime::random_bytes,
         };
-        site = Some(Rc::new(Hosted::new(options).await.map_err(|error| error.to_js_string())?));
+        let hosted = Hosted::new(options).await.map_err(|error| error.to_js_string())?;
+        hosted.api().jobs().hash_pictures(usize::MAX);
+        site = Some(Rc::new(hosted));
     } else if let Some(database) = var("STORE_DB").map_or_else(|| Some(root.join("data/mymind.db")), |path| (!path.is_empty()).then(|| resolve(&cwd, path)))
         && database.exists()
     {
@@ -132,7 +134,9 @@ async fn start(root: PathBuf) -> Result<(), String> {
             push: push(),
             random: mm_core::runtime::random_bytes,
         };
-        api = Some(Rc::new(Api::new(options).await.map_err(|error| error.to_js_string())?));
+        let opened = Api::new(options).await.map_err(|error| error.to_js_string())?;
+        opened.jobs().hash_pictures(usize::MAX);
+        api = Some(Rc::new(opened));
     }
     let server = Rc::new(Server {
         mirror: root.join("mirror").join("static"),
