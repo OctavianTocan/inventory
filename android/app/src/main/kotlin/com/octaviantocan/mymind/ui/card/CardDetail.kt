@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
@@ -100,7 +101,12 @@ class ReaderActions(
 @Immutable
 data class ReaderDetails(val spaces: List<String> = emptyList(), val recent: List<Card> = emptyList())
 
-/** A full-window card reader; contextual menu windows opened afterward remain above it. */
+/**
+ * A full-window card reader; contextual menu windows opened afterward remain above it.
+ *
+ * @param actionsProgress How far the card's sheet has risen over it, from 0 to 1; the reader blurs with it.
+ * @param shrink How far Delete card's hold has come, from 0 to 1; the reader shrinks and fades with it.
+ */
 @Composable
 fun CardDetailDialog(
     card: Card,
@@ -108,6 +114,7 @@ fun CardDetailDialog(
     onMenu: () -> Unit,
     onRemoveTag: ((Tag) -> Unit)? = null,
     actionsProgress: Float = 0f,
+    shrink: Float = 0f,
     scrollState: ScrollState = rememberScrollState(),
     actions: ReaderActions = ReaderActions(),
     details: ReaderDetails = ReaderDetails(),
@@ -130,11 +137,26 @@ fun CardDetailDialog(
             }
         }
         Box(Modifier.fillMaxSize()) {
-            CardDetail(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress), onRemoveTag = onRemoveTag,
+            CardDetail(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress).shrunk { shrink }, onRemoveTag = onRemoveTag,
                 scrollState = scrollState, actions = actions, details = details)
         }
     }
 }
+
+/**
+ * Shrinks and fades the page as Delete card is held, so the card visibly goes.
+ *
+ * @param progress How far the hold has come, from 0 to 1.
+ */
+fun Modifier.shrunk(progress: () -> Float): Modifier = graphicsLayer {
+    val held = progress()
+    scaleX = 1f - DELETE_SHRINK * held
+    scaleY = 1f - DELETE_SHRINK * held
+    alpha = 1f - DELETE_FADE * held
+}
+
+private const val DELETE_SHRINK = 0.1f
+private const val DELETE_FADE = 0.45f
 
 /**
  * A fixed, full-height reading page: Back, the card's name and Share above the card's parts in raised sections, with

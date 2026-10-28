@@ -106,7 +106,19 @@ class CardMenuIcons(val icon: @Composable (CardMenuAction) -> Painter)
 @Composable
 fun defaultCardMenuIcons() = CardMenuIcons(icon = { painterResource(it.icon) })
 
-/** Pully's quick tiles and titled groups; the sheet owns its fixed header and viewport. */
+/**
+ * Choose one: the card's big choices (Add to space, Same Vibe, Reader Mode), then its quick actions as tiles two by
+ * two, then Delete card alone in its own group, held rather than tapped. The sheet owns its fixed header and viewport.
+ *
+ * @param items The card's actions, from [cardMenuItems].
+ * @param onSelect Called with the chosen action; Delete card only once its hold completes.
+ * @param modifier Modifier for the content.
+ * @param icons Artwork for each action.
+ * @param enabled False ignores taps.
+ * @param spaces Add to space in place, with the card's spaces, instead of a choice that opens the spaces page; null
+ *   keeps the choice.
+ * @param onDeleteHold How far Delete card's hold has come, from 0 to 1.
+ */
 @Composable
 fun CardMenuContent(
     items: List<CardMenuItem>,
@@ -114,38 +126,38 @@ fun CardMenuContent(
     modifier: Modifier = Modifier,
     icons: CardMenuIcons = defaultCardMenuIcons(),
     enabled: Boolean = true,
+    spaces: (@Composable () -> Unit)? = null,
+    onDeleteHold: (Float) -> Unit = {},
 ) {
     val colors = menuColors()
-    val quick = items.filter { it.action in QUICK_ACTIONS }
-    val organize = items.filter { it.action in ORGANIZE_ACTIONS }
-    val discover = items.filter { it.action !in QUICK_ACTIONS && it.action !in ORGANIZE_ACTIONS && !it.action.danger }
-    val manage = items.filter { it.action.danger }
+    val choices = items.filter { it.action in CHOICES }.sortedBy { CHOICES.indexOf(it.action) }
+    val tiles = items.filter { it.action in TILES }.sortedBy { TILES.indexOf(it.action) }
+    val delete = items.firstOrNull { it.action == CardMenuAction.DeleteCard }
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 30.dp)) {
-        if (quick.isNotEmpty()) {
-            CardMenuHeading("Quick actions", first = true)
-            quick.chunked(if (quick.size > 3) 2 else 3).forEach { row ->
-                Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (choices.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            choices.forEach { item ->
+                if (spaces != null && item.action in SPACE_ACTIONS) spaces()
+                else CardChoice(item, icons, enabled) { onSelect(item) }
+            }
+        }
+        if (tiles.isNotEmpty()) Column(Modifier.padding(top = if (choices.isEmpty()) 0.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            tiles.chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { item -> CardQuickAction(item, colors, icons, enabled, Modifier.weight(1f)) { onSelect(item) } }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }
-        listOf("Organize" to organize, "Discover" to discover, "Manage card" to manage).forEach { (heading, rows) ->
-            if (rows.isNotEmpty()) {
-                CardMenuHeading(heading, first = quick.isEmpty() && heading == "Organize")
-                CardMenuGroup(Modifier.padding(top = 12.dp)) {
-                    rows.forEachIndexed { index, item ->
-                        if (index > 0) SheetRowDivider()
-                        CardMenuRow(item, colors, icons, enabled) { onSelect(item) }
-                    }
-                }
-            }
+        if (delete != null) CardMenuGroup(Modifier.padding(top = 20.dp)) {
+            HoldToDeleteRow(onDelete = { if (enabled) onSelect(delete) }, onProgress = onDeleteHold)
         }
     }
 }
 
-private val QUICK_ACTIONS = setOf(CardMenuAction.ViewSource, CardMenuAction.Copy, CardMenuAction.Download,
-    CardMenuAction.AddToTopOfMind, CardMenuAction.RemoveFromTopOfMind)
-private val ORGANIZE_ACTIONS = setOf(CardMenuAction.AddTags, CardMenuAction.AddToSpace, CardMenuAction.RemoveFromSpace)
+private val SPACE_ACTIONS = setOf(CardMenuAction.AddToSpace, CardMenuAction.RemoveFromSpace)
+private val CHOICES = listOf(CardMenuAction.AddToSpace, CardMenuAction.RemoveFromSpace, CardMenuAction.SameVibe, CardMenuAction.ReaderMode)
+private val TILES = listOf(CardMenuAction.ViewSource, CardMenuAction.Copy, CardMenuAction.Download, CardMenuAction.AddToTopOfMind,
+    CardMenuAction.RemoveFromTopOfMind, CardMenuAction.AddTags)
 
 /** The kit's small, muted, non-folding section heading, outside the raised group. */
 @Composable
@@ -165,13 +177,30 @@ internal fun CardMenuGroup(modifier: Modifier = Modifier, content: @Composable C
 
 @Composable
 private fun CardQuickAction(item: CardMenuItem, colors: MenuColors, icons: CardMenuIcons, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val pinned = item.action == CardMenuAction.RemoveFromTopOfMind
     val label = when (item.action) {
-        CardMenuAction.ViewSource -> "Source"
+        CardMenuAction.ViewSource -> "Open source"
         CardMenuAction.Copy -> "Copy"
-        CardMenuAction.RemoveFromTopOfMind -> "Unpin"
         else -> item.action.label
     }
-    SheetTile(icons.icon(item.action), label, onClick, modifier, description = item.action.label, enabled = enabled)
+    SheetTile(icons.icon(item.action), label, onClick, modifier, description = if (pinned) "Top of Mind, pinned" else item.action.label,
+        enabled = enabled, on = pinned)
+}
+
+/** One of the big choices: what it does over a muted line on what that means. */
+@Composable
+private fun CardChoice(item: CardMenuItem, icons: CardMenuIcons, enabled: Boolean, onClick: () -> Unit) {
+    val detail = when {
+        item.locked -> "Not included in your plan"
+        else -> when (item.action) {
+            CardMenuAction.AddToSpace -> "Keep it with cards like it"
+            CardMenuAction.RemoveFromSpace -> "Take it out of this space"
+            CardMenuAction.SameVibe -> "Cards that feel like this one"
+            CardMenuAction.ReaderMode -> "Just the words"
+            else -> null
+        }
+    }
+    SheetChoice(icons.icon(item.action), item.action.label, detail, onClick, enabled = enabled)
 }
 
 /**
@@ -183,19 +212,23 @@ private fun CardQuickAction(item: CardMenuItem, colors: MenuColors, icons: CardM
  * @param modifier Modifier for the tile; callers in a row give each tile the same weight.
  * @param description Spoken name, when the label alone is too short.
  * @param enabled False ignores taps.
+ * @param on True fills the tile with ink, for a setting that is on, such as a pinned card's Top of Mind.
  */
 @Composable
-internal fun SheetTile(icon: Painter, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, description: String = label, enabled: Boolean = true) {
+internal fun SheetTile(icon: Painter, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, description: String = label, enabled: Boolean = true,
+    on: Boolean = false) {
     val colors = menuColors()
     val shape = RoundedCornerShape(16.dp)
     val haptic = rememberSheetHaptics()
-    Column(modifier.heightIn(min = 72.dp).cardSurfaceShadow(shape, note = true).clip(shape).background(colors.row)
+    val fill by animateColorAsState(if (on) colors.rowText else colors.row, tween(200), label = "tileFill")
+    val ink by animateColorAsState(if (on) colors.sheet else colors.rowText, tween(200), label = "tileInk")
+    Column(modifier.heightIn(min = 72.dp).cardSurfaceShadow(shape, note = true).clip(shape).background(fill)
         .semantics { contentDescription = description }
         .clickable(remember { MutableInteractionSource() }, CardSheetIndication, enabled = enabled, role = Role.Button) { haptic.tick(); onClick() }
         .padding(horizontal = 8.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)) {
-        Image(icon, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(colors.rowText))
-        Text(label, style = TextStyle(fontFamily = CardMenuFont, fontSize = 15.sp, lineHeight = 21.sp, color = colors.rowText),
+        Image(icon, null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(ink))
+        Text(label, style = TextStyle(fontFamily = CardMenuFont, fontSize = 15.sp, lineHeight = 21.sp, color = ink),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
@@ -212,19 +245,6 @@ fun MenuCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() 
             .animateContentSize(),
         content = content,
     )
-}
-
-/** A Pully row: one shared surface, an inset divider and a label that can wrap. */
-@Composable
-private fun CardMenuRow(item: CardMenuItem, colors: MenuColors, icons: CardMenuIcons, enabled: Boolean, onClick: () -> Unit) {
-    val detail = when (item.action) {
-        CardMenuAction.AddTags -> "Label and find this card"
-        CardMenuAction.AddToSpace -> "Keep related cards together"
-        else -> if (item.locked) "Not included in your plan" else null
-    }
-    val opensPage = item.action == CardMenuAction.AddTags || item.action == CardMenuAction.AddToSpace
-    SheetRow(icons.icon(item.action), item.action.label, onClick, detail = detail, danger = item.action.danger, enabled = enabled,
-        trailing = if (opensPage) { { SheetRowChevron(colors) } } else null)
 }
 
 /**

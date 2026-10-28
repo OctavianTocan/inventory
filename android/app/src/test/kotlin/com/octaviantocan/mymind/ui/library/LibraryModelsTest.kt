@@ -19,7 +19,9 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -238,6 +240,75 @@ class LibraryModelsTest {
             listOf("space:s2:a", "unspace:s1:a", "newSpace:New:#f96", "deleteSpace:s2"),
             library.calls.filter { it.startsWith("space:") || it.startsWith("unspace:") || it.startsWith("newSpace:") || it.startsWith("deleteSpace:") },
         )
+    }
+
+    @Test
+    fun aDeleteWaitsOutItsUndoAndUndoPutsTheCardBackWhereItWas() = runTest(dispatcher) {
+        val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(testCard("a"), testCard("b"), testCard("c")))))
+        val viewModel = LibraryViewModel(library, io = dispatcher)
+        advanceUntilIdle()
+        val ids = { viewModel.everything.state.value.cards.map { it.id } }
+        val b = viewModel.everything.state.value.cards[1]
+
+        viewModel.deleteLater(b)
+        assertEquals(listOf("a", "c"), ids())
+        assertEquals(b, viewModel.deleting.value)
+        viewModel.everything.reread()
+        advanceTimeBy(1_000)
+        assertEquals("A list read again meanwhile leaves it out", listOf("a", "c"), ids())
+        viewModel.undoDelete()
+        assertEquals(listOf("a", "b", "c"), ids())
+        assertNull(viewModel.deleting.value)
+        advanceTimeBy(UNDO_DELETE_MS + 1)
+        assertTrue(library.calls.none { it.startsWith("trash:") })
+
+        viewModel.deleteLater(b)
+        advanceTimeBy(UNDO_DELETE_MS - 1)
+        assertTrue(library.calls.none { it.startsWith("trash:") })
+        advanceTimeBy(2)
+        advanceUntilIdle()
+        assertEquals(listOf("trash:b"), library.calls.filter { it.startsWith("trash:") })
+        assertNull(viewModel.deleting.value)
+        assertEquals(listOf("a", "c"), ids())
+    }
+
+    @Test
+    fun aSecondDeleteSendsTheFirstAtOnceAndARefusalBringsTheCardBack() = runTest(dispatcher) {
+        val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(testCard("a"), testCard("b"), testCard("c")))))
+        val viewModel = LibraryViewModel(library, io = dispatcher)
+        advanceUntilIdle()
+        val failures = mutableListOf<ApiFailure>()
+        backgroundScope.launch { viewModel.deleteFailures.collect { failures += it } }
+        val (a, b) = viewModel.everything.state.value.cards
+        viewModel.deleteLater(a)
+        viewModel.deleteLater(b)
+        runCurrent()
+        assertEquals("The first delete was sent when the second began", listOf("trash:a"), library.calls.filter { it.startsWith("trash:") })
+        library.writeFailure = ApiFailure.Server(500)
+        advanceTimeBy(UNDO_DELETE_MS + 1)
+        advanceUntilIdle()
+        assertEquals(listOf("b", "c"), viewModel.everything.state.value.cards.map { it.id })
+        assertEquals(listOf<ApiFailure>(ApiFailure.Server(500)), failures)
+    }
+
+    @Test
+    fun aSpaceMadeFromTheCardsSheetTakesTheCard() = runTest(dispatcher) {
+        val card = testCard("a")
+        val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(card))), spacePages = mapOf("s1" to CardPage(List(10) { testCard("in$it") })),
+            spaceList = listOf(Space("s1", "One")))
+        val viewModel = LibraryViewModel(library, io = dispatcher)
+        viewModel.loadSpaces()
+        advanceUntilIdle()
+        assertEquals(SPACE_LATEST_CARDS, viewModel.spaces.value.latest["s1"]?.size)
+
+        viewModel.createCardSpace("New", "#f96", card)
+        assertTrue(viewModel.cardSpaceCreation.value.pending)
+        advanceUntilIdle()
+        val created = viewModel.cardSpaceCreation.value
+        assertEquals(ApiResult.Ok("s-new"), created.result)
+        assertEquals(listOf("s-new"), created.card?.spaces)
+        assertEquals(listOf("s-new"), viewModel.everything.state.value.cards.single().spaces)
+        assertEquals(listOf("newSpace:New:#f96", "space:s-new:a"), library.calls.filter { it.startsWith("newSpace:") || it.startsWith("space:") })
     }
 
     @Test

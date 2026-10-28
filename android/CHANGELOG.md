@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.24 (35), 2026-10-28
+A card's actions sheet is now Choose one, with its spaces inside it and a delete you can take back.
+
+### Changed
+- The card's actions sheet is called Choose one. It starts with Add to space, Same Vibe and Reader Mode, then Open source, Copy, Download, Top of Mind and Add tags as tiles two by two, then Delete card on its own. The Top of Mind tile turns dark while the card is pinned.
+- Add to space sits in the sheet itself: up to three spaces as small mosaics of their cards, the space it most likely belongs in first, marked Suggested, and one tap adds or removes the card. All spaces shows every space with its mosaic and card count, and holding a space shows its latest cards.
+- New space opens in place on that page, with a name and a colour, and Create and add makes the space and puts the card in it.
+- Delete card is held, not tapped. It fills over a second and a bit while the page behind it shrinks, and letting go sooner keeps the card. Once it is deleted, a bar offers Undo for 5 seconds, and the card only goes to the trash after that.
+
 ## 0.6.23 (34), 2026-10-28
 Pinch the Spaces list to see more or fewer spaces at once.
 

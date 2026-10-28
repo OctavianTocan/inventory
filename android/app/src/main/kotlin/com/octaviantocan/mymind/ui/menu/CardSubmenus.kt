@@ -124,7 +124,6 @@ internal fun submenuColors(): SubmenuColors {
 
 private const val SUGGESTION_LIMIT = 5
 private const val ADD_TAGS_HELP = "Hit next to add separate tags.\nTap on added tags to remove them."
-private const val NO_SPACES_HELP = "Create a space to keep related cards together."
 
 /**
  * The tags the Add tags page offers under its field, as the original app picks them.
@@ -293,91 +292,6 @@ fun AddTagsPage(
     }
 }
 
-/**
- * The Select a space page: one row per space that puts the card in or takes it out at once, or, without spaces, the
- * empty text and "Create Your First Space".
- *
- * @param spaces Spaces in the user's order.
- * @param selected Ids of the spaces the card is in.
- * @param onToggle Called with a tapped space.
- * @param onCreateSpace Called when "Create Your First Space" is tapped.
- */
-@Composable
-fun SelectSpacePage(
-    spaces: List<Space>,
-    selected: Set<String>,
-    onToggle: (Space) -> Unit,
-    onCreateSpace: () -> Unit,
-) {
-    val colors = submenuColors()
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (spaces.isEmpty()) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Image(painterResource(R.drawable.ic_spaces), contentDescription = null, modifier = Modifier.size(36.dp), colorFilter = ColorFilter.tint(colors.help))
-                HelpText(NO_SPACES_HELP, colors)
-            }
-            SubmenuButton("Create Your First Space", colors, onClick = onCreateSpace)
-        } else {
-            CardMenuHeading("Your spaces", first = true)
-            CardMenuGroup(Modifier.padding(horizontal = 16.dp).padding(top = 12.dp, bottom = 30.dp)) {
-                spaces.forEachIndexed { index, space ->
-                    if (index > 0) HorizontalDivider(Modifier.padding(start = 52.dp), color = colors.spaceLabel.copy(alpha = 0.1f), thickness = 1.dp)
-                    SpaceChoiceRow(space, space.id in selected, colors) { onToggle(space) }
-                }
-            }
-        }
-    }
-}
-
-/** One 48 dp space row: the ring that fills and shows a check when the card is in the space, then the name. */
-@Composable
-private fun SpaceChoiceRow(space: Space, selected: Boolean, colors: SubmenuColors, onClick: () -> Unit) {
-    val ring = parseHexColor(space.color) ?: colors.spaceLabel
-    val fill by animateColorAsState(if (selected) ring else Color.Transparent, label = "fill")
-    val check by animateFloatAsState(if (selected) 1f else 0f, label = "check")
-    val scale = remember { Animatable(1f) }
-    var first by remember { mutableStateOf(true) }
-    LaunchedEffect(selected) {
-        if (first) {
-            first = false
-            return@LaunchedEffect
-        }
-        val bump = spring<Float>(dampingRatio = 0.75f, stiffness = 400f)
-        scale.animateTo(if (selected) 1.1f else 0.9f, bump)
-        scale.animateTo(1f, bump)
-    }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 52.dp)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(20.dp)
-                .scale(scale.value)
-                .clip(CircleShape)
-                .background(fill)
-                .border(2.dp, ring, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painterResource(R.drawable.spaces_checkmark),
-                contentDescription = if (selected) "In this space" else null,
-                colorFilter = ColorFilter.tint(Color.White),
-                modifier = Modifier.alpha(check),
-            )
-        }
-        Text(
-            space.name.orEmpty(),
-            style = TextStyle(color = colors.spaceLabel, fontSize = 17.sp, lineHeight = 23.sp, fontFamily = CardMenuFont),
-        )
-    }
-}
-
 /** Centred help or empty text under a submenu's content. */
 @Composable
 private fun HelpText(text: String, colors: SubmenuColors) {
@@ -412,66 +326,5 @@ private fun SubmenuButton(label: String, colors: SubmenuColors, enabled: Boolean
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = TextStyle(color = colors.buttonText, fontSize = 16.sp, letterSpacing = (-0.02).em, fontFamily = CardMenuFont))
-    }
-}
-
-/**
- * Creates a space as a child of the card's space selector. A failed request keeps the form available for retry.
- *
- * @param creation Model-owned pending operation and its last result.
- * @param onCreate Starts creation in the model; it does not add the selected card to it.
- * @param onCreated Returns to the space selector after creation succeeds.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun CreateSpacePage(
-    creation: CardSpaceCreationState,
-    onCreate: (name: String, color: String) -> Unit,
-    onCreated: () -> Unit,
-) {
-    val colors = submenuColors()
-    var name by rememberSaveable { mutableStateOf("") }
-    var color by rememberSaveable { mutableStateOf(SPACE_COLORS.first()) }
-    val busy = creation.pending
-    val error = (creation.result as? ApiResult.Failed)?.let { describe(it.failure) }
-    LaunchedEffect(creation.result) {
-        if (creation.result is ApiResult.Ok) onCreated()
-    }
-    val submit: () -> Unit = {
-        if (name.isNotBlank() && !busy) onCreate(name.trim(), color)
-    }
-    Column(Modifier.fillMaxWidth().padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        BasicTextField(
-            value = name,
-            onValueChange = { name = it },
-            enabled = !busy,
-            singleLine = true,
-            textStyle = TextStyle(color = colors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont),
-            cursorBrush = SolidColor(colors.fieldText),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { submit() }),
-            modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
-                .cardSurfaceShadow(RoundedCornerShape(16.dp), note = true)
-                .semantics { contentDescription = "Space name" }
-                .background(colors.field, RoundedCornerShape(16.dp)).padding(16.dp),
-            decorationBox = { field ->
-                Box {
-                    if (name.isEmpty()) Text("Space name", style = TextStyle(color = colors.help, fontSize = 17.sp, fontFamily = CardMenuFont))
-                    field()
-                }
-            },
-        )
-        CardMenuHeading("Color")
-        FlowRow(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SPACE_COLORS.forEach { choice ->
-                Box(Modifier.size(44.dp).clip(CircleShape)
-                    .clickable(enabled = !busy, role = Role.RadioButton) { color = choice }
-                    .semantics { contentDescription = "Space color $choice"; selected = color == choice }
-                    .border(if (color == choice) 2.dp else 0.dp, colors.title, CircleShape)
-                    .padding(5.dp).background(parseHexColor(choice) ?: colors.title, CircleShape))
-            }
-        }
-        error?.let { HelpText(it, colors) }
-        SubmenuButton(if (busy) "Creating…" else "Create space", colors, enabled = name.isNotBlank() && !busy, onClick = submit)
     }
 }

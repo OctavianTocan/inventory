@@ -19,6 +19,7 @@ import com.octaviantocan.mymind.data.map
 import com.octaviantocan.mymind.update.UploadActivity
 import com.octaviantocan.mymind.ui.describe
 import com.octaviantocan.mymind.ui.menu.CardActions
+import com.octaviantocan.mymind.ui.menu.CardMenuAction
 import com.octaviantocan.mymind.ui.menu.CardMenuItem
 import com.octaviantocan.mymind.ui.menu.CardMenuOutcome
 import com.octaviantocan.mymind.ui.menu.CardSubmenu
@@ -47,6 +48,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  *
  * @property spaces Spaces in the user's order.
  * @property covers First card of each space by space id, once read.
+ * @property latest The first cards of each space by space id, up to [SPACE_LATEST_CARDS], for its mosaic and peek.
  * @property loading True while the list is being fetched.
  * @property error Text for the last failed fetch, or null.
  * @property loaded True once the list was read, even when it is empty.
@@ -55,6 +57,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 data class SpacesState(
     val spaces: List<Space> = emptyList(),
     val covers: Map<String, Card> = emptyMap(),
+    val latest: Map<String, List<Card>> = emptyMap(),
     val loading: Boolean = false,
     val error: String? = null,
     val loaded: Boolean = false,
@@ -69,10 +72,17 @@ data class SpacesState(
  */
 data class TagChoices(val all: List<String> = emptyList(), val recent: List<String> = emptyList())
 
-/** A card-sheet creation keeps running when its form leaves composition. */
+/**
+ * A card-sheet creation keeps running when its form leaves composition.
+ *
+ * @property pending True while the space is being made and the card added to it.
+ * @property result The new space's id, or why it could not be made.
+ * @property card The card after it joined the new space, or null when none was added.
+ */
 data class CardSpaceCreationState(
     val pending: Boolean = false,
     val result: ApiResult<String>? = null,
+    val card: Card? = null,
 )
 
 /**
@@ -105,12 +115,22 @@ class LibraryViewModel(
     private val mutableCardSpaceCreation = MutableStateFlow(CardSpaceCreationState())
     private val spaceFeeds = mutableMapOf<String, CardFeed>()
     private val actions = CardActions(library, saver)
+    private val mutableDeleting = MutableStateFlow<Card?>(null)
+    private val mutableDeleteFailures = MutableSharedFlow<ApiFailure>(extraBufferCapacity = 1)
+    private var deleteJob: Job? = null
+    private var deletedFrom: List<Pair<CardFeed, Int>> = emptyList()
 
     /** The Everything tab's cards, newest first. */
-    val everything = CardFeed(viewModelScope, memory?.feed("everything")) { library.cards(it) }
+    val everything = CardFeed(viewModelScope, memory?.feed("everything")) { shown(library.cards(it)) }
 
     /** Cards pinned to Top of Mind, in pin order. */
-    val topOfMind = CardFeed(viewModelScope, memory?.feed("top-of-mind")) { library.topOfMind(it) }
+    val topOfMind = CardFeed(viewModelScope, memory?.feed("top-of-mind")) { shown(library.topOfMind(it)) }
+
+    /** The card waiting out its Undo before it goes to the trash, or null. */
+    val deleting: StateFlow<Card?> = mutableDeleting
+
+    /** Deletes the server refused once their Undo ran out; the card is back in its lists. */
+    val deleteFailures: SharedFlow<ApiFailure> = mutableDeleteFailures
 
     /** Files being uploaded from the + button. */
     val uploads = UploadQueue(viewModelScope, library, onUploaded = ::showUploaded, io = io, activity = uploadActivity)
@@ -269,7 +289,7 @@ class LibraryViewModel(
      * @return The space's cards, read on first use and kept while this view model lives.
      */
     fun spaceFeed(spaceId: String): CardFeed = spaceFeeds.getOrPut(spaceId) {
-        CardFeed(viewModelScope) { library.spaceCards(spaceId, it) }.also { it.loadMore() }
+        CardFeed(viewModelScope) { shown(library.spaceCards(spaceId, it)) }.also { it.loadMore() }
     }
 
     /**
@@ -296,7 +316,7 @@ class LibraryViewModel(
             is CardMenuOutcome.ShowSimilar -> search.similarTo(outcome.card)
             is CardMenuOutcome.OpenSubmenu -> when (outcome.submenu) {
                 CardSubmenu.Tags -> loadTagChoices()
-                CardSubmenu.Spaces, CardSubmenu.CreateSpace -> if (!mutableSpaces.value.loaded) loadSpaces()
+                CardSubmenu.Spaces -> if (!mutableSpaces.value.loaded) loadSpaces()
             }
             else -> Unit
         }
@@ -370,6 +390,55 @@ class LibraryViewModel(
     }
 
     /**
+     * Takes a card out of every list at once and moves it to the trash once [UNDO_DELETE_MS] pass without [undoDelete].
+     * A delete still waiting goes to the trash at once when another starts.
+     *
+     * @param card Card to delete.
+     */
+    fun deleteLater(card: Card) {
+        mutableDeleting.value?.let { waiting ->
+            deleteJob?.cancel()
+            trash(waiting)
+        }
+        deletedFrom = feeds().mapNotNull { feed -> feed.state.value.cards.indexOfFirst { it.id == card.id }.takeIf { it >= 0 }?.let { feed to it } }
+        deletedFrom.forEach { (feed, _) -> feed.remove(card.id) }
+        mutableDeleting.value = card
+        deleteJob = viewModelScope.launch {
+            delay(UNDO_DELETE_MS)
+            trash(card)
+        }
+    }
+
+    /** Puts the card waiting to be deleted back where it was in each list, and keeps it. */
+    fun undoDelete() {
+        val card = mutableDeleting.value ?: return
+        deleteJob?.cancel()
+        mutableDeleting.value = null
+        deletedFrom.forEach { (feed, index) -> feed.insert(card, index) }
+        deletedFrom = emptyList()
+    }
+
+    // Sends a waiting delete; a refusal puts the card back and reports why.
+    private fun trash(card: Card) {
+        val places = deletedFrom
+        deletedFrom = emptyList()
+        viewModelScope.launch {
+            val outcome = perform(CardMenuItem(CardMenuAction.DeleteCard), card, null)
+            if (mutableDeleting.value?.id == card.id) mutableDeleting.value = null
+            if (outcome is CardMenuOutcome.Failed) {
+                places.forEach { (feed, index) -> feed.insert(card, index) }
+                mutableDeleteFailures.tryEmit(outcome.failure)
+            }
+        }
+    }
+
+    // A page without the card waiting out its Undo, so a list read again meanwhile does not bring it back.
+    private fun shown(page: ApiResult<CardPage>): ApiResult<CardPage> {
+        val gone = mutableDeleting.value?.id ?: return page
+        return page.map { it.copy(cards = it.cards.filterNot { card -> card.id == gone }) }
+    }
+
+    /**
      * Creates a space and reads the list again.
      *
      * @param name Space name.
@@ -380,17 +449,21 @@ class LibraryViewModel(
         library.createSpace(name, color).also { if (it is ApiResult.Ok) reloadSpaces() }
 
     /**
-     * Starts one card-sheet creation in the model's scope. Leaving the form cannot cancel creation or its list reload.
+     * Starts one card-sheet creation in the model's scope, then adds the card to the new space. Leaving the form cannot
+     * cancel either step or the list reload.
      *
      * @param name Trimmed, nonblank space name.
      * @param color Selected CSS hex color.
+     * @param card Card to add to the new space, or null to only make it.
      */
-    fun createCardSpace(name: String, color: String) {
+    fun createCardSpace(name: String, color: String, card: Card? = null) {
         if (mutableCardSpaceCreation.value.pending || name.isBlank()) return
         mutableCardSpaceCreation.value = CardSpaceCreationState(pending = true)
         viewModelScope.launch {
             val answer = createSpace(name, color)
-            mutableCardSpaceCreation.value = CardSpaceCreationState(result = answer)
+            val id = (answer as? ApiResult.Ok)?.value
+            val added = if (id != null && card != null) (toggleSpace(card, Space(id, name, color)) as? ApiResult.Ok)?.value else null
+            mutableCardSpaceCreation.value = CardSpaceCreationState(result = answer, card = added)
         }
     }
 
@@ -408,7 +481,9 @@ class LibraryViewModel(
     suspend fun deleteSpace(space: Space): ApiResult<Unit> = library.deleteSpace(space.id).also { answer ->
         if (answer is ApiResult.Ok) {
             spaceFeeds.remove(space.id)
-            mutableSpaces.update { state -> state.copy(spaces = state.spaces.filterNot { it.id == space.id }, covers = state.covers - space.id) }
+            mutableSpaces.update { state ->
+                state.copy(spaces = state.spaces.filterNot { it.id == space.id }, covers = state.covers - space.id, latest = state.latest - space.id)
+            }
             feeds().forEach { feed ->
                 feed.state.value.cards.filter { space.id in it.spaces.orEmpty() }.forEach { feed.replace(it.copy(spaces = it.spaces.orEmpty() - space.id)) }
             }
@@ -433,7 +508,8 @@ class LibraryViewModel(
                 val fresh = answer.value.spaces
                 fresh.map { space -> launch { readCover(space.id) } }.forEach { it.join() }
                 mutableSpaces.update { state ->
-                    state.copy(spaces = fresh, covers = state.covers.filterKeys { id -> fresh.any { it.id == id } }, refreshing = false)
+                    val kept = fresh.mapTo(HashSet()) { it.id }
+                    state.copy(spaces = fresh, covers = state.covers.filterKeys { it in kept }, latest = state.latest.filterKeys { it in kept }, refreshing = false)
                 }
             }
             is ApiResult.Failed -> mutableSpaces.update { it.copy(refreshing = false) }
@@ -446,8 +522,14 @@ class LibraryViewModel(
     }
 
     private suspend fun readCover(spaceId: String) {
-        val first = (library.spaceCards(spaceId, null) as? ApiResult.Ok)?.value?.cards?.firstOrNull()
-        mutableSpaces.update { if (first != null) it.copy(covers = it.covers + (spaceId to first)) else it.copy(covers = it.covers - spaceId) }
+        val cards = (library.spaceCards(spaceId, null) as? ApiResult.Ok)?.value?.cards.orEmpty().take(SPACE_LATEST_CARDS)
+        val first = cards.firstOrNull()
+        mutableSpaces.update { state ->
+            state.copy(
+                covers = if (first != null) state.covers + (spaceId to first) else state.covers - spaceId,
+                latest = if (cards.isNotEmpty()) state.latest + (spaceId to cards) else state.latest - spaceId,
+            )
+        }
     }
 
     private fun refreshSpace(spaceId: String) {
@@ -673,6 +755,12 @@ private const val REFRESH_SYNC_WAIT_MS = 10_000L
 
 // The pause after the lists redraw from the copy, so a burst of changes, such as a sync's pages, redraws them twice at most.
 private const val COPY_REDRAW_GAP_MS = 250L
+
+/** How long a deleted card waits for Undo before it goes to the trash. */
+const val UNDO_DELETE_MS = 5_000L
+
+/** How many of a space's first cards the space pages show in its mosaic and when held. */
+const val SPACE_LATEST_CARDS = 8
 
 /** True when a sync ended having changed the phone's copy; false for a failure, a missing feed or a timeout. */
 private fun SyncOutcome?.changedAnything(): Boolean = (this as? SyncOutcome.Done)?.changed == true

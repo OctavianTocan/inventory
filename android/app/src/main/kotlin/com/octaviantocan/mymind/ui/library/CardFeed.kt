@@ -189,6 +189,20 @@ class CardFeed(
     }
 
     /**
+     * Puts a card back into the list without asking the server, such as one whose delete was undone.
+     *
+     * @param card The card; one the list holds already stays where it is.
+     * @param index Where it was, clamped to the list.
+     */
+    fun insert(card: Card, index: Int) {
+        mutableState.update { state ->
+            if (state.cards.any { it.id == card.id }) state
+            else state.copy(cards = state.cards.toMutableList().apply { add(index.coerceIn(0, size), card) })
+        }
+        remember()
+    }
+
+    /**
      * Swaps in a changed copy of a card that is in the list.
      *
      * @param card The changed card; a card the list does not hold is ignored.

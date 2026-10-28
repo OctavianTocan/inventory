@@ -26,7 +26,10 @@ import com.octaviantocan.mymind.ui.menu.CardMenuContent
 import com.octaviantocan.mymind.ui.menu.CardMenuPanel
 import com.octaviantocan.mymind.ui.menu.CardMenuIcons
 import com.octaviantocan.mymind.ui.menu.DarkMenuColors
+import com.octaviantocan.mymind.ui.menu.InlineSpaces
 import com.octaviantocan.mymind.ui.menu.LocalCardMenuAccent
+import com.octaviantocan.mymind.ui.menu.SpaceChoices
+import com.octaviantocan.mymind.ui.menu.SpaceSuggestion
 import com.octaviantocan.mymind.ui.menu.cardMenuItems
 import com.octaviantocan.mymind.ui.menu.defaultCardMenuIcons
 import com.octaviantocan.mymind.ui.shell.ShellFrame
@@ -167,8 +170,12 @@ class LibraryScreenshotTest(private val dark: Boolean) {
                         }
                     },
                 ) { SampleEverything() }
-                CardMenuPanel("Card actions", onDismiss = {}, accent = cardAccent(card)) {
-                    CardMenuContent(cardMenuItems(card, null), onSelect = {}, icons = icons())
+                CardMenuPanel("Choose one", onDismiss = {}, accent = cardAccent(card)) {
+                    val spaces = LibrarySamples.spaces
+                    val choices = SpaceChoices(spaces.spaces, selected = setOf("s2"), latest = spaces.latest,
+                        suggestion = SpaceSuggestion(spaces.spaces.first(), 3))
+                    CardMenuContent(cardMenuItems(card, null), onSelect = {}, icons = icons(),
+                        spaces = { InlineSpaces(choices, card, onToggle = {}, onAll = {}) })
                 }
             }
         }

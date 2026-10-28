@@ -60,7 +60,8 @@ internal fun rememberCardMenuPosition(): CardSheetPosition {
 
 /**
  * The card's auxiliary pages in Pully's own modal presentation, with no Material sheet underneath. The sheet opens on
- * [root]: the card's actions from [items], or [rootContent] when given, and shows [submenu] as a child page of it.
+ * [root]: Choose one from [items], with [spaces] in place of its Add to space choice and [onDeleteHold] following Delete
+ * card's hold, or [rootContent] when given; it shows [submenu] as a child page of it.
  */
 @Composable
 internal fun CardMenuSheet(
@@ -75,6 +76,8 @@ internal fun CardMenuSheet(
     accent: androidx.compose.ui.graphics.Color? = null,
     root: CardSheetRoot = CardSheetRoot.Actions,
     rootContent: (@Composable () -> Unit)? = null,
+    spaces: (@Composable () -> Unit)? = null,
+    onDeleteHold: (Float) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val motion = rememberSheetMotionEnabled()
@@ -99,7 +102,8 @@ internal fun CardMenuSheet(
                     .sheetEdgeFade(color = colors.paper, topStrength = { (scroll.value / fade).coerceIn(0f, 1f) })
                     .verticalScroll(scroll).navigationBarsPadding()) {
                     if (page != null) submenuContent(page)
-                    else rootContent?.invoke() ?: CardMenuContent(items, onSelect, icons = icons, enabled = !position.closing)
+                    else rootContent?.invoke() ?: CardMenuContent(items, onSelect, icons = icons, enabled = !position.closing, spaces = spaces,
+                        onDeleteHold = onDeleteHold)
                 }
             }
         }

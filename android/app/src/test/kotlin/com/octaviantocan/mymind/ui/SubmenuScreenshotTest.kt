@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -31,7 +32,12 @@ import com.octaviantocan.mymind.ui.menu.DarkMenuColors
 import com.octaviantocan.mymind.ui.menu.LocalCardMenuAccent
 import com.octaviantocan.mymind.ui.menu.CardMenuPanel
 import com.octaviantocan.mymind.ui.menu.CardSubmenu
-import com.octaviantocan.mymind.ui.menu.SelectSpacePage
+import com.octaviantocan.mymind.ui.menu.AllSpacesPage
+import com.octaviantocan.mymind.ui.menu.SpaceChoices
+import com.octaviantocan.mymind.ui.menu.SpaceSuggestion
+import com.octaviantocan.mymind.ui.menu.UndoDeleteBar
+import com.octaviantocan.mymind.ui.upload.UPLOAD_STRIP_BOTTOM
+import com.octaviantocan.mymind.ui.library.CardSpaceCreationState
 import com.octaviantocan.mymind.ui.shell.ShellFrame
 import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.PageScheme
@@ -108,12 +114,14 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun selectSpace() = submenu("S12_select_space", page = CardSubmenu.Spaces) {
-        SelectSpacePage(LibrarySamples.spaces.spaces, selected = setOf("s2", "s3"), onToggle = {}, onCreateSpace = {})
+        val spaces = LibrarySamples.spaces.spaces
+        AllSpacesPage(SpaceChoices(spaces, selected = setOf("s2", "s3"), suggestion = SpaceSuggestion(spaces.first(), 3)), CardSpaceCreationState(),
+            onToggle = {}, onCreate = { _, _ -> })
     }
 
     @Test
     fun selectSpaceEmpty() = submenu("S12_select_space_empty", page = CardSubmenu.Spaces) {
-        SelectSpacePage(emptyList(), selected = emptySet(), onToggle = {}, onCreateSpace = {})
+        AllSpacesPage(SpaceChoices(emptyList(), selected = emptySet()), CardSpaceCreationState(), onToggle = {}, onCreate = { _, _ -> })
     }
 
     private fun newSpace(name: String, step: Int) {
@@ -143,6 +151,18 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun newSpaceColor() = newSpace("S07_new_space_color", 2)
+
+    @Test
+    fun undoDelete() {
+        render {
+            Box(Modifier.fillMaxSize()) {
+                ShellFrame(Tab.Everything, onSelectTab = {}, scheme = PageScheme.Dark) { SampleEverything() }
+                UndoDeleteBar(LibrarySamples.article.title.orEmpty(), onUndo = {},
+                    Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = UPLOAD_STRIP_BOTTOM))
+            }
+        }
+        capture("S13_undo_delete")
+    }
 
     private fun shell(content: @Composable () -> Unit) =
         render { ShellFrame(Tab.Everything, onSelectTab = {}, scheme = PageScheme.Dark, page = content) }

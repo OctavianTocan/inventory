@@ -11,12 +11,14 @@ Source: pulls.review `kit-sheet-pages-stay-in-the-sheet`, DESIGN rules 78 and 11
 at ee5cf358333cb1170f1923c7118e12af3f265b74; see `docs/pully-ui-reference.md`.
 
 @cc [owner:OctavianTocan,label:product;reliability] card-space-creation-outlives-its-page
-Leaving the creation page MUST NOT cancel an accepted create request or prevent its
-result from refreshing the selector. Pending creation MUST remain guarded against
-duplicate submission when the form is reopened. Completion MUST navigate only if
-that creation page is still active.
+Leaving the New space form or dismissing the sheet MUST NOT cancel an accepted
+Create and add: the space is still made, the card is still added to it, and the
+spaces are refreshed. A pending creation MUST remain guarded against duplicate
+submission when the form is reopened. Completion MUST close the form only if it is
+still showing.
 Source: the same-sheet creation flow and its native Back/dismissal regressions,
-22 October 2026.
+22 October 2026; Create and add follows Tavi's pick of F08 in the reader
+prototype, 28 October 2026.
 
 @cc [owner:OctavianTocan,label:motion] card-sheet-pages-follow-navigation
 Opening a child page MUST move it in from the right and move the parent left; Back
@@ -34,25 +36,52 @@ and controls sharp and unobstructed.
 Source: pulls.review `kit-sheet-header-is-fixed`, DESIGN rules 70, 74 and 77,
 at ee5cf358333cb1170f1923c7118e12af3f265b74; see `docs/pully-ui-reference.md`.
 
-@cc [owner:OctavianTocan,label:product;motion] first-space-creation-is-a-child-page
-From a card's empty space selector, Create Your First Space MUST open a creation
-page inside the same card sheet and retain its selected card, accent hint, panel and
-drag state. Header Back and Android Back MUST return to the space selector, then
-to card actions, then dismiss. A failed creation MUST preserve the form for retry;
-success MUST return to the space selector without automatically adding the card.
-Source: Tavi's same-sheet child navigation requirement, 22 October 2026; applies
-card-sheet-pages-stay-in-the-sheet to the first-space creation path.
+@cc [owner:OctavianTocan,label:product] new-space-is-made-in-place
+All spaces, titled Add to space, MUST offer New space in place: a form on the same
+page with the space's name, its colour and Create and add, open at once when there
+are no spaces yet. Create and add MUST make the space and add the card to it. A
+failed creation MUST keep the form and its name for retry. Header Back and Android
+Back return to Choose one, then dismiss.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M10, new space
+inline), which replaces the 22 October child creation page that did not add the
+card.
+
+@cc [owner:OctavianTocan,label:product] add-to-space-sits-in-choose-one
+Choose one MUST show Add to space in place: up to three spaces as small mosaics of
+their cards, the suggested space first with a Suggested badge, then the card's own
+spaces, then the rest, each adding or removing the card with one tap, and All
+spaces. The suggestion is the space holding the most other cards that share a tag
+or a site with this card, and never one the card is already in. All spaces lists
+the suggestion, then every space with its mosaic and card count; holding a space
+MUST show its latest cards until it is let go.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M12, hold to
+look inside; M13, suggested space first).
+
+@cc [owner:OctavianTocan,label:product;motion] card-delete-is-held-then-undone
+Delete card MUST be held for 1.3 seconds, filling as it goes; letting go sooner
+keeps the card. While it is held the page behind the sheet MUST shrink and fade
+with the hold, unless the system disables animations. Once the hold completes the
+sheet and reader close and a bar with the card's name offers Undo for 5 seconds.
+The card MUST NOT be trashed until Undo has run out, Undo MUST put it back where it
+was, and a trash that fails MUST bring it back and show why. Accessibility services
+delete with one action, since Undo covers a slip.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (H10, hold to
+delete; M14, the card shrinks while Delete is held).
 
 @cc [owner:OctavianTocan,label:design] card-sheet-actions-have-hierarchy
-The root action sheet MUST combine quick-action tiles with separate, titled raised
-cards for organizing, discovering and managing a card, omitting empty sections.
+The root sheet, titled Choose one, MUST lead with the card's big choices (Add to
+space, Same Vibe, Reader Mode) as raised cards with a muted line on what each
+means, then its quick actions as tiles two by two (Open source, Copy, Download, Top
+of Mind, Add tags), then Delete card alone in its own group, omitting what the card
+cannot do. The Top of Mind tile MUST show an ink on state while the card is pinned.
 Section headings MUST be small, muted and non-folding, without a count, divider or
-chevron. The destructive action MUST sit in its own group. Cards and tiles use
-16dp corners and Pully's 2dp-down, 12dp-blur, 10% ink canvas shadow with its tight
-edge; header controls use the 10dp/8% variant. The title MUST remain centered in
-its own fixed area even while its animated content changes. The grabber has a
-14dp gap to the header; the first content respects Pully's 20dp top gap.
-Source: pulls.review DESIGN rules 45, 70, 74 and 141; SheetHeading, SheetCard,
+chevron. Cards and tiles use 16dp corners and Pully's 2dp-down, 12dp-blur, 10% ink
+canvas shadow with its tight edge; header controls use the 10dp/8% variant. The
+title MUST remain centered in its own fixed area even while its animated content
+changes. The grabber has a 14dp gap to the header; the first content respects
+Pully's 20dp top gap.
+Source: Tavi's pick of F08 in the reader prototype, 28 October 2026, for the
+order; pulls.review DESIGN rules 45, 70, 74 and 141; SheetHeading, SheetCard,
 QuickAction and SheetHeader at f651a784cfca9b3730c60116832b89bbe236c9c3;
 Tavi's 22 October 2026 request to port the composition as well as sheet motion.
 

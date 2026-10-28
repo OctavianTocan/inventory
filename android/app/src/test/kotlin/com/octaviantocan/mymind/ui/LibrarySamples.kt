@@ -65,6 +65,12 @@ object LibrarySamples {
             "s3" to grid[9],
             "s4" to grid[3],
         ),
+        latest = mapOf(
+            "s1" to listOf(grid[0], grid[1], grid[2], grid[4]),
+            "s2" to listOf(grid[6], grid[5]),
+            "s3" to listOf(grid[9], grid[8], grid[7]),
+            "s4" to listOf(grid[3]),
+        ),
     )
 
     val article: Card = testCard("a1", type = "Article", url = "https://example.com/a1", title = "An article opened in the card view")

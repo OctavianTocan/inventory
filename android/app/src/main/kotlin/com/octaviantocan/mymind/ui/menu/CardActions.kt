@@ -125,8 +125,8 @@ sealed interface CardMenuOutcome {
  * @property title Header title of the page.
  */
 enum class CardSheetRoot(val title: String) {
-    /** The card's actions. */
-    Actions("Card actions"),
+    /** The card's actions: Choose one. */
+    Actions("Choose one"),
 
     /** Ways to share the card. */
     Share("Share"),
@@ -142,11 +142,8 @@ enum class CardSubmenu(val title: String, val parent: CardSubmenu? = null) {
     /** Add tags. */
     Tags("Add tags"),
 
-    /** Select a space. */
-    Spaces("Select a space"),
-
-    /** Create a space inside the space selector. */
-    CreateSpace("Create a space", Spaces);
+    /** Every space, to put the card in or take it out, with New space in place. */
+    Spaces("Add to space");
 
     /** Navigation depth determines the direction of the sheet page transition. */
     val depth: Int get() = (parent?.depth ?: 0) + 1

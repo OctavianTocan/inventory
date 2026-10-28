@@ -12,16 +12,21 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,7 +52,11 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.uploadFileOf
 import com.octaviantocan.mymind.ui.card.CardDetailDialog
+import com.octaviantocan.mymind.ui.card.CardSheetMotion
 import com.octaviantocan.mymind.ui.card.ReaderActions
+import com.octaviantocan.mymind.ui.card.shrunk
+import com.octaviantocan.mymind.ui.library.cardHeading
+import com.octaviantocan.mymind.ui.upload.UPLOAD_STRIP_BOTTOM
 import com.octaviantocan.mymind.ui.card.ReaderDetails
 import com.octaviantocan.mymind.ui.describe
 import com.octaviantocan.mymind.ui.errors.ApiErrorDialog
@@ -59,7 +68,11 @@ import com.octaviantocan.mymind.ui.library.LibraryViewModel
 import com.octaviantocan.mymind.ui.library.NewSpaceDialog
 import com.octaviantocan.mymind.ui.library.SpacesScreen
 import com.octaviantocan.mymind.ui.library.rememberPublicAccountPhotoLoader
-import com.octaviantocan.mymind.ui.menu.CreateSpacePage
+import com.octaviantocan.mymind.ui.menu.AllSpacesPage
+import com.octaviantocan.mymind.ui.menu.InlineSpaces
+import com.octaviantocan.mymind.ui.menu.SpaceChoices
+import com.octaviantocan.mymind.ui.menu.UndoDeleteBar
+import com.octaviantocan.mymind.ui.menu.suggestSpace
 import com.octaviantocan.mymind.ui.menu.AddTagsPage
 import com.octaviantocan.mymind.ui.menu.CardMenuAction
 import com.octaviantocan.mymind.ui.menu.CardMenuItem
@@ -71,7 +84,6 @@ import com.octaviantocan.mymind.ui.menu.CardMenuSheet
 import com.octaviantocan.mymind.ui.menu.rememberCardMenuPosition
 import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
 import com.octaviantocan.mymind.ui.menu.CardSubmenu
-import com.octaviantocan.mymind.ui.menu.SelectSpacePage
 import com.octaviantocan.mymind.ui.menu.cardMenuItems
 import com.octaviantocan.mymind.ui.settings.ProfileSheetHost
 import com.octaviantocan.mymind.ui.settings.SettingsUpdates
@@ -147,6 +159,10 @@ fun MainShell(
     var newSpaceOpen by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<Space?>(null) }
     var failure by remember { mutableStateOf<ApiFailure?>(null) }
+    var deleteHold by remember { mutableFloatStateOf(0f) }
+    // The reader a delete closed, to open again on Undo.
+    var undoReopens by remember { mutableStateOf<OpenedCard?>(null) }
+    val pendingDelete by viewModel.deleting.collectAsStateWithLifecycle()
     val scheme by viewModel.scheme.collectAsStateWithLifecycle()
     val features by viewModel.features.collectAsStateWithLifecycle()
     val tagChoices by viewModel.tagChoices.collectAsStateWithLifecycle()
@@ -170,6 +186,9 @@ fun MainShell(
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
     val menuProgress = if (menuOpen) sheetState.scrim else 0f
+    val shrink by animateFloatAsState(if (motion) deleteHold else 0f, if (deleteHold == 0f) tween(CardSheetMotion.FAST) else snap(), label = "deleteShrink")
+    LaunchedEffect(viewModel) { viewModel.deleteFailures.collect { failure = it } }
+    LaunchedEffect(pendingDelete) { if (pendingDelete == null) undoReopens = null }
     val keepRecent = { card: Card -> recent.removeAll { it.id == card.id }; recent.add(0, card); if (recent.size > RECENT_KEPT) recent.removeAt(recent.lastIndex) }
     val openCard = { card: Card, spaceId: String? ->
         opened?.card?.takeIf { it.id != card.id }?.let(keepRecent)
@@ -189,7 +208,10 @@ fun MainShell(
         opened = opened?.takeIf { it.card.id == card.id }?.copy(card = card) ?: opened
         menuFor = menuFor?.takeIf { it.card.id == card.id }?.copy(card = card) ?: menuFor
     }
+    val joinedNewSpace = cardSpaceCreation.card
+    LaunchedEffect(joinedNewSpace) { joinedNewSpace?.let(updateCard) }
     val openSheet = { card: Card, spaceId: String?, root: CardSheetRoot, page: CardSubmenu? ->
+        if (page == CardSubmenu.Tags) viewModel.loadTagChoices()
         menuFor = OpenedCard(card, spaceId)
         sheetRoot = root
         submenu = page
@@ -244,7 +266,7 @@ fun MainShell(
         tab = tab,
         onSelectTab = selectTab,
         scheme = scheme,
-        modifier = Modifier.blur(MENU_BLUR * menuProgress),
+        modifier = Modifier.blur(MENU_BLUR * menuProgress).shrunk { if (opened == null) shrink else 0f },
         footer = {
             LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
                 onSearch = { tab = Tab.Everything; searchActive = true }, onCloseSearch = closeSearch,
@@ -259,6 +281,7 @@ fun MainShell(
                             onClose = closeCard,
                             onMenu = { openMenu(open.card, open.spaceId) },
                             actionsProgress = menuProgress,
+                            shrink = shrink,
                             actions = ReaderActions(
                                 onShare = if (open.card.url != null || shareText(open.card) != null) {
                                     { openSheet(open.card, open.spaceId, CardSheetRoot.Share, null) }
@@ -295,6 +318,18 @@ fun MainShell(
                 onDismiss = viewModel.uploads::dismiss,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
+            pendingDelete?.let { card ->
+                key(card.id) {
+                    UndoDeleteBar(
+                        cardHeading(card),
+                        onUndo = {
+                            viewModel.undoDelete()
+                            undoReopens?.let { opened = it }
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = UPLOAD_STRIP_BOTTOM),
+                    )
+                }
+            }
         },
     ) {
         pageStates.SaveableStateProvider(tab.name) {
@@ -331,6 +366,19 @@ fun MainShell(
 
     val target = menuFor
     if (menuOpen && target != null) {
+        LaunchedEffect(Unit) { if (!spaces.loaded) viewModel.loadSpaces() }
+        val suggestion = remember(target.card.id, spaces.spaces) { suggestSpace(target.card, viewModel.everything.state.value.cards, spaces.spaces) }
+        val choices = SpaceChoices(spaces.spaces, target.card.spaces.orEmpty().toSet(), spaces.latest, suggestion)
+        val toggleSpace = { space: Space ->
+            scope.launch {
+                val card = menuFor?.card ?: return@launch
+                when (val answer = viewModel.toggleSpace(card, space)) {
+                    is ApiResult.Ok -> updateCard(answer.value)
+                    is ApiResult.Failed -> failure = answer.failure
+                }
+            }
+            Unit
+        }
         CardMenuSheet(
             items = cardMenuItems(target.card, target.spaceId, features),
             accent = cardAccent(target.card),
@@ -343,6 +391,13 @@ fun MainShell(
                         sheetState.hide(motion)
                         menuOpen = false
                         submenu = null
+                    }
+                    if (item.action == CardMenuAction.DeleteCard && !item.locked) {
+                        undoReopens = opened?.takeIf { it.card.id == target.card.id }
+                        if (undoReopens != null) opened = null
+                        recent.removeAll { it.id == target.card.id }
+                        viewModel.deleteLater(target.card)
+                        return@launch
                     }
                     when (val outcome = viewModel.perform(item, target.card, target.spaceId)) {
                         is CardMenuOutcome.OpenSubmenu -> submenu = outcome.submenu
@@ -379,6 +434,13 @@ fun MainShell(
                     onCopyLink = card.url?.let { { closeMenu(); copyLink(card) } },
                 )
             }) else null,
+            spaces = {
+                InlineSpaces(choices, target.card, onToggle = toggleSpace, onAll = {
+                    viewModel.acknowledgeCardSpaceCreation()
+                    submenu = CardSubmenu.Spaces
+                })
+            },
+            onDeleteHold = { deleteHold = it },
             onBack = { focusManager.clearFocus(); submenu = submenu?.parent },
             submenuContent = { shown ->
                     when (shown) {
@@ -396,33 +458,12 @@ fun MainShell(
                                 }
                             },
                         )
-                        CardSubmenu.CreateSpace -> CreateSpacePage(
+                        CardSubmenu.Spaces -> AllSpacesPage(
+                            choices = choices,
                             creation = cardSpaceCreation,
-                            onCreate = viewModel::createCardSpace,
-                            onCreated = {
-                                if (submenu == CardSubmenu.CreateSpace) {
-                                    viewModel.acknowledgeCardSpaceCreation()
-                                    focusManager.clearFocus()
-                                    submenu = CardSubmenu.Spaces
-                                }
-                            },
-                        )
-                        CardSubmenu.Spaces -> SelectSpacePage(
-                            spaces = spaces.spaces,
-                            selected = target.card.spaces.orEmpty().toSet(),
-                            onToggle = { space ->
-                                scope.launch {
-                                    val card = menuFor?.card ?: return@launch
-                                    when (val answer = viewModel.toggleSpace(card, space)) {
-                                        is ApiResult.Ok -> updateCard(answer.value)
-                                        is ApiResult.Failed -> failure = answer.failure
-                                    }
-                                }
-                            },
-                            onCreateSpace = {
-                                viewModel.acknowledgeCardSpaceCreation()
-                                submenu = CardSubmenu.CreateSpace
-                            },
+                            onToggle = toggleSpace,
+                            onCreate = { name, color -> viewModel.createCardSpace(name, color, menuFor?.card) },
+                            onAcknowledge = viewModel::acknowledgeCardSpaceCreation,
                         )
                     }
             },
