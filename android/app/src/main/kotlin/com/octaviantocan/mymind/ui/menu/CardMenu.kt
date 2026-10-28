@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
@@ -224,40 +225,45 @@ private fun CardMenuRow(item: CardMenuItem, colors: MenuColors, icons: CardMenuI
 /**
  * One row of a raised Pully group: the icon, the label with an optional muted detail, then optional trailing content.
  *
- * @param icon Artwork, tinted like the label.
+ * @param icon Artwork, tinted like the label, or null for a row of text alone.
  * @param label The row's name.
- * @param onClick Called on a tap, after the sheet's tick.
+ * @param onClick Called on a tap, after the sheet's tick; null for a row that only shows something.
  * @param detail Muted second line, or null.
  * @param danger True paints the icon and label in the destructive color.
  * @param enabled False ignores taps.
+ * @param iconTint The icon's own colour, such as a brand mark's, instead of the label's.
+ * @param role What a tap does, for accessibility: a button, or a radio button on a list of choices.
  * @param trailing Drawn at the end, such as a value or a chevron.
  */
 @Composable
 internal fun SheetRow(
-    icon: Painter,
+    icon: Painter?,
     label: String,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     detail: String? = null,
     danger: Boolean = false,
     enabled: Boolean = true,
-    trailing: (@Composable () -> Unit)? = null,
+    iconTint: Color? = null,
+    role: Role = Role.Button,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val colors = menuColors()
     val tint = if (danger) colors.dangerText else colors.rowText
     val haptic = rememberSheetHaptics()
     Row(
         Modifier.fillMaxWidth().heightIn(min = 52.dp)
-            .clickable(remember { MutableInteractionSource() }, CardSheetIndication, enabled = enabled, role = Role.Button) { haptic.tick(); onClick() }
+            .then(if (onClick == null) Modifier else Modifier.clickable(remember { MutableInteractionSource() }, CardSheetIndication,
+                enabled = enabled, role = role) { haptic.tick(); onClick() })
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(icon, contentDescription = null, modifier = Modifier.size(22.dp), colorFilter = ColorFilter.tint(tint))
+        if (icon != null) Image(icon, contentDescription = null, modifier = Modifier.size(22.dp), colorFilter = ColorFilter.tint(iconTint ?: tint))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(label, style = TextStyle(color = tint, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont))
             if (detail != null) Text(detail, style = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 14.sp, lineHeight = 20.sp, fontFamily = CardMenuFont))
         }
-        trailing?.invoke()
+        trailing?.invoke(this)
     }
 }
 
@@ -267,8 +273,12 @@ internal fun SheetRowChevron(colors: MenuColors = menuColors()) {
     Image(painterResource(R.drawable.ic_caret_right), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(colors.rowText.copy(alpha = 0.55f)))
 }
 
-/** The inset divider between rows of one raised group. */
+/**
+ * The inset divider between rows of one raised group.
+ *
+ * @param start Where it starts: past the icon (52dp), or at the text of rows without icons (16dp).
+ */
 @Composable
-internal fun SheetRowDivider() {
-    HorizontalDivider(Modifier.padding(start = 52.dp), color = menuColors().rowText.copy(alpha = 0.1f), thickness = 1.dp)
+internal fun SheetRowDivider(start: Dp = 52.dp) {
+    HorizontalDivider(Modifier.padding(start = start), color = menuColors().rowText.copy(alpha = 0.1f), thickness = 1.dp)
 }

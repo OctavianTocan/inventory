@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.octaviantocan.mymind.data.AiAccount
 import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
@@ -110,6 +111,7 @@ private data class AddTarget(val spaceId: String?, val title: String = "Add to y
  * @param viewModel Library behind the tabs and the card menu.
  * @param settingsViewModel State and actions behind the profile sheet.
  * @param updates Update rows of the profile sheet.
+ * @param ai The account's Claude Code and Codex, for the profile sheet's AI rows, or null for none.
  * @param extras Drawn over everything, such as the update sheets.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,6 +120,7 @@ fun MainShell(
     viewModel: LibraryViewModel,
     settingsViewModel: SettingsViewModel,
     updates: SettingsUpdates = SettingsUpdates(),
+    ai: AiAccount? = null,
     extras: @Composable () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Everything) }
@@ -202,7 +205,8 @@ fun MainShell(
         underStatusBar = tab == Tab.Serendipity,
         footer = {
             LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
-                onSearch = { tab = Tab.Everything; searchActive = true }, onCloseSearch = closeSearch)
+                onSearch = { tab = Tab.Everything; searchActive = true }, onCloseSearch = closeSearch,
+                onSubmit = viewModel.search::submit)
         },
         overlay = {
             opened?.let { open ->
@@ -383,7 +387,7 @@ fun MainShell(
             onNewSpace = if (target.newSpace) ({ adding = null; newSpaceOpen = true }) else null,
         )
     }
-    if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false })
+    if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false }, ai = ai)
     if (newSpaceOpen) {
         PageTheme(scheme) {
             NewSpaceDialog(

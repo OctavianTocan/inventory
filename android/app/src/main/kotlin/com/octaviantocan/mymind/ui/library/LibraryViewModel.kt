@@ -3,6 +3,7 @@ package com.octaviantocan.mymind.ui.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.octaviantocan.mymind.data.ApiFailure
+import com.octaviantocan.mymind.data.AiRanking
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.CardPage
@@ -24,6 +25,7 @@ import com.octaviantocan.mymind.ui.menu.CardSubmenu
 import com.octaviantocan.mymind.ui.menu.FileSaver
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -87,6 +89,7 @@ class LibraryViewModel(
     uploadActivity: UploadActivity? = null,
     private val memory: LibraryMemory? = null,
     private val sync: LibrarySync? = null,
+    ai: AiRanking? = null,
 ) : ViewModel() {
     private val mutableScheme = MutableStateFlow(PageScheme.System)
     private val mutableFeatures = MutableStateFlow(emptySet<String>())
@@ -121,7 +124,7 @@ class LibraryViewModel(
     val cardSpaceCreation: StateFlow<CardSpaceCreationState> = mutableCardSpaceCreation
 
     /** Search text, filter, suggestions and results. */
-    val search = SearchModel(viewModelScope, library)
+    val search = SearchModel(viewModelScope, library, ai)
 
     /** The Serendipity deck. */
     val serendipity = SerendipityModel(viewModelScope, library)
@@ -452,20 +455,36 @@ data class SearchFilter(val label: String, val queryText: String) {
 /** Label of the Same Vibe filter, as on the web. */
 const val SAME_VIBE_LABEL = "Same Vibe"
 
+/** What Claude Code or Codex is doing with the shown results of a pressed search. */
+sealed interface AiRank {
+    /** [engine] is ranking the results. */
+    data class Ranking(val engine: String) : AiRank
+
+    /** [engine] ranked [count] of the results first. */
+    data class Ranked(val engine: String, val count: Int) : AiRank
+
+    /** The ranking failed, in the server's words. */
+    data class Failed(val message: String) : AiRank
+}
+
 /**
- * Search text, an optional filter, the suggestion chips and the matching cards.
+ * Search text, an optional filter, the suggestion chips and the matching cards. Typing searches by words and meaning
+ * at once; pressing search also has the account's Claude Code or Codex rank the matches, when one is signed in.
  *
  * @param scope Scope the searches run in.
  * @param library Source of the results and suggestions.
+ * @param ai Ranks a pressed search, or null for none.
  */
-class SearchModel(private val scope: CoroutineScope, private val library: Library) {
+class SearchModel(private val scope: CoroutineScope, private val library: Library, private val ai: AiRanking? = null) {
     private val mutableQuery = MutableStateFlow("")
     private val mutableFilter = MutableStateFlow<SearchFilter?>(null)
     private val mutableTypes = MutableStateFlow<List<Suggestion>>(emptyList())
     private val mutableSuggestions = MutableStateFlow<List<Suggestion>>(emptyList())
     private val mutableResults = MutableStateFlow(CardFeed(scope) { ApiResult.Ok(CardPage()) })
+    private val mutableRank = MutableStateFlow<AiRank?>(null)
     private var pending: Job? = null
     private var suggesting: Job? = null
+    private var ranking: Job? = null
 
     /** Text in the search field. */
     val query: StateFlow<String> = mutableQuery
@@ -482,8 +501,40 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
     /** Cards matching the current text and filter; empty while both are blank. */
     val results: StateFlow<CardFeed> = mutableResults
 
+    /** What the AI ranking of a pressed search is doing, or null when the results are not being ranked. */
+    val rank: StateFlow<AiRank?> = mutableRank
+
     /** True when there is something to search for. */
     val active: Boolean get() = mutableQuery.value.isNotBlank() || mutableFilter.value != null
+
+    /**
+     * Searches at once, then has the account's Claude Code or Codex rank the matches by what the search means and
+     * shows them in that order. Does nothing more without a signed-in engine, for Same Vibe or for an empty search.
+     */
+    fun submit() {
+        val text = searchText()
+        restart(0)
+        val ai = ai ?: return
+        if (text.isEmpty() || mutableFilter.value?.similar == true) return
+        val shown = pending
+        ranking = scope.launch {
+            val engine = ai.engine() ?: return@launch
+            mutableRank.value = AiRank.Ranking(engine)
+            mutableRank.value = try {
+                val answer = ai.search(text)
+                // The search started above shows first; the ranked cards then take its place.
+                shown?.join()
+                val feed = CardFeed(scope) { cursor -> ApiResult.Ok(if (cursor == null) CardPage(answer.cards) else CardPage()) }
+                mutableResults.value = feed
+                feed.loadMore()
+                AiRank.Ranked(engine, answer.ranked)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AiRank.Failed(e.message ?: "$engine could not rank these. Try again.")
+            }
+        }
+    }
 
     /** Reads the type suggestions once; later calls keep the first answer. */
     fun loadTypes() {
@@ -564,14 +615,20 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
         }
     }
 
-    private fun restart(wait: Long) {
-        pending?.cancel()
+    private fun searchText(): String {
         val filter = mutableFilter.value
-        val text = if (filter?.similar == true) {
+        return if (filter?.similar == true) {
             filter.queryText
         } else {
             listOfNotNull(filter?.queryText, mutableQuery.value.trim().ifEmpty { null }).joinToString(" ")
         }
+    }
+
+    private fun restart(wait: Long) {
+        pending?.cancel()
+        ranking?.cancel()
+        mutableRank.value = null
+        val text = searchText()
         pending = scope.launch {
             if (wait > 0) delay(wait)
             val feed = CardFeed(scope) { cursor ->

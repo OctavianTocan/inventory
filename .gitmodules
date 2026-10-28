@@ -1,0 +1,4 @@
+[submodule "vendor/pulls.review"]
+	path = vendor/pulls.review
+	url = https://github.com/OctavianTocan/pulls.review
+	shallow = true

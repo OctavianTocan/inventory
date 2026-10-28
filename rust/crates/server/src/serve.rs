@@ -42,6 +42,44 @@ pub struct Server {
 }
 
 impl Server {
+    /// The hosted library's or the library API's answer, or `None` when neither serves the request.
+    async fn library(&self, request: &mut Request) -> mm_core::Result<Option<Response>> {
+        if let Some(hosted) = &self.hosted {
+            return hosted.handle(request).await.map(Some);
+        }
+        match &self.api {
+            Some(api) => api.handle(request).await,
+            None => Ok(None),
+        }
+    }
+
+    /// Claude Code and Codex (`mm_ai`) for the signed-in account, with the library's own search for the cards an AI
+    /// search ranks.
+    async fn answer_ai(&self, request: &mut Request) -> mm_core::Result<Response> {
+        let login = mm_ai::login_for(request.header("x-mymind-email"));
+        let body = request.take_body().bytes_within(64 * 1024).await?;
+        let origin = request.url.origin().ascii_serialization();
+        let mut headers = request.headers.clone();
+        headers.remove("content-type");
+        headers.remove("content-length");
+        let candidates = |target: String| async move {
+            let mut search = Request::new("GET", &format!("{origin}{target}")).map_err(|error| anyhow::anyhow!(error.to_js_string()))?;
+            search.headers = headers;
+            let response = match self.library(&mut search).await {
+                Ok(Some(response)) if response.status == 200 => response,
+                Ok(_) => anyhow::bail!("The library search did not answer."),
+                Err(error) => anyhow::bail!(error.to_js_string()),
+            };
+            let bytes = response.body.bytes().await.map_err(|error| anyhow::anyhow!(error.to_js_string()))?;
+            Ok(serde_json::from_slice(&bytes)?)
+        };
+        let reply = mm_ai::answer(&login, &request.method, &request.url, &body, candidates)
+            .await
+            .unwrap_or_else(|| unreachable!("answer_ai runs only for the paths mm_ai serves"));
+        let headers = Headers::from([("content-type", "application/json"), ("cache-control", "no-store")]);
+        Ok(Response::send(reply.status, reply.body.to_string(), &headers))
+    }
+
     async fn serve_static(&self, relative: &str, search: &str) -> mm_core::Result<Response> {
         let Some(file) = file_inside(&self.mirror, relative) else {
             return Ok(Response::send(400, "bad path", &Headers::from([("content-type", "text/plain; charset=utf-8")])));
@@ -123,12 +161,10 @@ impl Listener {
             return Ok(Response::send(403, "This server has no sign-in configured.", &Headers::new()));
         }
         let pathname = request.pathname().to_owned();
-        if let Some(hosted) = &server.hosted {
-            return hosted.handle(request).await;
+        if mm_ai::serves(&pathname) {
+            return server.answer_ai(request).await;
         }
-        if let Some(api) = &server.api
-            && let Some(response) = api.handle(request).await?
-        {
+        if let Some(response) = server.library(request).await? {
             return Ok(response);
         }
         let search = mm_js::url::search(&request.url);

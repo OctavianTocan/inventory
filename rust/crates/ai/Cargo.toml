@@ -1,0 +1,24 @@
+[package]
+name = "mm-ai"
+description = "Claude Code and Codex for ThyMind through the shared AI kit: sign-in, model lists and AI search"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "mymind-agent-runner"
+path = "src/bin/agent_runner.rs"
+
+[dependencies]
+ai-kit = { workspace = true, features = ["agents"] }
+serde_json.workspace = true
+anyhow.workspace = true
+url.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ai-kit = { workspace = true, features = ["agents", "runner"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ai-kit = { workspace = true, features = ["agents", "worker"] }
+tokio = { version = "1", default-features = false, features = ["sync"] }

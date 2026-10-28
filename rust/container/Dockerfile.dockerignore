@@ -4,3 +4,6 @@
 !rust/crates/
 !rust/test-support/
 !rust/fetch-libvips.sh
+!vendor/pulls.review/ai-kit/
+vendor/pulls.review/ai-kit/target/
+vendor/pulls.review/ai-kit/kotlin/

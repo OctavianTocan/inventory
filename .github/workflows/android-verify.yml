@@ -33,6 +33,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          submodules: true
           ref: ${{ inputs.revision || github.sha }}
       - name: Require a new version for Android runtime changes
         env:

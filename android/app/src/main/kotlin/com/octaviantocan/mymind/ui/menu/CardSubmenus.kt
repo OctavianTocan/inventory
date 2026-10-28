@@ -109,7 +109,7 @@ class SubmenuColors(
 
 /** Neutral Pully surfaces and primary action; only the sheet's top carries the card hint. */
 @Composable
-private fun submenuColors(): SubmenuColors {
+internal fun submenuColors(): SubmenuColors {
     val colors = menuColors()
     val button = colors.rowText
     return SubmenuColors(

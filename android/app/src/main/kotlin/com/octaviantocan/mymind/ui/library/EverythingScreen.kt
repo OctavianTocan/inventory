@@ -15,8 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -82,6 +84,7 @@ fun EverythingScreen(
     val suggestions by viewModel.search.suggestions.collectAsStateWithLifecycle()
     val results by viewModel.search.results.collectAsStateWithLifecycle()
     val resultState by results.state.collectAsStateWithLifecycle()
+    val rank by viewModel.search.rank.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val resultsScroll = rememberLazyListState()
     LaunchedEffect(searching) { if (searching) viewModel.search.loadTypes() }
@@ -97,8 +100,20 @@ fun EverythingScreen(
         topOfMind = pinned.cards, onLoadMoreTopOfMind = viewModel.topOfMind::loadMore,
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
         onLongPressCard = onLongPressCard, onSerendipity = onSerendipity,
-        photoUrl = photoUrl, resultsState = resultsScroll,
+        photoUrl = photoUrl, resultsState = resultsScroll, aiNote = rank?.let(::aiNote),
     )
+}
+
+/**
+ * The line under the Search title while Claude Code or Codex ranks a pressed search, and after.
+ *
+ * @param rank What the ranking is doing.
+ * @return The words to show.
+ */
+fun aiNote(rank: AiRank): String = when (rank) {
+    is AiRank.Ranking -> "${rank.engine} is ranking these by what you mean…"
+    is AiRank.Ranked -> if (rank.count > 0) "Ranked by ${rank.engine}" else "${rank.engine} found nothing closer to what you mean"
+    is AiRank.Failed -> rank.message
 }
 
 /** Height of the fixed controls' row over the top of a library page. */
@@ -136,6 +151,7 @@ fun EverythingContent(
     photoUrl: String? = null,
     mosaic: MosaicState = rememberMosaicState(),
     resultsState: LazyListState = rememberLazyListState(),
+    aiNote: String? = null,
 ) {
     val colors = LibraryStyle.colors
     val photoLoader = if (photoUrl != null) rememberPublicAccountPhotoLoader() else null
@@ -146,6 +162,8 @@ fun EverythingContent(
                 LibraryMosaic(searchResults, onLoadMoreResults, onOpenCard, state = resultsState, mosaic = mosaic,
                     onLongPressCard = onLongPressCard, header = {
                         Text("Search", Modifier.padding(20.dp).semantics { heading() }, style = LibraryStyle.title, color = colors.text)
+                        if (aiNote != null) Text(aiNote, Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                            style = LibraryStyle.body, color = colors.muted)
                         ResultChips(filter, suggestions, onChoose, onRemoveFilter)
                         if (searchResults.cards.isEmpty()) GalleryFeedNotice(searchResults, onLoadMoreResults, search = true)
                     })

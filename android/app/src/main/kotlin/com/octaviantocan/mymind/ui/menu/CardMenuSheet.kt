@@ -227,6 +227,51 @@ internal fun CardMenuPanel(
     }
 }
 
+/** A child page of a paged sheet: its header title and how many pages deep it sits under the root. */
+internal interface SheetPage {
+    val title: String
+    val depth: Int
+}
+
+/**
+ * Pully's paged sheet outside a card: the root page under [title] with its close, each child page under its own title
+ * with Back, in one window, panel and drag state, each page keeping its own scroll position
+ * (card-sheet-pages-stay-in-the-sheet, card-sheet-pages-follow-navigation).
+ *
+ * @param title The root page's title.
+ * @param page The child page shown, or null for the root.
+ * @param onBack Returns to the parent page.
+ * @param onClose Called once the sheet has closed.
+ * @param content The page's rows, for the root (null) or a child page.
+ */
+@Composable
+internal fun <T : SheetPage> PullyPagedSheet(title: String, page: T?, onBack: () -> Unit, onClose: () -> Unit, content: @Composable ColumnScope.(T?) -> Unit) {
+    val position = rememberCardMenuPosition()
+    val scope = rememberCoroutineScope()
+    val motion = rememberSheetMotionEnabled()
+    val latestClose by rememberUpdatedState(onClose)
+    val scrolls = remember { mutableMapOf<T?, ScrollState>() }
+    val depth = { shown: T? -> shown?.depth ?: 0 }
+    PullySheetHost(onDismissRequest = { if (page != null) onBack() else position.dismiss(scope, motion) { latestClose() } }) {
+        val colors = cardMenuSheetColors(null, MymindTheme.colors.dark)
+        CardMenuPanel(page?.title ?: title, onClose, position = position, onBack = if (page != null) onBack else null,
+            scrollState = null, closeLabel = "Close",
+            titleContent = {
+                SheetPageSwitch(page, depth, Modifier.fillMaxWidth(), centered = true) { shown -> Text(shown?.title ?: title, Modifier.fillMaxWidth()) }
+            }) {
+            SheetPageSwitch(page, depth, Modifier.fillMaxWidth(), slow = true) { shown ->
+                val scroll = scrolls.getOrPut(shown) { ScrollState(0) }
+                val fade = with(LocalDensity.current) { 20.dp.toPx() }
+                Column(Modifier.fillMaxWidth()
+                    .sheetEdgeFade(color = colors.paper, topStrength = { (scroll.value / fade).coerceIn(0f, 1f) })
+                    .verticalScroll(scroll).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = 30.dp)) {
+                    content(shown)
+                }
+            }
+        }
+    }
+}
+
 /** Pully's BlurSwitch, scoped to this sheet's root and child pages (DESIGN rules 78, 105 and 115). */
 @Composable
 private fun CardMenuPageSwitch(
@@ -235,6 +280,17 @@ private fun CardMenuPageSwitch(
     centered: Boolean = false,
     slow: Boolean = false,
     content: @Composable AnimatedContentScope.(CardSubmenu?) -> Unit,
+) = SheetPageSwitch(page, { it?.depth ?: 0 }, modifier, centered, slow, content)
+
+/** Pully's BlurSwitch between a sheet's pages: deeper pages come in from the right, shallower ones from the left. */
+@Composable
+private fun <T> SheetPageSwitch(
+    page: T?,
+    depth: (T?) -> Int,
+    modifier: Modifier = Modifier,
+    centered: Boolean = false,
+    slow: Boolean = false,
+    content: @Composable AnimatedContentScope.(T?) -> Unit,
 ) {
     val moving = rememberSheetMotionEnabled()
     val step = with(LocalDensity.current) { 8.dp.roundToPx() }
@@ -247,7 +303,7 @@ private fun CardMenuPageSwitch(
         transitionSpec = {
             if (!moving) EnterTransition.None togetherWith ExitTransition.None
             else {
-                val direction = if ((targetState?.depth ?: 0) < (initialState?.depth ?: 0)) -1 else 1
+                val direction = if (depth(targetState) < depth(initialState)) -1 else 1
                 val travel = { width: Int -> if (slow) (width * 0.34f).toInt() else step }
                 ((slideInHorizontally(tween(inMs, easing = CardSheetMotion.SmoothOut)) { direction * travel(it) }
                     + fadeIn(tween(inMs, easing = CardSheetMotion.SmoothOut))) togetherWith

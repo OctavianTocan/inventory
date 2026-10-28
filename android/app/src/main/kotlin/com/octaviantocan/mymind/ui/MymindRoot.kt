@@ -80,6 +80,7 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
             uploadActivity = container.uploadActivity,
             memory = container.libraryCopy,
             sync = container.librarySync,
+            ai = container.ai,
         )
     }
     LaunchedEffect(online) { if (online) library.syncNow() }
@@ -118,6 +119,6 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
     val previews = remember { VideoPreviews(context.applicationContext, container.httpClient) }
     ClosePreviewsOnDispose(previews)
     CompositionLocalProvider(LocalVideoPreviews provides previews) {
-        MainShell(library, settings, rows.copy(onAllow = allow)) { UpdateOverlays(updates, allow) }
+        MainShell(library, settings, rows.copy(onAllow = allow), ai = container.ai) { UpdateOverlays(updates, allow) }
     }
 }

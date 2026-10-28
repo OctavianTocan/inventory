@@ -19,10 +19,14 @@
     "bindings": [
       { "name": "AUTH_OBJECT", "class_name": "Auth" },
       { "name": "LIBRARY", "class_name": "Library" },
-      { "name": "MEDIA", "class_name": "Media" }
+      { "name": "MEDIA", "class_name": "Media" },
+      { "name": "AGENT_HOME", "class_name": "AgentHome" }
     ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Auth", "Library", "Media"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Auth", "Library", "Media"] },
+    { "tag": "v2", "new_sqlite_classes": ["AgentHome"] }
+  ],
   "containers": [
     {
       "class_name": "Media",
@@ -30,6 +34,15 @@
       "image_build_context": "../../..",
       "instance_type": "standard-1",
       "max_instances": 1
+    },
+    // One container per account for its own Claude Code and Codex, started by its AgentHome object (the AI kit's
+    // home.rs, vendor/pulls.review/ai-kit).
+    {
+      "class_name": "AgentHome",
+      "image": "../../agent/Dockerfile",
+      "image_build_context": "../../..",
+      "instance_type": "standard-1",
+      "max_instances": 5
     }
   ],
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "mymind" }],

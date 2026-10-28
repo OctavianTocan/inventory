@@ -1,0 +1,40 @@
+@cc [owner:OctavianTocan,label:product;design] profile-ai-rows-are-pullys
+For a signed-in account the Profile sheet MUST list, under the account card, an AI search
+group and a Providers group as Pully's Settings does. The Model row MUST show the chosen
+model's name and its engine's own mark in colour, never a model ID or a robot icon. An
+Effort row of its own MUST follow Model whenever the chosen model has more than one
+effort, and the model page MUST NOT carry the efforts. Providers MUST list Claude Code and
+Codex with their marks and whether each is signed in. The rows carry no lines that
+explain them. Model, Effort and each provider open child pages inside the same Profile
+sheet (`ui/menu/CONTRACTS` `card-sheet-pages-stay-in-the-sheet`). The rows MUST use
+ThyMind's own sheet rows, type and colours, not Pully's look.
+Source: Tavi, 28 October 2026 ("fully copy from the Pully project how it does sign-in for
+those, how it puts them in the settings, its model and effort selectors"); pulls.review
+`settings-model-row-names-the-model`, `settings-effort-under-model` and
+`settings-no-helper-lines` at c71ee10d2f6fc1b279c5396076cfed5039f8dbd7.
+
+@cc [owner:OctavianTocan,label:product;design] profile-ai-model-and-effort-pages
+The model page MUST offer Claude Code and Codex as tabs, list the engine's recent models
+first and the rest under Older models, mark the chosen one, and say so when the engine
+is not signed in, linking to its sign-in page instead of a list. The effort page MUST
+list the model's efforts by Pully's names, mark the model's default as Recommended and
+end with Pully's footnote on what higher effort costs. Each engine MUST keep the model
+last chosen for it on the phone, and changing the model MUST keep the chosen effort only
+when the new model lists it.
+Source: Tavi, 28 October 2026 (as `profile-ai-rows-are-pullys`); pulls.review
+`ui/review/ModelPicker.kt` and `AiSettingsLogic` (ai-kit) at
+c71ee10d2f6fc1b279c5396076cfed5039f8dbd7.
+
+@cc [owner:OctavianTocan,label:product;security] profile-ai-sign-in-is-the-accounts
+Claude Code and Codex MUST be signed in through the CLIs' own subscription sign-in on
+Pully's pages: Claude Code's page code is pasted back, or taken from the clipboard when
+the app returns to the front; Codex shows a device code and finishes by itself once it is
+approved. The sign-in belongs to the signed-in ThyMind account and lives on the server,
+never on the phone. Everything a page holds belongs to the session that opened it: a new
+session MUST clear it and drop remembered sign-ins and model lists, and while the app is
+in the background a page MUST NOT send requests, open pages or read the clipboard. A
+refused AI request MUST NOT answer 401, because the app signs its session out on a 401.
+Source: Tavi, 28 October 2026 (as `profile-ai-rows-are-pullys`); ai-kit
+`kit-subscription-sign-in-only`; pulls.review
+`android-provider-signin-keeps-its-session-on-browser-return` at
+c71ee10d2f6fc1b279c5396076cfed5039f8dbd7.

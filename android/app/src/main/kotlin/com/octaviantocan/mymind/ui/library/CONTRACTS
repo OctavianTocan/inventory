@@ -192,3 +192,15 @@ Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search"
 and his choice of "Pinned + newest 1,000, Wi-Fi" for the pictures; online changes queued
 first for Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
 "ThyMind: a Zero-style sync engine", steps 2 and 3.
+
+@cc [owner:OctavianTocan,label:product] search-ranks-with-claude-or-codex-on-submit
+Typing in search MUST keep answering at once from words and meaning, with no AI call.
+Pressing search on the keyboard with the chosen engine signed in MUST keep those matches
+on screen, say under the Search title that the engine is ranking them, then show the
+engine's order: the cards it ranked first, then the rest of the matches, with a note
+naming the engine. A failed ranking MUST keep the matches and say why. Typing again or
+changing the filter MUST drop the ranking. Same vibe is never ranked, and without a
+signed-in engine pressing search changes nothing.
+Source: Tavi, 28 October 2026 ("we will modify how the search works so that we use
+Claude or Codex", combined with the embedding search of the plan "ThyMind: instant app
+and better search").

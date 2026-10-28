@@ -15,6 +15,13 @@ for (const name of ['Cargo.toml', 'Cargo.lock', 'crates', 'test-support']) {
     filter: (source) => !['node_modules', 'target', 'build', '.wrangler'].includes(path.basename(source)),
   });
 }
+// The Worker's AI crate builds the shared AI kit from the pulls.review submodule, at the same place beside rust/.
+const kit = path.join(artifactRoot, 'vendor/pulls.review/ai-kit');
+rmSync(kit, { recursive: true, force: true });
+cpSync(fileURLToPath(new URL('vendor/pulls.review/ai-kit', ROOT)), kit, {
+  recursive: true,
+  filter: (source) => !['target', 'kotlin', 'build'].includes(path.basename(source)),
+});
 const result = spawnSync('worker-build', ['--release'], {
   cwd: path.join(rust, 'crates/worker'), stdio: 'inherit',
   env: { ...process.env, CARGO_TARGET_DIR: path.join(artifactRoot, 'cargo-target') },

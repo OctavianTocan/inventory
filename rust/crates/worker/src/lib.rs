@@ -1,5 +1,6 @@
 //! The Cloudflare Worker that hosts the libraries (`worker/index.mjs`): every request is checked by the `Auth` object,
 //! a signed-in one goes to its account's `Library` object, and `/_admin/` exists only while `ADMIN_TOKEN` is set.
+//! Claude Code and Codex (`/app/v1/ai/`) run in each account's own `AgentHome` container.
 
 mod auth_object;
 mod bucket_r2;
@@ -21,6 +22,8 @@ use subtle::ConstantTimeEq;
 use wasm_bindgen::JsValue;
 use worker::{Env, event};
 
+// Every account's Claude Code and Codex container is an `AgentHome` of the AI kit shared with Pully.
+pub use ai_kit::home::AgentHome;
 pub use auth_object::Auth;
 pub use library_object::Library;
 pub use media_object::Media;
@@ -214,6 +217,30 @@ async fn download(request: &web_sys::Request, env: &Env, url: &url::Url, user: &
     Ok(Response::new(200, headers, body))
 }
 
+/// Claude Code and Codex for the signed-in account (`mm_ai`), its sign-ins kept by its `AgentHome`, with its library's
+/// own search for the cards an AI search ranks.
+async fn ai(request: &web_sys::Request, env: &Env, url: &url::Url, headers: &Headers, library: worker::Stub) -> Result<Response> {
+    ai_kit::home::install(env, "AGENT_HOME").map_err(worker_error)?;
+    ai_kit::rt::env::set(runtime::bindings(env));
+    let login = mm_ai::login_for(headers.get("x-mymind-email"));
+    let body = http::request_from(request)?.body.bytes_within(64 * 1024).await?;
+    let origin = url.origin().ascii_serialization();
+    let mut search = headers.clone();
+    for name in ["content-type", "content-length", "transfer-encoding"] {
+        search.remove(name);
+    }
+    let candidates = |target: String| async move {
+        let failed = |error: Error| anyhow::anyhow!(error.to_string());
+        let response = send(library, forward(&format!("{origin}{target}"), "GET", &search, None).map_err(failed)?).await.map_err(failed)?;
+        anyhow::ensure!(response.status == 200, "The library search did not answer.");
+        Ok(serde_json::from_slice(&response.body.bytes().await.map_err(failed)?)?)
+    };
+    let reply = mm_ai::answer(&login, &request.method(), url, &body, candidates)
+        .await
+        .unwrap_or_else(|| unreachable!("ai runs only for the paths mm_ai serves"));
+    Ok(Response::new(reply.status, Headers::from([("content-type", "application/json"), ("cache-control", "no-store")]), reply.body.to_string()))
+}
+
 /// An answer built here, or a Durable Object's own response, kept whole because a WebSocket upgrade cannot be copied.
 enum Reply {
     Built(Response),
@@ -265,8 +292,17 @@ async fn route(request: web_sys::Request, env: Env) -> Result<Reply> {
     headers.set("x-mymind-email", gate.headers.get("x-mymind-email").unwrap_or_default());
     headers.set("x-mymind-sub", gate.headers.get("x-mymind-sub").unwrap_or_default());
     let stub = env.durable_object("LIBRARY").map_err(worker_error)?.get_by_name(&library).map_err(worker_error)?;
+    if mm_ai::serves(url.path()) {
+        return ai(&request, &env, &url, &headers, stub).await.map(Reply::Built);
+    }
     let forwarded = forward(url.as_str(), &method, &headers, request.body())?;
     Ok(Reply::Passed(stub.fetch_with_request(worker::Request::from(forwarded)).await.map_err(worker_error)?))
+}
+
+/// Names the AI kit's volumes and containers before any object answers, since an `AgentHome` checks logins against them.
+#[event(start)]
+fn start() {
+    mm_ai::configure();
 }
 
 /// Route a Worker request through sign-in and its assigned library.

@@ -77,7 +77,11 @@ fun MymindTabBar(
     FootFree("library-navigation", modifier) { GalleryNavigation(selected, onSelect, onSearch) }
 }
 
-/** The shared bar switches its contents to the search field without creating a page-owned floating bar. */
+/**
+ * The shared bar switches its contents to the search field without creating a page-owned floating bar.
+ *
+ * @param onSubmit Called when the keyboard's search key is pressed, after the keyboard hides.
+ */
 @Composable
 fun LibraryFootBar(
     selected: Tab,
@@ -88,6 +92,7 @@ fun LibraryFootBar(
     onSearch: () -> Unit,
     onCloseSearch: () -> Unit,
     modifier: Modifier = Modifier,
+    onSubmit: () -> Unit = {},
 ) {
     if (!searching) {
         MymindTabBar(selected, onSelect, modifier, onSearch)
@@ -119,7 +124,7 @@ fun LibraryFootBar(
             textStyle = LibraryStyle.body.copy(color = colors.text),
             cursorBrush = SolidColor(colors.accent),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+            keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); onSubmit() }),
             decorationBox = { field ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
                     if (query.isEmpty()) Text("Search your mind", style = LibraryStyle.body, color = colors.muted, maxLines = 1)

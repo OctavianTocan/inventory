@@ -1,6 +1,6 @@
 # The media container on the Rust binary: `mymind container` with the libvips build sharp ships, ffmpeg, poppler and
 # Chromium, and no Node. Built from the repository root (crates/worker/wrangler.jsonc sets the build context);
-# Dockerfile.dockerignore lets only the Rust workspace in. Bookworm, as the JS image: the same Chromium and fonts draw
+# Dockerfile.dockerignore lets only the Rust workspace and the AI kit it shares with Pully in. Bookworm, as the JS image: the same Chromium and fonts draw
 # the same link screenshots.
 FROM rust:1.99-bookworm AS build
 WORKDIR /src
@@ -9,6 +9,7 @@ RUN ./fetch-libvips.sh linux-x64
 COPY rust/Cargo.toml rust/Cargo.lock ./
 COPY rust/crates ./crates
 COPY rust/test-support ./test-support
+COPY vendor/pulls.review/ai-kit /vendor/pulls.review/ai-kit
 RUN cargo build --release --locked -p mymind
 
 FROM debian:bookworm-slim

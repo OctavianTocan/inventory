@@ -1,6 +1,9 @@
 package com.octaviantocan.mymind.ui.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -16,13 +19,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -30,15 +38,20 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import com.octaviantocan.aikit.AiCli
+import com.octaviantocan.aikit.AiSignInServices
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.data.AiAccount
 import com.octaviantocan.mymind.ui.library.rememberPublicAccountPhotoLoader
 import com.octaviantocan.mymind.ui.menu.CardMenuFont
 import com.octaviantocan.mymind.ui.menu.CardMenuGroup
 import com.octaviantocan.mymind.ui.menu.CardMenuHeading
-import com.octaviantocan.mymind.ui.menu.PullySheet
+import com.octaviantocan.mymind.ui.menu.PullyPagedSheet
 import com.octaviantocan.mymind.ui.menu.SheetRow
 import com.octaviantocan.mymind.ui.menu.SheetRowChevron
 import com.octaviantocan.mymind.ui.menu.SheetRowDivider
@@ -53,18 +66,19 @@ const val SIGN_OUT = "Sign out"
  * @param settings State and actions behind the sheet.
  * @param updates Update rows of the sheet.
  * @param onClose Called once the sheet has closed.
+ * @param ai The account's Claude Code and Codex, or null for a sheet without the AI rows.
  */
 @Composable
-fun ProfileSheetHost(settings: SettingsViewModel, updates: SettingsUpdates, onClose: () -> Unit) {
+fun ProfileSheetHost(settings: SettingsViewModel, updates: SettingsUpdates, onClose: () -> Unit, ai: AiAccount? = null) {
     val state by settings.state.collectAsStateWithLifecycle()
     LaunchedEffect(settings) { settings.refresh() }
     ProfileSheet(state, appVersion(LocalContext.current), updates, onSignOut = settings::signOut, onClose = onClose,
-        photoLoader = rememberPublicAccountPhotoLoader())
+        photoLoader = rememberPublicAccountPhotoLoader(), ai = ai)
 }
 
 /**
- * The account and app options in Pully's bottom sheet: the Google photo, name and email, then the update rows and Sign
- * out.
+ * The account and app options in Pully's bottom sheet: the Google photo, name and email, the AI search rows, then the
+ * update rows and Sign out. The AI rows open their pages inside the same sheet.
  *
  * @param account The signed-in account; its fields are null until the server answers.
  * @param version Installed version, such as `0.6.0 (11)`.
@@ -72,6 +86,7 @@ fun ProfileSheetHost(settings: SettingsViewModel, updates: SettingsUpdates, onCl
  * @param onSignOut Called when Sign out is tapped.
  * @param onClose Called once the sheet has closed.
  * @param photoLoader Loader for the account photo that never carries the library session, or null for the glyph.
+ * @param ai The account's Claude Code and Codex, or null for a sheet without the AI rows.
  */
 @Composable
 fun ProfileSheet(
@@ -81,11 +96,44 @@ fun ProfileSheet(
     onSignOut: () -> Unit,
     onClose: () -> Unit,
     photoLoader: ImageLoader? = null,
+    ai: AiAccount? = null,
 ) {
-    PullySheet("Profile", onClose) { ProfileSheetContent(account, version, updates, onSignOut, onClose, photoLoader) }
+    var page by remember { mutableStateOf<ProfilePage?>(null) }
+    val services = ai?.let { rememberAiSignInServices(it) }
+    val context = LocalContext.current
+    val notify = { text: String -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    PullyPagedSheet("Profile", page, onBack = { page = null }, onClose = onClose) { shown ->
+        if (shown == null || ai == null || services == null) {
+            ProfileSheetContent(account, version, updates, onSignOut, onClose, photoLoader,
+                aiRows = ai?.let { mine -> { AiRows(mine) { page = it } } })
+        } else when (shown) {
+            ProfilePage.Model -> ModelPage(ai, open = { page = it }, onDone = { page = null })
+            ProfilePage.Effort -> EffortPage(ai, onDone = { page = null })
+            ProfilePage.ClaudeSignIn -> AiSignInPage(services, AiCli.Claude, notify)
+            ProfilePage.CodexSignIn -> AiSignInPage(services, AiCli.Codex, notify)
+        }
+    }
 }
 
-/** The body of [ProfileSheet], also drawn by screenshot fixtures inside a bare panel. */
+/** The sign-in pages' services for [ai], reading the clipboard only while the app is in front. */
+@Composable
+private fun rememberAiSignInServices(ai: AiAccount): AiSignInServices {
+    val context = LocalContext.current
+    val uri = LocalUriHandler.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val resumed = lifecycle.currentStateFlow.collectAsState()
+    return remember(ai) {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        ai.services(
+            foreground = { resumed.value.isAtLeast(Lifecycle.State.RESUMED) },
+            open = { runCatching { uri.openUri(it) } },
+            copy = { clipboard?.setPrimaryClip(ClipData.newPlainText("Sign-in code", it)) },
+            copied = { runCatching { clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString() }.getOrNull() },
+        )
+    }
+}
+
+/** The body of [ProfileSheet]'s root page, also drawn by screenshot fixtures inside a bare panel. */
 @Composable
 internal fun ColumnScope.ProfileSheetContent(
     account: SettingsUiState,
@@ -94,8 +142,10 @@ internal fun ColumnScope.ProfileSheetContent(
     onSignOut: () -> Unit,
     onClose: () -> Unit,
     photoLoader: ImageLoader?,
+    aiRows: (@Composable () -> Unit)? = null,
 ) {
     AccountCard(account, photoLoader)
+    aiRows?.invoke()
     if (updates.visible) {
         CardMenuHeading("App")
         CardMenuGroup(Modifier.padding(top = 12.dp)) {

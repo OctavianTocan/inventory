@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 export const ROOT = new URL('../../../', import.meta.url);
 export const PILOT_ROOT = new URL('../', import.meta.url);
+// Production classes the pilot neither deploys nor probes: AgentHome runs each account's Claude Code and Codex.
+export const PRODUCTION_ONLY = ['AgentHome'];
 
 /** Read the existing Wrangler deployment contract without reading environment files.
  * @returns {object} The production Worker configuration.
@@ -34,8 +36,12 @@ export function assertIsolation(pilot, production) {
     OWNER_EMAIL: 'owner@example.test', ALLOWED_GOOGLE_DOMAIN: '',
   }, 'sign-in stays enabled and uses a non-routable synthetic origin');
   assert.equal(pilot.main, '.artifacts/rust/crates/worker/build/index.js', 'only the staged Rust build can be uploaded');
-  assert.deepEqual(pilot.durable_objects, production.durable_objects, 'Rust namespace binding/class mapping drifted');
-  assert.deepEqual(production.migrations?.flatMap((migration) => migration.new_sqlite_classes ?? []).sort(),
+  const piloted = (className) => !PRODUCTION_ONLY.includes(className);
+  assert.deepEqual(pilot.durable_objects, {
+    ...production.durable_objects,
+    bindings: production.durable_objects.bindings.filter((binding) => piloted(binding.class_name)),
+  }, 'Rust namespace binding/class mapping drifted');
+  assert.deepEqual(production.migrations?.flatMap((migration) => migration.new_sqlite_classes ?? []).filter(piloted).sort(),
     ['Auth', 'Library', 'Media'], 'Alchemy must create the same three SQLite classes');
   assert.deepEqual(pilot.containers, [{
     class_name: 'Media', image: 'rust/container/Dockerfile',

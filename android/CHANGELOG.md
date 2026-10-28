@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.12 (23), 2026-10-28
+Search can ask Claude Code or Codex what you mean, signed in from your Profile as in Pully.
+
+### New
+- Your Profile has an AI search section: pick Claude Code or Codex, its model and how much effort it puts in, with the same pages as Pully.
+- Sign in to Claude Code or Codex from your Profile with your own Claude or ChatGPT subscription. Claude Code's code is picked up from the clipboard when you come back, and Codex finishes by itself once you approve its code.
+- Pressing search on the keyboard keeps the matches on screen while the chosen engine ranks them, then shows its order, with a note under the Search title. Typing still answers at once without it.
+
 ## 0.6.11 (22), 2026-10-28
 Your changes reach the server in one go, and never twice.
 

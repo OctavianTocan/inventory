@@ -5,6 +5,9 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import coil3.SingletonImageLoader
+import com.octaviantocan.mymind.data.AiAccount
+import com.octaviantocan.mymind.data.AiClient
+import com.octaviantocan.mymind.data.AiPrefs
 import com.octaviantocan.mymind.data.AuthInterceptor
 import com.octaviantocan.mymind.data.Connectivity
 import com.octaviantocan.mymind.data.KeystoreTokenStore
@@ -43,6 +46,9 @@ class AppContainer(context: Context) {
     val session = Session(KeystoreTokenStore(context))
     val httpClient: OkHttpClient = OkHttpClient.Builder().addInterceptor(AuthInterceptor(session, BuildConfig.SERVER_URL)).build()
     val repository = Repository(MymindApi(httpClient, BuildConfig.SERVER_URL), session, PrivateAccountProfileStore(context))
+
+    /** The account's own Claude Code and Codex, for the Profile sheet and AI search. */
+    val ai = AiAccount(AiClient(httpClient, BuildConfig.SERVER_URL), AiPrefs(context), session)
 
     // The phone's copy of the library, its waiting changes and its pictures belong to one session and are wiped
     // whenever the app is signed out.
