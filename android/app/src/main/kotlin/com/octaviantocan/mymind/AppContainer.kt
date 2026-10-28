@@ -60,12 +60,13 @@ class AppContainer(context: Context) {
     }
     private val main = Handler(Looper.getMainLooper())
 
-    /** Changes to cards made without network, sent once the phone is online; a refused one shows a short notice. */
+    /** Changes to cards made on the phone, sent through the server's push once it can be reached; a refused one shows a short notice. */
     val outbox = Outbox(
         libraryCopy,
         repository,
         onQueued = { OutboxWorker.schedule(context.applicationContext) },
         onRefused = { _, card -> main.post { Toast.makeText(context.applicationContext, refusedNotice(card), Toast.LENGTH_LONG).show() } },
+        push = repository::push,
     )
     val librarySync = LibrarySync(libraryCopy, repository::changes, outbox::send, onChanged = { PictureWorker.schedule(context.applicationContext) })
 

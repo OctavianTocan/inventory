@@ -12,6 +12,7 @@ use regex::Regex;
 use url::Url;
 
 use crate::app_api::AppApi;
+use crate::app_push;
 use crate::backfill::{HOSTED_BATCH, HOSTED_BATCH_MAX};
 use crate::device::device_variant;
 use crate::enrichment::{self, Enrichment, EnrichmentOptions};
@@ -786,6 +787,10 @@ impl Api {
         let get = method == "GET";
         if let Some(response) = self.app.handle(method, url).await? {
             return Ok(Some(response));
+        }
+        if !self.readonly && method == "POST" && path == "/app/v1/push" {
+            let answer = app_push::push(&self.store, &self.writer, &request_body(request).await?)?;
+            return Ok(Some(Response::send(200, stringify(&answer)?, &json_headers())));
         }
         if path == "/ai/backfill" && (get || method == "POST") {
             return self.backfill_route(request, method, url).await;

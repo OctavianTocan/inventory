@@ -16,6 +16,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.time.Instant
+import java.util.UUID
 
 /** How many of a list's first cards the phone keeps. */
 const val FEED_MEMORY_CARDS = 200
@@ -218,6 +219,13 @@ class LibraryCopy(context: Context, private val session: Session, private val io
     suspend fun firstQueued(): Pair<Long, Edit>? = owned(null) { db -> queuedIn(db).firstOrNull() }
 
     /**
+     * @param limit Most changes to return.
+     * @return The changes that wait longest, oldest first, each with its place in the queue; empty when none waits or
+     *   the queue cannot be read.
+     */
+    suspend fun queued(limit: Int): List<Pair<Long, Edit>> = owned(emptyList()) { db -> queuedIn(db).take(limit) }
+
+    /**
      * @param seq A change's place in the queue.
      * @return True once the change is out of the queue; false when the database failed.
      */
@@ -225,6 +233,22 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         db.delete("outbox", "seq = ?", arrayOf(seq.toString()))
         true
     }
+
+    /**
+     * @param seq A place in the queue.
+     * @return True once the change at [seq] and every change before it are out of the queue; false when the database
+     *   failed.
+     */
+    suspend fun unqueueThrough(seq: Long): Boolean = owned(false) { db ->
+        db.delete("outbox", "seq <= ?", arrayOf(seq.toString()))
+        true
+    }
+
+    /**
+     * @return The id this copy goes by with the server's push, made on first use and wiped with the queue, so a new
+     *   queue starts a new count with the server; null when signed out or the database failed.
+     */
+    suspend fun clientId(): String? = owned(null) { db -> meta(db, CLIENT) ?: UUID.randomUUID().toString().also { setMeta(db, CLIENT, it) } }
 
     /**
      * Takes a tag added while offline out of the queue and off its card, before it was sent.
@@ -393,6 +417,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         const val TOKEN = "sync_token"
         const val COMPLETE = "sync_complete"
         const val SPACES = "spaces"
+        const val CLIENT = "client_id"
         const val MAX_SEARCH_WORDS = 8
         val TABLES = listOf("feed_cards", "meta", "cards", "card_text", "outbox")
     }
