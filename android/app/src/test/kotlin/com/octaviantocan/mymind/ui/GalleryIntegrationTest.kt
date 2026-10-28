@@ -18,6 +18,7 @@ import com.octaviantocan.mymind.data.CardPage
 import com.octaviantocan.mymind.data.MymindApi
 import com.octaviantocan.mymind.data.Repository
 import com.octaviantocan.mymind.data.Session
+import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.TokenStore
 import com.octaviantocan.mymind.ui.library.FakeLibrary
 import com.octaviantocan.mymind.ui.library.LibraryViewModel
@@ -49,9 +50,9 @@ class GalleryIntegrationTest {
     private var server: MockWebServer? = null
     @After fun closeServer() { server?.shutdown() }
 
-    private fun showShell(searchHits: List<Card> = listOf(testCard("hit"))): LibraryViewModel {
+    private fun showShell(searchHits: List<Card> = listOf(testCard("hit")), spaces: List<Space> = emptyList()): LibraryViewModel {
         val library = FakeLibrary(pages = mapOf(null to CardPage((1..100).map { testCard("p$it", type = "Image", title = "Photo $it") })),
-            searchHits = searchHits)
+            searchHits = searchHits, spaceList = spaces)
         val model = LibraryViewModel(library)
         val local = MockWebServer().apply {
             dispatcher = object : Dispatcher() {
@@ -130,5 +131,26 @@ class GalleryIntegrationTest {
         }
         compose.waitForIdle()
         assertEquals("4 columns", gallery.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+    }
+
+    @Test fun theSpacesListPinchesLikeTheGalleryAndKeepsItsSizeAcrossASpace() {
+        // "for spaces we also need the pinching stuff" (Tavi, 28 Oct 2026).
+        showShell(spaces = (1..12).map { Space("s$it", "Space $it", "#ff5924") })
+        compose.onNodeWithText("Spaces").performClick()
+        compose.waitForIdle()
+        val list = compose.onNodeWithContentDescription("All spaces")
+        list.performTouchInput {
+            down(0, Offset(width * 0.18f, height * 0.5f))
+            down(1, Offset(width * 0.82f, height * 0.5f))
+            moveTo(0, Offset(width * 0.4f, height * 0.5f), delayMillis = 120)
+            moveTo(1, Offset(width * 0.6f, height * 0.5f), delayMillis = 120)
+            up(0); up(1)
+        }
+        compose.waitForIdle()
+        assertEquals("4 columns", list.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+        compose.onNodeWithText("Space 1").performClick()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForIdle()
+        assertEquals("4 columns", compose.onNodeWithContentDescription("All spaces").fetchSemanticsNode().config[SemanticsProperties.StateDescription])
     }
 }

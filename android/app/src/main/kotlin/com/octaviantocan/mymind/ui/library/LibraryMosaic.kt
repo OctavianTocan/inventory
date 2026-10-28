@@ -111,9 +111,20 @@ private data class MosaicLoadPosition(val count: Int, val last: Int, val total: 
 /**
  * Virtualized bricks that follow the fingers between cached density layouts. Stable card keys retain content while
  * only the bounded visible window is measured at its real, interpolated size.
+ *
+ * @param feed The cards and their loading state.
+ * @param onLoadMore Called when the gallery nears its last card.
+ * @param onOpenCard Called with a tapped card.
+ * @param modifier Modifier for the gallery.
+ * @param state Scroll position, kept by the caller to survive the gallery leaving the screen.
+ * @param mosaic Density, kept by the caller for the same reason.
+ * @param onLongPressCard Called with a held card, or null when holding does nothing.
+ * @param header Scrolls above the cards, such as the page title.
+ * @param tiles Draws and shapes the cards; library cards by default.
+ * @param label What the gallery is called to accessibility services.
  */
 @Composable
-fun LibraryMosaic(
+internal fun LibraryMosaic(
     feed: FeedState,
     onLoadMore: () -> Unit,
     onOpenCard: (Card) -> Unit,
@@ -122,6 +133,8 @@ fun LibraryMosaic(
     mosaic: MosaicState = rememberMosaicState(),
     onLongPressCard: ((Card) -> Unit)? = null,
     header: (@Composable () -> Unit)? = null,
+    tiles: MosaicTiles = GalleryMosaicTiles,
+    label: String = "Card gallery",
 ) {
     val colors = LibraryStyle.colors
     val density = LocalDensity.current
@@ -145,7 +158,7 @@ fun LibraryMosaic(
         val height = with(density) { maxHeight.toPx() }
         val gap = with(density) { MOSAIC_GAP.toPx() }
         val bottomPadding = with(density) { 156.dp.toPx() }
-        val layouts = remember(feed.cards, width, gap) { MosaicLayouts(feed.cards, width, gap) }
+        val layouts = remember(feed.cards, width, gap, tiles) { MosaicLayouts(feed.cards, width, gap, tiles) }
         // The slots measure against the rows composed here, never a newer reference whose rows are not composed yet.
         val referenceColumns = mosaic.referenceColumns
         val rows = layouts.level(referenceColumns).rows
@@ -346,7 +359,7 @@ fun LibraryMosaic(
         }
         Box(Modifier.fillMaxSize().clipToBounds()
             .semantics {
-                contentDescription = "Card gallery"
+                contentDescription = label
                 stateDescription = "${mosaic.columns} columns"
                 verticalScrollAxisRange = ScrollAxisRange(
                     value = { scrollProgress() },
@@ -542,7 +555,7 @@ private class MosaicFrame(
 
     fun shape(window: IntRange, layouts: MosaicLayouts): MosaicShape? = if (!moving) null else MosaicShape(
         window.filter(::wraps).toSet(),
-        window.filter { !galleryTileIsPicture(layouts.cards[it]) && layouts.wordsFrame(it, from.columns) != layouts.wordsFrame(it, to.columns) }.toSet(),
+        window.filter { !layouts.isPicture(it) && layouts.wordsFrame(it, from.columns) != layouts.wordsFrame(it, to.columns) }.toSet(),
     )
 
     /** The cards each blurred grid shows, by its columns: the new grid first, drawn whole, then the old one fading out over it. */
@@ -640,10 +653,10 @@ private fun ProjectedMosaicCards(
                 val card = layouts.cards[index]
                 val imageSize = imageRequestSize(layouts, mosaic, index)
                 mosaicSlots(index, shape).forEach { slot ->
-                    if (slot.copy || slot.under) MosaicCopy(card, imageSize) else GalleryTile(card, { if (!mosaic.isPinching) onOpenCard(card) },
-                        modifier = Modifier.fillMaxSize(), enabled = !mosaic.isPinching,
+                    if (slot.copy || slot.under) MosaicCopy(layouts.tiles, card, imageSize) else layouts.tiles.Tile(card,
+                        onClick = { if (!mosaic.isPinching) onOpenCard(card) },
                         onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
-                        imageRequestSizePx = imageSize)
+                        enabled = !mosaic.isPinching, imageRequestSizePx = imageSize, modifier = Modifier.fillMaxSize())
                 }
             }
         }
@@ -654,7 +667,7 @@ private fun ProjectedMosaicCards(
             val drawn = drawings.getOrPut(slot.index) { current.draws(slot.index) }
             val draw = if (slot.copy) drawn.copy ?: drawn.card else drawn.card
             val m = drawn.progress
-            val words = !galleryTileIsPicture(layouts.cards[slot.index])
+            val words = !layouts.isPicture(slot.index)
             // A tile with words is laid out in the grid it is nearer; its layout in the other one is drawn under it.
             val near = if (m < 0.5f) current.fromColumns else current.toColumns
             val far = if (m < 0.5f) current.toColumns else current.fromColumns
@@ -672,12 +685,10 @@ private fun ProjectedMosaicCards(
 /** A tile measured for its cell, as [placeTile] places it. */
 private class PlacedTile(val tile: Placeable, val cell: Rect, val words: Boolean, val alpha: Float)
 
-/** An inert drawing of [card]: no semantics, touches or playing video. */
+/** An inert drawing of [card] by [tiles]: no semantics, touches or playing video. */
 @Composable
-private fun MosaicCopy(card: Card, imageRequestSizePx: Int) {
-    Box(Modifier.fillMaxSize().clearAndSetSemantics {}) {
-        GalleryTile(card, {}, enabled = false, imageRequestSizePx = imageRequestSizePx, playVideo = false)
-    }
+private fun MosaicCopy(tiles: MosaicTiles, card: Card, imageRequestSizePx: Int) {
+    Box(Modifier.fillMaxSize().clearAndSetSemantics {}) { tiles.Copy(card, imageRequestSizePx) }
 }
 
 /** Both grids drawn whole and blurred behind the moving cards ([MosaicFrame.fill]), so no blank paper shows. */
@@ -693,7 +704,7 @@ private fun MosaicFill(layouts: MosaicLayouts, mosaic: MosaicState, height: Floa
     Layout(modifier = blurred,
         content = {
             slots.forEach { (columns, index) ->
-                key(columns, layouts.cards[index].id) { GalleryTileBackdrop(layouts.cards[index], imageRequestSize(layouts, mosaic, index)) }
+                key(columns, layouts.cards[index].id) { layouts.tiles.Backdrop(layouts.cards[index], imageRequestSize(layouts, mosaic, index)) }
             }
         }) { children, constraints ->
         val current = frame()

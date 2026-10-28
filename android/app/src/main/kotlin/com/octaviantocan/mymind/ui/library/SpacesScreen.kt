@@ -1,7 +1,6 @@
 package com.octaviantocan.mymind.ui.library
 
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import com.octaviantocan.mymind.ui.shell.FootCircleButton
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
@@ -9,23 +8,19 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -44,6 +39,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import com.octaviantocan.mymind.R
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -60,15 +58,17 @@ import com.octaviantocan.mymind.ui.theme.MymindTheme
 /** Height of the title row of the Spaces list and of an opened space. */
 val VIEW_HEADER_HEIGHT = GALLERY_CONTROLS_HEIGHT
 
-private val SPACE_ROW_GAP = 10.dp
-private val SPACE_SIDE = 16.dp
-private val SPACE_COLUMN_GAP = 12.dp
 private val SPACE_NAME_INSET = 50.dp
 private val SPACE_BACK_INSET = 72.dp
 private val SPACE_MENU_INSET = 68.dp
-private val SPACE_BOTTOM_PADDING = 156.dp
 private val STACK_SHADOW_LIGHT = Color(0xFF3C465A)
 private const val STACK_SCALE = 0.9f
+
+/** Width over height of a space's cell at one column: its stack about the width of the screen, its name under it. */
+private const val SPACE_ONE_COLUMN_RATIO = 0.9f
+
+/** The size a cover with words is laid out at before it is drawn scaled to its stack, so its words never rewrap. */
+private val COVER_FRAME = 160.dp
 
 /**
  * The Spaces tab on the gallery's own paper: the list of spaces, or one space after the user opened it.
@@ -96,6 +96,9 @@ fun SpacesScreen(
     controls: @Composable BoxScope.() -> Unit = {},
 ) {
     val spaces by viewModel.spaces.collectAsStateWithLifecycle()
+    // The list keeps its size and place while a space is open.
+    val listMosaic = rememberMosaicState()
+    val listScroll = rememberLazyListState()
     LaunchedEffect(Unit) { if (spaces.spaces.isEmpty()) viewModel.loadSpaces() }
     BackHandler(enabled = openSpace != null) { onOpenSpace(null) }
     if (openSpace == null) {
@@ -106,6 +109,8 @@ fun SpacesScreen(
             modifier = modifier,
             onRefresh = viewModel::refreshSpaces,
             controls = controls,
+            mosaic = listMosaic,
+            scroll = listScroll,
         )
     } else {
         val feed = viewModel.spaceFeed(openSpace.id)
@@ -126,8 +131,9 @@ fun SpacesScreen(
 }
 
 /**
- * The list of spaces on the gallery paper: a title that scrolls away under the fixed controls, then two columns of
- * card stacks with each space's name. Creating a space is offered by the Add sheet rather than a floating button.
+ * The list of spaces on the gallery paper: a title that scrolls away under the fixed controls, then card stacks with
+ * each space's name, two across until a pinch changes their size as it does in the gallery. Creating a space is offered
+ * by the Add sheet rather than a floating button.
  *
  * @param state Spaces and their first cards.
  * @param onOpenSpace Called with a tapped space.
@@ -135,6 +141,8 @@ fun SpacesScreen(
  * @param modifier Modifier for the page.
  * @param onRefresh Called when the list is pulled down to refresh.
  * @param controls The gallery's fixed controls, drawn over the list.
+ * @param mosaic The list's size, kept by the caller so it survives opening a space.
+ * @param scroll The list's scroll position, kept for the same reason.
  */
 @Composable
 fun SpaceListContent(
@@ -144,26 +152,54 @@ fun SpaceListContent(
     modifier: Modifier = Modifier,
     onRefresh: () -> Unit = {},
     controls: @Composable BoxScope.() -> Unit = {},
+    mosaic: MosaicState = rememberMosaicState(),
+    scroll: LazyListState = rememberLazyListState(),
 ) {
     Box(modifier.fillMaxSize().background(LibraryStyle.colors.background)) {
         when {
             state.spaces.isEmpty() && state.error != null -> WebErrorScreen(onRetry = onRetry)
             state.spaces.isEmpty() && !state.loaded -> PageSpinner()
             else -> PullRefresh(state.refreshing, onRefresh, top = VIEW_HEADER_HEIGHT) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = SPACE_SIDE, end = SPACE_SIDE, bottom = SPACE_BOTTOM_PADDING),
-                    horizontalArrangement = Arrangement.spacedBy(SPACE_COLUMN_GAP),
-                    verticalArrangement = Arrangement.spacedBy(SPACE_ROW_GAP),
-                ) {
-                    item(key = "spaces-title", span = { GridItemSpan(maxLineSpan) }) { GalleryTitle("All Spaces", start = 20.dp - SPACE_SIDE, end = CONTROLS_WIDTH - SPACE_SIDE) }
-                    items(state.spaces, key = { it.id }) { space -> SpaceStack(space, state.covers[space.id]) { onOpenSpace(space) } }
-                }
+                val cards = remember(state.spaces) { state.spaces.map(::spaceCard) }
+                val tiles = remember(state.spaces, state.covers) { SpaceMosaicTiles(state.spaces.associateBy { it.id }, state.covers) }
+                LibraryMosaic(FeedState(cards, endReached = true), onLoadMore = {},
+                    onOpenCard = { card -> state.spaces.firstOrNull { it.id == card.id }?.let(onOpenSpace) },
+                    state = scroll, mosaic = mosaic, header = { GalleryTitle("All Spaces") }, tiles = tiles, label = "All spaces")
             }
         }
         controls()
     }
+}
+
+/** The card that stands for [space] in the mosaic: only its id and name, which the mosaic keys and lays it out by. */
+private fun spaceCard(space: Space): Card =
+    Card(id = space.id, type = "Space", flags = 0, created = "", modified = "", bumped = "", title = space.name)
+
+/**
+ * Draws the Spaces list in the gallery's mosaic: every space one square, a stack measured to its cell so its name keeps
+ * its size, and nothing in the blurred fill, since paper already shows around each stack.
+ */
+private class SpaceMosaicTiles(private val spaces: Map<String, Space>, private val covers: Map<String, Card>) : MosaicTiles {
+    override fun span(card: Card): MosaicSpan = MosaicSpan(1, 1)
+
+    override fun aspectRatio(card: Card): Float = SPACE_ONE_COLUMN_RATIO
+
+    override fun isPicture(card: Card): Boolean = true
+
+    @Composable
+    override fun Tile(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, enabled: Boolean, imageRequestSizePx: Int, modifier: Modifier) {
+        val space = spaces[card.id] ?: return
+        SpaceStack(space, covers[card.id], onClick, modifier, enabled, imageRequestSizePx)
+    }
+
+    @Composable
+    override fun Copy(card: Card, imageRequestSizePx: Int) {
+        val space = spaces[card.id] ?: return
+        SpaceStack(space, covers[card.id], {}, Modifier.fillMaxSize(), enabled = false, imageRequestSizePx = imageRequestSizePx)
+    }
+
+    @Composable
+    override fun Backdrop(card: Card, imageRequestSizePx: Int) = Unit
 }
 
 /**
@@ -226,22 +262,42 @@ private fun SpaceOptions(onAdd: () -> Unit, onDelete: (() -> Unit)?, modifier: M
     }
 }
 
-/** One space (`mymind-stack`): its first card over three tilted blank cards, then the space's ring and name. */
+/**
+ * One space (`mymind-stack`) filling its cell: its first card over three tilted blank cards, as large as the cell leaves
+ * room for, then the space's ring and name.
+ *
+ * @param space The space.
+ * @param cover Its first card, or null for an empty stack.
+ * @param onClick Called when the stack is tapped.
+ * @param modifier Modifier for the cell.
+ * @param enabled False for a drawing that takes no touches.
+ * @param imageRequestSizePx Size, in pixels, to decode the cover's picture at, or null for the stack's own size.
+ */
 @Composable
-private fun SpaceStack(space: Space, cover: Card?, onClick: () -> Unit) {
+private fun SpaceStack(
+    space: Space,
+    cover: Card?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    imageRequestSizePx: Int? = null,
+) {
     val colors = LibraryStyle.colors
     val shape = RoundedCornerShape(TILE_RADIUS)
     val shadows = stackShadows(MymindTheme.colors.dark)
     val angles = remember(space.id) { stackAngles(space.id) }
-    BoxWithConstraints(Modifier.fillMaxWidth().clickable(interactionSource = null, indication = null, onClick = onClick)) {
-        val nameWidth = maxWidth - SPACE_NAME_INSET
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.fillMaxWidth().scale(STACK_SCALE)) {
-                angles.asReversed().forEach { angle ->
-                    Box(Modifier.matchParentSize().rotate(angle).stackShadow(shape, shadows).background(colors.raised, shape))
-                }
-                Box(Modifier.fillMaxWidth().aspectRatio(1f).stackShadow(shape, shadows).clip(shape).background(colors.raised)) {
-                    if (cover != null) GalleryTile(cover, onClick = {}, modifier = Modifier.clearAndSetSemantics {}, enabled = false, playVideo = false)
+    val press = if (enabled) Modifier.clickable(interactionSource = null, indication = null, onClick = onClick) else Modifier
+    BoxWithConstraints(modifier.then(press)) {
+        val nameWidth = maxWidth - minOf(SPACE_NAME_INSET, maxWidth * 0.3f)
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(minOf(maxWidth, maxHeight)).scale(STACK_SCALE)) {
+                    angles.asReversed().forEach { angle ->
+                        Box(Modifier.matchParentSize().rotate(angle).stackShadow(shape, shadows).background(colors.raised, shape))
+                    }
+                    Box(Modifier.fillMaxSize().stackShadow(shape, shadows).clip(shape).background(colors.raised)) {
+                        if (cover != null) StackCover(cover, imageRequestSizePx)
+                    }
                 }
             }
             Row(Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -255,6 +311,28 @@ private fun SpaceStack(space: Space, cover: Card?, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * A space's first card on top of its stack. A picture is cut to the stack at its size; a cover with words is laid out
+ * once at [COVER_FRAME] and drawn scaled, so its words keep their lines while a pinch resizes the stack.
+ */
+@Composable
+private fun StackCover(cover: Card, imageRequestSizePx: Int?) {
+    val tile = @Composable { GalleryTile(cover, onClick = {}, modifier = Modifier.clearAndSetSemantics {}, enabled = false,
+        imageRequestSizePx = imageRequestSizePx, playVideo = false) }
+    if (galleryTileIsPicture(cover)) return Box(Modifier.fillMaxSize()) { tile() }
+    Layout(content = tile, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
+        val frame = COVER_FRAME.roundToPx()
+        val laid = measurables.single().measure(Constraints.fixed(frame, frame))
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            laid.placeWithLayer(0, 0) {
+                transformOrigin = TransformOrigin(0f, 0f)
+                scaleX = constraints.maxWidth / frame.toFloat()
+                scaleY = constraints.maxHeight / frame.toFloat()
             }
         }
     }

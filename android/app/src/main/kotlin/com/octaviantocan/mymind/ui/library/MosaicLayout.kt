@@ -60,16 +60,17 @@ private fun storedRatio(card: Card): Float? {
 }
 
 /** The bands of [mosaicLevel], for callers that only need which cards share a slot. */
-internal fun mosaicRows(cards: List<Card>, width: Float, columns: Int, gap: Float): List<MosaicRow> =
-    mosaicLevel(cards, width, columns, gap).rows
+internal fun mosaicRows(cards: List<Card>, width: Float, columns: Int, gap: Float, tiles: MosaicTiles = GalleryMosaicTiles): List<MosaicRow> =
+    mosaicLevel(cards, width, columns, gap, tiles).rows
 
 /**
  * Lays the cards out at one density without reordering or dropping any. One column shows each card across the whole
  * width at its own proportions. Two to four columns share square cells in bands of one or two rows, filled row by row
  * in card order: a card two squares high starts a two-row band, and a card that does not fit where it falls takes one
  * square there, so a band is never left with a hole before the last card. Card tops never decrease with the order.
+ * [tiles] gives each card its shape.
  */
-internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Float): MosaicLayouts.Level {
+internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Float, tiles: MosaicTiles = GalleryMosaicTiles): MosaicLayouts.Level {
     if (cards.isEmpty() || !width.isFinite() || width <= 0f) return MosaicLayouts.Level(emptyList(), emptyList(), emptyList(), IntArray(0), 0f, 0f)
     val across = columns.coerceIn(1, 4)
     val space = mosaicGap(width, gap)
@@ -80,7 +81,7 @@ internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Flo
     var top = 0f
     if (across == 1) {
         cards.forEachIndexed { index, card ->
-            val height = width / mosaicAspectRatio(card)
+            val height = width / tiles.aspectRatio(card)
             starts += index
             rowOf[index] = index
             cells += Rect(0f, top, width, top + height)
@@ -90,7 +91,7 @@ internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Flo
     } else {
         val unit = (width - space * (across - 1)) / across
         val step = unit + space
-        val spans = cards.map(::mosaicSpan)
+        val spans = cards.map { tiles.span(it) }
         var index = 0
         while (index < cards.size) {
             val start = index
@@ -131,7 +132,7 @@ internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Flo
 }
 
 /** Readable proportions for the one-column gallery: the picture's own, else one that suits the card's text. */
-private fun mosaicAspectRatio(card: Card): Float {
+internal fun mosaicAspectRatio(card: Card): Float {
     if (galleryKeepsText(card) && galleryPicture(card) != null) return 0.9f
     storedRatio(card)?.let { return it.coerceIn(0.65f, 1.8f) }
     return when (tileKind(card)) {
@@ -145,11 +146,18 @@ private fun mosaicAspectRatio(card: Card): Float {
 /** The gap [mosaicLevel] leaves between cards: [gap], kept to a sixteenth of the [width]. */
 private fun mosaicGap(width: Float, gap: Float): Float = gap.takeIf { it.isFinite() }?.coerceIn(0f, width / 16f) ?: 0f
 
-/** Cached canonical geometry. Only the visible window is interpolated during a pointer frame. */
-internal class MosaicLayouts(val cards: List<Card>, val width: Float, gap: Float) {
+/**
+ * Cached canonical geometry, with the cards shaped and drawn by [tiles]. Only the visible window is interpolated during a
+ * pointer frame.
+ */
+internal class MosaicLayouts(val cards: List<Card>, val width: Float, gap: Float, val tiles: MosaicTiles = GalleryMosaicTiles) {
     internal class Level(val rows: List<MosaicRow>, val cells: List<Rect>, val starts: List<Int>, val rowOf: IntArray, val height: Float, val tallest: Float)
     val byId = cards.mapIndexed { index, card -> card.id to index }.toMap()
-    val levels = (1..4).map { columns -> mosaicLevel(cards, width, columns, gap) }
+    val levels = (1..4).map { columns -> mosaicLevel(cards, width, columns, gap, tiles) }
+    private val pictures = BooleanArray(cards.size) { tiles.isPicture(cards[it]) }
+
+    /** Whether card [index]'s tile is measured to its cell at every size ([MosaicTiles.isPicture]). */
+    fun isPicture(index: Int): Boolean = pictures[index]
 
     fun level(columns: Int): Level = levels[columns.coerceIn(1, 4) - 1]
 

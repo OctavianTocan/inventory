@@ -86,10 +86,15 @@ end of the transition it all pops for a frame"): the fill vanished in one frame.
 Every gallery of cards, Everything, search results and an opened space, MUST pinch as
 gallery-pinches-change-tile-size describes from the moment it shows, including a gallery
 shown before its cards arrived, such as the first moments after the app opens and a
-search whose results are still on their way.
+search whose results are still on their way. The Spaces list MUST pinch the same way,
+through the same one to four columns, with each space one square. Its stacks are drawn at
+their cell's size with the name under them at its own size, so a name shortens rather
+than shrinks, and a cover with words is drawn scaled so its words never rewrap. The list
+MUST keep its size and scroll position while a space is open.
 Source: Tavi, 28 October 2026 ("the moment I open the app pinching doesnt work until I
-switch to spaces and back", "The zoom in and stuff should work on the results too.
-Pinching is a thing in this app all across the app").
+switch to spaces and back", "for spaces we also need fthe pinching stuff", "The zoom in
+and stuff should work on the results too. Pinching is a thing in this app all across the
+app").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-highlights-stay-above-the-bricks
 Top of Mind MUST remain above the main mosaic, in pin order, as a horizontal rail of

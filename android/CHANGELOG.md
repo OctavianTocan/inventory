@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.23 (34), 2026-10-28
+Pinch the Spaces list to see more or fewer spaces at once.
+
+### Added
+- Pinching the Spaces list makes the stacks larger or smaller, from one across to four, the same way the gallery does. Names stay the same size and shorten when the stacks get small.
+
+### Changed
+- The Spaces list keeps its size and where you scrolled to while you look inside a space.
+
 ## 0.6.22 (33), 2026-10-28
 The Serendipity page is gone.
 
