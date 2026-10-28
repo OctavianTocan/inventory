@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.25 (36), 2026-10-28
+Search opens in the same bottom bar as Everything and Spaces.
+
+### Changed
+- Everything, Spaces and Search share one bottom bar, as in Pully. Tapping Search turns the tabs into the search field in the same place and the search button beside them into the close button, with a soft blur, instead of swapping in a different bar. Closing search turns it back.
+- The search field is now the same height as the tabs, so the bar no longer jumps when search opens.
+
 ## 0.6.24 (35), 2026-10-28
 A card's actions sheet is now Choose one, with its spaces inside it and a delete you can take back.
 

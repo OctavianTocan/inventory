@@ -51,7 +51,8 @@ internal object FootMotion {
     val BlurMedium = 3.dp
 }
 
-internal val FieldHeight = 52.dp
+/** The pill and its circle, on every page: the gallery's Google Photos height rather than Pully's 52dp. */
+internal val FieldHeight = 56.dp
 internal val FieldInset = 16.dp
 internal val FieldButtonInset = 6.dp
 internal val FieldGap = 10.dp

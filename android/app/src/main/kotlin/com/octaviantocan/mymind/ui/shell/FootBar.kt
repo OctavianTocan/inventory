@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui.shell
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
@@ -17,7 +18,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,11 +30,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
@@ -48,7 +53,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +64,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
 // Ported from pulls.review ee5cf358333cb1170f1923c7118e12af3f265b74, ui/design/FootBar.kt.
@@ -92,6 +100,9 @@ internal class FootSlot {
     var compact by mutableStateOf<String?>(null)
     var onExpand by mutableStateOf<(() -> Unit)?>(null)
     var veil by mutableStateOf<Modifier>(Modifier)
+    var inset by mutableStateOf<Dp?>(null)
+    var field by mutableStateOf(true)
+    var circle by mutableStateOf<FootCircle?>(null)
     var trailing by mutableStateOf<(@Composable () -> Unit)?>(null)
     var content by mutableStateOf<@Composable RowScope.() -> Unit>({})
     var freeContent by mutableStateOf<@Composable () -> Unit>({})
@@ -104,11 +115,30 @@ internal class FootSlot {
 /** The width of the short pill that reads "Ask" (Q5). */
 private val COMPACT_WIDTH = 104.dp
 
+private val CIRCLE_GAP = 8.dp
+
+/** Test tag of the one pill. */
+const val FOOT_PILL_TAG = "foot-pill"
+
+/**
+ * The round button beside the pill. Pages that both have one share it: it stays in place and only its glyph changes,
+ * blurring out and the next one in, the way the pill keeps its place while its words change (Tavi, 28 October 2026).
+ *
+ * @property icon Drawable of its glyph.
+ * @property label What a tap does, read by accessibility services.
+ * @property onClick Called when it is tapped.
+ * @property iconSize Size of its glyph.
+ */
+@Immutable
+class FootCircle(@DrawableRes val icon: Int, val label: String, val onClick: () -> Unit, val iconSize: Dp = 22.dp)
+
 /**
  * A page's bar in the one pill: [content] is what sits in it, after a search glass when [search], with the pill's end
- * made for a round button when [button]. [trailing] sits beside the pill, as the Inbox's sort does, and leaves with the
- * page. With [compact] the pill is short and reads that one word, centred, until a tap ([onExpand]) opens it to the full
- * width with its field focused ("a shorter bar that says Ask. And when you tap on it ... it kind of expands", Q5).
+ * made for a round button when [button], or [inset] from both ends when set, as the gallery's tabs are. Without a [field]
+ * to put the cursor in, a tap on the pill's edge does nothing. [circle] is the round button beside the pill that every
+ * page with one shares. [trailing] sits beside the pill, as the Inbox's sort does, and leaves with the page. With
+ * [compact] the pill is short and reads that one word, centred, until a tap ([onExpand]) opens it to the full width with
+ * its field focused ("a shorter bar that says Ask. And when you tap on it ... it kind of expands", Q5).
  * [veil] dims or holds the bar with its page. Outside a [FootBarLayer] the bar draws here, placed by [modifier].
  */
 @Composable
@@ -120,6 +150,9 @@ fun FootPill(
     compact: String? = null,
     onExpand: (() -> Unit)? = null,
     veil: Modifier = Modifier,
+    inset: Dp? = null,
+    field: Boolean = true,
+    circle: FootCircle? = null,
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
@@ -133,6 +166,9 @@ fun FootPill(
         this.compact = compact
         this.onExpand = onExpand
         this.veil = veil
+        this.inset = inset
+        this.field = field
+        this.circle = circle
         this.trailing = trailing
         this.content = content
     }
@@ -221,7 +257,7 @@ private fun PillBar(slot: FootSlot, moving: Boolean) {
         BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             val width: Dp = lerp(COMPACT_WIDTH.coerceAtMost(maxWidth), maxWidth, open)
             Box(
-                Modifier.width(width).height(FieldHeight)
+                Modifier.width(width).height(FieldHeight).testTag(FOOT_PILL_TAG)
                     .footShadow(CircleShape, FootShadow.Search)
                     .clip(CircleShape).background(c.raised)
                     // A tap anywhere on the pill is the pill's: it opens a short one, or puts the cursor in the field, and
@@ -233,7 +269,7 @@ private fun PillBar(slot: FootSlot, moving: Boolean) {
                             if (slot.compact != null && expand != null) {
                                 slot.focusOnOpen = true
                                 expand()
-                            } else {
+                            } else if (slot.field) {
                                 runCatching { slot.focus.requestFocus() }
                             }
                         }
@@ -258,7 +294,10 @@ private fun PillBar(slot: FootSlot, moving: Boolean) {
                             Text(face.slot.compact.orEmpty(), style = LibraryStyle.body.copy(fontWeight = FontWeight.Medium), color = c.text, maxLines = 1)
                         } else {
                             Row(
-                                Modifier.fillMaxSize().padding(start = FieldInset, end = if (face.slot.button) FieldButtonInset else FieldInset),
+                                Modifier.fillMaxSize().padding(
+                                    start = face.slot.inset ?: FieldInset,
+                                    end = face.slot.inset ?: if (face.slot.button) FieldButtonInset else FieldInset,
+                                ),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(FieldGap),
                             ) {
@@ -270,13 +309,45 @@ private fun PillBar(slot: FootSlot, moving: Boolean) {
                 }
             }
         }
-        AnimatedVisibility(
-            trailing != null,
-            enter = if (!moving) EnterTransition.None else fadeIn(tween(FootMotion.FAST, easing = FootMotion.SmoothOut)) + expandHorizontally(tween(FootMotion.FAST, easing = FootMotion.SmoothOut)),
-            exit = if (!moving) ExitTransition.None else fadeOut(tween(FootMotion.QUICK, easing = FootMotion.SmoothOut)) + shrinkHorizontally(tween(FootMotion.QUICK, easing = FootMotion.SmoothOut)),
-        ) { keptTrailing[0]?.invoke() }
+        val circle = slot.circle
+        val keptCircle = remember { arrayOfNulls<FootCircle>(1) }
+        if (circle != null) keptCircle[0] = circle
+        AnimatedVisibility(circle != null, enter = besideEnter(moving), exit = besideExit(moving)) {
+            keptCircle[0]?.let { CircleBar(it, moving, Modifier.padding(start = CIRCLE_GAP)) }
+        }
+        AnimatedVisibility(trailing != null, enter = besideEnter(moving), exit = besideExit(moving)) { keptTrailing[0]?.invoke() }
     }
 }
+
+/** The shared round button: one surface that stays while a page's glyph blur-fades into the next page's. */
+@Composable
+private fun CircleBar(circle: FootCircle, moving: Boolean, modifier: Modifier = Modifier) {
+    val c = LibraryStyle.colors
+    FootPressTheme {
+        Box(
+            modifier.size(FieldHeight).footShadow(CircleShape, FootShadow.Search).clip(CircleShape).background(c.raised)
+                .semantics { contentDescription = circle.label }
+                .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button, onClick = circle.onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            AnimatedContent(
+                circle,
+                contentKey = { it.icon },
+                transitionSpec = { blurFade(moving) },
+                contentAlignment = Alignment.Center,
+                label = "foot-circle",
+            ) { shown ->
+                Box(Modifier.blurredBy(transition), contentAlignment = Alignment.Center) { FootIcon(shown.icon, size = shown.iconSize) }
+            }
+        }
+    }
+}
+
+/** Something beside the pill arriving with its page, and leaving with it. */
+private fun besideEnter(moving: Boolean): EnterTransition =
+    if (!moving) EnterTransition.None else fadeIn(tween(FootMotion.FAST, easing = FootMotion.SmoothOut)) + expandHorizontally(tween(FootMotion.FAST, easing = FootMotion.SmoothOut))
+private fun besideExit(moving: Boolean): ExitTransition =
+    if (!moving) ExitTransition.None else fadeOut(tween(FootMotion.QUICK, easing = FootMotion.SmoothOut)) + shrinkHorizontally(tween(FootMotion.QUICK, easing = FootMotion.SmoothOut))
 
 /** What the pill shows: a page's field, or its one word while short. Short pills of any page are one face, so "Ask" never fades into "Ask". */
 private class PillFace(val slot: FootSlot, val short: Boolean) {

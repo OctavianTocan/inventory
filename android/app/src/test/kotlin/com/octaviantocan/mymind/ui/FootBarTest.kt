@@ -18,14 +18,18 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
+import com.octaviantocan.mymind.ui.shell.FOOT_PILL_TAG
 import com.octaviantocan.mymind.ui.shell.FootBarLayer
 import com.octaviantocan.mymind.ui.shell.FootBars
 import com.octaviantocan.mymind.ui.shell.FootPill
@@ -136,6 +140,36 @@ class FootBarTest {
         compose.onNodeWithContentDescription("Search your mind").assertDoesNotExist()
         compose.onAllNodesWithText("Everything").assertCountEquals(1)
         compose.runOnIdle { assertEquals(1, bars.slots.size); assertEquals(0, openedCard) }
+    }
+
+    @Test fun searchMorphsTheOnePillAndCircleOfTheNavigationInPlace() {
+        val bars = FootBars()
+        var searching by mutableStateOf(false)
+        show(bars) {
+            LibraryFootBar(Tab.Spaces, {}, searching, "", {}, { searching = true }, { searching = false })
+        }
+        val pill = compose.onNodeWithTag(FOOT_PILL_TAG).fetchSemanticsNode().boundsInRoot
+        val circle = compose.onNodeWithContentDescription("Search").fetchSemanticsNode().boundsInRoot
+        assertEquals(pill.height, circle.height, 1f)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithContentDescription("Search").performClick()
+        // Halfway through the change the tabs and the field share the one pill, and the one circle already closes.
+        compose.mainClock.advanceTimeBy(100)
+        compose.onAllNodesWithTag(FOOT_PILL_TAG).assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Search").assertCountEquals(0)
+        assertEquals(pill, compose.onNodeWithTag(FOOT_PILL_TAG).fetchSemanticsNode().boundsInRoot)
+        assertEquals(circle, compose.onNodeWithContentDescription("Close search").fetchSemanticsNode().boundsInRoot)
+        compose.mainClock.autoAdvance = true
+        settle()
+        val field = compose.onNodeWithContentDescription("Search your mind").fetchSemanticsNode().boundsInRoot
+        assertTrue("The field sits inside the navigation's pill", pill.contains(field.center))
+        compose.onNodeWithText("Spaces").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Close search").performClick()
+        settle()
+        compose.onNodeWithText("Spaces").assertIsSelected()
+        assertEquals(pill, compose.onNodeWithTag(FOOT_PILL_TAG).fetchSemanticsNode().boundsInRoot)
+        assertEquals(circle, compose.onNodeWithContentDescription("Search").fetchSemanticsNode().boundsInRoot)
+        compose.runOnIdle { assertEquals(1, bars.slots.size) }
     }
 
     @Test fun compactPillTapsOpenItWithoutReachingThePageBehind() {

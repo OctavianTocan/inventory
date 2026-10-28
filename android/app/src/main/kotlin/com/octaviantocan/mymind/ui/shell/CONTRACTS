@@ -6,12 +6,27 @@ pill's width eases to its new size. Disposed registrations MUST stop owning the 
 Source: pulls.review kit-one-foot-bar, DESIGN rule 196, FootBar.kt at
 ee5cf358333cb1170f1923c7118e12af3f265b74; requested by Tavi on 22 October 2026.
 
+@cc [owner:OctavianTocan,label:design;motion;architecture] library-search-morphs-the-navigation
+Everything, Spaces and Search MUST show the same bar: one FootPill with one round
+button, FootCircle, beside it. The tabs and the search field MUST be contents of that
+pill, never a capsule or pill of their own, and Search and Close MUST be glyphs of that
+circle. Opening or closing search MUST keep the pill and the circle in place and at
+the same size; only what is inside them changes, the tabs blurring out as the field
+blurs in and the magnifier with a sparkle turning into the close cross, through Pully's
+blur fade. A page that adds its own bar MUST do so through the same pill and circle.
+Source: Tavi, 28 October 2026 ("the bottom bar of the search and spaces isn't the same
+one as it is on the everything section. if you look at pully, you will see that the
+best is to use exactly the same one and morph it depending on the page");
+pulls.review kit-one-foot-bar.
+
 @cc [owner:OctavianTocan,label:design] library-bars-rest-alike
 Every library foot bar MUST use floatingBar for its position: 12dp in from the sides,
 16dp above the system navigation bar, and raised by the keyboard. Screens MUST NOT
 add their own bottom offset to the bar. The bar floats over the content without a
-solid strip behind it and carries Pully's two-layer downward canvas shadow. The
-navigation capsule and the Search circle are 56dp tall, with an 8dp highlight inset.
+solid strip behind it and carries Pully's two-layer downward canvas shadow. The pill
+and the circle beside it are 56dp tall on every page, search included, with an 8dp
+highlight inset around the tabs (made one height for search on 28 October 2026, when
+Tavi asked for one bar on every page).
 Source: pulls.review kit-bottom-bars-rest-alike, DESIGN rules 192 and 45, Kit.kt at
 ee5cf358333cb1170f1923c7118e12af3f265b74; geometry from Tavi's Google Photos
 comparison in the recorded review of 22 October 2026 ("less tall", "start a bit
