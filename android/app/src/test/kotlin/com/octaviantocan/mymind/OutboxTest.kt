@@ -10,6 +10,8 @@ import com.octaviantocan.mymind.data.LibraryCopy
 import com.octaviantocan.mymind.data.LibrarySync
 import com.octaviantocan.mymind.data.LocalFirstLibrary
 import com.octaviantocan.mymind.data.Outbox
+import com.octaviantocan.mymind.data.PushAnswer
+import com.octaviantocan.mymind.data.PushRequest
 import com.octaviantocan.mymind.data.Session
 import com.octaviantocan.mymind.data.SyncOutcome
 import com.octaviantocan.mymind.data.Tag
@@ -21,6 +23,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -45,6 +49,9 @@ class OutboxTest {
     private var feed: Map<String?, ApiResult<ChangesPage>> = emptyMap()
     private val sync = LibrarySync(copy, { since -> feed[since] ?: ApiResult.Failed(ApiFailure.Network) }, outbox::send, scope = CoroutineScope(Dispatchers.Unconfined))
     private val library = LocalFirstLibrary(server, copy, sync, outbox)
+    private val pushed = mutableListOf<PushRequest>()
+    private var pushAnswer: (PushRequest) -> ApiResult<PushAnswer> = { request -> ApiResult.Ok(PushAnswer(request.changes.last().id)) }
+    private val pushing = Outbox(copy, server, onRefused = { edit, card -> refused += edit to card }, push = { request -> pushed += request; pushAnswer(request) })
 
     @Before
     fun setUp() = runBlocking {
@@ -114,6 +121,93 @@ class OutboxTest {
         assertEquals(ApiResult.Failed(ApiFailure.NotAllowed), library.setPinned("a", true))
         assertTrue(outbox.isEmpty())
         assertEquals(emptyList<String>(), copy.pinned()!!.cards.map { it.id })
+    }
+
+    @Test
+    fun waitingChangesGoOutInOneBatchUnderTheirPlaceInTheQueue() = runBlocking {
+        server.writeFailure = ApiFailure.Network
+        library.setPinned("a", true)
+        library.setNote("b", "later")
+        library.removeFromSpace("s1", "b")
+        server.writeFailure = null
+        server.calls.clear()
+        assertNull(pushing.send())
+        val changes = pushed.single().changes
+        assertEquals(listOf("pin", "note", "remove-from-space"), changes.map { it.name })
+        assertEquals(changes.map { it.id }.sorted(), changes.map { it.id })
+        assertEquals(JsonObject(mapOf("cardId" to JsonPrimitive("a"), "pinned" to JsonPrimitive(true))), changes[0].args)
+        assertEquals("no change went out on its own", emptyList<String>(), server.calls)
+        assertTrue(pushing.isEmpty())
+    }
+
+    @Test
+    fun aBatchSentAgainCarriesTheSameIdsFromTheSamePhone() = runBlocking {
+        server.writeFailure = ApiFailure.Network
+        library.trash("a")
+        pushAnswer = { ApiResult.Failed(ApiFailure.Network) }
+        assertEquals(ApiFailure.Network, pushing.send())
+        assertFalse(pushing.isEmpty())
+        pushAnswer = { request -> ApiResult.Ok(PushAnswer(request.changes.last().id)) }
+        assertNull(pushing.send())
+        assertEquals(pushed[0], pushed[1])
+        assertTrue(pushing.isEmpty())
+    }
+
+    @Test
+    fun aChangeThePushTurnsDownIsDroppedAndItsCardReadAgain() = runBlocking {
+        server.writeFailure = ApiFailure.Network
+        library.setPinned("a", true)
+        library.setNote("b", "later")
+        server.cardsById = mapOf("a" to testCard("a", title = "As the server has it"))
+        pushAnswer = { request -> ApiResult.Ok(PushAnswer(request.changes.last().id, refused = listOf(request.changes.first().id))) }
+        assertNull(pushing.send())
+        assertEquals(listOf(Edit.Pin("a", true)), refused.map { it.first })
+        assertEquals(emptyList<String>(), copy.pinned()!!.cards.map { it.id })
+        assertEquals("As the server has it", copy.card("a")!!.title)
+        assertEquals("later", copy.card("b")!!.note)
+        assertTrue(pushing.isEmpty())
+    }
+
+    @Test
+    fun aServerWithoutThePushGetsEachChangeOnItsOwn() = runBlocking {
+        server.writeFailure = ApiFailure.Network
+        library.setPinned("a", true)
+        library.trash("b")
+        server.writeFailure = null
+        server.calls.clear()
+        pushAnswer = { ApiResult.Ok(PushAnswer()) }
+        assertNull(pushing.send())
+        assertEquals(listOf("pin:a:true", "trash:b"), server.calls)
+        server.writeFailure = ApiFailure.Network
+        library.setPinned("a", false)
+        server.writeFailure = null
+        assertNull(pushing.send())
+        assertEquals("the push is not asked again", 1, pushed.size)
+        assertEquals("pin:a:false", server.calls.last())
+    }
+
+    @Test
+    fun aPushAnswerTheAppCannotReadSendsTheChangesOneByOne() = runBlocking {
+        server.writeFailure = ApiFailure.Network
+        library.setNote("a", "later")
+        server.writeFailure = null
+        server.calls.clear()
+        pushAnswer = { ApiResult.Failed(ApiFailure.Server(0)) }
+        assertNull(pushing.send())
+        assertEquals(listOf("note:a:later"), server.calls)
+        assertTrue(pushing.isEmpty())
+    }
+
+    @Test
+    fun aTagAddedThroughThePushIsRemovedByTheServersId() = runBlocking {
+        val pushingSync = LibrarySync(copy, { since -> feed[since] ?: ApiResult.Failed(ApiFailure.Network) }, pushing::send, scope = CoroutineScope(Dispatchers.Unconfined))
+        val library = LocalFirstLibrary(server, copy, pushingSync, pushing)
+        pushAnswer = { request -> ApiResult.Ok(PushAnswer(request.changes.last().id, tagIds = request.changes.filter { it.name == "add-tag" }.associate { it.id.toString() to "t-server" })) }
+        val tag = (library.addTag("a", "later") as ApiResult.Ok).value
+        assertEquals("add-tag", pushed.single().changes.single().name)
+        assertEquals(ApiResult.Ok(Unit), library.removeTag(tag.id!!))
+        assertEquals(JsonObject(mapOf("tagId" to JsonPrimitive("t-server"))), pushed.last().changes.single().args)
+        assertTrue(pushing.isEmpty())
     }
 
     @Test

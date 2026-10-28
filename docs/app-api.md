@@ -143,6 +143,29 @@ Fields are omitted when the stored card has no value; the app treats every field
   …). The app re-reads `GET /app/v1/cards/<id>` for each changed id.
 - Writes: the endpoints in `docs/write-api.md`, with `Authorization: Bearer` instead of the session cookie.
 
+### Pushing the phone's changes
+
+`POST /app/v1/push` takes the changes waiting on the phone in one request, as in the Replicache and Zero push protocol
+(`app_push.rs`). The phone uses it and falls back to the per-change endpoints above when the answer has no
+`lastChangeId`: an older server answers a write it does not know with `{}` and applies nothing.
+
+```json
+{"clientId": "<the copy's id>", "changes": [{"id": 12, "name": "pin", "args": {"cardId": "<id>", "pinned": true}}]}
+```
+
+- `clientId` names the phone's copy (up to 64 characters); a new copy, as after sign-out, makes a new one. Change ids
+  are positive whole numbers that grow with each change; the server keeps the last one it handled for each client.
+- Each change runs in its own transaction with that record, so a change sent again (an answer lost on the way, a
+  retry) is skipped rather than applied twice.
+- Names and `args`: `pin` (`cardId`, `pinned`), `trash` (`cardId`), `note` (`cardId`, `text`, one paragraph per
+  line), `add-tag` (`cardId`, `name`), `remove-tag` (`tagId`), `add-to-space` and `remove-from-space` (`cardId`,
+  `spaceId`). Other fields are ignored.
+- Answer: `{"lastChangeId": 12, "refused": [ids], "tagIds": {"<change id>": "<tag id>"}}`. A change the library turns
+  down (a card that is gone, a blank tag, a name the server does not know) still counts as handled and is listed in
+  `refused`; the phone drops it and reads the card again. `tagIds` gives the id of each tag the push added.
+- A malformed body, or more than 100 changes, is a 400 and applies nothing. A database failure stops the push at that
+  change; the ones before it stay applied and are skipped when the phone sends again.
+
 ## App updates
 
 `/download` takes the app token as well as the session cookie (the Worker's sign-in gate, and

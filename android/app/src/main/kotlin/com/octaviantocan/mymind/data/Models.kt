@@ -3,6 +3,7 @@ package com.octaviantocan.mymind.data
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 /** JSON configuration shared by every request and response. */
 val AppJson = Json {
@@ -110,6 +111,36 @@ data class ChangesPage(
     val reset: Boolean = false,
     val spaces: List<Space>? = null,
 )
+
+/**
+ * One change made on the phone, as the server's push takes it.
+ *
+ * @property id The change's place in the phone's queue; the server applies each id once.
+ * @property name What the change does, such as `pin`.
+ * @property args The change's fields, such as `cardId`.
+ */
+@Serializable
+data class Change(val id: Long, val name: String, val args: JsonObject)
+
+/**
+ * A push of the phone's waiting changes.
+ *
+ * @property clientId The id the phone's copy goes by with the server.
+ * @property changes The changes, oldest first.
+ */
+@Serializable
+data class PushRequest(val clientId: String, val changes: List<Change>)
+
+/**
+ * The server's answer to a push.
+ *
+ * @property lastChangeId The highest change id the server has handled for the phone, applied or turned down; null
+ *   from an older server, which answers `{}` to a push it does not know and applies nothing.
+ * @property refused Ids of the changes the server turned down.
+ * @property tagIds The server's id of each tag the push added, by change id.
+ */
+@Serializable
+data class PushAnswer(val lastChangeId: Long? = null, val refused: List<Long> = emptyList(), val tagIds: Map<String, String> = emptyMap())
 
 @Serializable
 data class Space(

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.11 (22), 2026-10-28
+Your changes reach the server in one go, and never twice.
+
+### Changed
+- Changes waiting on the phone go to your server together in one request, each under its own number, so a change sent again after a dropped connection is not applied twice. A server from before this version gets them one by one, as before.
+
 ## 0.6.10 (21), 2026-10-28
 Notes stop shifting while you pinch.
 

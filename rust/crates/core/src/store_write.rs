@@ -55,7 +55,8 @@ fn stringify(value: &Value) -> Result<String> {
     json::stringify(value)?.ok_or_else(|| Error::invalid("Provided value cannot be bound to SQLite parameter"))
 }
 
-fn text_document(content: &Value) -> Result<Value> {
+// A prose document with one paragraph per line of a text.
+pub(crate) fn text_document(content: &Value) -> Result<Value> {
     let Some(source) = content.as_str() else { return Err(Error::invalid("text.split is not a function")) };
     let lines = source.replace("\r\n", "\n").replace('\r', "\n");
     let paragraphs: Vec<Value> = lines

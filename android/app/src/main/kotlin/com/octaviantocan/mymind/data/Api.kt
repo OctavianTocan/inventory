@@ -150,6 +150,16 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
         send(get("app/v1/changes", "since" to since, "limit" to limit.toString()), ChangesPage.serializer())
 
     /**
+     * Sends changes made on the phone through the server's push, which applies each change id once.
+     *
+     * @param request The phone's id and its changes, oldest first.
+     * @return What the server handled, or the failure; an older server without the push answers `{}`, which reads as
+     *   an answer without [PushAnswer.lastChangeId].
+     */
+    suspend fun push(request: PushRequest): ApiResult<PushAnswer> =
+        send(post("/app/v1/push", AppJson.encodeToString(PushRequest.serializer(), request)), PushAnswer.serializer())
+
+    /**
      * Reads the Serendipity deck from the partial web page, which carries its cards as `mymind-card` elements.
      *
      * @return Card ids of the deck in its order, or the failure.

@@ -68,6 +68,12 @@ class Repository(private val api: MymindApi, private val session: Session, priva
      */
     suspend fun changes(since: String?): ApiResult<ChangesPage> = api.changes(since, CHANGES_SIZE)
 
+    /**
+     * @param request The phone's id and its waiting changes, oldest first.
+     * @return What the server handled, or the failure.
+     */
+    suspend fun push(request: PushRequest): ApiResult<PushAnswer> = api.push(request)
+
     override suspend fun searchSuggestions(query: String): ApiResult<List<Suggestion>> = api.searchSuggestions(query)
 
     override suspend fun tagSuggestions(query: String): ApiResult<List<String>> = api.tagSuggestions(query).map { tags -> tags.map { it.name } }
