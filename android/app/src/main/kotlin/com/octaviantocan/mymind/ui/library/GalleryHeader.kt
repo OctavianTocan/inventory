@@ -37,7 +37,7 @@ import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import okhttp3.OkHttpClient
 
 /** Width the fixed controls cover at the end of the title row. */
-internal val CONTROLS_WIDTH = 44.dp * 3 + 8.dp * 2 + 16.dp
+internal val CONTROLS_WIDTH = 44.dp * 2 + 8.dp + 16.dp
 
 /**
  * A page title that scrolls away with the page beneath the fixed [GalleryControls], in the same row geometry.
@@ -56,12 +56,11 @@ fun GalleryTitle(text: String, modifier: Modifier = Modifier, start: Dp = 20.dp,
 }
 
 /**
- * Add, Rediscover and the account, fixed over the scrolling page; their own raised circles and shadows replace a solid
+ * Add and the account, fixed over the scrolling page; their own raised circles and shadows replace a solid
  * header strip. While [LocalOffline] is true an [OfflinePill] hangs under them.
  *
  * @param onSettings Called when the account is tapped.
  * @param onAdd Called when Add is tapped.
- * @param onSerendipity Called when Rediscover is tapped.
  * @param modifier Modifier for the row; callers align it to the top end.
  * @param photoUrl The account's Google photo, or null for the profile glyph.
  * @param photoLoader Loader for [photoUrl] that never carries the library session.
@@ -70,7 +69,6 @@ fun GalleryTitle(text: String, modifier: Modifier = Modifier, start: Dp = 20.dp,
 fun GalleryControls(
     onSettings: () -> Unit,
     onAdd: () -> Unit,
-    onSerendipity: () -> Unit,
     modifier: Modifier = Modifier,
     photoUrl: String? = null,
     photoLoader: ImageLoader? = null,
@@ -79,7 +77,6 @@ fun GalleryControls(
     Column(modifier.padding(end = 16.dp, top = 12.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FootCircleButton(R.drawable.ic_library_add, "Add", onAdd, size = 44.dp)
-            FootCircleButton(R.drawable.ic_library_shuffle, "Rediscover cards", onSerendipity, size = 44.dp)
             FootPressTheme {
                 Box(Modifier.size(44.dp).footShadow(CircleShape).clip(CircleShape)
                     .background(colors.selected).border(2.dp, colors.accent, CircleShape)

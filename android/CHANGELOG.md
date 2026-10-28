@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.22 (33), 2026-10-28
+The Serendipity page is gone.
+
+### Removed
+- The shuffle button at the top of Everything and Spaces, and the Serendipity page it opened, where cards came one at a time to keep or forget. Only Add and your profile sit up there now.
+
 ## 0.6.21 (32), 2026-10-28
 Pinching works as soon as the app opens, and on search results.
 

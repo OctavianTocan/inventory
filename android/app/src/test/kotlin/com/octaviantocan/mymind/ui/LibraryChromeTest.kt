@@ -61,7 +61,7 @@ class LibraryChromeTest {
                     typeChips = emptyList(), filter = null, suggestions = emptyList(),
                     onChoose = {}, onRemoveFilter = {}, onLoadMore = {}, onLoadMoreResults = {}, onRetry = {},
                     onOpenCard = { opened += it.id }, onOpenSettings = { controls += "settings" }, onAdd = { controls += "add" },
-                    onSerendipity = { controls += "rediscover" }, onLongPressCard = { held += it.id },
+                    onLongPressCard = { held += it.id },
                     onRefresh = { refreshes++ }, topOfMind = highlights, gridState = state, mosaic = mosaic,
                 )
             }
@@ -70,7 +70,7 @@ class LibraryChromeTest {
         compose.waitForIdle()
     }
 
-    private fun controlBounds(): List<Rect> = listOf("Account settings", "Add", "Rediscover cards").map {
+    private fun controlBounds(): List<Rect> = listOf("Account settings", "Add").map {
         compose.onNodeWithContentDescription(it).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
     }
 
@@ -102,8 +102,7 @@ class LibraryChromeTest {
         assertEquals("Scrolling the gallery must leave every top control in place", before, controlBounds())
         compose.onNodeWithContentDescription("Account settings").performClick()
         compose.onNodeWithContentDescription("Add").performClick()
-        compose.onNodeWithContentDescription("Rediscover cards").performClick()
-        assertEquals(listOf("settings", "add", "rediscover"), controls)
+        assertEquals(listOf("settings", "add"), controls)
     }
 
     @Test fun aRealPinchKeepsChromeUnscaledAndMixedPreviewTextBesideItsImage() {

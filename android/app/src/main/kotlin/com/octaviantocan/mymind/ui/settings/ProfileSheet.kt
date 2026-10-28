@@ -149,7 +149,7 @@ internal fun ColumnScope.ProfileSheetContent(
     if (updates.visible) {
         CardMenuHeading("App")
         CardMenuGroup(Modifier.padding(top = 12.dp)) {
-            SheetRow(painterResource(R.drawable.ic_tab_serendipity), "What's new", { onClose(); updates.onChangelog() },
+            SheetRow(painterResource(R.drawable.samevibeicon), "What's new", { onClose(); updates.onChangelog() },
                 detail = version, trailing = { SheetRowChevron() })
             SheetRowDivider()
             SheetRow(painterResource(R.drawable.ic_check_updates), "Check for updates", updates.onCheck,

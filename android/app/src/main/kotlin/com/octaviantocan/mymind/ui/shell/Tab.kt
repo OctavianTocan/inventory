@@ -13,5 +13,4 @@ import com.octaviantocan.mymind.R
 enum class Tab(val label: String, @DrawableRes val lightIcon: Int, @DrawableRes val darkIcon: Int) {
     Everything("Everything", R.drawable.ic_tab_everything, R.drawable.ic_tab_everything),
     Spaces("Spaces", R.drawable.ic_tab_spaces, R.drawable.ic_tab_spaces),
-    Serendipity("Serendipity", R.drawable.ic_tab_serendipity, R.drawable.ic_tab_serendipity),
 }

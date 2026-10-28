@@ -18,12 +18,9 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.ui.card.CardDetail
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.SearchType
-import com.octaviantocan.mymind.ui.library.SerendipityContent
-import com.octaviantocan.mymind.ui.library.SerendipityState
 import com.octaviantocan.mymind.ui.library.SpaceContent
 import com.octaviantocan.mymind.ui.library.SpaceListContent
 import com.octaviantocan.mymind.ui.library.SpacesState
-import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.menu.CardMenuContent
 import com.octaviantocan.mymind.ui.menu.CardMenuPanel
@@ -61,9 +58,9 @@ class LibraryScreenshotTest(private val dark: Boolean) {
 
     private fun capture(name: String) = compose.onRoot().captureRoboImage("screenshots/${name}_$mode.png")
 
-    private fun shell(tab: Tab = Tab.Everything, underStatusBar: Boolean = false, overlay: @Composable () -> Unit = {}, page: @Composable () -> Unit) =
+    private fun shell(tab: Tab = Tab.Everything, overlay: @Composable () -> Unit = {}, page: @Composable () -> Unit) =
         render {
-            ShellFrame(tab, onSelectTab = {}, scheme = PageScheme.Dark, underStatusBar = underStatusBar, overlay = { overlay() }, page = page)
+            ShellFrame(tab, onSelectTab = {}, scheme = PageScheme.Dark, overlay = { overlay() }, page = page)
         }
 
     @Test
@@ -126,23 +123,6 @@ class LibraryScreenshotTest(private val dark: Boolean) {
             SpaceContent(space, FeedState(LibrarySamples.grid, endReached = true), onBack = {}, onLoadMore = {}, onOpenCard = {}, onAdd = {})
         }
         capture("S07_space_open")
-    }
-
-    @Test
-    fun serendipity() {
-        val deck = listOf(LibrarySamples.grid[1]) + (2..18).map { testCard("d$it") }
-        shell(Tab.Serendipity, underStatusBar = true) {
-            SerendipityContent(SerendipityState(deck = deck), onOpenCard = {}, onKeep = {}, onForget = {}, onDeal = {})
-        }
-        capture("S08_serendipity")
-    }
-
-    @Test
-    fun serendipityLoading() {
-        shell(Tab.Serendipity, underStatusBar = true) {
-            SerendipityContent(SerendipityState(loading = true), onOpenCard = {}, onKeep = {}, onForget = {}, onDeal = {})
-        }
-        capture("S05_spinner_serendipity")
     }
 
     @Test

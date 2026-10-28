@@ -111,9 +111,6 @@ interface Library {
      */
     suspend fun removeFromSpace(spaceId: String, cardId: String): ApiResult<Unit>
 
-    /** @return Success, or the failure, after telling the server a Serendipity deck was finished. */
-    suspend fun completeSerendipity(): ApiResult<Unit>
-
     /**
      * @param cursor `next` of the previous page, or null for the first page.
      * @return One page of the cards pinned to Top of Mind, in pin order.
@@ -125,9 +122,6 @@ interface Library {
      * @return The card as the server has it now.
      */
     suspend fun card(cardId: String): ApiResult<Card>
-
-    /** @return Card ids of the Serendipity deck, in the deck's order. */
-    suspend fun serendipityIds(): ApiResult<List<String>>
 
     /**
      * @param count Number of files, 1 to 100.

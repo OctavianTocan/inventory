@@ -30,7 +30,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
@@ -133,9 +132,6 @@ class LibraryViewModel(
 
     /** Search text, filter, suggestions and results. */
     val search = SearchModel(viewModelScope, library, ai)
-
-    /** The Serendipity deck. */
-    val serendipity = SerendipityModel(viewModelScope, library)
 
     /** One signal each time the lists redraw from the phone's copy, for screens holding a card of their own to read it again. */
     val redrawn: SharedFlow<Unit> = mutableRedrawn
@@ -419,11 +415,6 @@ class LibraryViewModel(
         }
     }
 
-    /** Moves the Serendipity card on show to the trash, takes it out of every list and moves the deck on. */
-    fun forgetSerendipityCard() {
-        viewModelScope.launch { serendipity.forget()?.let { id -> feeds().forEach { it.remove(id) } } }
-    }
-
     private suspend fun showUploaded(cardId: String, spaceId: String?) {
         when (val answer = library.card(cardId)) {
             is ApiResult.Ok -> everything.prepend(answer.value)
@@ -689,77 +680,3 @@ private fun SyncOutcome?.changedAnything(): Boolean = (this as? SyncOutcome.Done
 /** A tag name as a query value, in quotes when it holds a space or a quote. */
 private fun quoted(name: String): String =
     if (name.any { it.isWhitespace() || it == '"' }) "\"" + name.replace("\"", "") + "\"" else name
-
-/**
- * State of the Serendipity deck.
- *
- * @property deck Cards of the current round.
- * @property index Position of the card on show; equal to the deck size once the round is over.
- * @property loading True while the deck is being drawn.
- * @property error Text for the last failure, or null.
- * @property dealt True once a deck was read, even an empty one.
- */
-data class SerendipityState(
-    val deck: List<Card> = emptyList(),
-    val index: Int = 0,
-    val loading: Boolean = false,
-    val error: String? = null,
-    val dealt: Boolean = false,
-) {
-    /** The card on show, or null before the deck is drawn and after the round. */
-    val current: Card? get() = deck.getOrNull(index)
-
-    /** True once every card of a drawn deck was kept or forgotten. */
-    val finished: Boolean get() = deck.isNotEmpty() && index >= deck.size
-}
-
-/**
- * The Serendipity round: the deck the server's Serendipity page holds, to keep or forget card by card.
- *
- * @param scope Scope the reads and writes run in.
- * @param library Source of the deck and the cards, and target of the writes.
- */
-class SerendipityModel(private val scope: CoroutineScope, private val library: Library) {
-    private val mutableState = MutableStateFlow(SerendipityState())
-
-    /** The deck and position. */
-    val state: StateFlow<SerendipityState> = mutableState
-
-    /** Reads the deck's card ids from the Serendipity page, then each card; cards that are gone or trashed are left out. */
-    fun deal() {
-        if (mutableState.value.loading) return
-        mutableState.value = SerendipityState(loading = true)
-        scope.launch {
-            mutableState.value = when (val answer = library.serendipityIds()) {
-                is ApiResult.Ok -> {
-                    val cards = answer.value.map { id -> async { (library.card(id) as? ApiResult.Ok)?.value } }.awaitAll()
-                    SerendipityState(deck = cards.filterNotNull().filter { it.deleted == null }, dealt = true)
-                }
-                is ApiResult.Failed -> SerendipityState(error = describe(answer.failure))
-            }
-        }
-    }
-
-    /** Keeps the card on show and moves on; nothing is sent to the server. */
-    fun keep() = advance()
-
-    /**
-     * Moves the card on show to the trash and moves on.
-     *
-     * @return The forgotten card's id, or null when nothing was on show or the server refused.
-     */
-    suspend fun forget(): String? {
-        val card = mutableState.value.current ?: return null
-        return when (library.trash(card.id)) {
-            is ApiResult.Ok -> card.id.also { advance() }
-            is ApiResult.Failed -> null
-        }
-    }
-
-    private fun advance() {
-        val state = mutableState.value
-        if (state.current == null) return
-        mutableState.value = state.copy(index = state.index + 1)
-        if (mutableState.value.finished) scope.launch { library.completeSerendipity() }
-    }
-}

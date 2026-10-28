@@ -273,18 +273,6 @@ data class GoogleSignInRequest(val idToken: String, val nonce: String, val devic
 data class PasswordSignInRequest(val username: String, val password: String, val device: String)
 
 /**
- * Card ids of the Serendipity deck, read from the `data-id` attributes of the `mymind-card` elements of the
- * `/serendipity` page.
- *
- * @param html The page.
- * @return The ids in page order, each once; empty when the page holds none.
- */
-fun serendipityIdsOf(html: String): List<String> =
-    DATA_ID.findAll(html).map { it.groupValues[1] }.filter { it.isNotBlank() }.distinct().toList()
-
-private val DATA_ID = Regex("""<mymind-card\b[^>]*?\bdata-id\s*=\s*["']([^"']+)["']""")
-
-/**
  * Permission to upload one file, from `POST /uploads/authorize`.
  *
  * @property url Path the file's pieces are sent to, such as `/uploads/<id>`.

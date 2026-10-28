@@ -71,7 +71,6 @@ private val STRIP_SHADOW = Shadow(radius = 24.dp, color = Color.Black, offset = 
  * @param onToggle Called when the strip is tapped, to open or close the list.
  * @param onDismiss Called with the id of a failed file whose delete button was tapped.
  * @param modifier Modifier that places the strip.
- * @param hidden True fades the strip out whatever the queue holds, as on the Serendipity tab.
  * @param bottom Distance from the strip to the bottom of its parent.
  */
 @Composable
@@ -80,10 +79,9 @@ fun UploadQueueStrip(
     onToggle: () -> Unit,
     onDismiss: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    hidden: Boolean = false,
     bottom: Dp = UPLOAD_STRIP_BOTTOM,
 ) {
-    AnimatedVisibility(state.items.isNotEmpty() && !hidden, modifier, enter = fadeIn(), exit = fadeOut()) {
+    AnimatedVisibility(state.items.isNotEmpty(), modifier, enter = fadeIn(), exit = fadeOut()) {
         val colors = MymindTheme.colors
         val sidePadding by animateDpAsState(if (state.details) 24.dp else 16.dp, label = "strip side")
         val topPadding by animateDpAsState(if (state.details) 20.dp else 0.dp, label = "strip top")

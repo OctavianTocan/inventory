@@ -99,16 +99,24 @@ and highlights MUST NOT scale with a mosaic pinch.
 Source: Tavi, 22 October 2026, Google Photos layout request and gallery polish in the Codex conversation.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-top-controls-stay-fixed
-The profile, Add and Rediscover controls MUST stay fixed at the top of Everything and
-the Spaces list while the page scrolls under them. They float as their own raised,
-shadowed circles with no solid header strip behind them. The page title ("Your
+The profile and Add controls MUST stay fixed at the top of Everything and the Spaces
+list while the page scrolls under them. They float as their own raised, shadowed
+circles with no solid header strip behind them. The page title ("Your
 mind", "All Spaces") MUST scroll away with the page. The controls MUST remain
 available for an empty, loading or failed feed. Pull to refresh and mosaic gestures
 belong to the scrolling page; search and browsing MUST retain independent scroll
 positions.
 Source: Tavi, 22 October 2026, gallery polish in the Codex conversation; the recorded
 review of the same day ("the title should not be sticky", "the buttons should be
-sticky but without a background").
+sticky but without a background"). Rediscover left the row on 28 October 2026, see
+`library-has-no-serendipity`.
+
+@cc [owner:OctavianTocan,label:product] library-has-no-serendipity
+The app MUST NOT offer mymind's Serendipity page, the deck of cards to keep or forget
+that Tavi calls the remix page, nor any button, tab, route or server call that leads to
+it, such as the Rediscover button that opened it.
+Source: Tavi, 28 October 2026 ("get completely rid of any stuff related to the remix
+page").
 
 @cc [owner:OctavianTocan,label:design;interaction] gallery-top-edge-blurs-the-scrolling-content
 Once the page has scrolled, the cards passing under the status bar and the fixed
@@ -185,7 +193,7 @@ Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search"
 @cc [owner:OctavianTocan,label:product;privacy] gallery-works-offline
 Once the phone holds the whole library (`data/LibraryCopy.kt`, filled page by page from
 `/app/v1/changes` by `data/LibrarySync.kt`), Everything, Top of Mind, the Spaces tab and
-its covers, space pages and the cards Serendipity deals MUST read from it, in the
+its covers and space pages MUST read from it, in the
 server's order, without waiting on the network. Space pages read from it only once its
 cards carry their place in the space (`spaceRanks`); before that they ask the server.
 Pull to refresh on the Spaces tab or in a space syncs the copy first. The copy syncs
@@ -196,7 +204,7 @@ and space pages answered from the copy. A server without the changes feed MUST l
 app working as before. The copy belongs to its session and is wiped at sign-out, like
 `gallery-opens-from-the-phone`.
 Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search", step 3
-(sync and offline mode); spaces, space pages and Serendipity added for Tavi's ask of 28
+(sync and offline mode); spaces and space pages added for Tavi's ask of 28
 October 2026 for a sync engine like Zero in Omar's Wholana, plan "ThyMind: a Zero-style
 sync engine", step 1.
 

@@ -160,17 +160,6 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
         send(post("/app/v1/push", AppJson.encodeToString(PushRequest.serializer(), request)), PushAnswer.serializer())
 
     /**
-     * Reads the Serendipity deck from the partial web page, which carries its cards as `mymind-card` elements.
-     *
-     * @return Card ids of the deck in its order, or the failure.
-     */
-    suspend fun serendipityIds(): ApiResult<List<String>> = withContext(Dispatchers.IO) {
-        // The document request gets the page shell without the deck; the web's deck script asks for the partial.
-        val request = Request.Builder().url(url("serendipity")).header("Accept", "text/html").header("x-partial", "1").get().build()
-        execute(request) { ApiResult.Ok(serendipityIdsOf(it)) }
-    }
-
-    /**
      * Asks for permission to upload files.
      *
      * @param count Number of files, 1 to 100.
@@ -399,14 +388,6 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
      */
     suspend fun removeFromSpace(spaceId: String, cardId: String): ApiResult<Unit> =
         write(Request.Builder().url(url("spaces/$spaceId/objects/$cardId")).delete())
-
-    /**
-     * Tells the server the user went through a whole Serendipity deck.
-     *
-     * @return Success, or the failure.
-     */
-    suspend fun completeSerendipity(): ApiResult<Unit> =
-        write(Request.Builder().url(url("serendipity/complete")).post("{}".toRequestBody(JSON_TYPE)))
 
     private fun url(path: String, vararg query: Pair<String, String?>) = server.trimEnd('/').toHttpUrl().newBuilder()
         .addPathSegments(path)

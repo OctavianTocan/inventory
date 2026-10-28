@@ -73,7 +73,6 @@ fun EverythingScreen(
     modifier: Modifier = Modifier,
     onLongPressCard: ((Card) -> Unit)? = null,
     searching: Boolean = false,
-    onSerendipity: () -> Unit = {},
     photoUrl: String? = null,
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
@@ -99,7 +98,7 @@ fun EverythingScreen(
         onOpenSettings = onOpenSettings, onAdd = onAdd, modifier = modifier,
         topOfMind = pinned.cards, onLoadMoreTopOfMind = viewModel.topOfMind::loadMore,
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
-        onLongPressCard = onLongPressCard, onSerendipity = onSerendipity,
+        onLongPressCard = onLongPressCard,
         photoUrl = photoUrl, resultsState = resultsScroll, aiNote = rank?.let(::aiNote),
     )
 }
@@ -147,7 +146,6 @@ fun EverythingContent(
     onRefresh: () -> Unit = {},
     onRefreshResults: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
-    onSerendipity: () -> Unit = {},
     photoUrl: String? = null,
     mosaic: MosaicState = rememberMosaicState(),
     resultsState: LazyListState = rememberLazyListState(),
@@ -183,7 +181,7 @@ fun EverythingContent(
                         })
                 }
                 GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter), visible = { gridState.scrolledBy() })
-                GalleryControls(onOpenSettings, onAdd, onSerendipity, Modifier.align(Alignment.TopEnd), photoUrl = photoUrl, photoLoader = photoLoader)
+                GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd), photoUrl = photoUrl, photoLoader = photoLoader)
             }
         }
     }

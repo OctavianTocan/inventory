@@ -12,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,7 +57,6 @@ import com.octaviantocan.mymind.ui.library.EverythingScreen
 import com.octaviantocan.mymind.ui.library.GalleryControls
 import com.octaviantocan.mymind.ui.library.LibraryViewModel
 import com.octaviantocan.mymind.ui.library.NewSpaceDialog
-import com.octaviantocan.mymind.ui.library.SerendipityScreen
 import com.octaviantocan.mymind.ui.library.SpacesScreen
 import com.octaviantocan.mymind.ui.library.rememberPublicAccountPhotoLoader
 import com.octaviantocan.mymind.ui.menu.CreateSpacePage
@@ -165,7 +163,6 @@ fun MainShell(
     LaunchedEffect(settingsViewModel) { settingsViewModel.refresh() }
     val photoLoader = if (account.photoUrl != null) rememberPublicAccountPhotoLoader() else null
     BackHandler(enabled = opened == null && !menuOpen && searching, onBack = closeSearch)
-    BackHandler(enabled = opened == null && !menuOpen && tab == Tab.Serendipity) { tab = Tab.Everything }
     val sheetState = key(menuOpen, menuFor?.card?.id) { rememberCardMenuPosition() }
     val motion = rememberSheetMotionEnabled()
     val scope = rememberCoroutineScope()
@@ -248,7 +245,6 @@ fun MainShell(
         onSelectTab = selectTab,
         scheme = scheme,
         modifier = Modifier.blur(MENU_BLUR * menuProgress),
-        underStatusBar = tab == Tab.Serendipity,
         footer = {
             LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
                 onSearch = { tab = Tab.Everything; searchActive = true }, onCloseSearch = closeSearch,
@@ -298,7 +294,6 @@ fun MainShell(
                 onToggle = viewModel.uploads::toggleDetails,
                 onDismiss = viewModel.uploads::dismiss,
                 modifier = Modifier.align(Alignment.BottomCenter),
-                hidden = tab == Tab.Serendipity,
             )
         },
     ) {
@@ -311,7 +306,6 @@ fun MainShell(
                     onAdd = { adding = AddTarget(null) },
                     onLongPressCard = { openMenu(it, null) },
                     searching = searching,
-                    onSerendipity = { focusManager.clearFocus(); tab = Tab.Serendipity },
                     photoUrl = account.photoUrl,
                 )
                 Tab.Spaces -> SpacesScreen(
@@ -326,13 +320,11 @@ fun MainShell(
                     GalleryControls(
                         onSettings = { profileOpen = true },
                         onAdd = { adding = AddTarget(null, newSpace = true) },
-                        onSerendipity = { focusManager.clearFocus(); tab = Tab.Serendipity },
                         modifier = Modifier.align(Alignment.TopEnd),
                         photoUrl = account.photoUrl,
                         photoLoader = photoLoader,
                     )
                 }
-                Tab.Serendipity -> SerendipityScreen(viewModel, onOpenCard = { openCard(it, null) })
             }
         }
     }
@@ -515,7 +507,6 @@ private const val DELETE_SPACE_TEXT = "The cards in it stay in your mind."
  * @param onSelectTab Called with the tab the user tapped.
  * @param scheme Appearance the account picked for the pages.
  * @param modifier Modifier for the full-screen box.
- * @param underStatusBar True lets the page reach under the status bar; the page then pads its own content.
  * @param overlay Drawn over the page and the tab bar, such as an opened card.
  * @param page The selected tab's page.
  */
@@ -525,7 +516,6 @@ fun ShellFrame(
     onSelectTab: (Tab) -> Unit,
     scheme: PageScheme,
     modifier: Modifier = Modifier,
-    underStatusBar: Boolean = false,
     footer: (@Composable () -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {},
     page: @Composable () -> Unit,
@@ -534,10 +524,7 @@ fun ShellFrame(
     CompositionLocalProvider(LocalFootBars provides bars) {
         Box(modifier.fillMaxSize().background(MymindTheme.colors.page)) {
             PageTheme(scheme) {
-                val top = if (underStatusBar) Modifier else Modifier.statusBarsPadding()
-                val library = tab == Tab.Everything || tab == Tab.Spaces
-                val background = if (library) LibraryStyle.colors.background else MymindTheme.page.background
-                Box(Modifier.fillMaxSize().then(top).background(background).padding(bottom = if (library) 0.dp else PAGE_BOTTOM_GAP)) {
+                Box(Modifier.fillMaxSize().statusBarsPadding().background(LibraryStyle.colors.background)) {
                     page()
                 }
                 if (footer != null) footer() else MymindTabBar(tab, onSelectTab)

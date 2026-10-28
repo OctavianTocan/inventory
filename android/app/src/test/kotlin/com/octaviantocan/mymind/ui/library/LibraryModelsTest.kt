@@ -25,7 +25,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -167,59 +166,6 @@ class LibraryModelsTest {
         assertEquals("software-application", SearchType.App.slug)
         assertEquals("content", SearchType.Snippet.slug)
         assertEquals(17, SearchType.entries.size)
-    }
-
-    @Test
-    fun serendipityDealsThePageDeckInOrderAndCompletesOnce() = runTest(dispatcher) {
-        val ids = (1..18).map { "c$it" }
-        val cards = ids.associateWith { testCard(it) } + ("gone" to testCard("gone").copy(deleted = "2026-10-16T08:00:00Z"))
-        val library = FakeLibrary(cardsById = cards - "c5", deckIds = ids + "gone")
-        val model = SerendipityModel(this, library)
-        model.deal()
-        advanceUntilIdle()
-        val deck = model.state.value.deck
-        assertEquals(ids - "c5", deck.map { it.id })
-        assertEquals("deck", library.calls.first())
-        assertEquals(deck.first(), model.state.value.current)
-
-        model.keep()
-        assertEquals(1, model.state.value.index)
-        assertEquals(deck[1].id, model.forget())
-        assertTrue("trash:${deck[1].id}" in library.calls)
-        repeat(deck.size - 2) { model.keep() }
-        advanceUntilIdle()
-        assertTrue(model.state.value.finished)
-        model.keep()
-        advanceUntilIdle()
-        assertEquals(1, library.calls.count { it == "complete" })
-    }
-
-    @Test
-    fun serendipityReportsAnEmptyDeckAndAFailedPage() = runTest(dispatcher) {
-        val library = FakeLibrary(deckIds = emptyList())
-        val model = SerendipityModel(this, library)
-        model.deal()
-        advanceUntilIdle()
-        assertTrue(model.state.value.dealt)
-        assertTrue(model.state.value.deck.isEmpty())
-        assertNull(model.state.value.error)
-
-        library.deckIds = null
-        model.deal()
-        advanceUntilIdle()
-        assertFalse(model.state.value.dealt)
-        assertNotNull(model.state.value.error)
-    }
-
-    @Test
-    fun serendipityForgetKeepsTheCardWhenTheServerRefuses() = runTest(dispatcher) {
-        val library = FakeLibrary(cardsById = mapOf("a" to testCard("a"), "b" to testCard("b")), deckIds = listOf("a", "b"))
-        val model = SerendipityModel(this, library)
-        model.deal()
-        advanceUntilIdle()
-        library.writeFailure = ApiFailure.Network
-        assertNull(model.forget())
-        assertEquals(0, model.state.value.index)
     }
 
     @Test

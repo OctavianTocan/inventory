@@ -101,13 +101,9 @@ class Repository(private val api: MymindApi, private val session: Session, priva
     override suspend fun removeFromSpace(spaceId: String, cardId: String): ApiResult<Unit> =
         api.removeFromSpace(spaceId, cardId)
 
-    override suspend fun completeSerendipity(): ApiResult<Unit> = api.completeSerendipity()
-
     override suspend fun topOfMind(cursor: String?): ApiResult<CardPage> = api.topOfMind(PAGE_SIZE, cursor)
 
     override suspend fun card(cardId: String): ApiResult<Card> = api.card(cardId)
-
-    override suspend fun serendipityIds(): ApiResult<List<String>> = api.serendipityIds()
 
     override suspend fun authorizeUploads(count: Int): ApiResult<List<UploadAuthorization>> = api.authorizeUploads(count)
 

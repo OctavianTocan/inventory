@@ -79,7 +79,7 @@ class GalleryIntegrationTest {
         compose.onNodeWithContentDescription("Account settings").assertIsDisplayed()
         compose.onNodeWithContentDescription("Pinned cards").assertIsDisplayed()
         compose.onNodeWithContentDescription("Card gallery").assertExists()
-        compose.onNodeWithContentDescription("Rediscover cards").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Rediscover cards").assertDoesNotExist()
         compose.onNodeWithText("Create").assertDoesNotExist()
     }
 

@@ -78,7 +78,6 @@ private const val NOTE_MAX_LINES = 40
 private const val NUNITO_NORMAL_LINE = 1.364f
 private val POST_TEXT = 12.sp
 private val POST_BASE_TEXT = 7.68.sp
-private val DECK_POST_TEXT = 16.sp
 private val NOTE_TEXT = 13.2.sp
 
 /**
@@ -89,8 +88,6 @@ private val NOTE_TEXT = 13.2.sp
  * @param onClick Called when the tile is tapped.
  * @param modifier Modifier for the tile column.
  * @param caption False leaves the title out, as in space stacks.
- * @param deck True draws the tile the way Serendipity shows it: post text at the page's base size, no coloured edge
- *   and no title.
  * @param onLongClick Called after a long press, with the long-press haptic; null leaves long presses alone.
  */
 @Composable
@@ -99,14 +96,13 @@ fun CardTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     caption: Boolean = true,
-    deck: Boolean = false,
     onLongClick: (() -> Unit)? = null,
 ) {
     val kind = tileKind(card)
     Column(modifier.fillMaxWidth().combinedClickable(interactionSource = null, indication = null, onLongClick = onLongClick, onClick = onClick)) {
         when (kind) {
             TileKind.Note -> NoteTile(card)
-            TileKind.Post -> PostTile(card, deck)
+            TileKind.Post -> PostTile(card)
             TileKind.Repository -> RepositoryTile(card)
             TileKind.Article -> ArticleTile(card)
             TileKind.Media -> CardPicture(card, play = false)
@@ -114,7 +110,7 @@ fun CardTile(
             TileKind.Plain -> PlainTile(card)
         }
         val title = card.title?.takeIf { it.isNotBlank() }
-        if (caption && !deck && title != null && kind in CAPTIONED) TileCaption(title)
+        if (caption && title != null && kind in CAPTIONED) TileCaption(title)
     }
 }
 
@@ -248,24 +244,22 @@ private fun NoteTile(card: Card) {
 
 /** A social post: coloured top edge, platform mark, paragraphs, first pictures and author. */
 @Composable
-private fun PostTile(card: Card, deck: Boolean) {
+private fun PostTile(card: Card) {
     val page = MymindTheme.page
-    val size = if (deck) DECK_POST_TEXT else POST_TEXT
-    val body = TextStyle(color = page.text2, fontSize = size, lineHeight = 1.3.em, fontFamily = MymindTheme.fonts.body)
-    val gap = with(LocalDensity.current) { (size * 1.3f).toDp() }
+    val body = TextStyle(color = page.text2, fontSize = POST_TEXT, lineHeight = 1.3.em, fontFamily = MymindTheme.fonts.body)
+    val gap = with(LocalDensity.current) { (POST_TEXT * 1.3f).toDp() }
     val links = TextLinkStyles(SpanStyle(color = page.link))
     val paragraphs = remember(card.id, card.post?.bodyHtml) { postParagraphs(card) }
-    // On the web the edge sits above the tile's box (`.body` margin-top -5px), and Serendipity clips it away.
+    // On the web the edge sits above the tile's box (`.body` margin-top -5px).
     Column(
         Modifier
-            .then(if (deck) Modifier else Modifier.overhangTop(POST_EDGE))
+            .overhangTop(POST_EDGE)
             .fillMaxWidth()
             .clip(RoundedCornerShape(TILE_RADIUS))
             .background(page.surface),
     ) {
-        if (!deck) Box(Modifier.fillMaxWidth().height(POST_EDGE).background(postColor(card.type)))
-        val base = if (deck) DECK_POST_TEXT else POST_BASE_TEXT
-        val maxBody = with(LocalDensity.current) { (base * NUNITO_NORMAL_LINE * POST_MAX_LINES).toDp() }
+        Box(Modifier.fillMaxWidth().height(POST_EDGE).background(postColor(card.type)))
+        val maxBody = with(LocalDensity.current) { (POST_BASE_TEXT * NUNITO_NORMAL_LINE * POST_MAX_LINES).toDp() }
         Column(Modifier.padding(16.dp).heightIn(max = maxBody).clipToBounds()) {
             PlatformMark(card.type)
             paragraphs.forEach { html ->

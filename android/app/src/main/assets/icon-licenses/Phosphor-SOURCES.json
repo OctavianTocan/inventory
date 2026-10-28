@@ -350,18 +350,6 @@
       "composition": "Both paths unchanged; the glass is scaled 0.8 and moved (10, 40), the star scaled 0.36 and moved (152, 14), as the search-with-sparkle mark of Google Photos."
     },
     {
-      "resource": "ic_library_shuffle",
-      "icon": "shuffle",
-      "weight": "regular",
-      "source_path": "assets/regular/shuffle.svg",
-      "source_sha256": "c3fdac72b005805ddf1078b858eecb55f288d7bc34573ffae276de02373bb6f2",
-      "android_width": "24dp",
-      "android_height": "24dp",
-      "fill_color": "#FFFFFFFF",
-      "root_attributes": {},
-      "path_count": 1
-    },
-    {
       "resource": "ic_library_spaces",
       "icon": "squares-four",
       "weight": "regular",
@@ -597,18 +585,6 @@
       "weight": "regular",
       "source_path": "assets/regular/images.svg",
       "source_sha256": "7e8e0035864a6cc3e0ea1e0441d073b582001b74c374939fd8ece6ff55101a2b",
-      "android_width": "24dp",
-      "android_height": "24dp",
-      "fill_color": "#ffffff",
-      "root_attributes": {},
-      "path_count": 1
-    },
-    {
-      "resource": "ic_tab_serendipity",
-      "icon": "sparkle",
-      "weight": "regular",
-      "source_path": "assets/regular/sparkle.svg",
-      "source_sha256": "9e2c17a26564098cb48dd95737a83c742156f755f13cedaa30f9d864d0e3eb76",
       "android_width": "24dp",
       "android_height": "24dp",
       "fill_color": "#ffffff",

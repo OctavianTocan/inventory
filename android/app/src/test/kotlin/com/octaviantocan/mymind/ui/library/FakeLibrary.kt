@@ -76,7 +76,6 @@ fun testCard(
  * @param media Bytes of uploaded files by path.
  * @param pinnedPages Pages of Top of Mind by cursor.
  * @param cardsById Cards `card` answers with; a missing id fails with 404.
- * @param deckIds Card ids of the Serendipity page, or null to fail its read with a network error.
  * @param searchHits Cards every search answers with.
  */
 class FakeLibrary(
@@ -91,7 +90,6 @@ class FakeLibrary(
     var media: Map<String, ByteArray> = emptyMap(),
     var pinnedPages: Map<String?, CardPage> = mapOf(null to CardPage()),
     var cardsById: Map<String, Card> = emptyMap(),
-    var deckIds: List<String>? = emptyList(),
     var searchHits: List<Card> = listOf(testCard("hit")),
 ) : Library {
     /** Calls in the order they arrived, such as `trash:c1`. */
@@ -174,8 +172,6 @@ class FakeLibrary(
 
     override suspend fun removeFromSpace(spaceId: String, cardId: String) = write("unspace:$spaceId:$cardId") {}
 
-    override suspend fun completeSerendipity() = write("complete") {}
-
     override suspend fun topOfMind(cursor: String?): ApiResult<CardPage> {
         calls += "topOfMind:$cursor"
         return pinnedPages[cursor]?.let { ApiResult.Ok(it) } ?: ApiResult.Failed(ApiFailure.Network)
@@ -184,11 +180,6 @@ class FakeLibrary(
     override suspend fun card(cardId: String): ApiResult<Card> {
         calls += "card:$cardId"
         return cardsById[cardId]?.let { ApiResult.Ok(it) } ?: ApiResult.Failed(ApiFailure.Server(404))
-    }
-
-    override suspend fun serendipityIds(): ApiResult<List<String>> {
-        calls += "deck"
-        return deckIds?.let { ApiResult.Ok(it) } ?: ApiResult.Failed(ApiFailure.Network)
     }
 
     override suspend fun authorizeUploads(count: Int) =

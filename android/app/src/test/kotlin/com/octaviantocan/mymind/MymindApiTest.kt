@@ -125,20 +125,6 @@ class MymindApiTest {
     }
 
     @Test
-    fun serendipityIdsComeFromTheCardsOfThePage() = runBlocking {
-        answer(
-            """<main data-id="page"><mymind-card class="a" data-id="c1"></mymind-card>""" +
-                """<mymind-card data-id='c2'><div data-id="inner"></div></mymind-card><mymind-card data-id="c1"></mymind-card></main>""",
-        )
-        assertEquals(ApiResult.Ok(listOf("c1", "c2")), api.serendipityIds())
-        val request = server.takeRequest()
-        assertEquals("GET /serendipity", "${request.method} ${request.path}")
-        assertEquals("text/html", request.getHeader("Accept"))
-        assertEquals("1", request.getHeader("x-partial"))
-        assertEquals(null, request.getHeader("Sec-Fetch-Dest"))
-    }
-
-    @Test
     fun uploadsAreAuthorizedSentInPiecesAndBecomeMediaCards() = runBlocking {
         answer("""[{"url":"/uploads/u1","token":"up-1"},{"url":"/uploads/u2","token":"up-2"}]""")
         answer("""{"id":"u1","blob":{"id":"u1"},"received":4,"done":false}""")
