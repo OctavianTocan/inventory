@@ -1,6 +1,7 @@
 package com.octaviantocan.mymind.data
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +39,9 @@ class LibrarySync(
 ) {
     private var running: Deferred<SyncOutcome>? = null
 
+    // A sync started to follow the running one that has not begun yet; it will see every change made until it begins.
+    private var waiting: Deferred<SyncOutcome>? = null
+
     /** False once the server answered that it has no changes feed; a later sync asks again. */
     @Volatile
     var available = true
@@ -46,16 +50,23 @@ class LibrarySync(
     /**
      * Starts a sync, or joins the one running.
      *
-     * @param afterCurrent True to start a new sync once the running one ends, so it sees a write made since it began.
+     * @param afterCurrent True for a sync that begins after the running one ends, so it sees a write made since that
+     *   one began; a sync already waiting to follow it is joined, since it begins later still.
      * @return The sync's outcome, when it ends.
      */
     fun start(afterCurrent: Boolean = false): Deferred<SyncOutcome> = synchronized(this) {
         val current = running?.takeIf { it.isActive }
         if (current != null && !afterCurrent) return current
-        scope.async {
+        waiting?.takeIf { it.isActive }?.let { return it }
+        lateinit var next: Deferred<SyncOutcome>
+        next = scope.async(start = CoroutineStart.LAZY) {
             current?.join()
+            synchronized(this@LibrarySync) { if (waiting === next) waiting = null }
             pull().also { if (it == SyncOutcome.Done(changed = true)) onChanged() }
-        }.also { running = it }
+        }
+        running = next
+        if (current != null) waiting = next
+        next.also { it.start() }
     }
 
     /**

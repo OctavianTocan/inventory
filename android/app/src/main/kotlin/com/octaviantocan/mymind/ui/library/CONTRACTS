@@ -166,15 +166,18 @@ October 2026 for a sync engine like Zero in Omar's Wholana, plan "ThyMind: a Zer
 sync engine", step 1.
 
 @cc [owner:OctavianTocan,label:product;privacy] gallery-keeps-offline-changes
-A pin, trash, note, tag or space change to a card made without network, or while earlier
-ones still wait, MUST show on the phone at once and read as done, wait in the phone's copy
-(`data/Outbox.kt`), and reach the server in the order it was made once the phone is
-online, even with the app closed. A change the server refuses is dropped, its card read
-again, and a short notice names the card. Waiting changes belong to the session and are
-wiped at sign-out. New cards, uploads and creating or deleting spaces still need a
-connection.
+A pin, trash, note, tag or space change to a card MUST show on the phone at once and read
+as done, online or not: it waits in the phone's copy (`data/Outbox.kt`) and reaches the
+server in the background, in the order it was made, even with the app closed. A card added
+to a space shows at the end of it. A change the server refuses is dropped, its card read
+again, and a short notice names the card. Only while the server answers that it has no
+changes feed does an online change go straight to the server. Waiting changes belong to the
+session and are wiped at sign-out. New cards, uploads and creating or deleting spaces still
+need a connection.
 On Wi-Fi with battery to spare, the phone MUST fetch ahead the gallery pictures of Top of
 Mind and the newest 1,000 cards (`data/KeptPictures.kt`) into its picture cache, which
 holds up to 512 MB and is wiped at sign-out with the copy.
 Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search", step 4,
-and his choice of "Pinned + newest 1,000, Wi-Fi" for the pictures.
+and his choice of "Pinned + newest 1,000, Wi-Fi" for the pictures; online changes queued
+first for Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
+"ThyMind: a Zero-style sync engine", step 2.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.9 (20), 2026-10-28
+Pins, notes, tags and space changes happen the moment you tap, even online.
+
+### Changed
+- Pinning, trashing, writing a note, adding or removing tags and moving a card in or out of a space show at once and reach your server in the background, instead of waiting for it to answer first. If the server turns a change down, the card goes back to how the server has it and a short notice says so.
+- A card added to a space shows at the end of it straight away.
+
 ## 0.6.8 (19), 2026-10-28
 Spaces open straight from the phone instead of waiting for the server.
 
