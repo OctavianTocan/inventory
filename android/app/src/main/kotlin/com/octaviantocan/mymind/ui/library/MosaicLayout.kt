@@ -343,6 +343,7 @@ private val PINCH_STEP = ln(1.3f)
 
 /** Share of the finger travel the cards follow; the rest is a quick hop when the fingers pass halfway between stops. */
 private const val FOLLOW = 0.6f
+private const val FILL_EDGE = 0.2f
 
 /**
  * The density drawn for a finger position: the nearest stop plus [FOLLOW] of the way the fingers have moved from it, so
@@ -352,6 +353,16 @@ internal fun steppedPosition(finger: Float): Float {
     val f = finger.coerceIn(1f, 4f)
     val stop = f.roundToInt()
     return stop + (f - stop) * FOLLOW
+}
+
+/**
+ * How strongly the blurred fill behind a pinch shows at [progress] of a step between two stops: fully while the cards
+ * are on their way, fading in from the stop the step starts at and out toward the one it ends at, so the fill never
+ * appears or disappears in one frame.
+ */
+internal fun mosaicFillShown(progress: Float): Float {
+    val edge = (minOf(progress, 1f - progress) / FILL_EDGE).coerceIn(0f, 1f)
+    return edge * edge * (3f - 2f * edge)
 }
 
 /** The finger position whose [steppedPosition] is nearest [position], so a pinch that interrupts a landing starts there. */

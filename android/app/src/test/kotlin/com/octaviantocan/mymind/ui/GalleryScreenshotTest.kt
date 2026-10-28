@@ -4,6 +4,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
@@ -292,6 +293,39 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         assertEquals("The font must not reset on release", beforeRelease.layoutInput.style.fontSize, afterRelease.layoutInput.style.fontSize)
         assertEquals("The excerpt must not rewrap on release", beforeRelease.lineCount, afterRelease.lineCount)
         frame("dense_released")
+    }
+
+    @Test fun landingOnFewerRowsKeepsDrawingEveryFrame() {
+        // The notes make more rows at two columns than at three, so as a landing on three ends, the list still holds
+        // rows that size does not have, for a frame.
+        show(2, sample = mixedNotes, highlights = emptyList())
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        gallery.performTouchInput {
+            down(0, Offset(width * 0.1f, height * 0.22f))
+            down(1, Offset(width * 0.9f, height * 0.22f))
+        }
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeByFrame()
+        for (finger in listOf(2.1f, 2.3f, 2.55f)) {
+            val fraction = (1f - 0.8f * 1.3f.pow(2f - finger)) / 2f
+            gallery.performTouchInput {
+                updatePointerTo(0, Offset(width * fraction, height * 0.22f))
+                updatePointerTo(1, Offset(width * (1f - fraction), height * 0.22f))
+                move(delayMillis = 16)
+            }
+            compose.mainClock.advanceTimeByFrame()
+        }
+        repeat(8) { compose.mainClock.advanceTimeByFrame() }
+        gallery.performTouchInput { up(0); up(1) }
+        var frames = 0
+        while (mosaicState.position != mosaicState.columns.toFloat() && frames++ < 60) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.onRoot().captureToImage()
+        }
+        repeat(3) { compose.mainClock.advanceTimeByFrame(); compose.onRoot().captureToImage() }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        assertEquals(3, mosaicState.columns)
     }
 
     companion object {

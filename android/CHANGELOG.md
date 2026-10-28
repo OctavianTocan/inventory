@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.19 (30), 2026-10-28
+A pinch no longer flickers when it lands.
+
+### Fixed
+- When a pinch lands on its new size, the soft blur behind the cards now fades away instead of vanishing in one frame, so the lines between the cards no longer flicker at the end.
+- Landing a pinch on a size with fewer rows, in a short list or at the end of your library, could close the app. It no longer does.
+
 ## 0.6.18 (29), 2026-10-28
 Pictures show at once, blurred, while they load.
 

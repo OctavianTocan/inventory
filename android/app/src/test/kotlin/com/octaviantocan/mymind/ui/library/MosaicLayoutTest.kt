@@ -246,6 +246,18 @@ class MosaicLayoutTest {
     }
 
     @Test
+    fun theBlurredFillFadesInFromAStopAndOutTowardTheNext() {
+        assertEquals(0f, mosaicFillShown(0f), 0f)
+        assertEquals(0f, mosaicFillShown(1f), 0f)
+        assertEquals(1f, mosaicFillShown(0.5f), 0f)
+        assertEquals(1f, mosaicFillShown(0.2f), 0.001f)
+        assertEquals(1f, mosaicFillShown(0.8f), 0.001f)
+        assertTrue("The fill must be all but gone a frame from a stop", mosaicFillShown(0.01f) < 0.01f && mosaicFillShown(0.99f) < 0.01f)
+        val rising = (0..20).map { mosaicFillShown(it / 100f) }
+        assertTrue("The fill must fade in without steps: $rising", rising.zipWithNext().all { (a, b) -> b > a && b - a < 0.12f })
+    }
+
+    @Test
     fun pinchAndAccessibleStepsRespectTheDensityLimits() {
         val state = MosaicState()
         state.beginPinch()

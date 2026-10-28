@@ -146,7 +146,9 @@ fun LibraryMosaic(
         val gap = with(density) { MOSAIC_GAP.toPx() }
         val bottomPadding = with(density) { 156.dp.toPx() }
         val layouts = remember(feed.cards, width, gap) { MosaicLayouts(feed.cards, width, gap) }
-        val rows = layouts.level(mosaic.referenceColumns).rows
+        // The slots measure against the rows composed here, never a newer reference whose rows are not composed yet.
+        val referenceColumns = mosaic.referenceColumns
+        val rows = layouts.level(referenceColumns).rows
 
         fun clampOrigin(value: Float): Float {
             val first = if (header == null) 0f else -headerHeight.toFloat()
@@ -426,7 +428,7 @@ fun LibraryMosaic(
                 // These semantic-free slots retain LazyListState and fling/viewport bookkeeping while cards regroup.
                 itemsIndexed(rows, key = { _, row -> "$MOSAIC_ROW${row.key}" }, contentType = { _, _ -> "bricks" }) { index, _ ->
                     Layout(content = {}, modifier = Modifier.fillMaxWidth()) { _, constraints ->
-                        layout(constraints.maxWidth, layouts.slotHeight(index, mosaic.referenceColumns, mosaic.position).roundToInt()) {}
+                        layout(constraints.maxWidth, layouts.slotHeight(index, referenceColumns, mosaic.position).roundToInt()) {}
                     }
                 }
                 if (feed.cards.isNotEmpty() && (feed.loading || feed.error != null)) item(key = "gallery-footer", contentType = "footer") {
@@ -548,6 +550,9 @@ private class MosaicFrame(
         if (columns == fillTo.columns) fillTo.cell(index).translate(Offset(fillToX, -y)) else fillFrom.cell(index).translate(Offset(fillFromX, -y))
 
     fun fillAlpha(columns: Int): Float = if (columns == fillTo.columns) 1f else 1f - progress
+
+    /** How strongly the whole blurred fill shows now ([mosaicFillShown]). */
+    val fillShown: Float get() = mosaicFillShown(progress)
 }
 
 /** Both index ranges and everything between them. */
@@ -678,7 +683,11 @@ private fun MosaicFill(layouts: MosaicLayouts, mosaic: MosaicState, height: Floa
     val latestFrame by rememberUpdatedState(frame)
     val grids by remember(layouts, height) { derivedStateOf { latestFrame().fill(height) } }
     val slots = grids.flatMap { (columns, cards) -> cards.map { columns to it } }
-    Layout(modifier = Modifier.fillMaxSize().clearAndSetSemantics {}.graphicsLayer { renderEffect = BlurEffect(blur, blur, TileMode.Clamp) },
+    val blurred = Modifier.fillMaxSize().clearAndSetSemantics {}.graphicsLayer {
+        renderEffect = BlurEffect(blur, blur, TileMode.Clamp)
+        alpha = latestFrame().fillShown
+    }
+    Layout(modifier = blurred,
         content = {
             slots.forEach { (columns, index) ->
                 key(columns, layouts.cards[index].id) { GalleryTileBackdrop(layouts.cards[index], imageRequestSize(layouts, mosaic, index)) }
