@@ -123,6 +123,7 @@ fn every_kind_of_write_puts_the_card_in_the_feed_once() {
     let tagged = after.get("cards").at(0);
     assert_eq!(tagged.get("tags").at(0).get("name").as_str(), Some("calm"));
     assert_eq!(tagged.get("spaces").at(0).as_str(), Some(space.as_str()));
+    assert_eq!(tagged.get("spaceRanks").get(&space).as_f64(), Some(0.0), "the card's place in the space travels with it");
     assert_eq!(after.get("cards").at(1).get("pinPosition").as_f64(), Some(0.0));
     assert_eq!(after.get("spaces").at(0).get("name").as_str(), Some("Reading"));
 
@@ -162,4 +163,31 @@ fn bad_tokens_and_limits_are_refused() {
     }
     let address = url::parse("/app/v1/changes", Some("http://localhost")).unwrap();
     assert_eq!(block_on(library.api.handle("POST", &address)).unwrap().unwrap().status, 405);
+}
+
+#[test]
+fn cards_carry_their_place_in_each_space() {
+    let library = library();
+    let [first, second, third] = [&library.ids[0], &library.ids[1], &library.ids[2]];
+    let space = library.writer.run(|writer| writer.create_space(&obj! { "name" => "Reading" }.into())).unwrap().get("id").as_str().unwrap().to_owned();
+    for id in [third, first, second] {
+        library.writer.run(|writer| writer.membership(&space, id, false)).unwrap();
+    }
+    let all = changes(&library, "");
+    let rank = |id: &str| all.get("cards").as_array().unwrap().iter().find(|card| card.get("id").as_str() == Some(id)).unwrap().get("spaceRanks").get(&space).as_f64();
+    assert_eq!([rank(third), rank(first), rank(second)], [Some(0.0), Some(1.0), Some(2.0)]);
+    let (_, page) = get(&library, &format!("/app/v1/spaces/{space}/cards"));
+    assert_eq!(card_ids(&page), vec![third.clone(), first.clone(), second.clone()], "the space lists its cards in the same order");
+}
+
+#[test]
+fn a_token_from_before_the_cards_carried_space_ranks_starts_over() {
+    let library = library();
+    let current = changes(&library, "");
+    let epoch = library.db.one("SELECT epoch FROM app_sync_epoch", &[]).unwrap().unwrap().text("epoch").unwrap().to_owned();
+    let raw = json::stringify(&Value::Array(vec![Value::String(epoch), Value::String("3".to_owned())])).unwrap().unwrap();
+    let old = changes(&library, &format!("?since={}", mm_js::base64::encode_url(raw.as_bytes())));
+    assert_eq!(old.get("reset"), &Value::Bool(true));
+    assert_eq!(card_ids(&old), library.ids);
+    assert_eq!(old.get("next"), current.get("next"));
 }

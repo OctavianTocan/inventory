@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.8 (19), 2026-10-28
+Spaces open straight from the phone instead of waiting for the server.
+
+### Changed
+- The Spaces tab, its cover pictures, the cards inside a space and the cards Serendipity deals now come from the library kept on the phone, so they show at once instead of after a trip to the server. Space pages switch over once the server is updated.
+- Pulling to refresh on the Spaces tab or inside a space brings the phone's library up to date first.
+- After the server update, the phone downloads its copy of the library once more, so each card knows its place in its spaces.
+
 ## 0.6.7 (18), 2026-10-23
 The gallery breaks up its squares like Google Photos, and pinching moves cards instead of swapping grids.
 

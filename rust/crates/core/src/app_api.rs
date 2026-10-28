@@ -16,6 +16,9 @@ use crate::{Error, Result};
 const DEFAULT_LIMIT: f64 = 50.0;
 const MAX_LIMIT: f64 = 200.0;
 const CHANGES_LIMIT: f64 = 100.0;
+// Joined to the log's epoch in every changes token. A new value tells phones holding an older token to start over, so
+// copies kept before the cards gained a field the phone reads (`spaceRanks`) fill again.
+const CHANGES_FORMAT: &str = "+ranks";
 
 /// The `/app/v1` endpoints over a store and its search.
 pub struct AppApi {
@@ -170,11 +173,10 @@ impl AppApi {
             Some(found) => json::parse(found.text("body").unwrap_or(""))?,
             None => data.get("prose").clone(),
         };
-        let spaces: Vec<Value> = db
-            .query("SELECT space_id FROM space_cards WHERE card_id = ? AND excluded = 0 ORDER BY rank", &[SqlValue::from(row.id.as_str())])?
-            .iter()
-            .map(|found| Value::String(found.text("space_id").unwrap_or("").to_owned()))
-            .collect();
+        let members = db.query("SELECT space_id, rank FROM space_cards WHERE card_id = ? AND excluded = 0 ORDER BY rank", &[SqlValue::from(row.id.as_str())])?;
+        let spaces: Vec<Value> = members.iter().map(|found| Value::String(found.text("space_id").unwrap_or("").to_owned())).collect();
+        let space_ranks: Object =
+            members.iter().map(|found| (found.text("space_id").unwrap_or("").to_owned(), Value::Number(found.number("rank").unwrap_or(0.0)))).collect();
         let tags: Vec<Value> = self.store.card_tags(&row.id)?.iter().map(|tag| tag.to_value()).collect();
         let note = if data.get("note").get("prose").truthy() {
             let trimmed = text::trim(&prose_text(data.get("note").get("prose"))?).to_owned();
@@ -219,6 +221,7 @@ impl AppApi {
             ("note", note),
             ("tags", if tags.is_empty() { Value::Undefined } else { Value::Array(tags) }),
             ("spaces", if spaces.is_empty() { Value::Undefined } else { Value::Array(spaces) }),
+            ("spaceRanks", if space_ranks.is_empty() { Value::Undefined } else { Value::Object(space_ranks) }),
             ("pinPosition", extras.get("pinPosition").clone()),
             ("cover", cover),
             ("blob", blob),
@@ -282,7 +285,7 @@ impl AppApi {
         let limit = limit_of(url, CHANGES_LIMIT)?;
         let since = search_param(url, "since").map(|token| read_changes_token(&token)).transpose()?;
         let db = self.store.db();
-        let epoch = install_app_sync(&**db)?;
+        let epoch = format!("{}{CHANGES_FORMAT}", install_app_sync(&**db)?);
         let (reset, after) = match since {
             Some((from, seq)) if from == epoch => (false, seq),
             Some(_) => (true, 0),
