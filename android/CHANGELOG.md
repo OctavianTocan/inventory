@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.34 (45), 2026-10-29
+PDFs show their pages.
+
+### Changed
+- A PDF's tile is now its whole first page, two squares tall, with its name and PDF under it.
+- Opening a PDF shows every page, one under another, with "3 of 48" under each. The phone fetches the PDF once and draws the pages itself, so PDFs you saved before work too.
+- A PDF says how many pages it has and how long it takes to read, and Read in Reader Mode sets its words at reading size (Android 15 and later).
+- Open the PDF at the foot hands it to your phone's PDF viewer.
+
 ## 0.6.33 (44), 2026-10-29
 Products look like pins, apps show their icon, and videos say what they are.
 

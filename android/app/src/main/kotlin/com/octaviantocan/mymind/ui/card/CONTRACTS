@@ -26,7 +26,12 @@ or video, whole; and when it was posted and saved. It shows no counts, and its t
 stays in the name's pill. A product's picture MUST carry its price as a white pill, with
 its brand or shop in its byline; when the account has Same Vibe, a product's reader
 shows a Same Vibe section after its words: up to three of the cards nearest it in meaning,
-from the user's own mind, each opening in its place.
+from the user's own mind, each opening in its place. A PDF MUST show its name, PDF with
+its page count and reading time once the phone has read them, and Read in Reader Mode
+when it has words, then every page whole, one under another at the page's width with
+"n of N" under it. The phone fetches the file from the library server once and draws
+the pages itself, only those near the screen; until then the first page shows as the
+server drew it.
 The card's type colour MUST wash the top of the reader as a faint fade, as it does
 on the card's sheets, and never tint the body. Tags are quiet pills without crosses;
 Edit tags reveals a cross on each and Done hides them again, and + Add opens Add
@@ -36,20 +41,23 @@ Source: Tavi's recorded review, 22 October 2026 ("why is there nothing here", "c
 just tint only the bottom sheet", "some tags which look really weird"); Tavi's pick
 of F08, whose page is the prototype's 02 raised sections, 28 October 2026; the post
 section from Tavi's pick of X10 on the card previews canvas, 29 October 2026, and the
-product's price and Same Vibe from his pick of P5 the same day.
+product's price and Same Vibe from his pick of P5 the same day, and the PDF's pages from
+his pick of D5 ("I wanted to see the content").
 
 @cc [owner:OctavianTocan,label:product] card-reader-opens-its-source
 A card with a web link MUST open it from a tap on its picture and from the foot's
 Open source pill, which speaks the site's name. Holding the picture MUST open its
 own sheet (`card-reader-parts-are-held`). A card without a link MUST NOT show Open
-source. A video the server
+source; a PDF without one shows Open the PDF in its place, which hands the file to the
+phone's own viewer. A video the server
 keeps plays in place instead (`card-reader-plays-videos`), and Open source still
 opens its link.
 Source: Tavi's recorded review, 22 October 2026 ("especially the preview, I should be
-taken to the source"); Tavi's pick of F08, 28 October 2026.
+taken to the source"); Tavi's pick of F08, 28 October 2026; Open the PDF from his pick of
+D5 on the card previews canvas, 29 October 2026.
 
 @cc [owner:OctavianTocan,label:product;design] card-reader-foot-holds-its-actions
-The reader's foot MUST float Open source, a 52dp pill in the page's ink, and a 52dp
+The reader's foot MUST float Open source (or Open the PDF), a 52dp pill in the page's ink, and a 52dp
 raised round button that opens the card's actions, over a fade into the page, and
 the page MUST leave room under its last section so the foot never covers it.
 Source: Tavi's pick of F08 in the reader prototype, 28 October 2026.
@@ -71,9 +79,11 @@ Reader Mode MUST show only the page's text, selectable and at the reading size,
 under the card's title and byline, ending with Back to the card. The foot hides and
 the name's pill draws a thin line that fills as the text is read. The header's Back
 and system Back MUST return to the card rather than close it. Reader Mode opens from
-Choose one and from the page text's sheet, for any card with page text.
+Choose one and from the page text's sheet, for any card with page text, and from a
+PDF's Read in Reader Mode with the words the phone reads from its pages (Android 15 and
+later), joined back into paragraphs.
 Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M27, Reader
-Mode, "definitely").
+Mode, "definitely"); PDFs from his pick of D5 on the card previews canvas, 29 October 2026.
 
 @cc [owner:OctavianTocan,label:product;design;motion] card-reader-name-grows-into-its-card
 Tapping the reader's name MUST grow its pill into a card of the card's details over

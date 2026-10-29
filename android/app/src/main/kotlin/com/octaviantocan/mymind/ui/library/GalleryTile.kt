@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -82,12 +83,13 @@ internal fun GalleryTile(
     val text = remember(card) { galleryText(card) }
     val pin = picture != null && productStandsTall(card)
     val app = picture != null && card.type == "SoftwareApplication"
+    val page = picture != null && pdfStandsTall(card)
     val caption = remember(card) { videoCaption(card) }
-    val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card) && !pin && !app
+    val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card) && !pin && !app && !page
     val paper = lerp(colors.raised, accent, 0.13f)
     val background = when {
         kind == TileKind.Post -> postBrand(card.type).paper
-        pin -> colors.background
+        pin || page -> colors.background
         caption != null -> colors.raised
         picture == null || mixed || app -> paper
         else -> parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper
@@ -123,6 +125,8 @@ internal fun GalleryTile(
                 PostTile(card, text, highlight, if (picture == null) null else ({ pictureModifier -> tilePicture("Image preview", pictureModifier) }))
             } else if (pin) {
                 PinTile(card, highlight) { pictureModifier -> tilePicture("Image preview", pictureModifier) }
+            } else if (page) {
+                PdfTile(card, highlight) { pictureModifier -> tilePicture("First page", pictureModifier) }
             } else if (app) {
                 AppTile(card, highlight) { pictureModifier -> tilePicture("App icon", pictureModifier) }
                 Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
@@ -183,7 +187,11 @@ private fun rememberGalleryImage(picture: String?, imageRequestSizePx: Int?): An
 internal fun GalleryTileBackdrop(card: Card, imageRequestSizePx: Int) {
     val colors = LibraryStyle.colors
     val picture = galleryPicture(card)
-    val paper = if (tileKind(card) == TileKind.Post) postBrand(card.type).paper else lerp(colors.raised, cardAccent(card) ?: colors.selected, 0.13f)
+    val paper = when {
+        tileKind(card) == TileKind.Post -> postBrand(card.type).paper
+        picture != null && (productStandsTall(card) || pdfStandsTall(card)) -> colors.background
+        else -> lerp(colors.raised, cardAccent(card) ?: colors.selected, 0.13f)
+    }
     val onlyPicture = picture != null && tileKind(card) != TileKind.Post && !(galleryKeepsText(card) && galleryText(card).isNotBlank())
     val imageModel = rememberGalleryImage(picture.takeIf { onlyPicture }, imageRequestSizePx)
     val background = if (onlyPicture) parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper else paper
@@ -256,6 +264,32 @@ private fun PinTile(card: Card, highlight: Boolean, picture: @Composable (Modifi
         }
     }
 }
+
+/**
+ * A PDF as its first page, whole at its own shape with a soft shadow on the gallery's paper, and its name in up to two
+ * lines with PDF under it.
+ */
+@Composable
+private fun PdfTile(card: Card, highlight: Boolean, picture: @Composable (Modifier) -> Unit) {
+    val width = card.cover?.width ?: card.blob?.width
+    val height = card.cover?.height ?: card.blob?.height
+    val ratio = if (width != null && height != null && width > 0 && height > 0) width.toFloat() / height else PAGE_RATIO
+    val shape = RoundedCornerShape(if (highlight) 8.dp else 4.dp)
+    Column(Modifier.fillMaxSize().padding(start = 8.dp, top = 8.dp, end = 8.dp)) {
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.aspectRatio(ratio.coerceIn(0.3f, 3f)).shadow(3.dp, shape).clip(shape).background(Color.White)) {
+                picture(Modifier.fillMaxSize())
+            }
+        }
+        Column(Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, top = 7.dp, bottom = 6.dp)) {
+            TileText(cardHeading(card), highlight, Modifier, maxLines = 2)
+            KindLabel("PDF")
+        }
+    }
+}
+
+/** Width over height of an A4 page, for a PDF whose first page's size is not known. */
+private const val PAGE_RATIO = 0.707f
 
 /** A product's price on its photo: a small white pill with a soft shadow. */
 @Composable

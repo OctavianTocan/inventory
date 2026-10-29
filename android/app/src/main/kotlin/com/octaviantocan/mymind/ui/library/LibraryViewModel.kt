@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 
 /**
  * What the Spaces tab shows.
@@ -234,6 +235,17 @@ class LibraryViewModel(
      * @return The card, or null when it cannot be read.
      */
     suspend fun cardNow(cardId: String): Card? = (library.card(cardId) as? ApiResult.Ok)?.value
+
+    /**
+     * @param card A card holding a file.
+     * @param into Where to write the file.
+     * @return True once the library server's copy of the card's file is written to [into]; false without a file or
+     *   when it could not be fetched.
+     */
+    suspend fun fetchFile(card: Card, into: File): Boolean {
+        val path = card.blob?.path ?: return false
+        return library.media(path) { input -> into.outputStream().use { input.copyTo(it) } } is ApiResult.Ok
+    }
 
     /**
      * @param card A card.

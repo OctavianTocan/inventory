@@ -39,11 +39,11 @@ private const val WIDE_RATIO = 1.6f
  * The card's shape in the grid, as Google Photos breaks up its squares: screenshots and other tall pictures stand two
  * squares high, about half the wide pictures lie two across, and about one picture in seven is shown big, two by two.
  * A social post with a picture or more words than a square holds stands two squares high ([postStandsTall]), and so
- * does a product with a photo, drawn as a pin ([productStandsTall]); other text and pictures with words stay one
- * square. The choice is fixed by the card's id, so a card keeps its shape at every density and across reloads.
+ * does a product with a photo, drawn as a pin ([productStandsTall]), and a PDF, its first page whole
+ * ([pdfStandsTall]); other text and pictures with words stay one square. The choice is fixed by the card's id, so a card keeps its shape at every density and across reloads.
  */
 internal fun mosaicSpan(card: Card): MosaicSpan {
-    if (postStandsTall(card) || productStandsTall(card)) return MosaicSpan(1, 2)
+    if (postStandsTall(card) || productStandsTall(card) || pdfStandsTall(card)) return MosaicSpan(1, 2)
     if (galleryKeepsText(card) || galleryPicture(card) == null) return MosaicSpan(1, 1)
     val ratio = storedRatio(card) ?: return MosaicSpan(1, 1)
     val pick = card.id.hashCode().let { (it xor (it ushr 16)) and Int.MAX_VALUE }

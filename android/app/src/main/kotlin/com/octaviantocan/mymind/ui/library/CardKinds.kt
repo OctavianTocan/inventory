@@ -266,6 +266,9 @@ fun parseHexColor(hex: String?): Color? {
     return digits.toLongOrNull(16)?.let { Color(0xFF000000 or it) }
 }
 
+/** True for a PDF with a picture of its first page, which stands two squares high with the page whole. */
+internal fun pdfStandsTall(card: Card): Boolean = card.type == "Document" && galleryPicture(card) != null
+
 /** True for a product with a photo, which stands two squares high as a pin. */
 internal fun productStandsTall(card: Card): Boolean = card.type == "Product" && galleryPicture(card) != null
 

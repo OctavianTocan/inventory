@@ -37,9 +37,16 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
@@ -204,10 +211,16 @@ internal fun CardDetail(
     val uriHandler = LocalUriHandler.current
     val open = onOpenSource ?: { url: String -> runCatching { uriHandler.openUri(url) }; Unit }
     val source = sourceUrl(card)?.let { url -> { open(url) } }
+    val context = LocalContext.current
+    val pdf = rememberPdfPages(card)
+    var pdfText by remember(pdf) { mutableStateOf<String?>(null) }
+    LaunchedEffect(pdf) { pdfText = pdf?.text() }
+    val paragraphs = remember(card, pdfText) { readerParagraphs(card).ifEmpty { pdfText?.lines()?.filter { it.isNotBlank() }.orEmpty() } }
+    val viewPdf = pdf?.let { pages -> { pages.view(context) } }
     val wash = cardAccent(card)?.copy(alpha = if (colors.paper.luminance() < 0.5f) 0.16f else 0.12f)
     var named by rememberSaveable(card.id) { mutableStateOf(false) }
     val readingScroll = rememberScrollState()
-    val inReader = reading && readerParagraphs(card).isNotEmpty()
+    val inReader = reading && paragraphs.isNotEmpty()
     val back = if (inReader) ({ actions.onReading?.invoke(false); Unit }) else onClose
     BackHandler(onBack = back)
     CompositionLocalProvider(LocalCardSheetColors provides colors) {
@@ -229,10 +242,12 @@ internal fun CardDetail(
                     Column(Modifier.fillMaxSize()
                         .sheetEdgeFade(color = colors.paper, topStrength = { (shown.value / fade).coerceIn(0f, 1f) })
                         .verticalScroll(shown)) {
-                        if (inReader) ReaderModeBody(card, onBack = back)
-                        else ReaderBody(card, onRemoveTag, actions.onAddTags, source, onMenu, actions.onPart, details.sameVibe, actions.onOpenRecent)
+                        if (inReader) ReaderModeBody(card, paragraphs, onBack = back)
+                        else ReaderBody(card, onRemoveTag, actions.onAddTags, source, onMenu, actions.onPart, details.sameVibe, actions.onOpenRecent,
+                            pdf, pdfText?.let(::readingMinutes), actions.onReading?.takeIf { paragraphs.isNotEmpty() }?.let { read -> { read(true) } })
                     }
-                    if (!inReader) ReaderFoot(card, source, onMenu, Modifier.align(Alignment.BottomCenter))
+                    if (!inReader) ReaderFoot(card, source ?: viewPdf, onMenu, Modifier.align(Alignment.BottomCenter),
+                        openLabel = if (source == null && viewPdf != null) "Open the PDF" else null)
                 }
             }
             ReaderNameCard(named, card, details, actions, onClose = { named = false })
@@ -328,16 +343,22 @@ private fun ReaderBody(
     onPart: ((ReaderPart) -> Unit)?,
     sameVibe: List<Card> = emptyList(),
     onOpenCard: ((Card) -> Unit)? = null,
+    pdf: PdfPages? = null,
+    pdfMinutes: Int? = null,
+    onRead: (() -> Unit)? = null,
 ) {
     val sections = readerSections(card)
     val hold = { part: ReaderPart -> onPart?.takeIf { partChoices(part, card).isNotEmpty() }?.let { open -> { open(part) } } }
     val pictureHold = hold(ReaderPart.Picture)
     val emptyNote = onPart != null && tileKind(card) != TileKind.Note && sections.none { it.part == ReaderPart.YourNote }
     val post = tileKind(card) == TileKind.Post
+    val document = isPdf(card)
     Column(Modifier.fillMaxWidth().padding(horizontal = BODY_SIDE).padding(top = 12.dp, bottom = FOOT_ROOM),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (post) PostSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions", hold(ReaderPart.Post))
+        else if (document) PdfHeadSection(card, pdf?.count, pdfMinutes, onRead)
         else HeadSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions")
+        if (document) PdfPagesSection(card, pdf, onMenu)
         sections.filter { it.part in LEAD_PARTS && !(post && it.part == ReaderPart.Post) }.forEach { TextSection(it, card, hold(it.part)) }
         if (sameVibe.isNotEmpty()) SameVibeSection(sameVibe, onOpenCard)
         TagsSection(card, onRemoveTag, onAddTags, hold(ReaderPart.Tags))
@@ -400,9 +421,10 @@ private fun EmptyNoteSection(onHold: (() -> Unit)?) {
  * with Back to the card.
  */
 @Composable
-private fun ReaderModeBody(card: Card, onBack: () -> Unit) {
+private fun ReaderModeBody(card: Card, paragraphs: List<String>, onBack: () -> Unit) {
     val colors = LocalCardSheetColors.current
-    val byline = listOfNotNull(bylineOf(card), readingTime(card)).joinToString(" · ").ifEmpty { null }
+    val minutes = paragraphs.takeIf { it.isNotEmpty() }?.let { "${readingMinutes(it.joinToString(" "))} min read" }
+    val byline = listOfNotNull(bylineOf(card), minutes).joinToString(" · ").ifEmpty { null }
     Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 48.dp)) {
         Text(cardHeading(card), Modifier.semantics { heading() }, style = TextStyle(fontFamily = MymindTheme.fonts.heading,
             fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 34.sp, color = colors.text))
@@ -410,7 +432,7 @@ private fun ReaderModeBody(card: Card, onBack: () -> Unit) {
         Spacer(Modifier.height(22.dp))
         SelectionContainer {
             Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                readerParagraphs(card).forEach {
+                paragraphs.forEach {
                     Text(it, style = TextStyle(color = colors.text, fontSize = 19.sp, lineHeight = 30.sp, fontFamily = MymindTheme.fonts.body))
                 }
             }
@@ -521,6 +543,86 @@ private fun PostSection(card: Card, onOpenSource: (() -> Unit)?, onPictureHold: 
         if (time != null) Text(time, Modifier.padding(top = 12.dp), style = muted)
     }
 }
+
+/**
+ * A PDF's head: its name, then what it is, how many pages it has and how long its words take to read once the phone
+ * has read them, and Read in Reader Mode when it has words.
+ */
+@Composable
+private fun PdfHeadSection(card: Card, pages: Int?, minutes: Int?, onRead: (() -> Unit)?) {
+    val colors = LocalCardSheetColors.current
+    ReaderSection(SECTION_PADDING) {
+        Text(cardHeading(card), Modifier.semantics { heading() }, style = TextStyle(fontFamily = MymindTheme.fonts.heading,
+            fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp, color = colors.text))
+        Text(pdfDetail(pages, minutes, savedLabel(card.created)), Modifier.padding(top = 4.dp), style = detailStyle(colors))
+        if (onRead != null) {
+            val shape = RoundedCornerShape(50)
+            Row(Modifier.padding(top = 12.dp).heightIn(min = 44.dp).clip(shape).background(colors.active)
+                    .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button, onClick = onRead)
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Image(painterResource(R.drawable.readermodeicon), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(colors.text))
+                Text("Read in Reader Mode", style = TextStyle(color = colors.text, fontSize = 17.sp, lineHeight = 22.sp, fontFamily = MymindTheme.fonts.body))
+            }
+        }
+    }
+}
+
+/**
+ * A PDF's pages one under another at the page's width, each on white with its number under it, drawn by the phone
+ * as they come near the screen. Until the phone has the file, the first page shows as the server drew it.
+ */
+@Composable
+private fun PdfPagesSection(card: Card, pdf: PdfPages?, onHold: () -> Unit) {
+    if (pdf != null) {
+        repeat(pdf.count) { index -> PdfPage(pdf, index, card.takeIf { index == 0 }, onHold) }
+        return
+    }
+    if (galleryPicture(card) == null) return
+    val ratio = card.cover?.let { cover -> if ((cover.width ?: 0) > 0 && (cover.height ?: 0) > 0) cover.width!!.toFloat() / cover.height!! else null }
+    PdfPaper(ratio ?: PAGE_RATIO, onHold) { CardPicture(card, play = false, whole = true, modifier = Modifier.fillMaxSize()) }
+}
+
+/** One page of a PDF, drawn while it is within a couple of screens of the window and let go when it is further. */
+@Composable
+private fun PdfPage(pdf: PdfPages, index: Int, cover: Card?, onHold: () -> Unit) {
+    val window = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    var near by remember(pdf, index) { mutableStateOf(false) }
+    var width by remember { mutableIntStateOf(0) }
+    var drawn by remember(pdf, index) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(pdf, index, near, width) {
+        val target = width.coerceAtMost(PAGE_MAX_PX)
+        drawn = if (near && target > 0) drawn?.takeIf { it.width == target } ?: pdf.draw(index, target) else null
+    }
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        PdfPaper(pdf.ratio(index), onHold, Modifier
+            .onSizeChanged { width = it.width }
+            .onGloballyPositioned { coordinates ->
+                val top = coordinates.positionInWindow().y
+                near = top < window * PAGE_NEAR_SCREENS && top + coordinates.size.height > -window * PAGE_NEAR_SCREENS
+            }
+            .semantics { contentDescription = "Page ${index + 1} of ${pdf.count}" }) {
+            val page = drawn
+            if (page != null) Image(page, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+            else if (cover != null) CardPicture(cover, play = false, whole = true, modifier = Modifier.fillMaxSize())
+        }
+        Text("${index + 1} of ${pdf.count}", Modifier.clearAndSetSemantics {}, style = detailStyle(LocalCardSheetColors.current))
+    }
+}
+
+/** A page's white paper at its own [ratio], with the reader's soft shadow; holding it opens the card's actions. */
+@Composable
+private fun PdfPaper(ratio: Float, onHold: () -> Unit, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(modifier.fillMaxWidth().aspectRatio(ratio.coerceIn(PAGE_RATIO_MIN, PAGE_RATIO_MAX)).cardSurfaceShadow(shape, note = true).clip(shape)
+        .background(Color.White).held("Card actions", onHold), content = content)
+}
+
+private const val PAGE_RATIO = 0.707f
+private const val PAGE_RATIO_MIN = 0.3f
+private const val PAGE_RATIO_MAX = 3f
+private const val PAGE_MAX_PX = 1440
+private const val PAGE_NEAR_SCREENS = 2f
 
 /**
  * Same Vibe for a product: the three cards nearest it in meaning, as Pinterest's "More to explore" shows pins like the
@@ -638,32 +740,32 @@ private fun TagsSection(card: Card, onRemove: ((Tag) -> Unit)?, onAdd: (() -> Un
 
 /** Open source, in the ink of the page's one main action, and the card's actions, floating over a fade at the foot. */
 @Composable
-private fun ReaderFoot(card: Card, onOpenSource: (() -> Unit)?, onMenu: () -> Unit, modifier: Modifier = Modifier) {
+private fun ReaderFoot(card: Card, onOpenSource: (() -> Unit)?, onMenu: () -> Unit, modifier: Modifier = Modifier, openLabel: String? = null) {
     val colors = LocalCardSheetColors.current
     Box(modifier.fillMaxWidth()) {
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(0f to colors.paper.copy(alpha = 0f), 0.6f to colors.paper)))
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 36.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onOpenSource != null) OpenSourceButton(sourceName(card), onOpenSource, Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
+            if (onOpenSource != null) OpenSourceButton(sourceName(card), onOpenSource, Modifier.weight(1f), openLabel) else Spacer(Modifier.weight(1f))
             FootCircle(painterResource(R.drawable.ic_horizontal_menu), "Card actions", onMenu)
         }
     }
 }
 
-/** The 52dp ink pill that opens the original page. */
+/** The 52dp ink pill that opens the original page, or with [label] such as "Open the PDF", the card's own file. */
 @Composable
-private fun OpenSourceButton(name: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun OpenSourceButton(name: String, onClick: () -> Unit, modifier: Modifier = Modifier, label: String? = null) {
     val colors = LocalCardSheetColors.current
     val haptic = rememberSheetHaptics()
     Row(
         modifier.height(52.dp).cardSurfaceShadow(CircleShape).clip(CircleShape).background(colors.text)
-            .semantics { contentDescription = "Open source, $name" }
+            .semantics { contentDescription = label ?: "Open source, $name" }
             .clickable(remember { MutableInteractionSource() }, CardSheetIndication, role = Role.Button) { haptic.tick(); onClick() }
             .padding(horizontal = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Open source", style = TextStyle(color = colors.paper, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium,
+        Text(label ?: "Open source", style = TextStyle(color = colors.paper, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium,
             fontFamily = MymindTheme.fonts.body), maxLines = 1)
         Image(painterResource(R.drawable.visitsourceicon), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(colors.paper))
     }

@@ -53,6 +53,8 @@ import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.uploadFileOf
 import com.octaviantocan.mymind.ui.card.CardDetailDialog
 import com.octaviantocan.mymind.ui.card.CardSheetMotion
+import com.octaviantocan.mymind.ui.card.FetchedPdfs
+import com.octaviantocan.mymind.ui.card.LocalPdfSource
 import com.octaviantocan.mymind.ui.card.ReaderActions
 import com.octaviantocan.mymind.ui.card.shrunk
 import com.octaviantocan.mymind.ui.library.cardHeading
@@ -216,6 +218,8 @@ fun MainShell(
     }
     // The opened card follows the phone's copy too, such as a shared link the server has just read.
     val openedId = opened?.card?.id
+    // Opened PDFs, fetched once into the phone's cache so the reader draws their pages.
+    val pdfs = remember(viewModel, context) { FetchedPdfs(File(context.cacheDir, PDF_DIR)) { card, file -> viewModel.fetchFile(card, file) } }
     // The cards nearest an opened product, for its Same Vibe section, kept with the id they were found for.
     var sameVibe by remember { mutableStateOf<Pair<String, List<Card>>?>(null) }
     val sameVibeOpen = "sameVibe" in features
@@ -316,41 +320,43 @@ fun MainShell(
             opened?.let { open ->
                 key(open.card.id) {
                     PageTheme(scheme) {
-                        CardDetailDialog(
-                            open.card,
-                            onClose = closeCard,
-                            onMenu = { openMenu(open.card, open.spaceId) },
-                            actionsProgress = menuProgress,
-                            shrink = shrink,
-                            reading = open.reading,
-                            actions = ReaderActions(
-                                onShare = { openSheet(open.card, open.spaceId, CardSheetRoot.Share, null) },
-                                onAddTags = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Tags) },
-                                onCopyLink = { copyLink(open.card) },
-                                onTogglePin = { togglePin(open.card) },
-                                onSpaces = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Spaces) },
-                                onOpenRecent = { openCard(it, null) },
-                                onEverything = {
-                                    closeCard()
-                                    selectTab(Tab.Everything)
-                                },
-                                onPart = { part -> openSheet(open.card, open.spaceId, CardSheetRoot.Part(part), null) },
-                                onReading = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(reading = on) ?: opened },
-                            ),
-                            details = ReaderDetails(
-                                spaces = spaces.spaces.filter { it.id in open.card.spaces.orEmpty() }.mapNotNull { it.name },
-                                recent = recent.toList(),
-                                sameVibe = sameVibe?.takeIf { it.first == open.card.id }?.second.orEmpty(),
-                            ),
-                            onRemoveTag = { tag ->
-                                scope.launch {
-                                    when (val answer = viewModel.removeTag(open.card, tag)) {
-                                        is ApiResult.Ok -> updateCard(answer.value)
-                                        is ApiResult.Failed -> failure = answer.failure
+                        CompositionLocalProvider(LocalPdfSource provides pdfs) {
+                            CardDetailDialog(
+                                open.card,
+                                onClose = closeCard,
+                                onMenu = { openMenu(open.card, open.spaceId) },
+                                actionsProgress = menuProgress,
+                                shrink = shrink,
+                                reading = open.reading,
+                                actions = ReaderActions(
+                                    onShare = { openSheet(open.card, open.spaceId, CardSheetRoot.Share, null) },
+                                    onAddTags = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Tags) },
+                                    onCopyLink = { copyLink(open.card) },
+                                    onTogglePin = { togglePin(open.card) },
+                                    onSpaces = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Spaces) },
+                                    onOpenRecent = { openCard(it, null) },
+                                    onEverything = {
+                                        closeCard()
+                                        selectTab(Tab.Everything)
+                                    },
+                                    onPart = { part -> openSheet(open.card, open.spaceId, CardSheetRoot.Part(part), null) },
+                                    onReading = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(reading = on) ?: opened },
+                                ),
+                                details = ReaderDetails(
+                                    spaces = spaces.spaces.filter { it.id in open.card.spaces.orEmpty() }.mapNotNull { it.name },
+                                    recent = recent.toList(),
+                                    sameVibe = sameVibe?.takeIf { it.first == open.card.id }?.second.orEmpty(),
+                                ),
+                                onRemoveTag = { tag ->
+                                    scope.launch {
+                                        when (val answer = viewModel.removeTag(open.card, tag)) {
+                                            is ApiResult.Ok -> updateCard(answer.value)
+                                            is ApiResult.Failed -> failure = answer.failure
+                                        }
                                     }
-                                }
-                            },
-                        )
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -644,6 +650,9 @@ fun MainShell(
 }
 
 private const val DOWNLOADED = "Successfully downloaded"
+
+/** The folder of the phone's cache that keeps opened PDFs. */
+private const val PDF_DIR = "pdf"
 private const val NO_PICTURE = "The picture could not be loaded"
 
 /** How many recently opened cards the shell keeps for the reader's name card. */

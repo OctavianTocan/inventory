@@ -200,6 +200,19 @@ fun postTimeLine(card: Card, today: LocalDate = LocalDate.now(), zone: ZoneId = 
     return listOfNotNull(posted, savedLabel(card.created, today, zone)).joinToString(" · ").ifEmpty { null }
 }
 
+/**
+ * @param pages How many pages the PDF has, once the phone has read it.
+ * @param minutes How long its words take to read, once the phone has read them.
+ * @param saved When it was saved, such as "Saved 24 Oct".
+ * @return Such as "PDF · 48 pages · 12 min read · Saved 24 Oct", leaving out what is not known.
+ */
+fun pdfDetail(pages: Int?, minutes: Int?, saved: String?): String = listOfNotNull(
+    "PDF",
+    pages?.takeIf { it > 0 }?.let { if (it == 1) "1 page" else "$it pages" },
+    minutes?.takeIf { it > 0 }?.let { "$it min read" },
+    saved,
+).joinToString(" · ")
+
 /** Such as "8:14 am", as X writes its times. */
 private fun clock(time: ZonedDateTime): String =
     "${time.format(DateTimeFormatter.ofPattern("h:mm", Locale.UK))} ${if (time.hour < 12) "am" else "pm"}"

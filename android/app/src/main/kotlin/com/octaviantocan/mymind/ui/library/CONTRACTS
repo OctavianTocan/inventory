@@ -5,8 +5,9 @@ rows, filled row by row, as Google Photos breaks up its squares: screenshots and
 tall pictures stand two squares high, about half the wide pictures lie two across, and
 about one picture in seven is big, two by two, chosen by the card's id so it keeps its
 shape across reloads. A social post with a picture, or with more words than one square
-holds, stands two squares high, and so does a product with a photo, drawn as a pin
-(gallery-products-are-pins); other text and pictures with words take one square. A band MUST
+holds, stands two squares high, and so do a product with a photo, drawn as a pin
+(gallery-products-are-pins), and a PDF, its first page whole
+(gallery-pdfs-show-their-first-page); other text and pictures with words take one square. A band MUST
 NOT leave a hole before the last card. One column shows each card across the width at
 its own proportions. Images fill their cells; text cards retain a readable preview. Tap
 and hold MUST target the same card at every density.
@@ -17,7 +18,7 @@ of taking the aspect ratio of screenshots", "some of these images are just bigge
 posts two squares high from Tavi's pick of X10 on the card previews canvas, 29 October
 2026 ("Pick recommended and build it"), after his review of X05 ("having them be two
 rows instead of one is actually pretty interesting"); products two squares high from his
-pick of P5 the same day.
+pick of P5 the same day, and PDFs from his pick of D5.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-mixed-cards-keep-text-and-images
 A note, social post, article or saved link with text and a picture MUST show both in its gallery
@@ -203,6 +204,14 @@ ratings. A product without a photo keeps the text tile.
 Source: Tavi's recorded review of the card previews canvas, 29 October 2026 (P1 "kind of
 nice", and look at how Pinterest shows products), and his pick of P5, a tall pin with
 P1's price on the photo, the same day ("Pick recommended and build it").
+
+@cc [owner:OctavianTocan,label:product;design] gallery-pdfs-show-their-first-page
+A PDF with a picture of its first page MUST show that page whole, at its own shape, on
+white with a soft shadow on the gallery's paper, with its name in up to two lines and
+PDF under it. The page MUST NOT be cut to a band or covered by words.
+Source: Tavi's recorded review of the card previews canvas, 29 October 2026 (of the
+first three PDF versions, "none of the ones you showed. I wanted to see the content"),
+and his pick of D5 the same day ("Pick recommended and build it").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-apps-show-their-icon
 An app MUST show its icon whole, with rounded corners, in the middle of paper of its type

@@ -132,6 +132,15 @@ class GalleryTileTest(private val width: Int) {
         assertTrue("The name is under the photo", name.top >= photo.bottom)
     }
 
+    @Test fun aPdfShowsItsWholeFirstPageWithItsNameUnderIt() {
+        render(testCard("pdf", type = "Document", title = "Fell walks")
+            .copy(cover = Cover(source, 642, 840), blob = Blob("u/pdf/fell-walks.pdf", "application/pdf")))
+        val page = compose.onNodeWithContentDescription("First page", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val name = compose.onNodeWithText("Fell walks", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("The name is under the page", name.top >= page.bottom)
+        assertTrue("The page keeps its own shape", kotlin.math.abs(page.width / page.height - 642f / 840f) < 0.02f)
+    }
+
     @Test fun anAppShowsItsIconAndName() {
         render(testCard("app", type = "SoftwareApplication", title = "Trailhead")
             .copy(cover = Cover(source, 250, 250), app = AppInfo("play-store")))

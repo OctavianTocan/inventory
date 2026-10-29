@@ -1,10 +1,13 @@
 package com.octaviantocan.mymind.ui
 
+import android.content.Context
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.ScrollState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -22,12 +25,17 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeDown
+import com.octaviantocan.mymind.data.Blob
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.Product
 import com.octaviantocan.mymind.ui.card.CardDetail
+import com.octaviantocan.mymind.ui.card.LocalPdfSource
+import com.octaviantocan.mymind.ui.card.PdfPages
+import com.octaviantocan.mymind.ui.card.PdfSource
 import com.octaviantocan.mymind.ui.card.ReaderActions
 import com.octaviantocan.mymind.ui.card.ReaderDetails
+import com.octaviantocan.mymind.ui.card.pdfParagraphs
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
@@ -40,6 +48,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -58,19 +67,22 @@ class CardDetailInteractionTest {
         actions: ReaderActions = ReaderActions(),
         details: ReaderDetails = ReaderDetails(),
         card: Card = LibrarySamples.article.copy(description = "Long synthetic card content.\n".repeat(100)),
+        pdfs: PdfSource? = null,
     ) {
         compose.setPhoneContent(false) {
             back = checkNotNull(LocalOnBackPressedDispatcherOwner.current).onBackPressedDispatcher
             PageTheme(PageScheme.Dark) {
-                if (opened.value) CardDetail(
-                    card,
-                    onClose = { closed++; opened.value = false },
-                    onMenu = {},
-                    headerIcons = flatSizedCardHeaderIcons(),
-                    scrollState = scroll,
-                    actions = actions,
-                    details = details,
-                )
+                CompositionLocalProvider(LocalPdfSource provides pdfs) {
+                    if (opened.value) CardDetail(
+                        card,
+                        onClose = { closed++; opened.value = false },
+                        onMenu = {},
+                        headerIcons = flatSizedCardHeaderIcons(),
+                        scrollState = scroll,
+                        actions = actions,
+                        details = details,
+                    )
+                }
             }
         }
         compose.mainClock.advanceTimeBy(1500)
@@ -182,5 +194,48 @@ class CardDetailInteractionTest {
         compose.onNodeWithText("Same Vibe").assertExists()
         compose.onNodeWithContentDescription(near.title!!).performSemanticsAction(SemanticsActions.OnClick)
         assertEquals(listOf(near.id), shown)
+    }
+
+    @Test
+    fun aPdfShowsEveryPageAndOpensInReaderModeAndInThePhonesViewer() {
+        val doc = testCard("doc", type = "Document", title = "Fell walks")
+            .copy(blob = Blob("u/doc/fell-walks.pdf", "application/pdf"), cover = Cover("https://example.test/p1.webp", 642, 840))
+        val pages = FakePdf(3, "Most visitors arrive by the railway.\nWalk up the lane behind the station.")
+        val reading = mutableListOf<Boolean>()
+        open(ReaderActions(onReading = { reading += it }), card = doc, pdfs = object : PdfSource {
+            override suspend fun file(card: Card) = File("fell-walks.pdf")
+            override fun open(file: File) = pages
+        })
+        compose.onNodeWithText("PDF · 3 pages · 1 min read", substring = true).assertExists()
+        compose.onNodeWithContentDescription("Page 1 of 3").assertExists()
+        compose.onNodeWithContentDescription("Page 3 of 3").assertExists()
+        assertTrue("The page on screen is drawn", 0 in pages.drawn)
+        compose.onNodeWithText("Read in Reader Mode").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(listOf(true), reading)
+        compose.onNodeWithContentDescription("Open the PDF").performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(1, pages.viewed)
+        compose.change { opened.value = false }
+        compose.mainClock.advanceTimeBy(100)
+        compose.waitForIdle()
+        assertTrue("Leaving the reader closes the PDF", pages.closed)
+    }
+
+    private class FakePdf(override val count: Int, private val words: String) : PdfPages {
+        val drawn = mutableSetOf<Int>()
+        var viewed = 0
+        var closed = false
+        override suspend fun load() = true
+        override fun ratio(index: Int) = 0.75f
+        override suspend fun draw(index: Int, width: Int): ImageBitmap {
+            drawn += index
+            return ImageBitmap(width, (width / 0.75f).toInt())
+        }
+        override suspend fun text() = pdfParagraphs(listOf(words))
+        override fun view(context: Context) {
+            viewed++
+        }
+        override fun close() {
+            closed = true
+        }
     }
 }
