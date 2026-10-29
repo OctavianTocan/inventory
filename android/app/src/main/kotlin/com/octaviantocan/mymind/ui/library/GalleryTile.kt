@@ -1,7 +1,9 @@
 package com.octaviantocan.mymind.ui.library
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -11,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,9 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -74,7 +80,8 @@ internal fun GalleryTile(
     val text = remember(card) { galleryText(card) }
     val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card)
     val paper = lerp(colors.raised, accent, 0.13f)
-    val background = if (picture == null || mixed || kind == TileKind.Post) paper else parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper
+    val background = if (kind == TileKind.Post) postBrand(card.type).paper
+        else if (picture == null || mixed) paper else parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper
     val heading = card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card)
     val previews = LocalVideoPreviews.current
     val video = remember(card) { previewVideo(card) }
@@ -104,7 +111,6 @@ internal fun GalleryTile(
         ) {
             if (kind == TileKind.Post) {
                 PostTile(card, text, highlight, if (picture == null) null else ({ pictureModifier -> tilePicture("Image preview", pictureModifier) }))
-                Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
             } else if (mixed) {
                 Column(Modifier.fillMaxSize()) {
                     GalleryTextPreview(card, text, highlight, Modifier.weight(0.56f).fillMaxWidth())
@@ -160,7 +166,7 @@ private fun rememberGalleryImage(picture: String?, imageRequestSizePx: Int?): An
 internal fun GalleryTileBackdrop(card: Card, imageRequestSizePx: Int) {
     val colors = LibraryStyle.colors
     val picture = galleryPicture(card)
-    val paper = lerp(colors.raised, cardAccent(card) ?: colors.selected, 0.13f)
+    val paper = if (tileKind(card) == TileKind.Post) postBrand(card.type).paper else lerp(colors.raised, cardAccent(card) ?: colors.selected, 0.13f)
     val onlyPicture = picture != null && tileKind(card) != TileKind.Post && !(galleryKeepsText(card) && galleryText(card).isNotBlank())
     val imageModel = rememberGalleryImage(picture.takeIf { onlyPicture }, imageRequestSizePx)
     val background = if (onlyPicture) parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper else paper
@@ -181,34 +187,52 @@ private fun GalleryCount(card: Card, modifier: Modifier) {
 }
 
 /**
- * A saved post drawn as the post itself: where it was posted, its words, its own picture, then who wrote it. The words
- * take what they need, up to a little over half the tile, and the picture fills the rest.
+ * A saved post drawn as the post itself, in its network's own colours ([postBrand]): the network's mark top left, the
+ * author's name with the handle under it, the post's words, then its own picture with rounded corners. With a picture
+ * the words take what they need, up to a little under half of the tile under the name, and the picture fills the rest.
+ * It shows no likes, reposts or other counts.
  */
 @Composable
 private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Composable (Modifier) -> Unit)?) {
-    val colors = LibraryStyle.colors
+    val brand = postBrand(card.type)
+    val byline = remember(card) { postByline(card) ?: PostByline(galleryKind(card), null) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 110.dp
         val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
-        val author =(card.post?.author ?: card.author)?.takeIf { it.isNotBlank() && !compact && maxHeight >= 160.dp }
         val words = text.ifBlank { if (picture == null) cardHeading(card) else "" }
-        val showKind = !compact && maxHeight >= 112.dp
-        val wordsHeight = maxHeight * 0.55f
-        Column(Modifier.fillMaxSize().padding(inset)) {
-            if (showKind) {
-                KindLabel(galleryKind(card))
+        val head = !compact && maxHeight >= 96.dp
+        val wordsHeight = ((maxHeight - inset * 2 - if (head) POST_HEAD else 0.dp) * 0.45f).coerceAtLeast(19.dp)
+        Column(Modifier.fillMaxSize().padding(start = inset, end = inset, top = inset - 2.dp, bottom = inset - 3.dp)) {
+            if (head) {
+                PostHead(brand, byline)
                 Spacer(Modifier.height(6.dp))
             }
             if (words.isNotBlank()) {
-                TileText(words, highlight, if (picture == null) Modifier.weight(1f) else Modifier.heightIn(max = wordsHeight))
+                TileText(words, highlight, if (picture == null) Modifier.weight(1f) else Modifier.heightIn(max = wordsHeight), brand.text)
             }
-            if (picture != null) Box(Modifier.padding(top = if (words.isBlank()) 0.dp else 8.dp).fillMaxWidth().weight(1f)
+            if (picture != null) Box(Modifier.padding(top = if (words.isBlank()) 0.dp else 7.dp).fillMaxWidth().weight(1f)
                 .clip(RoundedCornerShape(if (compact) 4.dp else 8.dp))) {
                 picture(Modifier.fillMaxSize())
-                GalleryCount(card, Modifier.align(Alignment.TopEnd))
+                if (card.post?.hasVideo == true) VideoBadge(false, null, Modifier.align(Alignment.TopEnd).padding(6.dp))
+                else GalleryCount(card, Modifier.align(Alignment.TopEnd))
             }
-            if (author != null) Text(author, Modifier.padding(top = 6.dp).clearAndSetSemantics {}, color = colors.muted,
-                style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** Height of a post tile's head: the name and the handle under it, as [PostHead] draws them. */
+private val POST_HEAD = 38.dp
+
+/** A post tile's head: its network's mark, then the author's name with the handle under it, on the network's colour. */
+@Composable
+private fun PostHead(brand: PostBrand, byline: PostByline) {
+    val style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp)
+    Row(Modifier.fillMaxWidth().clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        if (brand.icon != null) Image(painterResource(brand.icon), null, Modifier.padding(top = 2.dp).size(13.dp),
+            colorFilter = ColorFilter.tint(brand.text))
+        Column(Modifier.weight(1f)) {
+            Text(byline.name, color = brand.text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (byline.handle != null) Text(byline.handle, color = brand.muted, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -225,9 +249,9 @@ private fun KindLabel(kind: String) {
  * while a pinch changes the tile. A word too long for the line breaks with a hyphen.
  */
 @Composable
-private fun TileText(text: String, highlight: Boolean, modifier: Modifier) {
+private fun TileText(text: String, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text) {
     Text(
-        text, modifier, color = LibraryStyle.colors.text,
+        text, modifier, color = color,
         style = LibraryStyle.body.copy(
             fontSize = if (highlight) HIGHLIGHT_TEXT else TILE_TEXT, lineHeight = (if (highlight) 1.34f else 1.42f).em,
             fontWeight = FontWeight.Normal, hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph,
@@ -292,7 +316,8 @@ internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_T
 
 private fun galleryText(card: Card): String = when (tileKind(card)) {
     TileKind.Note -> noteText(card)
-    TileKind.Post -> postText(card)
+    TileKind.Post -> if (card.type != "RedditPost") postWords(card)
+        else listOfNotNull(card.reddit?.title, postWords(card)).filter { it.isNotBlank() }.distinct().joinToString("\n")
     TileKind.Media, TileKind.Video -> card.prose?.let(::proseText)?.takeIf { it.isNotBlank() }
         ?: card.note?.takeIf { it.isNotBlank() }
         ?: card.title?.takeIf { it.isNotBlank() } ?: card.description.orEmpty()

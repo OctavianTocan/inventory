@@ -64,6 +64,9 @@ import com.octaviantocan.mymind.ui.library.TileKind
 import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.library.cardHeading
 import com.octaviantocan.mymind.ui.library.galleryPicture
+import com.octaviantocan.mymind.ui.library.postBrand
+import com.octaviantocan.mymind.ui.library.postByline
+import com.octaviantocan.mymind.ui.library.postWords
 import com.octaviantocan.mymind.ui.library.readerVideo
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.MymindTheme
@@ -323,10 +326,12 @@ private fun ReaderBody(
     val hold = { part: ReaderPart -> onPart?.takeIf { partChoices(part, card).isNotEmpty() }?.let { open -> { open(part) } } }
     val pictureHold = hold(ReaderPart.Picture)
     val emptyNote = onPart != null && tileKind(card) != TileKind.Note && sections.none { it.part == ReaderPart.YourNote }
+    val post = tileKind(card) == TileKind.Post
     Column(Modifier.fillMaxWidth().padding(horizontal = BODY_SIDE).padding(top = 12.dp, bottom = FOOT_ROOM),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        HeadSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions")
-        sections.filter { it.part in LEAD_PARTS }.forEach { TextSection(it, card, hold(it.part)) }
+        if (post) PostSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions", hold(ReaderPart.Post))
+        else HeadSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions")
+        sections.filter { it.part in LEAD_PARTS && !(post && it.part == ReaderPart.Post) }.forEach { TextSection(it, card, hold(it.part)) }
         TagsSection(card, onRemoveTag, onAddTags, hold(ReaderPart.Tags))
         sections.filter { it.part == ReaderPart.YourNote }.forEach { TextSection(it, card, hold(it.part)) }
         if (emptyNote) EmptyNoteSection(hold(ReaderPart.YourNote))
@@ -448,6 +453,58 @@ private fun HeadSection(card: Card, onOpenSource: (() -> Unit)?, onHold: () -> U
                 lines.forEach { Text(it, style = detailStyle(colors)) }
             }
         }
+    }
+}
+
+/**
+ * A social post as one section in its network's own colours ([postBrand]): who posted it, with the handle and the day
+ * and the network's mark; a Reddit post's title; its words; its picture or the video the server keeps, whole; then when
+ * it was posted and saved. It is ThyMind's own copy, never a live embed, and shows no counts. Holding the words opens
+ * the post's sheet ([onHold]); the picture opens the source when tapped and calls [onPictureHold] when held.
+ */
+@Composable
+private fun PostSection(card: Card, onOpenSource: (() -> Unit)?, onPictureHold: () -> Unit, pictureHoldLabel: String, onHold: (() -> Unit)?) {
+    val colors = LocalCardSheetColors.current
+    val brand = postBrand(card.type)
+    val byline = remember(card) { postByline(card) }
+    val previews = LocalVideoPreviews.current
+    val video = remember(card) { readerVideo(card) }?.takeIf { previews != null }
+    val words = remember(card) { postWords(card) }
+    val title = card.reddit?.title?.trim()?.takeIf { card.type == "RedditPost" && it.isNotEmpty() }
+    val second = listOfNotNull(byline?.handle, postDay(card)).joinToString(" · ").ifEmpty { null }
+    val time = postTimeLine(card)
+    val shape = RoundedCornerShape(24.dp)
+    val body = TextStyle(color = brand.text, fontSize = 17.sp, lineHeight = 26.sp, fontFamily = MymindTheme.fonts.body)
+    val muted = TextStyle(color = brand.muted, fontSize = 15.sp, lineHeight = 21.sp, fontFamily = MymindTheme.fonts.body)
+    Column(Modifier.fillMaxWidth().cardSurfaceShadow(shape, note = true).clip(shape).background(brand.paper)
+        .padding(start = 18.dp, top = 18.dp, end = 18.dp, bottom = 16.dp)) {
+        Column(Modifier.fillMaxWidth().held("Post actions", onHold)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(byline?.name ?: sourceName(card), style = body.copy(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (second != null) Text(second, style = muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                brand.icon?.let { Image(painterResource(it), null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(brand.text)) }
+            }
+            if (title != null) Text(title, Modifier.padding(top = 12.dp), style = body.copy(fontFamily = MymindTheme.fonts.heading,
+                fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp))
+            if (words.isNotEmpty()) Text(words, Modifier.padding(top = if (title != null) 10.dp else 12.dp), style = body)
+        }
+        val frame = Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
+        if (video != null && previews != null) {
+            CompositionLocalProvider(LocalCardSheetColors provides CardSheetColors(brand.paper, brand.paper, brand.text, colors.grabber,
+                colors.scrim, brand.line, colors.shadow)) { CardVideo(card, video, previews, frame) }
+        } else if (galleryPicture(card) != null) Box(frame) {
+            CardPicture(card, play = card.post?.hasVideo == true, whole = true, modifier = Modifier
+                .semantics { contentDescription = "Preview" }
+                .combinedClickable(
+                    interactionSource = null, indication = CardSheetIndication, role = Role.Button,
+                    onClickLabel = if (onOpenSource != null) "Open source" else null, onClick = { onOpenSource?.invoke() },
+                    onLongClickLabel = pictureHoldLabel, onLongClick = onPictureHold,
+                ))
+        }
+        if (time != null) Text(time, Modifier.padding(top = 12.dp), style = muted)
     }
 }
 

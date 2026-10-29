@@ -4,12 +4,14 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.ui.library.TileKind
 import com.octaviantocan.mymind.ui.library.galleryPicture
 import com.octaviantocan.mymind.ui.library.noteText
-import com.octaviantocan.mymind.ui.library.postText
+import com.octaviantocan.mymind.ui.library.postWords
+import com.octaviantocan.mymind.ui.library.postedAt
 import com.octaviantocan.mymind.ui.library.proseText
 import com.octaviantocan.mymind.ui.library.tileKind
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.ceil
@@ -55,7 +57,7 @@ fun readerSections(card: Card): List<ReaderText> {
     val prose = card.prose?.let(::proseText)
     val parts = when (tileKind(card)) {
         TileKind.Note -> listOf(ReaderPart.Note to noteText(card), ReaderPart.YourNote to card.note)
-        TileKind.Post -> listOf(ReaderPart.Post to postText(card), ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
+        TileKind.Post -> listOf(ReaderPart.Post to postWords(card), ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
         else -> listOf(ReaderPart.Summary to card.description, ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
     }
     val seen = mutableSetOf<String>()
@@ -173,6 +175,34 @@ fun savedLabel(created: String, today: LocalDate = LocalDate.now(), zone: ZoneId
     val pattern = if (day.year == today.year) "d MMM" else "d MMM yyyy"
     return "Saved " + day.format(DateTimeFormatter.ofPattern(pattern, Locale.UK))
 }
+
+/**
+ * @param card A social post.
+ * @param today The day it is now, in the phone's time zone.
+ * @param zone The phone's time zone.
+ * @return The day it was posted, such as "14 Oct" (with the year when it is not this year), for an X post; null when
+ *   the post does not say.
+ */
+fun postDay(card: Card, today: LocalDate = LocalDate.now(), zone: ZoneId = ZoneId.systemDefault()): String? {
+    val day = postedAt(card)?.atZone(zone)?.toLocalDate() ?: return null
+    return day.format(DateTimeFormatter.ofPattern(if (day.year == today.year) "d MMM" else "d MMM yyyy", Locale.UK))
+}
+
+/**
+ * @param card A social post.
+ * @param today The day it is now, in the phone's time zone.
+ * @param zone The phone's time zone.
+ * @return When it was posted (for an X post) and when ThyMind saved its own copy, such as
+ *   "8:14 am · 14 Oct 2026 · Saved 14 Oct"; null when neither can be read.
+ */
+fun postTimeLine(card: Card, today: LocalDate = LocalDate.now(), zone: ZoneId = ZoneId.systemDefault()): String? {
+    val posted = postedAt(card)?.atZone(zone)?.let { "${clock(it)} · ${it.format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK))}" }
+    return listOfNotNull(posted, savedLabel(card.created, today, zone)).joinToString(" · ").ifEmpty { null }
+}
+
+/** Such as "8:14 am", as X writes its times. */
+private fun clock(time: ZonedDateTime): String =
+    "${time.format(DateTimeFormatter.ofPattern("h:mm", Locale.UK))} ${if (time.hour < 12) "am" else "pm"}"
 
 /**
  * @param card A card.

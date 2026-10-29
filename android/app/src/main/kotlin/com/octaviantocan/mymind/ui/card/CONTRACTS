@@ -18,7 +18,12 @@ The reader MUST show every part of a card it has, each once, in its own raised
 section: the picture (cover, post image or image file) with the title, who made it,
 where it is from, when it was saved and how long its page takes to read; the post or
 note body, or else the saved summary; the tags; the user's note; and the captured
-page text with its reading time. Text sections MUST carry a small muted heading.
+page text with its reading time. Text sections MUST carry a small muted heading. A social
+post MUST instead show as one section on its network's colour
+(`gallery-posts-look-like-posts`): who posted it, with the handle, the posting day where
+the post gives it and the network's mark; a Reddit post's title; its words; its picture
+or video, whole; and when it was posted and saved. It shows no counts, and its title
+stays in the name's pill.
 The card's type colour MUST wash the top of the reader as a faint fade, as it does
 on the card's sheets, and never tint the body. Tags are quiet pills without crosses;
 Edit tags reveals a cross on each and Done hides them again, and + Add opens Add
@@ -26,7 +31,8 @@ tags. A card that is not itself a note MUST show Your note even before one is
 written, inviting one, and the page ends with a line saying any part can be held.
 Source: Tavi's recorded review, 22 October 2026 ("why is there nothing here", "can't
 just tint only the bottom sheet", "some tags which look really weird"); Tavi's pick
-of F08, whose page is the prototype's 02 raised sections, 28 October 2026.
+of F08, whose page is the prototype's 02 raised sections, 28 October 2026; the post
+section from Tavi's pick of X10 on the card previews canvas, 29 October 2026.
 
 @cc [owner:OctavianTocan,label:product] card-reader-opens-its-source
 A card with a web link MUST open it from a tap on its picture and from the foot's

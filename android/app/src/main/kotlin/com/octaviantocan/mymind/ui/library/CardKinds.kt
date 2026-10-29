@@ -1,16 +1,35 @@
 package com.octaviantocan.mymind.ui.library
 
+import androidx.annotation.DrawableRes
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.core.text.HtmlCompat
+import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import java.time.Instant
 
 private val MEDIA_LINK = Regex("""(?:https?://)?(?:pic\.(?:twitter|x)\.com|t\.co)/\S+""")
 private val LINE_END_SPACE = Regex("""[ \t\u00a0]+(\n|$)""")
+private val HTML_TAG = Regex("<[^>]*>")
+private val X_STATUS = Regex("""https?://(?:www\.|mobile\.)?(?:x|twitter)\.com/(\w{1,15})/status(?:es)?/(\d+)""")
+private val THREADS_USER = Regex("""https?://(?:www\.)?threads\.(?:net|com)/@([\w.]+)""")
+private val BLUESKY_USER = Regex("""https?://bsky\.app/profile/([^/?#]+)""")
+private val SUBSTACK_USER = Regex("""https?://(?:www\.)?substack\.com/@([\w-]+)""")
+private val MASTODON_USER = Regex("""https?://([^/?#]+)/@(\w+)""")
+private val NAMED_HANDLE = Regex("""^(.*?)\s*\(@([\w.]+)\)$""")
+private val REDDIT_SUMMARY = Regex("""^Posted in r/\S+ by """)
+
+/** The first X id that carries its own time (4 November 2010); older ids are plain numbers. */
+private const val X_FIRST_TIMED_ID = 29_700_859_247L
+private const val X_EPOCH_MILLIS = 1_288_834_974_657L
+
+/** A post with more words than this, or with a picture, stands two squares high: one square holds about four lines. */
+private const val POST_SQUARE_CHARS = 72
 
 /** How a card is drawn in the grid, following the web front-end's card classes. */
 enum class TileKind {
@@ -103,14 +122,116 @@ fun proseText(node: JsonElement): String {
 
 /**
  * @param type Card type of a post.
- * @return Colour of the post tile's top edge (`--card-color` in the web front-end).
+ * @return The colour its tile is drawn in ([postBrand]), which its reader and sheets wash with.
  */
-fun postColor(type: String): Color = when (type) {
-    "XPost" -> Color(0xFF1E9BF0)
-    "SubstackNote" -> Color(0xFFFF6719)
-    "MastodonPost" -> Color(0xFF6364FF)
-    "BlueskyPost" -> Color(0xFF1185FE)
-    else -> Color(0xFF626C7A)
+fun postColor(type: String): Color = postBrand(type).paper
+
+/**
+ * A social network's own colours, in which its posts' tiles and reader sections are drawn.
+ *
+ * @property paper The network's colour, deepened just enough that white words on it read at 4.5:1.
+ * @property text The post's words and the author's name.
+ * @property muted The handle, the day and other quiet lines.
+ * @property line Hairlines drawn on [paper].
+ * @property icon The network's own mark, drawn in [text].
+ */
+@Immutable
+data class PostBrand(val paper: Color, val text: Color, val muted: Color, val line: Color, @param:DrawableRes val icon: Int?)
+
+private val ON_COLOUR = Color.White
+private val ON_COLOUR_MUTED = Color.White.copy(alpha = 0.8f)
+private val ON_COLOUR_LINE = Color.White.copy(alpha = 0.3f)
+
+/**
+ * @param type Card type of a post.
+ * @return Its network's colours: X in X's own black and greys, Threads in black, Reddit, Bluesky, Mastodon and
+ *   Substack in their colours, and any other post in slate.
+ */
+fun postBrand(type: String): PostBrand = when (type) {
+    "XPost" -> PostBrand(Color.Black, Color(0xFFE7E9EA), Color(0xFF71767B), Color(0xFF2F3336), R.drawable.ic_si_x)
+    "ThreadsPost" -> PostBrand(Color.Black, ON_COLOUR, Color(0xFF8E8E8E), Color(0xFF333333), R.drawable.ic_si_threads)
+    "RedditPost" -> PostBrand(Color(0xFFD93A00), ON_COLOUR, ON_COLOUR_MUTED, ON_COLOUR_LINE, R.drawable.ic_si_reddit)
+    "BlueskyPost" -> PostBrand(Color(0xFF0D71D8), ON_COLOUR, ON_COLOUR_MUTED, ON_COLOUR_LINE, R.drawable.ic_si_bluesky)
+    "MastodonPost" -> PostBrand(Color(0xFF5F60F5), ON_COLOUR, ON_COLOUR_MUTED, ON_COLOUR_LINE, R.drawable.ic_si_mastodon)
+    "SubstackNote" -> PostBrand(Color(0xFFC85113), ON_COLOUR, ON_COLOUR_MUTED, ON_COLOUR_LINE, R.drawable.ic_si_substack)
+    else -> PostBrand(Color(0xFF4A525E), ON_COLOUR, ON_COLOUR_MUTED, ON_COLOUR_LINE, null)
+}
+
+/**
+ * Who wrote a post, as its tile and reader name them.
+ *
+ * @property name The author's name, or for Reddit the subreddit (`r/hiking`).
+ * @property handle The author's handle (`@theo_maps`, `u/fernhollow`), when it is known and differs from [name].
+ */
+data class PostByline(val name: String, val handle: String?)
+
+/**
+ * @param card A social post.
+ * @return Its author's name over the handle read from the post's own link, or the subreddit over `u/author` for
+ *   Reddit; null when the card names nobody.
+ */
+fun postByline(card: Card): PostByline? {
+    if (card.type == "RedditPost") {
+        val subreddit = card.reddit?.subreddit?.trim()?.takeIf { it.isNotEmpty() }?.let { "r/$it" }
+        val user = card.author?.trim()?.removePrefix("u/")?.takeIf { it.isNotEmpty() }?.let { "u/$it" }
+        return (subreddit ?: user)?.let { PostByline(it, user.takeIf { subreddit != null }) }
+    }
+    val written = (card.post?.author ?: card.author)?.trim()?.removePrefix("by ")?.trim()?.takeIf { it.isNotEmpty() }
+    val named = written?.let(NAMED_HANDLE::matchEntire)
+    val name = named?.groupValues?.get(1)?.takeIf { it.isNotBlank() } ?: written
+    val handle = postHandle(card) ?: named?.groupValues?.get(2)?.let { "@$it" }
+    return when {
+        name != null -> PostByline(name, handle?.takeIf { it != name })
+        handle != null -> PostByline(handle, null)
+        else -> null
+    }
+}
+
+/** The author's handle as the post's own link gives it, such as `@theo_maps`, or null. */
+private fun postHandle(card: Card): String? {
+    val url = card.url ?: return null
+    return when (card.type) {
+        "XPost" -> X_STATUS.find(url)?.groupValues?.get(1)?.takeIf { it != "i" }?.let { "@$it" }
+        "ThreadsPost" -> THREADS_USER.find(url)?.groupValues?.get(1)?.let { "@$it" }
+        "BlueskyPost" -> BLUESKY_USER.find(url)?.groupValues?.get(1)?.let { "@$it" }
+        "SubstackNote" -> SUBSTACK_USER.find(url)?.groupValues?.get(1)?.let { "@$it" }
+        "MastodonPost" -> MASTODON_USER.find(url)?.let { "@${it.groupValues[2]}@${it.groupValues[1]}" }
+        else -> null
+    }
+}
+
+/**
+ * @param card A social post.
+ * @return When it was posted, read from an X post's id (X's ids carry their own time); null for other posts and for X
+ *   posts older than November 2010.
+ */
+fun postedAt(card: Card): Instant? {
+    if (card.type != "XPost") return null
+    val id = card.url?.let(X_STATUS::find)?.groupValues?.get(2)?.toLongOrNull()?.takeIf { it >= X_FIRST_TIMED_ID } ?: return null
+    return Instant.ofEpochMilli((id shr 22) + X_EPOCH_MILLIS)
+}
+
+/**
+ * @param card A social post.
+ * @return The words its tile and reader show: the post's own words, or a Reddit post's description unless it is only
+ *   the page's "Posted in r/… by …" line.
+ */
+fun postWords(card: Card): String {
+    val words = postText(card)
+    return if (card.type == "RedditPost" && REDDIT_SUMMARY.containsMatchIn(words)) "" else words
+}
+
+/**
+ * @param card A card.
+ * @return True for a social post with a picture, or with more words than one square holds, which stands two squares
+ *   high. It reads the stored words without parsing them, as the layout asks for every card.
+ */
+internal fun postStandsTall(card: Card): Boolean {
+    if (tileKind(card) != TileKind.Post) return false
+    if (galleryPicture(card) != null) return true
+    val words = card.post?.bodyHtml?.replace(HTML_TAG, "") ?: card.description.orEmpty()
+    val title = if (card.type == "RedditPost") card.reddit?.title.orEmpty() else ""
+    return words.replace(MEDIA_LINK, "").trim().length + title.length > POST_SQUARE_CHARS
 }
 
 /**

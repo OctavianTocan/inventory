@@ -4,14 +4,18 @@ lays cards out. At two to four columns cards share square cells in bands of one 
 rows, filled row by row, as Google Photos breaks up its squares: screenshots and other
 tall pictures stand two squares high, about half the wide pictures lie two across, and
 about one picture in seven is big, two by two, chosen by the card's id so it keeps its
-shape across reloads. Text, posts and pictures with words take one square. A band MUST
+shape across reloads. A social post with a picture, or with more words than one square
+holds, stands two squares high; other text and pictures with words take one square. A band MUST
 NOT leave a hole before the last card. One column shows each card across the width at
 its own proportions. Images fill their cells; text cards retain a readable preview. Tap
 and hold MUST target the same card at every density.
 Source: Tavi, 22 October 2026, Google Photos layout request in the Codex conversation;
 the recorded review of 23 October 2026 ("they use all these shapes to break up the
 layout so that you don't just have like a bunch of squares", "the screenshots are kind
-of taking the aspect ratio of screenshots", "some of these images are just bigger").
+of taking the aspect ratio of screenshots", "some of these images are just bigger");
+posts two squares high from Tavi's pick of X10 on the card previews canvas, 29 October
+2026 ("Pick recommended and build it"), after his review of X05 ("having them be two
+rows instead of one is actually pretty interesting").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-mixed-cards-keep-text-and-images
 A note, social post, article or saved link with text and a picture MUST show both in its gallery
@@ -167,12 +171,22 @@ much more helpful") and 23 October 2026 ("that YouTube icon, if you look at the 
 Photos ... it was a lot more interesting", "the videos aren't auto playing").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-posts-look-like-posts
-A social post tile MUST read as the post itself: the platform, the post's words, its own
-picture inset with rounded corners below them, and the author when the tile has room.
+A social post tile MUST read as the post itself, drawn on its network's own colour: X in
+X's black and greys, Threads in black, and Reddit, Bluesky, Mastodon and Substack in
+their colours, each deepened only as far as white words on it need to read at 4.5:1. It
+shows the network's mark top left, the author's name with the handle under it (for
+Reddit, the subreddit with u/author), the post's words, and its own picture inset with
+rounded corners below them. It MUST NOT show likes, reposts, points or other counts.
+The tile and the reader show ThyMind's own saved copy of the post, never a live embed.
 Bare media links the platform appends, such as pic.twitter.com or t.co addresses, MUST
 NOT appear as text in the tile or the reader.
 Source: Tavi's recorded review, 22 October 2026 ("if we have a link for the thing, I
-don't think we should put it on the thing", "I think we can just probably show the tweet").
+don't think we should put it on the thing", "I think we can just probably show the tweet");
+his recorded review of the card previews canvas, 29 October 2026 (X08's ink tile "I think
+we should do for all of them ... but use X's actual color and also put the username
+under", "we don't need to put the likes and stuff there", "embedding it would mean that
+if the original post changes, ours changes too. That's not what we want"), and his pick
+of X10, R4 and O2 the same day.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-text-is-one-size
 All gallery tile text MUST use one size and one regular weight, so neighbouring tiles

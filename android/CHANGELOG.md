@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.32 (43), 2026-10-29
+Saved posts look like the network they came from.
+
+### Changed
+- An X post's tile is now drawn in X's own black, with the X mark at the top, the author's name and @handle under it, and the post's words. A post with a picture, or more words than one square holds, stands two squares tall, so the whole post fits and the picture gets room. Posts show no likes or reposts.
+- Reddit posts take Reddit's orange, with the subreddit and u/author at the top and the post's title. Threads, Bluesky, Mastodon and Substack posts take their own colours the same way.
+- Opening a post shows it as one section in the same colours: who posted it with the handle and the day, the words, the picture or video, and when it was posted and saved. It is ThyMind's own copy of the post, so it doesn't change if the original does.
+
 ## 0.6.31 (42), 2026-10-29
 Sharing something into ThyMind shows what you saved and goes away by itself.
 
