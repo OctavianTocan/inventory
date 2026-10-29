@@ -235,6 +235,14 @@ class LibraryViewModel(
      */
     suspend fun cardNow(cardId: String): Card? = (library.card(cardId) as? ApiResult.Ok)?.value
 
+    /**
+     * @param card A card.
+     * @return Up to [limit] cards nearest to it in meaning (Same Vibe), nearest first and without the card itself;
+     *   empty when the search fails or finds none.
+     */
+    suspend fun sameVibe(card: Card, limit: Int = 3): List<Card> =
+        (library.search("similar:${card.id}", null) as? ApiResult.Ok)?.value?.cards.orEmpty().filter { it.id != card.id }.take(limit)
+
     // Reads every list on show again from the phone's copy, keeping each as it is when nothing in it changed.
     private suspend fun showCopy() {
         everything.reread()

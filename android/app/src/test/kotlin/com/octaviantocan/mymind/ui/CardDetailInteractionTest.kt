@@ -22,9 +22,13 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeDown
+import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.data.Cover
+import com.octaviantocan.mymind.data.Product
 import com.octaviantocan.mymind.ui.card.CardDetail
 import com.octaviantocan.mymind.ui.card.ReaderActions
 import com.octaviantocan.mymind.ui.card.ReaderDetails
+import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
 import kotlinx.coroutines.runBlocking
@@ -50,12 +54,16 @@ class CardDetailInteractionTest {
 
     private val nameCard get() = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "About this card"))
 
-    private fun open(actions: ReaderActions = ReaderActions(), details: ReaderDetails = ReaderDetails()) {
+    private fun open(
+        actions: ReaderActions = ReaderActions(),
+        details: ReaderDetails = ReaderDetails(),
+        card: Card = LibrarySamples.article.copy(description = "Long synthetic card content.\n".repeat(100)),
+    ) {
         compose.setPhoneContent(false) {
             back = checkNotNull(LocalOnBackPressedDispatcherOwner.current).onBackPressedDispatcher
             PageTheme(PageScheme.Dark) {
                 if (opened.value) CardDetail(
-                    LibrarySamples.article.copy(description = "Long synthetic card content.\n".repeat(100)),
+                    card,
                     onClose = { closed++; opened.value = false },
                     onMenu = {},
                     headerIcons = flatSizedCardHeaderIcons(),
@@ -161,5 +169,18 @@ class CardDetailInteractionTest {
         compose.waitForIdle()
         assertEquals(1, closed)
         panel.assertDoesNotExist()
+    }
+
+    @Test
+    fun aProductShowsItsPriceAndSameVibeOpensACardNearIt() {
+        val lamp = testCard("lamp", type = "Product", url = "https://shop.example.test/lamp", title = "Paper lamp")
+            .copy(cover = Cover("https://shop.example.test/lamp.jpg", 900, 1200), product = Product("GBP 24.00", "Norrland"))
+        val near = LibrarySamples.video
+        val shown = mutableListOf<String>()
+        open(ReaderActions(onOpenRecent = { shown += it.id }), ReaderDetails(sameVibe = listOf(near)), lamp)
+        compose.onNodeWithText("£24").assertExists()
+        compose.onNodeWithText("Same Vibe").assertExists()
+        compose.onNodeWithContentDescription(near.title!!).performSemanticsAction(SemanticsActions.OnClick)
+        assertEquals(listOf(near.id), shown)
     }
 }

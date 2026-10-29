@@ -5,7 +5,8 @@ rows, filled row by row, as Google Photos breaks up its squares: screenshots and
 tall pictures stand two squares high, about half the wide pictures lie two across, and
 about one picture in seven is big, two by two, chosen by the card's id so it keeps its
 shape across reloads. A social post with a picture, or with more words than one square
-holds, stands two squares high; other text and pictures with words take one square. A band MUST
+holds, stands two squares high, and so does a product with a photo, drawn as a pin
+(gallery-products-are-pins); other text and pictures with words take one square. A band MUST
 NOT leave a hole before the last card. One column shows each card across the width at
 its own proportions. Images fill their cells; text cards retain a readable preview. Tap
 and hold MUST target the same card at every density.
@@ -15,7 +16,8 @@ layout so that you don't just have like a bunch of squares", "the screenshots ar
 of taking the aspect ratio of screenshots", "some of these images are just bigger");
 posts two squares high from Tavi's pick of X10 on the card previews canvas, 29 October
 2026 ("Pick recommended and build it"), after his review of X05 ("having them be two
-rows instead of one is actually pretty interesting").
+rows instead of one is actually pretty interesting"); products two squares high from his
+pick of P5 the same day.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-mixed-cards-keep-text-and-images
 A note, social post, article or saved link with text and a picture MUST show both in its gallery
@@ -169,6 +171,10 @@ Source: Tavi's recorded reviews, 22 October 2026 ("I don't really like this came
 "videos autoplay ... They don't play with sound", "this icon with the time is actually
 much more helpful") and 23 October 2026 ("that YouTube icon, if you look at the Google
 Photos ... it was a lot more interesting", "the videos aren't auto playing").
+A YouTube or Instagram video with a title and no note of its own MUST show the title under
+its still, in up to three lines when the tile stands tall and one otherwise, with its
+channel under it, on the raised paper; the badge stays on the still. Source: Tavi's
+recorded review of the card previews canvas, 29 October 2026, picking V1.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-posts-look-like-posts
 A social post tile MUST read as the post itself, drawn on its network's own colour: X in
@@ -187,6 +193,23 @@ we should do for all of them ... but use X's actual color and also put the usern
 under", "we don't need to put the likes and stuff there", "embedding it would mean that
 if the original post changes, ours changes too. That's not what we want"), and his pick
 of X10, R4 and O2 the same day.
+
+@cc [owner:OctavianTocan,label:product;design] gallery-products-are-pins
+A product with a photo MUST show as a pin, as Pinterest's feed does: the photo with round
+corners standing on the gallery's paper, the shop's price on the photo as a small white
+pill with the currency's sign (such as £24 for GBP 24.00), and under the photo the name
+in up to two lines with the brand, else the shop, under it. It MUST NOT show counts or
+ratings. A product without a photo keeps the text tile.
+Source: Tavi's recorded review of the card previews canvas, 29 October 2026 (P1 "kind of
+nice", and look at how Pinterest shows products), and his pick of P5, a tall pin with
+P1's price on the photo, the same day ("Pick recommended and build it").
+
+@cc [owner:OctavianTocan,label:product;design] gallery-apps-show-their-icon
+An app MUST show its icon whole, with rounded corners, in the middle of paper of its type
+colour, with its name in one line and the store it is on under it: Google Play or the App
+Store with the store's mark, else the address it was saved from.
+Source: Tavi's pick of A1 on the card previews canvas, 29 October 2026 ("Pick recommended
+and build it").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-text-is-one-size
 All gallery tile text MUST use one size and one regular weight, so neighbouring tiles

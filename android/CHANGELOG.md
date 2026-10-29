@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.33 (44), 2026-10-29
+Products look like pins, apps show their icon, and videos say what they are.
+
+### Changed
+- A product with a photo is now a pin, as on Pinterest: the photo with round corners, two squares tall, with the price on it in a small white pill (such as £24), and the name and brand under it.
+- An app shows its icon whole in the middle of its tile, with its name and the store it is on, Google Play or the App Store, under it.
+- A YouTube or Instagram video shows its title and channel under its picture. A video with your own note keeps the note instead.
+- Opening a product shows its price on the photo and its brand or shop under the name. When your account has Same Vibe, it also shows up to three things from your mind that are like it, and tapping one opens it.
+
 ## 0.6.32 (43), 2026-10-29
 Saved posts look like the network they came from.
 

@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -59,6 +60,7 @@ import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.library.CardPicture
+import com.octaviantocan.mymind.ui.library.CardThumbnail
 import com.octaviantocan.mymind.ui.library.LocalVideoPreviews
 import com.octaviantocan.mymind.ui.library.TileKind
 import com.octaviantocan.mymind.ui.library.cardAccent
@@ -67,6 +69,8 @@ import com.octaviantocan.mymind.ui.library.galleryPicture
 import com.octaviantocan.mymind.ui.library.postBrand
 import com.octaviantocan.mymind.ui.library.postByline
 import com.octaviantocan.mymind.ui.library.postWords
+import com.octaviantocan.mymind.ui.library.productPrice
+import com.octaviantocan.mymind.ui.library.productShop
 import com.octaviantocan.mymind.ui.library.readerVideo
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.MymindTheme
@@ -111,9 +115,10 @@ class ReaderActions(
  *
  * @property spaces Names of the spaces the card is in, in the user's order.
  * @property recent Cards opened before this one, latest first.
+ * @property sameVibe The cards nearest a product in meaning, nearest first, for its Same Vibe section.
  */
 @Immutable
-data class ReaderDetails(val spaces: List<String> = emptyList(), val recent: List<Card> = emptyList())
+data class ReaderDetails(val spaces: List<String> = emptyList(), val recent: List<Card> = emptyList(), val sameVibe: List<Card> = emptyList())
 
 /**
  * A full-window card reader; contextual menu windows opened afterward remain above it.
@@ -225,7 +230,7 @@ internal fun CardDetail(
                         .sheetEdgeFade(color = colors.paper, topStrength = { (shown.value / fade).coerceIn(0f, 1f) })
                         .verticalScroll(shown)) {
                         if (inReader) ReaderModeBody(card, onBack = back)
-                        else ReaderBody(card, onRemoveTag, actions.onAddTags, source, onMenu, actions.onPart)
+                        else ReaderBody(card, onRemoveTag, actions.onAddTags, source, onMenu, actions.onPart, details.sameVibe, actions.onOpenRecent)
                     }
                     if (!inReader) ReaderFoot(card, source, onMenu, Modifier.align(Alignment.BottomCenter))
                 }
@@ -321,6 +326,8 @@ private fun ReaderBody(
     onOpenSource: (() -> Unit)?,
     onMenu: () -> Unit,
     onPart: ((ReaderPart) -> Unit)?,
+    sameVibe: List<Card> = emptyList(),
+    onOpenCard: ((Card) -> Unit)? = null,
 ) {
     val sections = readerSections(card)
     val hold = { part: ReaderPart -> onPart?.takeIf { partChoices(part, card).isNotEmpty() }?.let { open -> { open(part) } } }
@@ -332,6 +339,7 @@ private fun ReaderBody(
         if (post) PostSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions", hold(ReaderPart.Post))
         else HeadSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions")
         sections.filter { it.part in LEAD_PARTS && !(post && it.part == ReaderPart.Post) }.forEach { TextSection(it, card, hold(it.part)) }
+        if (sameVibe.isNotEmpty()) SameVibeSection(sameVibe, onOpenCard)
         TagsSection(card, onRemoveTag, onAddTags, hold(ReaderPart.Tags))
         sections.filter { it.part == ReaderPart.YourNote }.forEach { TextSection(it, card, hold(it.part)) }
         if (emptyNote) EmptyNoteSection(hold(ReaderPart.YourNote))
@@ -430,7 +438,9 @@ private fun HeadSection(card: Card, onOpenSource: (() -> Unit)?, onHold: () -> U
     val video = remember(card) { readerVideo(card) }?.takeIf { previews != null }
     val picture = galleryPicture(card) != null
     val title = card.title?.trim()?.takeIf { it.isNotEmpty() }
-    val lines = listOfNotNull(bylineOf(card), listOfNotNull(savedLabel(card.created), readingTime(card)).joinToString(" · ").ifEmpty { null })
+    val price = if (card.type == "Product") productPrice(card) else null
+    val by = if (card.type == "Product") listOfNotNull(productShop(card), siteOf(card)).distinct().joinToString(" · ").ifEmpty { null } else bylineOf(card)
+    val lines = listOfNotNull(by, listOfNotNull(savedLabel(card.created), readingTime(card)).joinToString(" · ").ifEmpty { null })
     val media = video != null || picture
     if (!media && title == null) return
     ReaderSection(PaddingValues(8.dp)) {
@@ -444,6 +454,10 @@ private fun HeadSection(card: Card, onOpenSource: (() -> Unit)?, onHold: () -> U
                     onClickLabel = if (onOpenSource != null) "Open source" else null, onClick = { onOpenSource?.invoke() },
                     onLongClickLabel = holdLabel, onLongClick = onHold,
                 ))
+            if (price != null) Text(price, Modifier.align(Alignment.BottomStart).padding(12.dp).shadow(3.dp, CircleShape).clip(CircleShape)
+                .background(Color.White).padding(horizontal = 14.dp, vertical = 7.dp),
+                style = TextStyle(color = Color(0xFF262520), fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium,
+                    fontFamily = MymindTheme.fonts.body))
         }
         if (title != null || lines.isNotEmpty()) {
             Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = if (media) 12.dp else 8.dp, bottom = 10.dp),
@@ -507,6 +521,29 @@ private fun PostSection(card: Card, onOpenSource: (() -> Unit)?, onPictureHold: 
         if (time != null) Text(time, Modifier.padding(top = 12.dp), style = muted)
     }
 }
+
+/**
+ * Same Vibe for a product: the three cards nearest it in meaning, as Pinterest's "More to explore" shows pins like the
+ * one open, each of which opens in this one's place.
+ */
+@Composable
+private fun SameVibeSection(cards: List<Card>, onOpen: ((Card) -> Unit)?) {
+    ReaderSection(SECTION_PADDING) {
+        SectionHeading(R.drawable.samevibeicon, "Same Vibe", trailing = "From your mind")
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            cards.take(SAME_VIBE_SHOWN).forEach { near ->
+                val name = cardHeading(near)
+                CardThumbnail(near, Modifier.weight(1f).height(104.dp).clip(RoundedCornerShape(12.dp))
+                    .semantics { contentDescription = name }
+                    .then(if (onOpen != null) Modifier.clickable(role = Role.Button, onClickLabel = "Open $name") { onOpen(near) } else Modifier))
+            }
+            repeat(SAME_VIBE_SHOWN - cards.size.coerceAtMost(SAME_VIBE_SHOWN)) { Spacer(Modifier.weight(1f)) }
+        }
+    }
+}
+
+private const val SAME_VIBE_SHOWN = 3
 
 /** One part of the card's words under its small heading; the page text's heading also says how long it takes to read. */
 @Composable

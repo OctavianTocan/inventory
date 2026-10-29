@@ -13,11 +13,13 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
+import com.octaviantocan.mymind.data.AppInfo
 import com.octaviantocan.mymind.data.Blob
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
+import com.octaviantocan.mymind.data.Product
 import com.octaviantocan.mymind.ui.PHONE_QUALIFIERS
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import okhttp3.OkHttpClient
@@ -118,6 +120,31 @@ class GalleryTileTest(private val width: Int) {
         render(testCard("text-note", type = "Note", title = "A thought", note = body))
         compose.onNodeWithText(body, useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Image preview", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test fun aProductIsAPinWithItsPriceOnThePhoto() {
+        render(testCard("pin", type = "Product", title = "Paper lamp")
+            .copy(cover = Cover(source, 900, 1200), product = Product("GBP 24.00", "Norrland"), siteName = "Hollow & Pine"))
+        val price = compose.onNodeWithText("£24", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val photo = compose.onNodeWithContentDescription("Image preview", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val name = compose.onNodeWithText("Paper lamp", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("The price sits on the photo", photo.contains(price.center))
+        assertTrue("The name is under the photo", name.top >= photo.bottom)
+    }
+
+    @Test fun anAppShowsItsIconAndName() {
+        render(testCard("app", type = "SoftwareApplication", title = "Trailhead")
+            .copy(cover = Cover(source, 250, 250), app = AppInfo("play-store")))
+        compose.onNodeWithContentDescription("App icon", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Trailhead", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun aYouTubeVideoShowsItsTitleUnderItsStill() {
+        render(testCard("yt-caption", type = "YouTubeVideo", title = "Folding a paper lamp")
+            .copy(cover = Cover(source, 1280, 720), author = "by Maya Walks"))
+        val title = compose.onNodeWithText("Folding a paper lamp", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val badge = compose.onNodeWithContentDescription("YouTube video", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("The badge stays on the still, above the title", badge.bottom <= title.top)
     }
 
     companion object {

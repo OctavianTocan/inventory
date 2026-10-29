@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -78,10 +80,18 @@ internal fun GalleryTile(
     val imageModel = rememberGalleryImage(picture, imageRequestSizePx)
     val preview = rememberPicturePreview(card)
     val text = remember(card) { galleryText(card) }
-    val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card)
+    val pin = picture != null && productStandsTall(card)
+    val app = picture != null && card.type == "SoftwareApplication"
+    val caption = remember(card) { videoCaption(card) }
+    val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card) && !pin && !app
     val paper = lerp(colors.raised, accent, 0.13f)
-    val background = if (kind == TileKind.Post) postBrand(card.type).paper
-        else if (picture == null || mixed) paper else parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper
+    val background = when {
+        kind == TileKind.Post -> postBrand(card.type).paper
+        pin -> colors.background
+        caption != null -> colors.raised
+        picture == null || mixed || app -> paper
+        else -> parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper
+    }
     val heading = card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card)
     val previews = LocalVideoPreviews.current
     val video = remember(card) { previewVideo(card) }
@@ -111,6 +121,13 @@ internal fun GalleryTile(
         ) {
             if (kind == TileKind.Post) {
                 PostTile(card, text, highlight, if (picture == null) null else ({ pictureModifier -> tilePicture("Image preview", pictureModifier) }))
+            } else if (pin) {
+                PinTile(card, highlight) { pictureModifier -> tilePicture("Image preview", pictureModifier) }
+            } else if (app) {
+                AppTile(card, highlight) { pictureModifier -> tilePicture("App icon", pictureModifier) }
+                Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
+            } else if (caption != null) {
+                VideoCaptionTile(caption, highlight) { pictureModifier -> tilePicture(null, pictureModifier) }
             } else if (mixed) {
                 Column(Modifier.fillMaxSize()) {
                     GalleryTextPreview(card, text, highlight, Modifier.weight(0.56f).fillMaxWidth())
@@ -220,6 +237,76 @@ private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Co
     }
 }
 
+/**
+ * A product as a pin, as Pinterest shows one: its photo with round corners standing on the gallery's paper, the price
+ * on the photo when the shop gives one, and the name in up to two lines with the brand or shop under it.
+ */
+@Composable
+private fun PinTile(card: Card, highlight: Boolean, picture: @Composable (Modifier) -> Unit) {
+    val price = remember(card) { productPrice(card) }
+    val shop = productShop(card)
+    Column(Modifier.fillMaxSize().padding(start = 2.dp, top = 2.dp, end = 2.dp)) {
+        Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(if (highlight) 22.dp else 14.dp))) {
+            picture(Modifier.fillMaxSize())
+            if (price != null) PriceChip(price, Modifier.align(Alignment.BottomStart).padding(7.dp))
+        }
+        Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 5.dp, bottom = 6.dp)) {
+            TileText(cardHeading(card), highlight, Modifier, maxLines = 2)
+            if (shop != null) KindLabel(shop)
+        }
+    }
+}
+
+/** A product's price on its photo: a small white pill with a soft shadow. */
+@Composable
+private fun PriceChip(price: String, modifier: Modifier) {
+    Text(price, modifier.shadow(2.dp, CircleShape).clip(CircleShape).background(Color.White)
+        .padding(horizontal = 7.dp, vertical = 2.dp), color = Color(0xFF262520),
+        style = LibraryStyle.label.copy(fontSize = 11.sp, lineHeight = 15.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+}
+
+/**
+ * An app as its icon, whole with rounded corners, in the middle of paper of its colour, with its name and the store it
+ * is on, with the store's mark, under it.
+ */
+@Composable
+private fun AppTile(card: Card, highlight: Boolean, picture: @Composable (Modifier) -> Unit) {
+    val store = appStore(card)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val icon = minOf(maxWidth, maxHeight) * 0.44f
+        Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 10.dp)) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(icon).clip(RoundedCornerShape(icon * 0.24f))) { picture(Modifier.fillMaxSize()) }
+            }
+            TileText(cardHeading(card), highlight, Modifier, maxLines = 1)
+            if (store != null) Row(Modifier.padding(top = 3.dp).clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                if (store.icon != null) Image(painterResource(store.icon), null, Modifier.size(10.dp),
+                    colorFilter = ColorFilter.tint(LibraryStyle.colors.text))
+                KindLabel(store.name)
+            }
+        }
+    }
+}
+
+/**
+ * A video from another site: its still, with the corner badge the gallery draws over it, then its title and channel
+ * under it, on white. A tall tile gives the title three lines; others one.
+ */
+@Composable
+private fun VideoCaptionTile(caption: VideoCaption, highlight: Boolean, picture: @Composable (Modifier) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val lines = if (maxHeight > maxWidth * 1.5f) 3 else 1
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxWidth().weight(1f)) { picture(Modifier.fillMaxSize()) }
+            Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 8.dp)) {
+                TileText(caption.title, highlight, Modifier, maxLines = lines)
+                if (caption.channel != null) KindLabel(caption.channel)
+            }
+        }
+    }
+}
+
 /** Height of a post tile's head: the name and the handle under it, as [PostHead] draws them. */
 private val POST_HEAD = 38.dp
 
@@ -249,9 +336,9 @@ private fun KindLabel(kind: String) {
  * while a pinch changes the tile. A word too long for the line breaks with a hyphen.
  */
 @Composable
-private fun TileText(text: String, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text) {
+private fun TileText(text: String, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text, maxLines: Int = Int.MAX_VALUE) {
     Text(
-        text, modifier, color = color,
+        text, modifier, color = color, maxLines = maxLines,
         style = LibraryStyle.body.copy(
             fontSize = if (highlight) HIGHLIGHT_TEXT else TILE_TEXT, lineHeight = (if (highlight) 1.34f else 1.42f).em,
             fontWeight = FontWeight.Normal, hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph,
@@ -308,7 +395,7 @@ private fun repositoryCover(card: Card): String? = card.url?.takeIf { tileKind(c
 
 /** Whether [card]'s gallery tile is only its picture, with no words, so a pinch may cut it to any cell. */
 internal fun galleryTileIsPicture(card: Card): Boolean =
-    galleryPicture(card) != null && !galleryKeepsText(card) && tileKind(card).let { it == TileKind.Media || it == TileKind.Video }
+    galleryPicture(card) != null && !galleryKeepsText(card) && videoCaption(card) == null && tileKind(card).let { it == TileKind.Media || it == TileKind.Video }
 
 /** Saved links keep their headline; visual cards also keep any note the user wrote alongside the image. */
 internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_TYPES

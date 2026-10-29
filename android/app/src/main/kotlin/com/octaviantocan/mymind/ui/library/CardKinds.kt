@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import java.time.Instant
+import java.util.Locale
 
 private val MEDIA_LINK = Regex("""(?:https?://)?(?:pic\.(?:twitter|x)\.com|t\.co)/\S+""")
 private val LINE_END_SPACE = Regex("""[ \t\u00a0]+(\n|$)""")
@@ -23,6 +24,9 @@ private val SUBSTACK_USER = Regex("""https?://(?:www\.)?substack\.com/@([\w-]+)"
 private val MASTODON_USER = Regex("""https?://([^/?#]+)/@(\w+)""")
 private val NAMED_HANDLE = Regex("""^(.*?)\s*\(@([\w.]+)\)$""")
 private val REDDIT_SUMMARY = Regex("""^Posted in r/\S+ by """)
+private val PRICE = Regex("""^([A-Za-z]{3})\s+(\S+)$""")
+private val CURRENCY_SIGNS = mapOf("GBP" to "£", "USD" to "$", "EUR" to "€", "JPY" to "¥")
+private val EXTERNAL_VIDEOS = setOf("YouTubeVideo", "InstagramReel")
 
 /** The first X id that carries its own time (4 November 2010); older ids are plain numbers. */
 private const val X_FIRST_TIMED_ID = 29_700_859_247L
@@ -260,4 +264,70 @@ fun parseHexColor(hex: String?): Color? {
         else -> return null
     }
     return digits.toLongOrNull(16)?.let { Color(0xFF000000 or it) }
+}
+
+/** True for a product with a photo, which stands two squares high as a pin. */
+internal fun productStandsTall(card: Card): Boolean = card.type == "Product" && galleryPicture(card) != null
+
+/**
+ * @param card A product.
+ * @return Its price with the currency's sign, such as "£24" for the shop's "GBP 24.00" or "CHF 30" for a currency
+ *   without one here; null when the shop gave none.
+ */
+fun productPrice(card: Card): String? {
+    val raw = card.product?.price?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val parts = PRICE.matchEntire(raw)
+    val code = parts?.groupValues?.get(1)?.uppercase()
+    val amount = parts?.groupValues?.get(2) ?: raw
+    val number = amount.toDoubleOrNull()
+    val shown = when {
+        number == null -> amount
+        number % 1.0 == 0.0 -> number.toLong().toString()
+        else -> String.format(Locale.UK, "%.2f", number)
+    }
+    if (code == null) return shown
+    return CURRENCY_SIGNS[code]?.let { it + shown } ?: "$code $shown"
+}
+
+/**
+ * @param card A product.
+ * @return Its brand, else the shop's name or address; null when none is known.
+ */
+fun productShop(card: Card): String? = listOf(card.product?.brand, card.siteName, card.domain).firstOrNull { !it.isNullOrBlank() }?.trim()
+
+/**
+ * The store an app is on.
+ *
+ * @property name Such as "Google Play".
+ * @property icon The store's mark.
+ */
+data class AppStore(val name: String, @param:DrawableRes val icon: Int?)
+
+/**
+ * @param card An app.
+ * @return The store it is on, from the store the capture found, else its address; null when neither is known.
+ */
+fun appStore(card: Card): AppStore? = when (card.app?.distributor) {
+    "play-store" -> AppStore("Google Play", R.drawable.ic_si_googleplay)
+    "app-store" -> AppStore("App Store", R.drawable.ic_si_appstore)
+    else -> card.domain?.takeIf { it.isNotBlank() }?.let { AppStore(it, null) }
+}
+
+/**
+ * The words a video from another site shows under its picture.
+ *
+ * @property title The video's title.
+ * @property channel Who posted it, when known.
+ */
+data class VideoCaption(val title: String, val channel: String?)
+
+/**
+ * @param card A card.
+ * @return The title and channel a YouTube or Instagram video with a picture shows under it; null for other cards and
+ *   for a video with a note of its own, which keeps the note beside its picture instead.
+ */
+fun videoCaption(card: Card): VideoCaption? {
+    if (card.type !in EXTERNAL_VIDEOS || galleryPicture(card) == null || !card.note.isNullOrBlank()) return null
+    val title = card.title?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return VideoCaption(title, card.author?.trim()?.removePrefix("by ")?.trim()?.takeIf { it.isNotEmpty() })
 }

@@ -216,6 +216,13 @@ fun MainShell(
     }
     // The opened card follows the phone's copy too, such as a shared link the server has just read.
     val openedId = opened?.card?.id
+    // The cards nearest an opened product, for its Same Vibe section, kept with the id they were found for.
+    var sameVibe by remember { mutableStateOf<Pair<String, List<Card>>?>(null) }
+    val sameVibeOpen = "sameVibe" in features
+    LaunchedEffect(openedId, sameVibeOpen) {
+        val card = opened?.card?.takeIf { it.type == "Product" && sameVibeOpen } ?: return@LaunchedEffect
+        sameVibe = card.id to viewModel.sameVibe(card)
+    }
     LaunchedEffect(openedId) {
         if (openedId == null) return@LaunchedEffect
         viewModel.redrawn.collect {
@@ -333,6 +340,7 @@ fun MainShell(
                             details = ReaderDetails(
                                 spaces = spaces.spaces.filter { it.id in open.card.spaces.orEmpty() }.mapNotNull { it.name },
                                 recent = recent.toList(),
+                                sameVibe = sameVibe?.takeIf { it.first == open.card.id }?.second.orEmpty(),
                             ),
                             onRemoveTag = { tag ->
                                 scope.launch {
