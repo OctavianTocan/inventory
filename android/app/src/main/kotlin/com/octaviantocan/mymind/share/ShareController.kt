@@ -4,11 +4,13 @@ import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Library
 import com.octaviantocan.mymind.data.UploadFile
+import com.octaviantocan.mymind.ui.describe
 import com.octaviantocan.mymind.ui.library.UploadQueue
 import com.octaviantocan.mymind.update.UploadActivity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -23,7 +25,23 @@ import kotlinx.coroutines.launch
  * @property note Note for every saved card, or blank for none.
  * @property spaceIds Spaces every saved card joins.
  */
-data class ShareDetails(val tags: List<String> = emptyList(), val note: String = "", val spaceIds: Set<String> = emptySet())
+data class ShareDetails(val tags: List<String> = emptyList(), val note: String = "", val spaceIds: Set<String> = emptySet()) {
+    /** True when there is nothing to put on the cards. */
+    fun isEmpty() = tags.isEmpty() && note.isBlank() && spaceIds.isEmpty()
+}
+
+/**
+ * How far saving a share has come.
+ *
+ * @property saved Ids of the cards saved so far, in the order they were saved.
+ * @property failed How many items could not be saved.
+ * @property expected How many items the share brought; zero until saving starts.
+ * @property problem Why the first item that failed could not be saved, or null.
+ */
+data class ShareProgress(val saved: List<String> = emptyList(), val failed: Int = 0, val expected: Int = 0, val problem: String? = null) {
+    /** True once every item is saved or has failed. */
+    val done: Boolean get() = expected > 0 && saved.size + failed >= expected
+}
 
 /**
  * Saves what was shared and puts the sheet's details on the saved cards.
@@ -43,7 +61,8 @@ class ShareController(
 ) {
     private val savedIds = MutableStateFlow<List<String>>(emptyList())
     private val failures = MutableStateFlow(0)
-    private var expected = 0
+    private val firstProblem = MutableStateFlow<String?>(null)
+    private val expected = MutableStateFlow(0)
 
     /** Upload queue of the shared files. */
     val queue = UploadQueue(scope, library, onUploaded = { id, _ -> savedIds.update { it + id } }, io = io, activity = activity)
@@ -51,13 +70,19 @@ class ShareController(
     /** Cards saved so far. */
     val cards: StateFlow<List<String>> = savedIds
 
+    /** How far saving has come, counting uploads that failed. */
+    val progress: Flow<ShareProgress> = combine(savedIds, failures, firstProblem, expected, queue.state) { ids, failed, problem, count, uploads ->
+        val errors = uploads.items.mapNotNull { it.error }
+        ShareProgress(ids, failed + errors.size, count, problem ?: errors.firstOrNull())
+    }
+
     /**
      * Starts saving every item.
      *
      * @param items What was shared.
      */
     fun start(items: List<ShareItem>) {
-        expected = items.size
+        expected.value = items.size
         activity?.begin()
         scope.launch { save(items) }.invokeOnCompletion { activity?.end() }
     }
@@ -68,12 +93,17 @@ class ShareController(
             when (item) {
                 is ShareItem.Text -> when (val saved = library.createFromContent(item.text, SOURCE, null, item.note)) {
                     is ApiResult.Ok -> savedIds.update { it + saved.value }
-                    is ApiResult.Failed -> failures.update { it + 1 }
+                    is ApiResult.Failed -> failed(describe(saved.failure))
                 }
-                is ShareItem.Stream -> open(item.uri)?.let { files += it } ?: failures.update { it + 1 }
+                is ShareItem.Stream -> open(item.uri)?.let { files += it } ?: failed(UNREADABLE)
             }
         }
         queue.add(files, null)
+    }
+
+    private fun failed(problem: String) {
+        firstProblem.update { it ?: problem }
+        failures.update { it + 1 }
     }
 
     /**
@@ -92,9 +122,7 @@ class ShareController(
     }
 
     private suspend fun applyDetails(details: ShareDetails): ApiResult<Unit> {
-        val ids = combine(savedIds, failures, queue.state) { ids, failed, uploads ->
-            ids to (ids.size + failed + uploads.items.count { it.error != null } >= expected)
-        }.first { it.second }.first
+        val ids = progress.first { it.done }.saved
         if (ids.isEmpty()) return ApiResult.Failed(ApiFailure.Network)
         for (id in ids) {
             for (tag in details.tags) (library.addTag(id, tag) as? ApiResult.Failed)?.let { return it }
@@ -106,5 +134,6 @@ class ShareController(
 
     private companion object {
         const val SOURCE = "clipboard"
+        const val UNREADABLE = "The app you shared from did not let ThyMind read the file."
     }
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.31 (42), 2026-10-29
+Sharing something into ThyMind shows what you saved and goes away by itself.
+
+### Changed
+- Sharing a link, words, photos, a video or a PDF into ThyMind now opens a small sheet over the app you shared from, instead of a full grey page. It shows what you saved, with its picture, and fills in the page's title and picture as ThyMind reads it.
+- One field takes everything: type a word and the spaces and tags that match show up under it, type a sentence and use it as your note. With nothing typed it offers the space ThyMind suggests and your recent tags. Enter adds the first one, and whatever you add sits above the field with a cross to take it off.
+- The sheet fades away by itself 5 seconds after saving if you don't touch it. Touching it keeps it open until you tap Done, and tapping outside closes it at once. The lighter part of Done shows the time left.
+- When something can't be saved (too big, more than 20 things, a PDF with a password, signed out), the sheet says why in ThyMind's own words and fades after 8 seconds.
+
 ## 0.6.30 (41), 2026-10-28
 Search your mind understands what you mean and answers questions.
 

@@ -7,6 +7,7 @@ import com.octaviantocan.mymind.ui.library.FakeLibrary
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.update.UploadActivity
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -77,6 +78,29 @@ class ShareControllerTest {
         controller.start(listOf(ShareItem.Stream("bad"), ShareItem.Stream("good.jpg")))
         assertEquals(ApiResult.Ok(Unit), controller.finish(ShareDetails()))
         assertEquals(1, controller.cards.value.size)
+    }
+
+    @Test
+    fun progressCountsWhatIsSavedAndSaysWhyTheRestIsNot() = runTest(dispatcher) {
+        val library = FakeLibrary()
+        val controller = ShareController(this, library, dispatcher) { uri -> if (uri == "bad") null else file(uri) }
+        assertEquals(false, controller.progress.first().done)
+        controller.start(listOf(ShareItem.Text("https://example.com"), ShareItem.Stream("bad"), ShareItem.Stream("good.jpg")))
+        advanceUntilIdle()
+        val progress = controller.progress.first()
+        assertEquals(true, progress.done)
+        assertEquals(2, progress.saved.size)
+        assertEquals(1, progress.failed)
+        assertEquals("The app you shared from did not let ThyMind read the file.", progress.problem)
+    }
+
+    @Test
+    fun aFailedUploadIsCountedWithItsReason() = runTest(dispatcher) {
+        val library = FakeLibrary().apply { chunkFailure = ApiFailure.Network }
+        val controller = ShareController(this, library, dispatcher) { uri -> file(uri) }
+        controller.start(listOf(ShareItem.Stream("a.jpg")))
+        advanceUntilIdle()
+        assertEquals(ShareProgress(emptyList(), 1, 1, "Cannot reach the server. Check your connection."), controller.progress.first())
     }
 
     @Test

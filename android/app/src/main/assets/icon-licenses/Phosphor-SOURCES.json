@@ -181,6 +181,18 @@
       "path_count": 1
     },
     {
+      "resource": "ic_arrow_up",
+      "icon": "arrow-up",
+      "weight": "regular",
+      "source_path": "assets/regular/arrow-up.svg",
+      "source_sha256": "361aa9f9c52a759bf598faf6ed38ccd426f949f541d662c65b5b5d868fa76980",
+      "android_width": "20dp",
+      "android_height": "20dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_card_image",
       "icon": "article",
       "weight": "regular",
@@ -249,6 +261,18 @@
       "android_width": "18dp",
       "android_height": "18dp",
       "fill_color": "#ffffff",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_file",
+      "icon": "file",
+      "weight": "regular",
+      "source_path": "assets/regular/file.svg",
+      "source_sha256": "eb2dcc530fb0727a1718dfdc55a466479bb5ad7c8f0e45f1993541093c747e06",
+      "android_width": "28dp",
+      "android_height": "28dp",
+      "fill_color": "#FFFFFF",
       "root_attributes": {},
       "path_count": 1
     },
@@ -393,6 +417,18 @@
       "source_sha256": "526d89480e3064c614b7d46a93888c187696d7776f684527d48eb94e2d7cd5d4",
       "android_width": "20dp",
       "android_height": "20dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_lock",
+      "icon": "lock",
+      "weight": "regular",
+      "source_path": "assets/regular/lock.svg",
+      "source_sha256": "7f9e0acc09a417a48328cd5b74e95de98989c5af1710ca5da705179da75c72d9",
+      "android_width": "28dp",
+      "android_height": "28dp",
       "fill_color": "#FFFFFF",
       "root_attributes": {},
       "path_count": 1
@@ -576,6 +612,18 @@
       "android_width": "24dp",
       "android_height": "24dp",
       "fill_color": "#FF000000",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
+      "resource": "ic_stack",
+      "icon": "stack",
+      "weight": "regular",
+      "source_path": "assets/regular/stack.svg",
+      "source_sha256": "ee9eaaeb345e8a28c9662cf8a59147cb86080bd922e41f143444189e0116ea7e",
+      "android_width": "28dp",
+      "android_height": "28dp",
+      "fill_color": "#FFFFFF",
       "root_attributes": {},
       "path_count": 1
     },

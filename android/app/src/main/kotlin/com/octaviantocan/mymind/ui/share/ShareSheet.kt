@@ -6,382 +6,513 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.share.ShareDetails
-import com.octaviantocan.mymind.share.ShareState
-import com.octaviantocan.mymind.ui.library.UploadQueueState
+import com.octaviantocan.mymind.share.ShareItem
+import com.octaviantocan.mymind.ui.card.cardSurfaceShadow
+import com.octaviantocan.mymind.ui.card.rememberSheetHaptics
+import com.octaviantocan.mymind.ui.library.CardThumbnail
+import com.octaviantocan.mymind.ui.library.galleryPicture
 import com.octaviantocan.mymind.ui.library.parseHexColor
+import com.octaviantocan.mymind.ui.menu.CardMenuFont
+import com.octaviantocan.mymind.ui.menu.MenuColors
+import com.octaviantocan.mymind.ui.menu.SpaceRing
+import com.octaviantocan.mymind.ui.menu.SpaceSuggestion
 import com.octaviantocan.mymind.ui.menu.addTag
-import com.octaviantocan.mymind.ui.menu.tagChoices
-import com.octaviantocan.mymind.ui.theme.MymindTheme
-import com.octaviantocan.mymind.ui.upload.UploadQueueStrip
+import com.octaviantocan.mymind.ui.menu.menuColors
+import java.net.URI
+import java.util.Locale
 
-/** The tabs of the share sheet. */
-enum class ShareTab(val label: String, val icon: Int) {
-    Tags("Tags", R.drawable.tags),
-    Notes("Notes", R.drawable.notes),
-    Spaces("Spaces", R.drawable.spaces),
+/** How far saving what was shared has come. */
+enum class SavePhase {
+    /** Still saving. */
+    Saving,
+
+    /** Everything that could be saved is saved. */
+    Saved,
+
+    /** Kept on the phone while it is offline; it goes up once it is online. */
+    Kept,
+
+    /** Nothing could be saved. */
+    Failed,
 }
 
-/** How far the save has come. */
-enum class SavePhase { Editing, Saving, Saved, Failed }
+/**
+ * A file that was shared.
+ *
+ * @property uri Its address.
+ * @property name Its name.
+ * @property mime Its media type.
+ * @property size Its length in bytes.
+ */
+data class SharedFile(val uri: String, val name: String, val mime: String, val size: Long)
 
 /**
- * Everything the share sheet shows and lets the user change.
+ * Everything the share sheet shows and lets the user add.
  *
- * @param tab Tab that is open.
- * @param allTags Every tag of the library, for suggestions.
- * @param recentTags Tags added last.
- * @param spaces The user's spaces.
- * @param phase How far the save has come.
+ * @param items What was shared.
+ * @param phase How far saving has come.
  */
 @Stable
-class ShareSheetState(
-    tab: ShareTab = ShareTab.Tags,
-    allTags: List<String> = emptyList(),
-    recentTags: List<String> = emptyList(),
-    spaces: List<Space> = emptyList(),
-    phase: SavePhase = SavePhase.Editing,
-) {
-    var tab by mutableStateOf(tab)
-    var allTags by mutableStateOf(allTags)
-    var recentTags by mutableStateOf(recentTags)
-    var spaces by mutableStateOf(spaces)
+class ShareSheetState(items: List<ShareItem> = emptyList(), phase: SavePhase = SavePhase.Saving) {
+    /** What was shared. */
+    var items by mutableStateOf(items)
+
+    /** The shared files, described. */
+    var files by mutableStateOf<List<SharedFile>>(emptyList())
+
+    /** The saved cards as the library has them; they fill in as ThyMind reads them. */
+    var cards by mutableStateOf<List<Card>>(emptyList())
     var phase by mutableStateOf(phase)
-    var tagText by mutableStateOf("")
+
+    /** How many items are saved. */
+    var saved by mutableIntStateOf(0)
+
+    /** How many items could not be saved. */
+    var failed by mutableIntStateOf(0)
+
+    /** Why something could not be saved, or null. */
+    var problem by mutableStateOf<String?>(null)
+    var spaces by mutableStateOf<List<Space>>(emptyList())
+    var allTags by mutableStateOf<List<String>>(emptyList())
+    var recentTags by mutableStateOf<List<String>>(emptyList())
+
+    /** The space suggested for what was saved, or null. */
+    var suggestion by mutableStateOf<SpaceSuggestion?>(null)
+
+    /** What is in the field. */
+    var typed by mutableStateOf("")
     var tags by mutableStateOf<List<String>>(emptyList())
     var note by mutableStateOf("")
-    var selectedSpaces by mutableStateOf<Set<String>>(emptySet())
-    var uploads by mutableStateOf(UploadQueueState())
 
-    /** The details to put on the saved cards, with text left in the tag field counted as a tag. */
-    fun details() = ShareDetails(addTag(tags, tagText), note, selectedSpaces)
+    /** Ids of the chosen spaces, in the order they were chosen. */
+    var spaceIds by mutableStateOf<List<String>>(emptyList())
+
+    /** True once the sheet has been touched, which keeps it open until it is closed. */
+    var touched by mutableStateOf(false)
+
+    /** The details to put on the saved cards. */
+    fun details() = ShareDetails(tags, note.trim(), spaceIds.toSet())
+
+    /** The rows under the field, for what is typed now. */
+    fun suggestions(): List<ShareSuggestion> {
+        val onCards = cards.flatMap { card -> card.tags.orEmpty().mapNotNull { it.name } }
+        return shareSuggestions(typed, spaces, spaceIds.toSet(), allTags, recentTags, tags + onCards, suggestion)
+    }
+
+    /**
+     * Adds what a row offers and empties the field.
+     *
+     * @param row The row tapped, or the first one on Enter.
+     */
+    fun add(row: ShareSuggestion) {
+        when (row) {
+            is ShareSuggestion.AddToSpace -> if (row.space.id !in spaceIds) spaceIds = spaceIds + row.space.id
+            is ShareSuggestion.AddTag -> tags = addTag(tags, row.tag)
+            is ShareSuggestion.UseAsNote -> note = row.text
+        }
+        typed = ""
+    }
 }
-
-/** Colours of the share sheet; mymind uses the same ones in light and dark. */
-object ShareColors {
-    val sheet = Color(0xFFF0F2F5)
-    val tabInactive = Color(0xFF121B28)
-    val tabActive = Color.White
-    val field = Color.White
-    val fieldText = Color.Black
-    val hint = Color(0xFF747E8D)
-    val label = Color(0xFF415777)
-    val chip = Color(0xFFDEE4ED)
-    val button = Color(0xFFFF5924)
-}
-
 
 /**
- * The share sheet: title, tabs, the open tab and the Save button over the picture, with the upload strip below.
+ * The two lines of the saved row.
+ *
+ * @property title What was shared, by its name once ThyMind knows it.
+ * @property detail Where it is from and how big it is, what ThyMind is doing with it, or why it was not saved.
+ */
+data class SavedLines(val title: String, val detail: String)
+
+/**
+ * @param state The sheet.
+ * @return The saved row's lines for what was shared and how far saving has come.
+ */
+fun savedLines(state: ShareSheetState): SavedLines {
+    val problem = (state.problem ?: NOT_SAVED).takeIf { state.phase == SavePhase.Failed }
+    val count = state.items.size
+    if (count > 1) {
+        val detail = problem ?: when {
+            state.phase != SavePhase.Saving && state.failed > 0 -> "${state.saved} saved, ${state.failed} could not be"
+            else -> state.files.takeIf { it.size == count }?.let { files -> sizeText(files.sumOf { it.size }) } ?: "From the app you shared from"
+        }
+        return SavedLines("$count ${pluralNoun(state.files.map { it.mime }, count)}", detail)
+    }
+    val card = state.cards.firstOrNull()
+    return when (val item = state.items.firstOrNull()) {
+        is ShareItem.Text -> if (LINK.matches(item.text)) {
+            val read = card?.title?.takeIf { it.isNotBlank() && card.type != PLACEHOLDER }
+            val site = card?.siteName?.takeIf { it.isNotBlank() } ?: card?.domain ?: hostOf(item.text)
+            SavedLines(read ?: shortLink(item.text), problem ?: when {
+                read != null -> listOfNotNull(site, card.author?.takeIf { it.isNotBlank() }).distinct().joinToString(" · ")
+                state.phase == SavePhase.Kept -> "ThyMind reads it once you’re online"
+                state.phase == SavePhase.Saved -> "Getting the page…"
+                else -> site.orEmpty()
+            })
+        } else {
+            SavedLines(item.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty(), problem ?: "Words you shared")
+        }
+        is ShareItem.Stream -> {
+            val file = state.files.firstOrNull()
+            val title = card?.title?.takeIf { it.isNotBlank() } ?: file?.name ?: "A file"
+            SavedLines(title, problem ?: listOfNotNull(kindOf(file?.mime), file?.size?.let(::sizeText)).joinToString(" · "))
+        }
+        null -> SavedLines("", problem.orEmpty())
+    }
+}
+
+/**
+ * @param state The sheet.
+ * @return The header's words: saving, saved, kept on the phone, or nothing saved.
+ */
+fun statusText(state: ShareSheetState): String = when (state.phase) {
+    SavePhase.Saving -> if (state.items.size > 1) "Saving ${minOf(state.saved + state.failed + 1, state.items.size)} of ${state.items.size}" else "Saving to your mind"
+    SavePhase.Saved -> "Saved to your mind"
+    SavePhase.Kept -> "Kept on this phone"
+    SavePhase.Failed -> NOT_SAVED
+}
+
+/**
+ * What the share target shows once something was shared (share-field-takes-everything): the saved row, what has been
+ * added, one field for a space, a tag or a note with its suggestions, and Done. Left untouched once saved it fades
+ * away after [SAVED_FADE_MS], or [PROBLEM_FADE_MS] when nothing was saved (share-sheet-fades-by-itself).
  *
  * @param state What the sheet shows.
- * @param onSave Called when Save is tapped.
- * @param onToggleUploads Called when the upload strip is tapped.
- * @param onDismissUpload Called with a failed upload's id.
+ * @param onClose Called once the sheet has gone, by itself or closed; the details are still to be put on the cards.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ShareSheet(
-    state: ShareSheetState,
-    onSave: () -> Unit,
-    onToggleUploads: () -> Unit,
-    onDismissUpload: (Long) -> Unit,
-) {
-    Box(Modifier.fillMaxSize().background(ShareColors.sheet)) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().navigationBarsPadding()) {
-            Text(
-                titleOf(state.phase),
-                Modifier.padding(horizontal = 28.dp).padding(top = 32.dp, bottom = 20.dp),
-                style = TextStyle(
-                    color = Color.White,
-                    fontSize = 38.sp,
-                    lineHeight = 36.sp,
-                    letterSpacing = 0.03.em,
-                    fontFamily = MymindTheme.fonts.heading,
-                ),
-            )
-            TabRow(state)
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .background(ShareColors.sheet),
-            ) {
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    when (state.tab) {
-                        ShareTab.Tags -> TagsPanel(state)
-                        ShareTab.Notes -> NotePanel(state)
-                        ShareTab.Spaces -> SpacesPanel(state)
+fun ShareSheet(state: ShareSheetState, onClose: () -> Unit) {
+    val failed = state.phase == SavePhase.Failed
+    ShareFrame(
+        statusText(state),
+        counting = state.phase != SavePhase.Saving && !state.touched,
+        waitMs = if (failed) PROBLEM_FADE_MS else SAVED_FADE_MS,
+        onTouch = { state.touched = true },
+        onClosed = onClose,
+        titleContent = { StatusTitle(state) },
+    ) { frame ->
+        val colors = menuColors()
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 24.dp)) {
+            SavedRow(state, colors)
+            if (!failed) {
+                Added(state, colors)
+                val rows = state.suggestions()
+                CommandField(state, colors) { rows.firstOrNull()?.let(state::add) }
+                if (rows.isNotEmpty()) Suggestions(rows, typed = state.typed.isNotBlank(), colors) { state.add(it) }
+            }
+            Spacer(Modifier.height(20.dp))
+            ShareDoneButton(if (failed) "Okay" else "Done", frame::left, frame.close)
+        }
+    }
+}
+
+/** The header: a spinner, a tick or the offline mark, then the words. */
+@Composable
+private fun StatusTitle(state: ShareSheetState) {
+    val colors = menuColors()
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+        when (state.phase) {
+            SavePhase.Saving -> CircularProgressIndicator(Modifier.size(18.dp), color = colors.rowText, strokeWidth = 2.dp, trackColor = colors.rowText.copy(alpha = 0.1f))
+            SavePhase.Saved -> Tick(colors, 22.dp)
+            SavePhase.Kept -> Image(painterResource(R.drawable.offline_notice), null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(colors.rowText))
+            SavePhase.Failed -> Unit
+        }
+        Text(statusText(state), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun Tick(colors: MenuColors, size: Dp) {
+    Box(Modifier.size(size).clip(CircleShape).background(colors.rowText), contentAlignment = Alignment.Center) {
+        Image(painterResource(R.drawable.spaces_checkmark), null, Modifier.size(size * 0.62f), colorFilter = ColorFilter.tint(colors.row))
+    }
+}
+
+/** What was shared, as a raised row: its picture, its two lines and how far saving it has come. */
+@Composable
+private fun SavedRow(state: ShareSheetState, colors: MenuColors) {
+    val shape = RoundedCornerShape(16.dp)
+    val lines = savedLines(state)
+    Row(
+        Modifier.fillMaxWidth().cardSurfaceShadow(shape, note = true).clip(shape).background(colors.row)
+            .padding(start = 10.dp, top = 10.dp, bottom = 10.dp, end = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SavedPicture(state, colors, Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(lines.title, style = labelStyle(colors), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(lines.detail, style = mutedStyle(colors), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** The saved row's picture: the card's own once it has one, else the shared photo, else a mark for what it is. */
+@Composable
+private fun SavedPicture(state: ShareSheetState, colors: MenuColors, modifier: Modifier) {
+    val quiet = colors.rowText.copy(alpha = 0.07f)
+    val items = state.items
+    if (items.size > 1) {
+        Column(modifier.background(colors.sheet), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            repeat(2) { row ->
+                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    repeat(2) { column ->
+                        val at = row * 2 + column
+                        Box(Modifier.weight(1f).fillMaxHeight().background(quiet)) {
+                            if (at < items.size) OnePicture(items[at], state.cards.getOrNull(at), state.files.getOrNull(at), colors, Modifier.fillMaxSize(), mark = false)
+                        }
                     }
                 }
-                if (state.phase == SavePhase.Failed) {
-                    Text(
-                        "Saving failed. Try again.",
-                        Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                        style = bodyStyle(ShareColors.label).copy(textAlign = TextAlign.Center),
-                    )
-                }
-                SaveButton(state.phase, onSave)
             }
         }
-        UploadQueueStrip(
-            state.uploads,
-            onToggle = onToggleUploads,
-            onDismiss = onDismissUpload,
-            modifier = Modifier.align(Alignment.BottomCenter),
-            bottom = 80.dp,
-        )
-    }
-}
-
-private fun titleOf(phase: SavePhase) = if (phase == SavePhase.Saved) "Tagged and saved to your mind" else "Saving to your mind"
-
-@Composable
-private fun TabRow(state: ShareSheetState) {
-    Row(Modifier.padding(horizontal = 28.dp).padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ShareTab.entries.forEach { tab ->
-            val color = if (tab == state.tab) ShareColors.tabActive else ShareColors.tabInactive
-            Row(
-                Modifier.clip(RoundedCornerShape(8.dp)).clickable { state.tab = tab }.padding(vertical = 4.dp, horizontal = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Image(painterResource(tab.icon), contentDescription = null, colorFilter = ColorFilter.tint(color))
-                Text(
-                    tab.label,
-                    style = TextStyle(color = color, fontSize = 20.sp, lineHeight = 28.sp, letterSpacing = 0.02.em, fontFamily = MymindTheme.fonts.body),
-                )
-            }
+    } else {
+        Box(modifier.background(quiet), contentAlignment = Alignment.Center) {
+            items.firstOrNull()?.let { OnePicture(it, state.cards.firstOrNull(), state.files.firstOrNull(), colors, Modifier.fillMaxSize(), mark = true) }
         }
     }
 }
 
 @Composable
-private fun bodyStyle(color: Color) =
-    TextStyle(color = color, fontSize = 15.sp, lineHeight = 20.sp, fontFamily = MymindTheme.fonts.body)
-
-@Composable
-private fun TagsPanel(state: ShareSheetState) {
-    val choices = tagChoices(state.allTags, state.recentTags, state.tagText)
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(ShareColors.field).padding(20.dp)) {
-            if (state.tagText.isEmpty()) Text("+ Add tags", style = bodyStyle(ShareColors.hint).copy(fontSize = 15.sp, lineHeight = 20.sp))
-            BasicTextField(
-                value = state.tagText,
-                onValueChange = { state.tagText = it },
-                singleLine = true,
-                textStyle = TextStyle(color = ShareColors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body),
-                cursorBrush = SolidColor(ShareColors.fieldText),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(onNext = {
-                    state.tags = addTag(state.tags, state.tagText)
-                    state.tagText = ""
-                }),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        if (state.tags.isEmpty()) {
-            Text("Hit next to add separate tags.\nTap on added tags to remove them.", Modifier.fillMaxWidth(), style = bodyStyle(ShareColors.hint).copy(textAlign = TextAlign.Center))
-        } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.tags.forEach { tag ->
-                    Text(
-                        tag,
-                        Modifier.clip(RoundedCornerShape(64.dp)).background(ShareColors.chip).clickable { state.tags = state.tags - tag }.padding(horizontal = 16.dp, vertical = 6.dp),
-                        style = bodyStyle(ShareColors.fieldText).copy(fontSize = 17.sp, lineHeight = 23.sp),
-                    )
-                }
+private fun OnePicture(item: ShareItem, card: Card?, file: SharedFile?, colors: MenuColors, modifier: Modifier, mark: Boolean) {
+    when {
+        card != null && galleryPicture(card) != null -> CardThumbnail(card, modifier)
+        item is ShareItem.Stream && file?.mime?.startsWith("image/") != false ->
+            AsyncImage(model = item.uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier)
+        mark -> Box(modifier, contentAlignment = Alignment.Center) {
+            val icon = when {
+                item is ShareItem.Text -> if (LINK.matches(item.text)) R.drawable.ic_link else R.drawable.ic_quote
+                file?.mime?.startsWith("video/") == true -> R.drawable.ic_video
+                file?.mime == PDF -> R.drawable.ic_pdf
+                else -> R.drawable.ic_file
             }
-        }
-        if (choices.isNotEmpty()) {
-            if (state.tagText.isEmpty()) Text("RECENT TAGS", style = bodyStyle(ShareColors.hint).copy(fontSize = 12.sp, fontFamily = MymindTheme.fonts.body, fontWeight = FontWeight.SemiBold))
-            choices.forEach { choice ->
-                Text(
-                    choice,
-                    Modifier.fillMaxWidth().clickable {
-                        state.tags = addTag(state.tags, choice)
-                        state.tagText = ""
-                    }.padding(vertical = 6.dp),
-                    style = bodyStyle(ShareColors.label).copy(fontSize = 18.sp, lineHeight = 26.sp),
-                )
-            }
+            Image(painterResource(icon), null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(colors.rowText.copy(alpha = 0.65f)))
         }
     }
 }
 
+/** The spaces, tags and note added so far; each comes off with its cross. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun NotePanel(state: ShareSheetState) {
-    Box(Modifier.fillMaxSize().padding(20.dp)) {
-        Box(Modifier.fillMaxWidth().heightIn(min = 160.dp).clip(RoundedCornerShape(8.dp)).background(ShareColors.field).padding(20.dp)) {
-            if (state.note.isEmpty()) Text("Write a note", style = bodyStyle(ShareColors.hint))
-            BasicTextField(
-                value = state.note,
-                onValueChange = { state.note = it },
-                textStyle = TextStyle(color = ShareColors.fieldText, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body),
-                cursorBrush = SolidColor(ShareColors.fieldText),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-@Composable
-private fun SpacesPanel(state: ShareSheetState) {
-    if (state.spaces.isEmpty()) {
-        Text(
-            "You have no spaces.\nPlease create a new space\nin the mymind app first.",
-            Modifier.fillMaxWidth().padding(28.dp),
-            style = bodyStyle(ShareColors.hint).copy(textAlign = TextAlign.Center),
-        )
-        return
-    }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(state.spaces, key = { it.id }) { space ->
-            val selected = space.id in state.selectedSpaces
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(ShareColors.field)
-                    .clickable { state.selectedSpaces = if (selected) state.selectedSpaces - space.id else state.selectedSpaces + space.id }
-                    .padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(parseHexColor(space.color) ?: ShareColors.label))
-                Text(
-                    space.name.orEmpty(),
-                    Modifier.weight(1f).padding(start = 12.dp),
-                    maxLines = 1,
-                    style = bodyStyle(ShareColors.fieldText).copy(fontSize = 18.sp, lineHeight = 32.sp),
-                )
-                if (selected) Image(painterResource(R.drawable.checkmark), contentDescription = "In this space", colorFilter = ColorFilter.tint(ShareColors.label))
+private fun Added(state: ShareSheetState, colors: MenuColors) {
+    val spaces = state.spaceIds.mapNotNull { id -> state.spaces.firstOrNull { it.id == id } }
+    if (spaces.isNotEmpty() || state.tags.isNotEmpty()) {
+        FlowRow(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            spaces.forEach { space ->
+                AddedChip(space.name.orEmpty(), "Take out of ${space.name.orEmpty()}", colors, lead = {
+                    Box(Modifier.size(12.dp).clip(CircleShape).background(parseHexColor(space.color) ?: colors.rowText))
+                }) { state.spaceIds = state.spaceIds - space.id }
+            }
+            state.tags.forEach { tag ->
+                AddedChip(tag, "Take off $tag", colors, lead = {
+                    Image(painterResource(R.drawable.tags), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(colors.rowText))
+                }) { state.tags = state.tags - tag }
             }
         }
     }
-}
-
-@Composable
-private fun SaveButton(phase: SavePhase, onSave: () -> Unit) {
-    Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .height(48.dp)
-                .clip(RoundedCornerShape(100.dp))
-                .background(ShareColors.button.copy(alpha = if (phase == SavePhase.Editing || phase == SavePhase.Failed) 1f else 0.5f))
-                .clickable(enabled = phase == SavePhase.Editing || phase == SavePhase.Failed, onClick = onSave)
-                .padding(horizontal = 48.dp),
-            contentAlignment = Alignment.Center,
+    if (state.note.isNotBlank()) {
+        val shape = RoundedCornerShape(16.dp)
+        Row(
+            Modifier.fillMaxWidth().padding(top = 10.dp).cardSurfaceShadow(shape).clip(shape).background(colors.row)
+                .padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                when (phase) {
-                    SavePhase.Saving -> "Saving"
-                    SavePhase.Saved -> "Saved"
-                    else -> "Save"
-                },
-                style = TextStyle(color = Color.White, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body),
-            )
+            Image(painterResource(R.drawable.notes), null, Modifier.padding(top = 1.dp).size(18.dp), colorFilter = ColorFilter.tint(colors.rowText))
+            Text(state.note, Modifier.weight(1f), style = mutedStyle(colors).copy(color = colors.rowText), maxLines = 4, overflow = TextOverflow.Ellipsis)
+            Cross("Take off the note", colors) { state.note = "" }
         }
     }
 }
 
-/**
- * A card over the picture that explains why nothing was saved.
- *
- * @param problem The state to explain; [ShareState.Ready] shows nothing.
- * @param onAction Called when the card's button is tapped.
- * @param onClose Called when the area around the card is tapped.
- */
 @Composable
-fun ShareProblem(problem: ShareState, onAction: () -> Unit, onClose: () -> Unit) {
-    val text = problemText(problem) ?: return
-    Box(
-        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(interactionSource = null, indication = null, onClick = onClose),
-        contentAlignment = Alignment.Center,
+private fun AddedChip(label: String, removeLabel: String, colors: MenuColors, lead: @Composable () -> Unit, onRemove: () -> Unit) {
+    val haptic = rememberSheetHaptics()
+    Row(
+        Modifier.height(36.dp).cardSurfaceShadow(CircleShape).clip(CircleShape).background(colors.row)
+            .clickable(role = Role.Button, onClickLabel = removeLabel) { haptic.tick(); onRemove() }
+            .padding(start = 12.dp, end = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            Modifier
-                .padding(horizontal = 24.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(ShareColors.sheet)
-                .clickable(interactionSource = null, indication = null) {}
-                .padding(28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Image(painterResource(R.drawable.sad_mymind), contentDescription = null, colorFilter = ColorFilter.tint(ShareColors.tabInactive))
-            Text(
-                text.title,
-                style = TextStyle(color = ShareColors.tabInactive, fontSize = 45.sp, lineHeight = 44.sp, fontFamily = MymindTheme.fonts.heading, textAlign = TextAlign.Center),
-            )
-            Text(
-                text.body,
-                style = TextStyle(color = ShareColors.label, fontSize = 22.sp, lineHeight = 26.sp, fontFamily = MymindTheme.fonts.body, textAlign = TextAlign.Center),
-            )
-            Box(
-                Modifier.height(48.dp).clip(RoundedCornerShape(100.dp)).background(ShareColors.button).clickable(onClick = onAction).padding(horizontal = 32.dp),
-                contentAlignment = Alignment.Center,
+        lead()
+        Text(label, style = mutedStyle(colors).copy(color = colors.rowText), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Image(painterResource(R.drawable.ic_sheet_close), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(colors.rowText.copy(alpha = 0.7f)))
+    }
+}
+
+@Composable
+private fun Cross(label: String, colors: MenuColors, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val haptic = rememberSheetHaptics()
+    Box(modifier.size(28.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = label) { haptic.tick(); onClick() }
+        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Image(painterResource(R.drawable.ic_sheet_close), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(colors.rowText.copy(alpha = 0.7f)))
+    }
+}
+
+/** The one field: a space, a tag or a note, added with Enter or the arrow. */
+@Composable
+private fun CommandField(state: ShareSheetState, colors: MenuColors, onEnter: () -> Unit) {
+    val ready = state.typed.isNotBlank()
+    BasicTextField(
+        value = state.typed,
+        onValueChange = { state.typed = it },
+        singleLine = true,
+        textStyle = labelStyle(colors),
+        cursorBrush = SolidColor(colors.rowText),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { if (ready) onEnter() }),
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).semantics { contentDescription = FIELD_HINT },
+        decorationBox = { field ->
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 52.dp).cardSurfaceShadow(CircleShape).clip(CircleShape).background(colors.row)
+                    .padding(start = 18.dp, end = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text.button, style = TextStyle(color = Color.White, fontSize = 17.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body))
+                Box(Modifier.weight(1f).padding(vertical = 14.dp)) {
+                    if (state.typed.isEmpty()) Text(FIELD_HINT, style = labelStyle(colors).copy(color = colors.rowText.copy(alpha = 0.65f)), maxLines = 1)
+                    field()
+                }
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(colors.rowText.copy(alpha = if (ready) 1f else 0.25f))
+                        .clickable(enabled = ready, role = Role.Button, onClickLabel = "Add") { onEnter() }
+                        .semantics { contentDescription = "Add" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(painterResource(R.drawable.ic_arrow_up), null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(colors.row))
+                }
+            }
+        },
+    )
+}
+
+/** The rows under the field, in one raised group; the first says Enter adds it once something is typed. */
+@Composable
+private fun Suggestions(rows: List<ShareSuggestion>, typed: Boolean, colors: MenuColors, onPick: (ShareSuggestion) -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    val haptic = rememberSheetHaptics()
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp).cardSurfaceShadow(shape, note = true).clip(shape).background(colors.row)) {
+        rows.forEachIndexed { index, row ->
+            if (index > 0) Box(Modifier.padding(start = 52.dp).fillMaxWidth().height(1.dp).background(colors.rowText.copy(alpha = 0.06f)))
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(role = Role.Button) { haptic.tick(); onPick(row) }.padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.width(22.dp), contentAlignment = Alignment.Center) {
+                    when (row) {
+                        is ShareSuggestion.AddToSpace -> SpaceRing(parseHexColor(row.space.color) ?: colors.rowText, selected = false, size = 20.dp)
+                        is ShareSuggestion.AddTag -> Image(painterResource(R.drawable.tags), null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(colors.rowText))
+                        is ShareSuggestion.UseAsNote -> Image(painterResource(R.drawable.notes), null, Modifier.size(20.dp), colorFilter = ColorFilter.tint(colors.rowText))
+                    }
+                }
+                val (label, detail) = rowLines(row)
+                Column(Modifier.weight(1f).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(label, style = labelStyle(colors), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(detail, style = mutedStyle(colors), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (index == 0 && typed) Text("Enter", style = mutedStyle(colors))
             }
         }
     }
 }
 
-/** Words of a problem card. */
-class ProblemText(val title: String, val body: String, val button: String)
-
 /**
- * The words the share target shows for a state.
- *
- * @param problem The state.
- * @return Title, body and button, or null for a state that is not a problem.
+ * @param row A row under the field.
+ * @return Its label and its muted line.
  */
-fun problemText(problem: ShareState): ProblemText? = when (problem) {
-    ShareState.Malformed -> ProblemText("Ouch, that hurt.", "A rare and unknown error occurred. I'm sorry.\n\nPlease screenshot this message and send it to help@mymind.com", "Okay I got it")
-    ShareState.TooManyItems -> ProblemText("That's too much!", "Your mind can only upload\nup to 20 things at once.\n\nTry again, with a bit less!", "Okay I got it")
-    ShareState.FileTooBig -> ProblemText("Whoa, that's big.", "mymind only supports files\nup to 25mb, which means\nthis file is reeeally big.\n\nTry a smaller one?", "Okay I got it")
-    ShareState.PdfHasPassword -> ProblemText("We can't get in!", "Your mind doesn't support\nPDF files that are password protected.", "Okay I got it")
-    ShareState.NoLogin -> ProblemText("Please log in!", "mymind couldn't save this\nbecause you're not logged\ninto your account.\n\nPlease sign in and\nsave it again.", "Sign in")
-    is ShareState.Ready -> null
+fun rowLines(row: ShareSuggestion): Pair<String, String> = when (row) {
+    is ShareSuggestion.AddToSpace -> "Add to ${row.space.name.orEmpty()}" to row.detail
+    is ShareSuggestion.AddTag -> when {
+        row.fresh -> "Tag it “${row.tag}”" to "A new tag"
+        row.recent -> row.tag to "Recent tag"
+        else -> row.tag to "Tag"
+    }
+    is ShareSuggestion.UseAsNote -> "Use as your note" to row.text
 }
+
+private fun labelStyle(colors: MenuColors) = TextStyle(color = colors.rowText, fontSize = 17.sp, lineHeight = 22.sp, fontFamily = CardMenuFont)
+
+private fun mutedStyle(colors: MenuColors) = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 15.sp, lineHeight = 21.sp, fontFamily = CardMenuFont)
+
+/** "theatlantic.com/magazine/walking" for a link, without its scheme, `www.` or a closing slash. */
+private fun shortLink(link: String) = link.substringAfter("://").removePrefix("www.").trimEnd('/')
+
+private fun hostOf(link: String): String? = runCatching { URI(link).host }.getOrNull()?.removePrefix("www.")
+
+private fun kindOf(mime: String?): String? = when {
+    mime == null -> null
+    mime.startsWith("image/") -> "Photo"
+    mime.startsWith("video/") -> "Video"
+    mime == PDF -> "PDF"
+    else -> "File"
+}
+
+private fun pluralNoun(mimes: List<String>, count: Int): String = when {
+    mimes.size < count -> "things"
+    mimes.all { it.startsWith("image/") } -> "photos"
+    mimes.all { it.startsWith("video/") } -> "videos"
+    mimes.all { it == PDF } -> "PDFs"
+    else -> "files"
+}
+
+/** "640 KB", "2.1 MB" or "31 MB". */
+internal fun sizeText(bytes: Long): String {
+    val mb = bytes / 1_048_576.0
+    return when {
+        mb < 1 -> "${maxOf(1L, bytes / 1024)} KB"
+        mb < 10 -> String.format(Locale.ROOT, "%.1f MB", mb)
+        else -> "${mb.toLong()} MB"
+    }
+}
+
+private val LINK = Regex("""^https?://\S+$""")
+private const val PLACEHOLDER = "Placeholder"
+private const val PDF = "application/pdf"
+private const val NOT_SAVED = "Nothing was saved"
+private const val FIELD_HINT = "Add a space, a tag or a note"

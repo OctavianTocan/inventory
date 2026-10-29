@@ -1,0 +1,36 @@
+@cc [owner:OctavianTocan,label:product;motion] share-sheet-fades-by-itself
+What shows after something is shared into ThyMind MUST go away by itself: once
+everything is saved, or kept on the phone while offline, it waits 5 seconds and
+fades out, and a sheet saying nothing was saved waits 8 seconds. The wait MUST
+NOT start while saving is still going. Any touch on the sheet or its scrim, or
+typing in it, MUST stop the wait and keep it open until Done, its cross, the
+scrim, Back or a drag closes it; tapping outside closes it at once. While it
+waits, the Done button shows the time left as a lighter part that shrinks. It
+MUST NOT block the other app longer than that wait, and the wait MUST last as
+long with the system's animations turned off. Spaces, tags and a note added
+before it goes MUST still reach the saved cards, however it closes.
+Source: Tavi's Cap recording of the share prototype, 29 October 2026: "it has to
+be something that goes away by itself ... if I don't tap anything, not something
+that I have to close"; "we do not want to block people".
+
+@cc [owner:OctavianTocan,label:product;design] share-field-takes-everything
+The share sheet MUST be Pully's paper over the app that shared, resting at its
+content's height, titled with how saving is going (Saving to your mind, Saved to
+your mind, Kept on this phone, Nothing was saved). It MUST show what was saved
+as a raised row with its picture and two lines, filling in the page's title and
+picture as ThyMind reads them; then the spaces, tags and note added, each with a
+cross that takes it off; then one field, Add a space, a tag or a note. With
+nothing typed, the field offers the suggested space and recent tags; typed words
+offer the spaces and tags that hold them, a new tag for one word no tag matches,
+and Use as your note for words with a space. Enter adds the first row.
+Source: Tavi's pick of 10, One field for everything, in the share prototype,
+29 October 2026 ("Let's do 10"). ThyMind's own tags already land on the card by
+themselves, so the empty field offers recent tags instead of them.
+
+@cc [owner:OctavianTocan,label:product] share-problems-speak-for-thymind
+When nothing can be saved (nothing to keep, more than 20 things, a file over
+25 MB, a PDF with a password, signed out) the share target MUST say so in its own
+words on the same sheet, titled Nothing was saved: a mark, what went wrong and
+what to do, and one button. It MUST NOT name mymind, its address or its artwork.
+Source: the 29 October 2026 share prototype's problem sheets, which Tavi saw
+with every version; AGENTS.md: the replica is its own product.
