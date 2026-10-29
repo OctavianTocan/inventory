@@ -1,13 +1,15 @@
 @cc [owner:OctavianTocan,label:product;design] gallery-keeps-card-order
 The library mosaic MUST preserve the server's card order and every card ID when it
 lays cards out. At two to four columns cards share square cells in bands of one or two
-rows, filled row by row, as Google Photos breaks up its squares: screenshots and other
-tall pictures stand two squares high, about half the wide pictures lie two across, and
-about one picture in seven is big, two by two, chosen by the card's id so it keeps its
-shape across reloads. A social post with a picture, or with more words than one square
-holds, stands two squares high, and so do a product with a photo, drawn as a pin
-(gallery-products-are-pins), and a PDF, its first page whole
-(gallery-pdfs-show-their-first-page); other text and pictures with words take one square. A band MUST
+rows, filled row by row, as Google Photos breaks up its squares and the web showcase
+spreads its pieces: a card whose picture is tall, such as a screenshot, stands two squares
+high, about half the wide pictures shown alone lie two across, and about one card with a
+picture in seven is big, two by two, words and all, chosen by the card's id so it keeps
+its shape across reloads and matches the showcase's hash. A picture with words over it
+MUST NOT lie two across, where both would be a thin strip. A social post with a picture,
+or with more words than one square holds, stands two squares high, and so do a product
+with a photo, drawn as a pin (gallery-products-are-pins), and a PDF, its first page whole
+(gallery-pdfs-show-their-first-page); a card of words alone takes one square. A band MUST
 NOT leave a hole before the last card. One column shows each card across the width at
 its own proportions. Images fill their cells; text cards retain a readable preview. Tap
 and hold MUST target the same card at every density.
@@ -18,7 +20,22 @@ of taking the aspect ratio of screenshots", "some of these images are just bigge
 posts two squares high from Tavi's pick of X10 on the card previews canvas, 29 October
 2026 ("Pick recommended and build it"), after his review of X05 ("having them be two
 rows instead of one is actually pretty interesting"); products two squares high from his
-pick of P5 the same day, and PDFs from his pick of D5.
+pick of P5 the same day, and PDFs from his pick of D5. Cards with words and a picture
+take the showcase's big and tall shapes from Tavi, 29 October 2026, comparing the app with
+the web showcase ("the way some tiles are bigger and some are smaller looks nicer").
+
+@cc [owner:OctavianTocan,label:product;design] gallery-tiles-look-like-the-showcase
+Every gallery tile MUST have 12 dp round corners, the web showcase's, and they MUST stay
+12 dp on screen at every density and at every moment of a pinch, including a tile with
+words drawn scaled from its frame. The cards MUST sit 16 dp in from each side of the
+screen, the inset Top of Mind starts at, and a card sliding off one end of its line
+leaves at that edge. The space between cards MUST be about a twentieth of a column, from
+6 to 24 dp, as the showcase spaces its wall (`wallGap` in octa-ui's `apps/showcase`): on a
+phone 16 dp at one column, 8 at two and 6 at three and four. The Spaces list keeps its own
+stacks inside the same margins and spacing.
+Source: Tavi, 29 October 2026, comparing the app with the web showcase ("their corner
+radius looks nicer, their spacing between tiles looks nicer ... I think we should do all
+those").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-mixed-cards-keep-text-and-images
 A note, social post, article or saved link with text and a picture MUST show both in its gallery
@@ -34,8 +51,9 @@ density levels and reverse while the fingers remain down. Density stops
 MUST offer distinct sizes for uniform portrait, square and landscape cards, with one
 to four columns at their stops. Text MUST retain its size and wrapping when
 releasing at a stop. A tile with words MUST be a picture of itself: it is laid out
-once, one square wide at three columns in the shape of its cell, and drawn scaled
-to its cell at every density and between them, so it MUST NOT rewrap, change its
+once, as many squares wide at three columns as its cell spans, in the shape of its
+cell, and drawn scaled to its cell at every density and between them, a big tile's
+words the size of its neighbours', so it MUST NOT rewrap, change its
 inset, or show or hide its labels while the fingers move (Tavi, 28 Oct 2026: notes
 "still shift weirdly" when pinching; he picked version 13 of the design canvas).
 Adjacent cached grids MUST remain coherent and nonoverlapping within each projection, sharing one focal card's fractional X/Y point and physical

@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -185,6 +186,8 @@ private class SpaceMosaicTiles(private val spaces: Map<String, Space>, private v
     override fun aspectRatio(card: Card): Float = SPACE_ONE_COLUMN_RATIO
 
     override fun isPicture(card: Card): Boolean = true
+
+    override val corner: Dp = 0.dp
 
     @Composable
     override fun Tile(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, enabled: Boolean, imageRequestSizePx: Int, modifier: Modifier) {

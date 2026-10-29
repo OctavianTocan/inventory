@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.36 (47), 2026-10-29
+The gallery's tiles are laid out like the showcase's.
+
+### Changed
+- Every tile has rounder corners, the same 12 dp as the showcase, and they stay that round while you pinch.
+- The cards sit a little in from the sides of the screen, in line with Top of Mind, with more room between them: 8 dp at two columns, 6 at three and four, and 16 at one.
+- More cards take a bigger shape. An article, link or note with a picture is now and then shown big, two squares by two, and one with a tall picture stands two squares high, as photos already did. Words alone stay one square.
+
 ## 0.6.34 (45), 2026-10-29
 PDFs show their pages.
 

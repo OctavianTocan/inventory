@@ -143,8 +143,10 @@ class LibraryMosaicTest {
             compose.waitForIdle()
             assertTrue("The pinch must be between stops", density.position % 1f != 0f)
             val (left, right) = coverage()
-            assertTrue("No empty margin on the left at ${density.position}: $left", left <= root.left + 1f)
-            assertTrue("No empty margin on the right at ${density.position}: $right", right >= root.right - 1f)
+            // The grid stops at the gallery's two 16 dp margins, and the cards cover everything between them.
+            val margin = 16f * 450f / 160f
+            assertTrue("No empty margin on the left at ${density.position}: $left", left <= root.left + margin + 1f)
+            assertTrue("No empty margin on the right at ${density.position}: $right", right >= root.right - margin - 1f)
             val before = compose.onNodeWithContentDescription("Photo 19").fetchSemanticsNode().boundsInRoot.center
             gallery.performTouchInput {
                 updatePointerTo(0, focal - Offset(width * spread, -height * 0.1f))
@@ -834,7 +836,10 @@ class LibraryMosaicTest {
         compose.runOnIdle {
             val point = bounds.height * 0.48f
             val row = state.layoutInfo.visibleItemsInfo.first { point >= it.offset && point < it.offset + it.size }
-            touched = mosaicRows(cards, bounds.width, 2, 3f * 450f / 160f)[row.index].cards.map { it.title!! }
+            // The gallery lays its cards out inside two 16 dp margins, with its gap for two columns.
+            val dp = 450f / 160f
+            val inner = bounds.width - 32f * dp
+            touched = mosaicRows(cards, inner, 2, mosaicGapDp(2, inner / dp) * dp)[row.index].cards.map { it.title!! }
         }
         pinch(inward = true)
         assertEquals(4, density.columns)

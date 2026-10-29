@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -62,7 +63,16 @@ private val VISUAL_CARD_TYPES = setOf("Image", "Screenshot", "Video", "YouTubeVi
 private val TILE_TEXT = 13.sp
 private val HIGHLIGHT_TEXT = 17.sp
 
-/** A gallery brick keeps both the words and picture of a mixed card visible at every density. */
+/** The corner radius of a gallery tile, the web showcase's `rounded-lg` (Tavi, 29 October 2026). */
+internal val TILE_CORNER = 12.dp
+
+/** The corner radius of a Top of Mind card. */
+private val HIGHLIGHT_CORNER = 28.dp
+
+/**
+ * A gallery brick keeps both the words and picture of a mixed card visible at every density. It rounds its own corners
+ * to [corner]; the mosaic passes 0 and rounds them itself, so a tile drawn scaled keeps [TILE_CORNER] on screen.
+ */
 @Composable
 internal fun GalleryTile(
     card: Card,
@@ -73,6 +83,7 @@ internal fun GalleryTile(
     highlight: Boolean = false,
     imageRequestSizePx: Int? = null,
     playVideo: Boolean = true,
+    corner: Dp = if (highlight) HIGHLIGHT_CORNER else TILE_CORNER,
 ) {
     val colors = LibraryStyle.colors
     val accent = cardAccent(card) ?: colors.selected
@@ -114,7 +125,7 @@ internal fun GalleryTile(
     }
     FootPressTheme {
         Box(
-            modifier.fillMaxSize().clip(RoundedCornerShape(if (highlight) 28.dp else 3.dp)).background(background)
+            modifier.fillMaxSize().then(if (corner > 0.dp) Modifier.clip(RoundedCornerShape(corner)) else Modifier).background(background)
                 .semantics(mergeDescendants = true) { contentDescription = heading }
                 .then(if (enabled) Modifier.combinedClickable(
                     interactionSource = null, indication = CardSheetIndication, role = Role.Button,
@@ -133,9 +144,15 @@ internal fun GalleryTile(
             } else if (caption != null) {
                 VideoCaptionTile(caption, highlight) { pictureModifier -> tilePicture(null, pictureModifier) }
             } else if (mixed) {
-                Column(Modifier.fillMaxSize()) {
-                    GalleryTextPreview(card, text, highlight, Modifier.weight(0.56f).fillMaxWidth())
-                    tilePicture("Image preview", Modifier.weight(0.44f).fillMaxWidth())
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    // The words take what they need, up to a little over half, so a big tile's picture fills the rest.
+                    val most = maxHeight * 0.56f
+                    Column(Modifier.fillMaxSize()) {
+                        GalleryTextPreview(card, text, highlight,
+                            if (highlight) Modifier.weight(0.56f).fillMaxWidth() else Modifier.heightIn(max = most).fillMaxWidth(),
+                            fit = !highlight)
+                        tilePicture("Image preview", Modifier.weight(if (highlight) 0.44f else 1f).fillMaxWidth())
+                    }
                 }
                 Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
             } else if (picture != null) {
@@ -195,7 +212,7 @@ internal fun GalleryTileBackdrop(card: Card, imageRequestSizePx: Int) {
     val onlyPicture = picture != null && tileKind(card) != TileKind.Post && !(galleryKeepsText(card) && galleryText(card).isNotBlank())
     val imageModel = rememberGalleryImage(picture.takeIf { onlyPicture }, imageRequestSizePx)
     val background = if (onlyPicture) parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper else paper
-    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(3.dp)).background(background).clearAndSetSemantics {}) {
+    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(TILE_CORNER)).background(background).clearAndSetSemantics {}) {
         if (imageModel != null) AsyncImage(model = imageModel, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
     }
 }
@@ -254,7 +271,7 @@ private fun PinTile(card: Card, highlight: Boolean, picture: @Composable (Modifi
     val price = remember(card) { productPrice(card) }
     val shop = productShop(card)
     Column(Modifier.fillMaxSize().padding(start = 2.dp, top = 2.dp, end = 2.dp)) {
-        Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(if (highlight) 22.dp else 14.dp))) {
+        Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(if (highlight) 22.dp else TILE_CORNER))) {
             picture(Modifier.fillMaxSize())
             if (price != null) PriceChip(price, Modifier.align(Alignment.BottomStart).padding(7.dp))
         }
@@ -381,21 +398,24 @@ private fun TileText(text: String, highlight: Boolean, modifier: Modifier, color
     )
 }
 
-/** Text gets its own paper area; compact tiles spend that space on the excerpt before the type label. */
+/**
+ * Text gets its own paper area; compact tiles spend that space on the excerpt before the type label. With [fit] the
+ * area is only as tall as its words, up to the height it is given; otherwise it fills that height.
+ */
 @Composable
-private fun GalleryTextPreview(card: Card, text: String, highlight: Boolean, modifier: Modifier) {
+private fun GalleryTextPreview(card: Card, text: String, highlight: Boolean, modifier: Modifier, fit: Boolean = false) {
     BoxWithConstraints(modifier) {
         val compact = maxWidth < 110.dp
         val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
         val words = text.ifBlank { cardHeading(card) }
         val kind = galleryKind(card)
         val showKind = !compact && maxHeight >= 112.dp && !sameWords(kind, words)
-        Column(Modifier.fillMaxSize().padding(inset)) {
+        Column((if (fit) Modifier.fillMaxWidth() else Modifier.fillMaxSize()).padding(inset)) {
             if (showKind) {
                 KindLabel(kind)
                 Spacer(Modifier.height(6.dp))
             }
-            TileText(words, highlight, Modifier.weight(1f))
+            TileText(words, highlight, if (fit) Modifier else Modifier.weight(1f))
         }
     }
 }

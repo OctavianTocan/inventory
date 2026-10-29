@@ -31,12 +31,46 @@ class MosaicLayoutTest {
     fun picturesTakeShapesLikeGooglePhotos() {
         assertEquals(MosaicSpan(1, 2), mosaicSpan(photo("screenshot", 1080, 2400)))
         assertEquals(MosaicSpan(1, 1), mosaicSpan(testCard("note", type = "Note", note = "A thought")))
-        assertEquals(MosaicSpan(1, 1), mosaicSpan(photo("noted", 1080, 2400).copy(note = "Words beside it")))
         val wide = (1..40).map { mosaicSpan(photo("wide$it", 1920, 1080)) }
         assertTrue("About half the wide pictures lie two across", wide.count { it == MosaicSpan(2, 1) } in 10..30)
         val square = (1..140).map { mosaicSpan(photo("square$it", 1000, 1000)) }
         assertTrue("A few pictures are big", square.count { it == MosaicSpan(2, 2) } in 8..40)
         assertTrue(square.none { it == MosaicSpan(2, 1) || it == MosaicSpan(1, 2) })
+    }
+
+    @Test
+    fun cardsWithWordsAndAPictureShareTheShowcasesMixOfSizes() {
+        assertEquals(MosaicSpan(1, 2), mosaicSpan(photo("noted", 1080, 2400).copy(note = "Words beside it")))
+        val articles = (1..140).map { mosaicSpan(photo("article$it", 1200, 630).copy(type = "Article", title = "A headline")) }
+        assertTrue("About one article with a picture in seven is big", articles.count { it == MosaicSpan(2, 2) } in 8..40)
+        assertTrue("Words over a wide picture never lie two across", articles.none { it == MosaicSpan(2, 1) })
+        val notes = (1..140).map { mosaicSpan(testCard("words$it", type = "Note", note = "Only words")) }
+        assertTrue("Words alone stay one square", notes.all { it == MosaicSpan(1, 1) })
+    }
+
+    @Test
+    fun gapsFollowTheShowcaseAndTightenWithMoreColumns() {
+        // A 384 dp phone less its two 16 dp margins, as the gallery and the web showcase lay it out.
+        assertEquals(listOf(16f, 8f, 6f, 6f), (1..4).map { mosaicGapDp(it, 352f) })
+        assertEquals(24f, mosaicGapDp(1, 1200f))
+        assertEquals(6f, mosaicGapDp(4, 0f))
+    }
+
+    @Test
+    fun aBigTileWithWordsKeepsItsNeighboursTextSize() {
+        val big = (1..60).map { photo("big$it", 1200, 900).copy(type = "Article", title = "A headline") }
+            .first { mosaicSpan(it) == MosaicSpan(2, 2) }
+        val sample = listOf(big) + (1..8).map { testCard("n$it", type = "Note", note = "Note $it") }
+        val layouts = MosaicLayouts(sample, 1000f, listOf(16f, 8f, 6f, 6f))
+        for (columns in 2..4) {
+            val level = layouts.level(columns)
+            val scale = { index: Int -> level.cells[index].width / layouts.wordsFrame(index, columns).width }
+            assertEquals("At $columns columns", scale(1), scale(0), 0.01f)
+            assertEquals(level.cells[0].height / level.cells[0].width,
+                layouts.wordsFrame(0, columns).let { it.height / it.width }, 0.01f)
+        }
+        assertEquals(layouts.wordsFrame(0, 2), layouts.wordsFrame(0, 3))
+        assertEquals(layouts.wordsFrame(1, 2), layouts.wordsFrame(1, 4))
     }
 
     @Test

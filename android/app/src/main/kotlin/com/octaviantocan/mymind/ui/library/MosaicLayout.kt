@@ -36,20 +36,22 @@ private const val TALL_RATIO = 0.62f
 private const val WIDE_RATIO = 1.6f
 
 /**
- * The card's shape in the grid, as Google Photos breaks up its squares: screenshots and other tall pictures stand two
- * squares high, about half the wide pictures lie two across, and about one picture in seven is shown big, two by two.
- * A social post with a picture or more words than a square holds stands two squares high ([postStandsTall]), and so
- * does a product with a photo, drawn as a pin ([productStandsTall]), and a PDF, its first page whole
- * ([pdfStandsTall]); other text and pictures with words stay one square. The choice is fixed by the card's id, so a card keeps its shape at every density and across reloads.
+ * The card's shape in the grid, as Google Photos breaks up its squares and the web showcase spreads its pieces: a card
+ * whose picture is tall, such as a screenshot, stands two squares high, about half the wide pictures shown alone lie two
+ * across, and about one card with a picture in seven is shown big, two by two, its words included. A social post with a
+ * picture or more words than a square holds stands two squares high ([postStandsTall]), and so does a product with a
+ * photo, drawn as a pin ([productStandsTall]), and a PDF, its first page whole ([pdfStandsTall]); a card of words alone
+ * stays one square. The choice is fixed by the card's id, so a card keeps its shape at every density and across reloads.
  */
 internal fun mosaicSpan(card: Card): MosaicSpan {
     if (postStandsTall(card) || productStandsTall(card) || pdfStandsTall(card)) return MosaicSpan(1, 2)
-    if (galleryKeepsText(card) || galleryPicture(card) == null) return MosaicSpan(1, 1)
+    if (galleryPicture(card) == null) return MosaicSpan(1, 1)
     val ratio = storedRatio(card) ?: return MosaicSpan(1, 1)
     val pick = card.id.hashCode().let { (it xor (it ushr 16)) and Int.MAX_VALUE }
     return when {
         ratio <= TALL_RATIO -> MosaicSpan(1, 2)
-        ratio >= WIDE_RATIO && pick % 2 == 0 -> MosaicSpan(2, 1)
+        // Words over a picture two squares wide would leave both a thin strip, so only a picture alone lies across.
+        ratio >= WIDE_RATIO && pick % 2 == 0 && !galleryKeepsText(card) -> MosaicSpan(2, 1)
         pick % 7 == 3 -> MosaicSpan(2, 2)
         else -> MosaicSpan(1, 1)
     }
@@ -74,7 +76,7 @@ internal fun mosaicRows(cards: List<Card>, width: Float, columns: Int, gap: Floa
  * [tiles] gives each card its shape.
  */
 internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Float, tiles: MosaicTiles = GalleryMosaicTiles): MosaicLayouts.Level {
-    if (cards.isEmpty() || !width.isFinite() || width <= 0f) return MosaicLayouts.Level(emptyList(), emptyList(), emptyList(), IntArray(0), 0f, 0f)
+    if (cards.isEmpty() || !width.isFinite() || width <= 0f) return MosaicLayouts.Level(emptyList(), emptyList(), emptyList(), IntArray(0), 0f, 0f, 0f, 0f)
     val across = columns.coerceIn(1, 4)
     val space = mosaicGap(width, gap)
     val cells = ArrayList<Rect>(cards.size)
@@ -82,6 +84,7 @@ internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Flo
     val starts = ArrayList<Int>()
     val rowOf = IntArray(cards.size)
     var top = 0f
+    val unit = if (across == 1) width else (width - space * (across - 1)) / across
     if (across == 1) {
         cards.forEachIndexed { index, card ->
             val height = width / tiles.aspectRatio(card)
@@ -92,7 +95,6 @@ internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Flo
             top += height + space
         }
     } else {
-        val unit = (width - space * (across - 1)) / across
         val step = unit + space
         val spans = cards.map { tiles.span(it) }
         var index = 0
@@ -131,7 +133,7 @@ internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Flo
             top += height + space
         }
     }
-    return MosaicLayouts.Level(rows, cells, starts, rowOf, (top - space).coerceAtLeast(0f), rows.maxOf { it.height })
+    return MosaicLayouts.Level(rows, cells, starts, rowOf, (top - space).coerceAtLeast(0f), rows.maxOf { it.height }, unit, space)
 }
 
 /** Readable proportions for the one-column gallery: the picture's own, else one that suits the card's text. */
@@ -150,13 +152,31 @@ internal fun mosaicAspectRatio(card: Card): Float {
 private fun mosaicGap(width: Float, gap: Float): Float = gap.takeIf { it.isFinite() }?.coerceIn(0f, width / 16f) ?: 0f
 
 /**
- * Cached canonical geometry, with the cards shaped and drawn by [tiles]. Only the visible window is interpolated during a
- * pointer frame.
+ * The space between tiles at [columns] across a gallery [width] wide, both in dp: about a twentieth of a column, from 6
+ * to 24 dp, so a denser grid sits tighter, as the web showcase spaces its wall (`wallGap` in octa-ui's
+ * `apps/showcase`). On a phone that is 16 dp at one column, 8 at two and 6 at three and four.
  */
-internal class MosaicLayouts(val cards: List<Card>, val width: Float, gap: Float, val tiles: MosaicTiles = GalleryMosaicTiles) {
-    internal class Level(val rows: List<MosaicRow>, val cells: List<Rect>, val starts: List<Int>, val rowOf: IntArray, val height: Float, val tallest: Float)
+internal fun mosaicGapDp(columns: Int, width: Float): Float =
+    (width / columns.coerceAtLeast(1) * 0.045f).roundToInt().coerceIn(6, 24).toFloat()
+
+/**
+ * Cached canonical geometry, with the cards shaped and drawn by [tiles]. Only the visible window is interpolated during a
+ * pointer frame. [gaps] holds the space between cards at one to four columns.
+ */
+internal class MosaicLayouts(val cards: List<Card>, val width: Float, gaps: List<Float>, val tiles: MosaicTiles = GalleryMosaicTiles) {
+    /** The same [gap] at every density. */
+    constructor(cards: List<Card>, width: Float, gap: Float, tiles: MosaicTiles = GalleryMosaicTiles) : this(cards, width, List(4) { gap }, tiles)
+
+    /**
+     * One density's grid: [unit] is one square's width (the whole width at one column) and [gap] the space between
+     * cards.
+     */
+    internal class Level(
+        val rows: List<MosaicRow>, val cells: List<Rect>, val starts: List<Int>, val rowOf: IntArray, val height: Float,
+        val tallest: Float, val unit: Float, val gap: Float,
+    )
     val byId = cards.mapIndexed { index, card -> card.id to index }.toMap()
-    val levels = (1..4).map { columns -> mosaicLevel(cards, width, columns, gap, tiles) }
+    val levels = (1..4).map { columns -> mosaicLevel(cards, width, columns, gaps.getOrElse(columns - 1) { 0f }, tiles) }
     private val pictures = BooleanArray(cards.size) { tiles.isPicture(cards[it]) }
 
     /** Whether card [index]'s tile is measured to its cell at every size ([MosaicTiles.isPicture]). */
@@ -164,17 +184,26 @@ internal class MosaicLayouts(val cards: List<Card>, val width: Float, gap: Float
 
     fun level(columns: Int): Level = levels[columns.coerceIn(1, 4) - 1]
 
-    /** One square's width at three columns: every tile with words is laid out this wide, at every density. */
-    private val wordsWidth = (width - 2 * mosaicGap(width, gap)) / 3
+    /** The space between cards at three columns, where every tile with words is laid out. */
+    private val wordsGap = mosaicGap(width, gaps.getOrElse(2) { 0f })
+
+    /** One square's width at three columns: every tile with words is laid out this wide per square, at every density. */
+    private val wordsWidth = (width - 2 * wordsGap) / 3
 
     /**
-     * The size a tile with words is laid out at while the grid of [columns] is shown: [wordsWidth] wide, in the shape
-     * of its cell there. The tile is then drawn scaled to its cell, a picture of itself, so its words keep the same lines
-     * at every density and between them.
+     * The size a tile with words is laid out at while the grid of [columns] is shown: the squares its cell spans there,
+     * at their size in the three-column grid, or [wordsWidth] wide in the cell's shape at one column. The tile is then
+     * drawn scaled to its cell, a picture of itself, so its words keep the same lines at every density and between
+     * them, and a big tile's words are the size of its neighbours'. A tile that spans the same squares in two grids has
+     * one frame in both, so a pinch between them never lays it out twice.
      */
     fun wordsFrame(index: Int, columns: Int): Size {
-        val cell = level(columns).cells[index]
-        return Size(wordsWidth, wordsWidth * cell.height / cell.width)
+        val level = level(columns)
+        val cell = level.cells[index]
+        if (level.unit >= width || level.unit <= 0f) return Size(wordsWidth, wordsWidth * cell.height / cell.width)
+        fun squares(length: Float) = ((length + level.gap) / (level.unit + level.gap)).roundToInt().coerceAtLeast(1)
+        fun span(squares: Int) = squares * wordsWidth + (squares - 1) * wordsGap
+        return Size(span(squares(cell.width)), span(squares(cell.height)))
     }
 
 /** Projects a whole canonical grid around one shared focal rectangle; row neighbours never cross. */

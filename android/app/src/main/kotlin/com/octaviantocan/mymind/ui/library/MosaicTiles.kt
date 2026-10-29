@@ -3,6 +3,8 @@ package com.octaviantocan.mymind.ui.library
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.data.Card
 
 /**
@@ -22,6 +24,12 @@ internal interface MosaicTiles {
      * tile with words is ([MosaicLayouts.wordsFrame]).
      */
     fun isPicture(card: Card): Boolean
+
+    /**
+     * The radius the mosaic rounds every tile's corners to, the same on screen at every density and while a tile with
+     * words is drawn scaled; 0 when the tiles draw their own edges.
+     */
+    val corner: Dp
 
     /**
      * The card's own drawing, which takes its touches and semantics.
@@ -64,13 +72,16 @@ internal object GalleryMosaicTiles : MosaicTiles {
 
     override fun isPicture(card: Card): Boolean = galleryTileIsPicture(card)
 
+    override val corner: Dp = TILE_CORNER
+
     @Composable
     override fun Tile(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, enabled: Boolean, imageRequestSizePx: Int, modifier: Modifier) =
-        GalleryTile(card, onClick, modifier = modifier, enabled = enabled, onLongClick = onLongClick, imageRequestSizePx = imageRequestSizePx)
+        GalleryTile(card, onClick, modifier = modifier, enabled = enabled, onLongClick = onLongClick, imageRequestSizePx = imageRequestSizePx,
+            corner = 0.dp)
 
     @Composable
     override fun Copy(card: Card, imageRequestSizePx: Int) =
-        GalleryTile(card, {}, enabled = false, imageRequestSizePx = imageRequestSizePx, playVideo = false)
+        GalleryTile(card, {}, enabled = false, imageRequestSizePx = imageRequestSizePx, playVideo = false, corner = 0.dp)
 
     @Composable
     override fun Backdrop(card: Card, imageRequestSizePx: Int) = GalleryTileBackdrop(card, imageRequestSizePx)

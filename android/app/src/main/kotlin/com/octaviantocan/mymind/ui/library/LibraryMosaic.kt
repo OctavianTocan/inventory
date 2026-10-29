@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -89,8 +90,13 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
-private val MOSAIC_GAP = 3.dp
+/** Space on each side of the cards, the web showcase's on a phone; Top of Mind starts at the same inset. */
+private val MOSAIC_MARGIN = 16.dp
+
+/** Space between the page's header, such as its title or Top of Mind, and the first cards. */
+private val MOSAIC_HEADER_GAP = 4.dp
 private const val MOSAIC_HEADER = "gallery-header"
 private const val MOSAIC_ROW = "row:"
 private const val HOP_NANOS = 130 * 1_000_000L
@@ -151,11 +157,15 @@ internal fun LibraryMosaic(
     val latestMore by rememberUpdatedState(onLoadMore)
     val headerItems = if (header == null) 0 else 1
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val width = with(density) { maxWidth.toPx() }
+        // The grid's own width: everything below works inside the margins, and touches are moved in by [margin].
+        val margin = with(density) { MOSAIC_MARGIN.toPx() }
+        val width = with(density) { maxWidth.toPx() } - 2 * margin
         val height = with(density) { maxHeight.toPx() }
-        val gap = with(density) { MOSAIC_GAP.toPx() }
+        val gaps = remember(maxWidth, density) {
+            (1..4).map { columns -> with(density) { mosaicGapDp(columns, (maxWidth - MOSAIC_MARGIN * 2).value).dp.toPx() } }
+        }
         val bottomPadding = with(density) { 156.dp.toPx() }
-        val layouts = remember(feed.cards, width, gap, tiles) { MosaicLayouts(feed.cards, width, gap, tiles) }
+        val layouts = remember(feed.cards, width, gaps, tiles) { MosaicLayouts(feed.cards, width, gaps, tiles) }
 
         fun clampOrigin(value: Float): Float {
             val first = if (header == null) 0f else -headerHeight.toFloat()
@@ -235,13 +245,14 @@ internal fun LibraryMosaic(
             val x = if (width - right <= -left) shift.coerceIn(width - right, -left) else (width - right - left) / 2f
             val fillFrom = projection(between.from)
             val fillTo = projection(between.to)
-            return MosaicFrame(from, to, x, y, t, waves.of(layouts, between, focal, anchor, height), width + gap,
+            val wrap = width + maxOf(layouts.level(between.from).gap, layouts.level(between.to).gap)
+            return MosaicFrame(from, to, x, y, t, waves.of(layouts, between, focal, anchor, height), wrap,
                 fillFrom, coverShift(fillFrom, shift), fillTo, coverShift(fillTo, shift))
         }
         fun capture(focal: Offset?): MosaicAnchor? {
             if (layouts.level(1).cells.isEmpty()) return null
             val drawn = frame()
-            val point = focal?.takeIf { it.x.isFinite() && it.y.isFinite() } ?: Offset.Zero
+            val point = focal?.takeIf { it.x.isFinite() && it.y.isFinite() }?.minus(Offset(margin, 0f)) ?: Offset.Zero
             var nearest = -1
             var distance = Float.MAX_VALUE
             for (index in drawn.window(height)) {
@@ -449,7 +460,7 @@ internal fun LibraryMosaic(
                 contentPadding = PaddingValues(bottom = 156.dp),
             ) {
                 if (header != null) item(key = MOSAIC_HEADER, contentType = "header") {
-                    Column(Modifier.onSizeChanged { headerHeight = it.height }.padding(bottom = MOSAIC_GAP)) { header() }
+                    Column(Modifier.onSizeChanged { headerHeight = it.height }.padding(bottom = MOSAIC_HEADER_GAP)) { header() }
                 }
                 // These semantic-free slots retain LazyListState and fling/viewport bookkeeping while cards regroup. The
                 // list reads its rows as it measures, so a landing's new rows and its scroll request reach it in the same
@@ -472,8 +483,9 @@ internal fun LibraryMosaic(
                 }
             }
             if (feed.cards.isNotEmpty() && layouts.level(1).cells.isNotEmpty()) {
-                // Header/footer remain real LazyColumn children; temporary projected edges clip only inside the body.
-                Box(Modifier.fillMaxSize().graphicsLayer {
+                // Header/footer remain real LazyColumn children; temporary projected edges clip only inside the body, whose
+                // sides stop at the margins, so a card sliding off one end of its line leaves at the grid's edge.
+                Box(Modifier.fillMaxSize().padding(horizontal = MOSAIC_MARGIN).graphicsLayer {
                     val visible = state.layoutInfo.visibleItemsInfo
                     val top = visible.firstOrNull { it.key == MOSAIC_HEADER }?.let { (it.offset + it.size).toFloat() } ?: 0f
                     val bottom = visible.firstOrNull { it.key == "gallery-footer" }?.offset?.toFloat() ?: size.height
@@ -661,6 +673,7 @@ private fun ProjectedMosaicCards(
     modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
 ) {
     val slots = indices.flatMap { mosaicSlots(it, shape) }
+    val corner = with(LocalDensity.current) { layouts.tiles.corner.toPx() }
     Layout(modifier = modifier, content = {
         indices.forEach { index ->
             key(layouts.cards[index].id) {
@@ -691,7 +704,7 @@ private fun ProjectedMosaicCards(
             PlacedTile(tile, draw.rect, words, alpha)
         }
         layout(constraints.maxWidth, constraints.maxHeight) {
-            placed.forEach { placeTile(it.tile, it.cell, it.words, it.alpha) }
+            placed.forEach { placeTile(it.tile, it.cell, it.words, it.alpha, corner) }
         }
     }
 }
@@ -746,13 +759,13 @@ private fun Measurable.measureTile(cell: Rect, frame: Size?): Placeable = measur
 private fun Size.fixed(): Constraints = Constraints.fixed(width.roundToInt().coerceAtLeast(1), height.roundToInt().coerceAtLeast(1))
 
 /**
- * Places a tile measured by [measureTile] in [cell] at [alpha]; a tile with words is scaled from its frame, as a
- * picture zooms.
+ * Places a tile measured by [measureTile] in [cell] at [alpha], with its corners rounded to [corner] pixels on screen;
+ * a tile with words is scaled from its frame, as a picture zooms.
  */
-private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, words: Boolean, alpha: Float) {
+private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, words: Boolean, alpha: Float, corner: Float = 0f) {
     val x = cell.left.roundToInt()
     val y = cell.top.roundToInt()
-    if (!words && alpha >= 1f) {
+    if (!words && alpha >= 1f && corner <= 0f) {
         tile.place(x, y)
         return
     }
@@ -762,6 +775,11 @@ private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, word
             transformOrigin = TransformOrigin(0f, 0f)
             scaleX = cell.width / tile.width
             scaleY = cell.height / tile.height
+        }
+        if (corner > 0f) {
+            // The layer scales its own outline, so a tile drawn scaled gets corners that scale cancels.
+            shape = RoundedCornerShape(corner / sqrt(scaleX * scaleY))
+            clip = true
         }
     }
 }
