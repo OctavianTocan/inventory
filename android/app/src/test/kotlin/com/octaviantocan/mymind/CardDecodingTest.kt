@@ -28,7 +28,9 @@ class CardDecodingTest {
                    "gallery": [{"src": "/media/g1", "width": 10, "height": 20}]},
           "app": {"distributor": "app-store", "srcset": "/media/s 2x", "width": 250, "height": 250},
           "product": {"price": "${'$'}9", "brand": "Brand"},
-          "reddit": {"title": "Thread", "subreddit": "sample"},
+          "reddit": {"title": "Thread", "subreddit": "sample", "comments": [{"author": "moss", "body": "Forty-one km."}]},
+          "videoLength": 634,
+          "article": {"title": "Walking cities", "preview": "A city that is good to walk in.", "url": "https://x.com/i/article/1"},
           "state": "ready",
           "somethingNew": {"nested": true}
         },
@@ -63,6 +65,10 @@ class CardDecodingTest {
         assertEquals("app-store", card.app?.distributor)
         assertEquals("Brand", card.product?.brand)
         assertEquals("sample", card.reddit?.subreddit)
+        assertEquals("Forty-one km.", card.reddit?.comments?.single()?.body)
+        assertEquals(634, card.videoLength)
+        assertEquals("Walking cities", card.article?.title)
+        assertEquals("https://x.com/i/article/1", card.article?.url)
         assertEquals("ready", card.state)
     }
 

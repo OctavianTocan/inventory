@@ -13,7 +13,7 @@ fn redundant(kind: &str) -> Option<&'static [&'static str]> {
         "Document" => &["pdf", "document", "file"],
         "WebPage" => &["web page", "webpage"],
         "SoftwareApplication" => &["app", "application", "mobile app", "mobile application"],
-        "XPost" | "ThreadsPost" | "SubstackNote" | "RedditPost" => &["tweet", "post"],
+        "XPost" | "ThreadsPost" | "SubstackNote" | "RedditPost" | "BlueskyPost" | "MastodonPost" => &["tweet", "post"],
         _ => return None,
     })
 }

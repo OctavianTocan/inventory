@@ -19,6 +19,7 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
+import com.octaviantocan.mymind.data.PostArticle
 import com.octaviantocan.mymind.data.Product
 import com.octaviantocan.mymind.ui.PHONE_QUALIFIERS
 import com.octaviantocan.mymind.ui.theme.MymindTheme
@@ -154,6 +155,21 @@ class GalleryTileTest(private val width: Int) {
         val title = compose.onNodeWithText("Folding a paper lamp", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val badge = compose.onNodeWithContentDescription("YouTube video", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue("The badge stays on the still, above the title", badge.bottom <= title.top)
+    }
+
+    @Test fun aYouTubeVideoShowsTheLengthItsSiteGave() {
+        render(testCard("yt-length", type = "YouTubeVideo", title = "Folding a paper lamp").copy(cover = Cover(source, 1280, 720), videoLength = 634))
+        compose.onNodeWithContentDescription(if (width >= 96) "YouTube video, 10:34" else "YouTube video", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test fun anXPostShowsTheArticleItCarriesUnderItsWords() {
+        val title = "The quiet economics of walking cities"
+        render(testCard("x-article", type = "XPost", title = title).copy(cover = Cover(source, 1456, 582),
+            post = Post(bodyHtml = "<p>New piece.</p>", author = "by Noor"), article = PostArticle(title, "A city that is good to walk in.")))
+        val cover = compose.onNodeWithContentDescription("Image preview", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val name = compose.onNodeWithText(title, useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Article", useUnmergedTree = true).assertIsDisplayed()
+        assertTrue("The article's title is under its cover", name.top >= cover.bottom)
     }
 
     companion object {

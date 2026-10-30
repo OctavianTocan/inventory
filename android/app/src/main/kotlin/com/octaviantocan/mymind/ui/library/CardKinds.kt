@@ -6,6 +6,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.text.HtmlCompat
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.data.PostArticle
+import com.octaviantocan.mymind.data.RedditComment
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -98,7 +100,7 @@ fun noteText(card: Card): String =
  */
 fun postText(card: Card): String =
     (card.post?.bodyHtml?.let { HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_COMPACT).toString() }?.takeIf { it.isNotBlank() }
-        ?: card.description.orEmpty()).replace(MEDIA_LINK, "").replace(LINE_END_SPACE, "$1").trim()
+        ?: card.description.takeIf { postArticle(card) == null }.orEmpty()).replace(MEDIA_LINK, "").replace(LINE_END_SPACE, "$1").trim()
 
 /**
  * @param node A stored document tree (`{"type": "doc", "content": [...]}`).
@@ -197,7 +199,7 @@ private fun postHandle(card: Card): String? {
     return when (card.type) {
         "XPost" -> X_STATUS.find(url)?.groupValues?.get(1)?.takeIf { it != "i" }?.let { "@$it" }
         "ThreadsPost" -> THREADS_USER.find(url)?.groupValues?.get(1)?.let { "@$it" }
-        "BlueskyPost" -> BLUESKY_USER.find(url)?.groupValues?.get(1)?.let { "@$it" }
+        "BlueskyPost" -> BLUESKY_USER.find(url)?.groupValues?.get(1)?.takeIf { !it.startsWith("did:") }?.let { "@$it" }
         "SubstackNote" -> SUBSTACK_USER.find(url)?.groupValues?.get(1)?.let { "@$it" }
         "MastodonPost" -> MASTODON_USER.find(url)?.let { "@${it.groupValues[2]}@${it.groupValues[1]}" }
         else -> null
@@ -227,12 +229,26 @@ fun postWords(card: Card): String {
 
 /**
  * @param card A card.
- * @return True for a social post with a picture, or with more words than one square holds, which stands two squares
- *   high. It reads the stored words without parsing them, as the layout asks for every card.
+ * @return The X article an X post carries, when the server read one with a title; null otherwise.
+ */
+fun postArticle(card: Card): PostArticle? = card.article?.takeIf { card.type == "XPost" && !it.title.isNullOrBlank() }
+
+/**
+ * @param card A card.
+ * @return The top comments kept with a Reddit post when it was saved, each with its author and words; empty for other
+ *   cards.
+ */
+fun redditComments(card: Card): List<RedditComment> = if (card.type != "RedditPost") emptyList()
+    else card.reddit?.comments.orEmpty().filter { !it.author.isNullOrBlank() && !it.body.isNullOrBlank() }
+
+/**
+ * @param card A card.
+ * @return True for a social post with a picture or an X article, or with more words than one square holds, which
+ *   stands two squares high. It reads the stored words without parsing them, as the layout asks for every card.
  */
 internal fun postStandsTall(card: Card): Boolean {
     if (tileKind(card) != TileKind.Post) return false
-    if (galleryPicture(card) != null) return true
+    if (galleryPicture(card) != null || postArticle(card) != null) return true
     val words = card.post?.bodyHtml?.replace(HTML_TAG, "") ?: card.description.orEmpty()
     val title = if (card.type == "RedditPost") card.reddit?.title.orEmpty() else ""
     return words.replace(MEDIA_LINK, "").trim().length + title.length > POST_SQUARE_CHARS

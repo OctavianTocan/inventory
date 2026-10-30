@@ -23,7 +23,12 @@ post MUST instead show as one section on its network's colour
 (`gallery-posts-look-like-posts`): who posted it, with the handle, the posting day where
 the post gives it and the network's mark; a Reddit post's title; its words; its picture
 or video, whole; and when it was posted and saved. It shows no counts, and its title
-stays in the name's pill. A product's picture MUST carry its price as a white pill, with
+stays in the name's pill. A Reddit post MUST show the top comments kept when it was
+saved, up to three, under the post in a Top comments section, each with u/author over
+its words and no points. An X post that carries an X article MUST show the article in
+the post where its picture would be, as X draws it: the cover whole, the title, its
+opening lines and Article on X, ruled in X's line colour; a tap opens the post on X,
+where the article reads in full. A product's picture MUST carry its price as a white pill, with
 its brand or shop in its byline; when the account has Same Vibe, a product's reader
 shows a Same Vibe section after its words: up to three of the cards nearest it in meaning,
 from the user's own mind, each opening in its place. A PDF MUST show its name, PDF with
@@ -42,7 +47,9 @@ just tint only the bottom sheet", "some tags which look really weird"); Tavi's p
 of F08, whose page is the prototype's 02 raised sections, 28 October 2026; the post
 section from Tavi's pick of X10 on the card previews canvas, 29 October 2026, and the
 product's price and Same Vibe from his pick of P5 the same day, and the PDF's pages from
-his pick of D5 ("I wanted to see the content").
+his pick of D5 ("I wanted to see the content"); the top comments from R4 ("the top
+comments stay, from R3") and the article from XA5, both taken with "Pick recommended and
+build it" the same day.
 
 @cc [owner:OctavianTocan,label:product] card-reader-opens-its-source
 A card with a web link MUST open it from a tap on its picture and from the foot's

@@ -253,6 +253,18 @@
       "path_count": 1
     },
     {
+      "resource": "ic_comment",
+      "icon": "chat-circle",
+      "weight": "regular",
+      "source_path": "assets/regular/chat-circle.svg",
+      "source_sha256": "09e36aa820a39bbc8cffe705ad84c836d1e5733f83dc1d2212a965fdacdf4a67",
+      "android_width": "20dp",
+      "android_height": "20dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_delete",
       "icon": "trash",
       "weight": "regular",

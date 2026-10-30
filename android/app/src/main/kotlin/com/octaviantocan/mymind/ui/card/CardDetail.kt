@@ -65,20 +65,25 @@ import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.data.PostArticle
+import com.octaviantocan.mymind.data.RedditComment
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.library.CardPicture
 import com.octaviantocan.mymind.ui.library.CardThumbnail
 import com.octaviantocan.mymind.ui.library.LocalVideoPreviews
+import com.octaviantocan.mymind.ui.library.PostBrand
 import com.octaviantocan.mymind.ui.library.TileKind
 import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.library.cardHeading
 import com.octaviantocan.mymind.ui.library.galleryPicture
+import com.octaviantocan.mymind.ui.library.postArticle
 import com.octaviantocan.mymind.ui.library.postBrand
 import com.octaviantocan.mymind.ui.library.postByline
 import com.octaviantocan.mymind.ui.library.postWords
 import com.octaviantocan.mymind.ui.library.productPrice
 import com.octaviantocan.mymind.ui.library.productShop
 import com.octaviantocan.mymind.ui.library.readerVideo
+import com.octaviantocan.mymind.ui.library.redditComments
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
@@ -359,6 +364,8 @@ private fun ReaderBody(
         else if (document) PdfHeadSection(card, pdf?.count, pdfMinutes, onRead)
         else HeadSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions")
         if (document) PdfPagesSection(card, pdf, onMenu)
+        val comments = redditComments(card)
+        if (comments.isNotEmpty()) CommentsSection(comments, onMenu)
         sections.filter { it.part in LEAD_PARTS && !(post && it.part == ReaderPart.Post) }.forEach { TextSection(it, card, hold(it.part)) }
         if (sameVibe.isNotEmpty()) SameVibeSection(sameVibe, onOpenCard)
         TagsSection(card, onRemoveTag, onAddTags, hold(ReaderPart.Tags))
@@ -528,7 +535,9 @@ private fun PostSection(card: Card, onOpenSource: (() -> Unit)?, onPictureHold: 
             if (words.isNotEmpty()) Text(words, Modifier.padding(top = if (title != null) 10.dp else 12.dp), style = body)
         }
         val frame = Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
-        if (video != null && previews != null) {
+        val article = postArticle(card)
+        if (article != null) PostArticleCard(card, article, brand, onOpenSource, onPictureHold, pictureHoldLabel)
+        else if (video != null && previews != null) {
             CompositionLocalProvider(LocalCardSheetColors provides CardSheetColors(brand.paper, brand.paper, brand.text, colors.grabber,
                 colors.scrim, brand.line, colors.shadow)) { CardVideo(card, video, previews, frame) }
         } else if (galleryPicture(card) != null) Box(frame) {
@@ -541,6 +550,52 @@ private fun PostSection(card: Card, onOpenSource: (() -> Unit)?, onPictureHold: 
                 ))
         }
         if (time != null) Text(time, Modifier.padding(top = 12.dp), style = muted)
+    }
+}
+
+/**
+ * The X article a post carries, as X draws it in the post: a box ruled in the network's line colour holding the
+ * article's cover whole, its title, its opening lines and Article on X. A tap opens the post on X, where the article
+ * reads in full, and holding it calls [onHold], which says [holdLabel].
+ */
+@Composable
+private fun PostArticleCard(card: Card, article: PostArticle, brand: PostBrand, onOpenSource: (() -> Unit)?, onHold: () -> Unit, holdLabel: String) {
+    val shape = RoundedCornerShape(16.dp)
+    val body = TextStyle(color = brand.text, fontSize = 15.sp, lineHeight = 22.sp, fontFamily = MymindTheme.fonts.body)
+    val preview = article.preview?.trim()?.takeIf { it.isNotEmpty() }
+    Column(Modifier.padding(top = 12.dp).fillMaxWidth().clip(shape).border(1.dp, brand.line, shape)
+        .semantics { contentDescription = "Article, ${article.title.orEmpty()}" }
+        .combinedClickable(
+            interactionSource = null, indication = CardSheetIndication, role = Role.Button,
+            onClickLabel = if (onOpenSource != null) "Open source" else null, onClick = { onOpenSource?.invoke() },
+            onLongClickLabel = holdLabel, onLongClick = onHold,
+        )) {
+        if (galleryPicture(card) != null) CardPicture(card, play = false, whole = true)
+        Column(Modifier.fillMaxWidth().padding(start = 12.dp, top = 10.dp, end = 12.dp, bottom = 12.dp)) {
+            Text(article.title.orEmpty(), style = body.copy(fontSize = 17.sp, fontWeight = FontWeight.SemiBold))
+            if (preview != null) Text(preview, Modifier.padding(top = 6.dp), style = body)
+            Text("Article on X", Modifier.padding(top = 6.dp), style = body.copy(color = brand.muted, lineHeight = 21.sp))
+        }
+    }
+}
+
+/**
+ * A Reddit post's top comments as they were when it was saved, each with its author over its words, ruled apart, as
+ * people save a thread for its answers. It shows no points.
+ */
+@Composable
+private fun CommentsSection(comments: List<RedditComment>, onHold: (() -> Unit)?) {
+    val colors = LocalCardSheetColors.current
+    ReaderSection(SECTION_PADDING, holdLabel = "Card actions", onHold = onHold) {
+        SectionHeading(R.drawable.ic_comment, "Top comments", trailing = "When saved")
+        comments.forEachIndexed { index, comment ->
+            if (index > 0) Box(Modifier.padding(top = 12.dp).fillMaxWidth().height(1.dp).background(colors.active))
+            Column(Modifier.padding(top = if (index > 0) 12.dp else 10.dp).semantics(mergeDescendants = true) {}) {
+                Text("u/${comment.author.orEmpty().removePrefix("u/")}", style = detailStyle(colors).copy(fontFamily = MymindTheme.fonts.body))
+                Text(comment.body.orEmpty(), Modifier.padding(top = 2.dp),
+                    style = TextStyle(color = colors.text, fontSize = 16.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body))
+            }
+        }
     }
 }
 

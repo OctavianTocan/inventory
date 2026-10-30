@@ -2,6 +2,7 @@ package com.octaviantocan.mymind.ui.library
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -108,7 +109,9 @@ internal fun GalleryTile(
     val heading = card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card)
     val previews = LocalVideoPreviews.current
     val video = remember(card) { previewVideo(card) }
-    var length by remember(video, previews) { mutableStateOf(video?.let { previews?.length(it) }) }
+    var length by remember(video, previews, card.videoLength) {
+        mutableStateOf(video?.let { previews?.length(it) } ?: card.videoLength?.takeIf { it > 0 }?.let { it * 1000L })
+    }
     val moving = rememberSheetMotionEnabled()
     val tilePicture = @Composable { description: String?, pictureModifier: Modifier ->
         if (previews != null && video != null && playVideo && moving) {
@@ -232,16 +235,18 @@ private fun GalleryCount(card: Card, modifier: Modifier) {
  * A saved post drawn as the post itself, in its network's own colours ([postBrand]): the network's mark top left, the
  * author's name with the handle under it, the post's words, then its own picture with rounded corners. With a picture
  * the words take what they need, up to a little under half of the tile under the name, and the picture fills the rest.
- * It shows no likes, reposts or other counts.
+ * An X post that carries an article shows the article as X does, in a box under the words: its cover, then its title
+ * with Article under it. It shows no likes, reposts or other counts.
  */
 @Composable
 private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Composable (Modifier) -> Unit)?) {
     val brand = postBrand(card.type)
     val byline = remember(card) { postByline(card) ?: PostByline(galleryKind(card), null) }
+    val article = postArticle(card)
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 110.dp
         val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
-        val words = text.ifBlank { if (picture == null) cardHeading(card) else "" }
+        val words = text.ifBlank { if (picture == null && article == null) cardHeading(card) else "" }
         val head = !compact && maxHeight >= 96.dp
         val wordsHeight = ((maxHeight - inset * 2 - if (head) POST_HEAD else 0.dp) * 0.45f).coerceAtLeast(19.dp)
         Column(Modifier.fillMaxSize().padding(start = inset, end = inset, top = inset - 2.dp, bottom = inset - 3.dp)) {
@@ -252,8 +257,9 @@ private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Co
             if (words.isNotBlank()) {
                 TileText(words, highlight, if (picture == null) Modifier.weight(1f) else Modifier.heightIn(max = wordsHeight), brand.text)
             }
-            if (picture != null) Box(Modifier.padding(top = if (words.isBlank()) 0.dp else 7.dp).fillMaxWidth().weight(1f)
-                .clip(RoundedCornerShape(if (compact) 4.dp else 8.dp))) {
+            val gap = Modifier.padding(top = if (words.isBlank()) 0.dp else 7.dp).fillMaxWidth()
+            if (article != null) PostArticleBox(article.title.orEmpty(), brand, compact, picture, if (picture != null) gap.weight(1f) else gap)
+            else if (picture != null) Box(gap.weight(1f).clip(RoundedCornerShape(if (compact) 4.dp else 8.dp))) {
                 picture(Modifier.fillMaxSize())
                 if (card.post?.hasVideo == true) VideoBadge(false, null, Modifier.align(Alignment.TopEnd).padding(6.dp))
                 else GalleryCount(card, Modifier.align(Alignment.TopEnd))
@@ -371,6 +377,23 @@ private fun PostHead(brand: PostBrand, byline: PostByline) {
         Column(Modifier.weight(1f)) {
             Text(byline.name, color = brand.text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (byline.handle != null) Text(byline.handle, color = brand.muted, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/**
+ * The article an X post carries, as X draws its card in a post: a box ruled in the network's line colour holding the
+ * article's cover, when there is one, over its title in up to two lines with Article under it.
+ */
+@Composable
+private fun PostArticleBox(title: String, brand: PostBrand, compact: Boolean, picture: (@Composable (Modifier) -> Unit)?, modifier: Modifier) {
+    val shape = RoundedCornerShape(if (compact) 4.dp else 8.dp)
+    val style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp)
+    Column(modifier.clip(shape).border(1.dp, brand.line, shape)) {
+        if (picture != null) Box(Modifier.fillMaxWidth().weight(1f)) { picture(Modifier.fillMaxSize()) }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp).clearAndSetSemantics {}) {
+            Text(title, color = brand.text, style = style.copy(fontWeight = FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("Article", color = brand.muted, style = style.copy(fontSize = 11.sp, lineHeight = 14.sp), maxLines = 1)
         }
     }
 }

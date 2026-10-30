@@ -14,6 +14,8 @@ fn class_of(kind: &str) -> Option<&'static str> {
         "XPost" => "x-post post",
         "ThreadsPost" => "threads-post post",
         "SubstackNote" => "substack-note post",
+        "BlueskyPost" => "bluesky-post post",
+        "MastodonPost" => "mastodon-post post",
         "WebPage" => "web-page",
         "Article" => "article",
         "Repository" => "repository",
@@ -39,6 +41,8 @@ fn link_label(data: &Value, kind: &str) -> String {
         "XPost" => "X Post",
         "ThreadsPost" => "Threads Post",
         "SubstackNote" => "Substack Note",
+        "BlueskyPost" => "Bluesky Post",
+        "MastodonPost" => "Mastodon Post",
         "RedditPost" => "Reddit Post",
         "InstagramReel" => "Reel",
         "SoftwareApplication" => "App",
@@ -82,6 +86,8 @@ fn render_post(data: &Value, extras: &Value) -> Result<String> {
     let platform = match data.get("type").as_str() {
         Some("XPost") => "x",
         Some("ThreadsPost") => "threads",
+        Some("BlueskyPost") => "bluesky",
+        Some("MastodonPost") => "mastodon",
         _ => "substack",
     };
     let body = if post.get("bodyHtml").is_nullish() {
@@ -238,7 +244,7 @@ fn render_body(data: &Value, extras: &Value) -> Result<String> {
                 e(&text(title)), e(&text(optional(reddit, "subreddit")))
             )
         }
-        "XPost" | "ThreadsPost" | "SubstackNote" => render_post(data, extras)?,
+        "XPost" | "ThreadsPost" | "SubstackNote" | "BlueskyPost" | "MastodonPost" => render_post(data, extras)?,
         _ => return Err(Error::invalid(format!("Unsupported card type: {}", data.get("type").to_js_string()))),
     })
 }

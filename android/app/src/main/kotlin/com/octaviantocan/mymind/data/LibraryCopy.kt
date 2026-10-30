@@ -492,6 +492,8 @@ private fun bodyText(card: Card): String = buildList {
     addAll(listOfNotNull(card.description, card.note, card.url, card.domain, card.siteName, card.author, card.product?.brand))
     card.post?.bodyHtml?.let { add(it.replace(Regex("<[^>]+>"), " ")) }
     card.post?.author?.let(::add)
+    card.article?.let { addAll(listOfNotNull(it.title, it.preview)) }
+    card.reddit?.comments?.forEach { addAll(listOfNotNull(it.author, it.body)) }
     card.prose?.let { collectText(it, this) }
 }.joinToString(" ")
 

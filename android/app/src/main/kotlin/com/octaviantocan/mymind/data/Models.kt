@@ -56,8 +56,16 @@ data class AppInfo(
 @Serializable
 data class Product(val price: String? = null, val brand: String? = null)
 
+/** One of the top comments kept with a Reddit post when it was saved. */
 @Serializable
-data class RedditInfo(val title: String? = null, val subreddit: String? = null)
+data class RedditComment(val author: String? = null, val body: String? = null)
+
+@Serializable
+data class RedditInfo(val title: String? = null, val subreddit: String? = null, val comments: List<RedditComment>? = null)
+
+/** The X article a post carries: its title, its opening lines and its address on X. */
+@Serializable
+data class PostArticle(val title: String? = null, val preview: String? = null, val url: String? = null)
 
 /** A library card. [type] is kept as a string so card types this app does not know still decode. */
 @Serializable
@@ -88,6 +96,9 @@ data class Card(
     val app: AppInfo? = null,
     val product: Product? = null,
     val reddit: RedditInfo? = null,
+    /** A video's length in seconds, as its site gives it, for videos the server does not keep. */
+    val videoLength: Int? = null,
+    val article: PostArticle? = null,
     val state: String? = null,
 )
 

@@ -2,6 +2,8 @@ package com.octaviantocan.mymind.ui.library
 
 import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
+import com.octaviantocan.mymind.data.PostArticle
+import com.octaviantocan.mymind.data.RedditComment
 import com.octaviantocan.mymind.data.RedditInfo
 import com.octaviantocan.mymind.ui.card.postDay
 import com.octaviantocan.mymind.ui.card.postTimeLine
@@ -46,6 +48,31 @@ class PostCardsTest {
         assertEquals("@maya.walks", postByline(threads)?.handle)
         assertEquals("@theo.bsky.social", postByline(bluesky)?.handle)
         assertEquals("@sam@mastodon.social", postByline(mastodon)?.handle)
+    }
+
+    @Test
+    fun aBlueskyLinkThatNamesItsAuthorByIdShowsNoHandle() {
+        val card = testCard("b", type = "BlueskyPost", url = "https://bsky.app/profile/did:plc:fern/post/3k").copy(post = Post(author = "by Fern Hollow"))
+        assertEquals(PostByline("Fern Hollow", null), postByline(card))
+    }
+
+    @Test
+    fun anXPostCarriesTheArticleItLinksTo() {
+        val article = PostArticle("The quiet economics of walking cities", "A city that is good to walk in.", "https://x.com/i/article/1844")
+        val card = testCard("xa", type = "XPost").copy(post = Post(author = "by Noor"), description = article.preview, article = article)
+        assertEquals(article, postArticle(card))
+        assertEquals("The article's opening lines are not the post's words", "", postWords(card))
+        assertTrue("An article stands two squares high", postStandsTall(card))
+        assertNull(postArticle(card.copy(article = article.copy(title = " "))))
+        assertNull("Only X posts carry articles", postArticle(card.copy(type = "WebPage")))
+    }
+
+    @Test
+    fun aRedditPostKeepsItsTopCommentsWithTheirAuthors() {
+        val comments = listOf(RedditComment("moss_and_map", "Forty-one km along the coast."), RedditComment("", "Who?"), RedditComment("ridgeline", " "))
+        val card = testCard("r", type = "RedditPost").copy(reddit = RedditInfo("The longest walk?", "hiking", comments))
+        assertEquals(listOf(comments[0]), redditComments(card))
+        assertEquals(emptyList<RedditComment>(), redditComments(card.copy(type = "XPost")))
     }
 
     @Test

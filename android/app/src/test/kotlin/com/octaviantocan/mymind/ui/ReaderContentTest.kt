@@ -1,7 +1,10 @@
 package com.octaviantocan.mymind.ui
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -12,6 +15,9 @@ import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.Post
+import com.octaviantocan.mymind.data.PostArticle
+import com.octaviantocan.mymind.data.RedditComment
+import com.octaviantocan.mymind.data.RedditInfo
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.card.CardDetail
 import com.octaviantocan.mymind.ui.card.ReaderActions
@@ -135,6 +141,39 @@ class ReaderContentTest {
         compose.onNodeWithText("Done").performClick()
         compose.onNodeWithContentDescription("Remove tag Linting").assertDoesNotExist()
         compose.runOnIdle { assertEquals(listOf("Formatting"), removed) }
+    }
+
+    @Test
+    fun aRedditPostKeepsItsTopCommentsUnderThePost() {
+        val thread = testCard("r1", type = "RedditPost", url = "https://www.reddit.com/r/hiking/comments/1abc/", title = "The longest walk?")
+            .copy(author = "fernhollow", post = Post(bodyHtml = "<p>What is the longest day you have walked?</p>"),
+                reddit = RedditInfo("The longest walk?", "hiking", listOf(RedditComment("moss_and_map", "Forty-one km along the coast."),
+                    RedditComment("ridgeline", "Thirty, in the rain."))))
+        compose.setPhoneContent(false) {
+            PageTheme(PageScheme.Dark) { CardDetail(thread, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons(), onOpenSource = {}) }
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithText("Top comments").assertExists()
+        compose.onNodeWithText("u/moss_and_map").assertExists()
+        compose.onNodeWithText("Thirty, in the rain.").assertExists()
+        compose.onAllNodesWithText("What is the longest day you have walked?").assertCountEquals(1)
+    }
+
+    @Test
+    fun anXPostShowsTheArticleItCarriesAndATapOpensThePost() {
+        val opened = mutableListOf<String>()
+        val article = PostArticle("The quiet economics of walking cities", "A city that is good to walk in.", "https://x.com/i/article/1844")
+        val post = testCard("xa", type = "XPost", url = "https://x.com/noor/status/1844", title = article.title)
+            .copy(post = Post(bodyHtml = "<p>New piece.</p>", author = "by Noor"), cover = Cover("/media/cover.jpg", 1456, 582), article = article)
+        compose.setPhoneContent(false) {
+            PageTheme(PageScheme.Dark) { CardDetail(post, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons(), onOpenSource = { opened += it }) }
+        }
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithText("A city that is good to walk in.", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Article on X", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithContentDescription("Preview").assertCountEquals(0)
+        compose.onNodeWithContentDescription("Article, ${article.title}").performClick()
+        compose.runOnIdle { assertEquals(listOf("https://x.com/noor/status/1844"), opened) }
     }
 
     @Test

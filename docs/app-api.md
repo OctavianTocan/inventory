@@ -108,14 +108,17 @@ Fields are omitted when the stored card has no value; the app treats every field
   "post": {"bodyHtml": "<p>…</p>", "author": "by …", "hasVideo": true, "gallery": [{"src": "…", "width": 1, "height": 1}]},
   "app": {"distributor": "app-store", "srcset": "…", "width": 250, "height": 250},
   "product": {"price": "$99", "brand": "…"},
-  "reddit": {"title": "…", "subreddit": "…"},
+  "reddit": {"title": "…", "subreddit": "…", "comments": [{"author": "…", "body": "…"}]},
+  "videoLength": 634,
+  "article": {"title": "…", "preview": "…", "url": "https://x.com/i/article/…"},
   "state": "ready"
 }
 ```
 
-- `type`: one of `XPost`, `ThreadsPost`, `SubstackNote`, `WebPage`, `Article`, `Repository`, `Image`, `Screenshot`,
-  `Video`, `YouTubeVideo`, `InstagramReel`, `Note`, `Content`, `SoftwareApplication`, `Product`, `Document`,
-  `RedditPost`, `Placeholder`. The app shows an unknown type as a plain titled card instead of failing.
+- `type`: one of `XPost`, `ThreadsPost`, `SubstackNote`, `BlueskyPost`, `MastodonPost`, `WebPage`, `Article`,
+  `Repository`, `Image`, `Screenshot`, `Video`, `YouTubeVideo`, `InstagramReel`, `Note`, `Content`,
+  `SoftwareApplication`, `Product`, `Document`, `RedditPost`, `Placeholder`. The app shows an unknown type as a plain
+  titled card instead of failing.
 - `url`: `extras.linkUrl`, else `data.source.url`. `title`: `extras.title` (full), else `data.title`.
 - `cover`: `extras.cover`; for an uploaded image without one, the rendition `imageCover(blob)` picks for the web.
 - `thumbHash` on `cover`, or on `blob` for a card without a cover: the [ThumbHash](https://evanw.github.io/thumbhash/)
@@ -127,6 +130,12 @@ Fields are omitted when the stored card has no value; the app treats every field
 - `prose`: the stored document tree (Note, Content). `post.bodyHtml` is the source post's sanitized HTML, the one
   place HTML reaches the app.
 - `state`: `ready`, `saving` (capture pending), `screenshot` (screenshot pending) or `failed` (capture failed).
+- What a link's own site adds after the capture (`rust/crates/core/src/capture_more.rs`), each only where the site
+  answered: `reddit.comments`, up to three top comments from Reddit's public JSON with the post's own words in
+  `post`; `videoLength`, a YouTube video's length in seconds from its watch page; `article`, the X article an X post
+  carries, from X's embed data, whose cover becomes the card's `cover`. A saved Bluesky or Mastodon post, read from the
+  network's public API, becomes a `BlueskyPost` or `MastodonPost` with its words, author and pictures.
+- `product.brand`: `data.brand` when the capture read one, else what `extras.product` holds.
 - `spaceRanks`: the card's place in each of its `spaces`. A space lists its cards from the smallest, the order of
   `/spaces/<id>/cards`, so the phone can show a space from its copy.
 

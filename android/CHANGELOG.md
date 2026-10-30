@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.37 (48), 2026-10-29
+Saved links bring more of their post with them.
+
+### Changed
+- A Reddit post you save now keeps the post's own words and its top three comments. Opening it shows them under the post in Top comments, each with who wrote it.
+- A YouTube video shows its length in the corner of its tile, as other videos do.
+- An X post that carries an X article shows the article as X does: its cover, its title and Article in a box under the post, two squares tall. Opening it shows the article's opening lines too, and tapping the article opens the post on X to read the rest.
+- Bluesky and Mastodon links you save now become posts in the network's own colour, with the author, the words and the pictures, instead of a screenshot of the page.
+- These come from the server when it saves a link, so they show for links saved after the server is updated.
+
 ## 0.6.36 (47), 2026-10-29
 The gallery's tiles are laid out like the showcase's.
 

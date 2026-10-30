@@ -12,6 +12,7 @@ use crate::ai::{Ai, AiImage, AiItem, VocabularyEntry};
 use crate::ai_tags::relevant_tag;
 use crate::backfill::{self, Estimate, MediaImages, Report};
 use crate::capture_link::{CaptureOptions, capture_link};
+use crate::capture_more::capture_more;
 use crate::host::{Fetch, Media, MediaUser, Resource, Screenshot};
 use crate::search_document::analysis_item;
 use crate::sql::SqlExt;
@@ -345,7 +346,12 @@ impl Enrichment {
             Ok(())
         };
         let capture = CaptureOptions { id: &row.id, user: &user, media: &*options.media, update: &update, offline: options.offline };
-        capture_link(&|| baseline.borrow().get("data").clone(), &capture, &*options.resource, &*options.screenshot).await
+        capture_link(&|| baseline.borrow().get("data").clone(), &capture, &*options.resource, &*options.screenshot).await?;
+        if self.0.closed.get() {
+            return Ok(());
+        }
+        let captured = baseline.borrow().clone();
+        capture_more(&captured, &capture, &*options.resource).await
     }
 
     async fn analyze(&self, row: &CardRow, before: &str) -> Result<()> {

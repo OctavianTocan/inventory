@@ -183,7 +183,8 @@ at most three at once, over its still until the first frame shows; one saved wit
 cover MUST show a still the server takes from the video, never an empty "Video" tile.
 Videos on other sites such as YouTube keep their still cover. Every video tile with a
 picture MUST show the Google Photos corner badge: the length (m:ss, or h:mm:ss) once a
-player has read it and the tile has room, then a white play circle, drawn straight on
+player has read it, or for a YouTube video as YouTube gave it when the link was saved, and
+the tile has room, then a white play circle, drawn straight on
 the picture with a soft shadow, with no pill and no site logo. Previews MUST only
 request media from the library server.
 Source: Tavi's recorded reviews, 22 October 2026 ("I don't really like this camera icon",
@@ -204,14 +205,18 @@ Reddit, the subreddit with u/author), the post's words, and its own picture inse
 rounded corners below them. It MUST NOT show likes, reposts, points or other counts.
 The tile and the reader show ThyMind's own saved copy of the post, never a live embed.
 Bare media links the platform appends, such as pic.twitter.com or t.co addresses, MUST
-NOT appear as text in the tile or the reader.
+NOT appear as text in the tile or the reader. An X post that carries an X article MUST
+stand two squares tall and show the article as X does, in a box ruled in X's line colour
+under the post's words: the article's cover, then its title in up to two lines with
+Article under it. The article's opening lines are not the post's words.
 Source: Tavi's recorded review, 22 October 2026 ("if we have a link for the thing, I
 don't think we should put it on the thing", "I think we can just probably show the tweet");
 his recorded review of the card previews canvas, 29 October 2026 (X08's ink tile "I think
 we should do for all of them ... but use X's actual color and also put the username
 under", "we don't need to put the likes and stuff there", "embedding it would mean that
 if the original post changes, ours changes too. That's not what we want"), and his pick
-of X10, R4 and O2 the same day.
+of X10, R4 and O2 the same day; the article box from XA5, which he took with "Pick
+recommended and build it", 29 October 2026.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-products-are-pins
 A product with a photo MUST show as a pin, as Pinterest's feed does: the photo with round

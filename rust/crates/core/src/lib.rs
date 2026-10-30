@@ -14,6 +14,7 @@ pub mod capture_entities;
 pub mod capture_html;
 pub mod capture_http;
 pub mod capture_link;
+pub mod capture_more;
 pub mod device;
 pub mod download_page;
 pub mod enrichment;

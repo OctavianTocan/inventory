@@ -201,6 +201,13 @@ impl AppApi {
             "ready"
         };
         let author = if data.get("author").is_string() { data.get("author").clone() } else { Value::Undefined };
+        let mut product = extras.get("product").clone();
+        if data.get("brand").is_string() {
+            if product.is_nullish() {
+                product = Value::Object(obj! {});
+            }
+            product.set("brand", data.get("brand").clone());
+        }
         let deleted = match row.deleted_ns {
             None => Value::Undefined,
             Some(ns) => or_iso(data.get("deleted"), ns)?,
@@ -229,8 +236,10 @@ impl AppApi {
             ("prose", prose),
             ("post", extras.get("post").clone()),
             ("app", extras.get("app").clone()),
-            ("product", extras.get("product").clone()),
+            ("product", product),
             ("reddit", extras.get("reddit").clone()),
+            ("videoLength", extras.get("videoLength").clone()),
+            ("article", extras.get("article").clone()),
             ("state", state.into()),
         ]));
         Ok(json::parse(&json::stringify(&card)?.unwrap_or_default())?)

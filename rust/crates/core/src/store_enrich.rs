@@ -242,8 +242,9 @@ impl<'a> Enricher<'a> {
             }
         }
         let kind = row.data.get("type").clone();
-        let retitle = ["XPost", "ThreadsPost", "SubstackNote"].iter().any(|name| kind.as_str() == Some(name))
+        let retitle = ["XPost", "ThreadsPost", "SubstackNote", "BlueskyPost", "MastodonPost"].iter().any(|name| kind.as_str() == Some(name))
             && !row.extras.get("titleEdited").truthy()
+            && !row.extras.get("article").truthy()
             && strict_equal(row.data.get("title"), row.extras.get("capturedTitle"))
             && result.get("title").truthy();
         if retitle {
