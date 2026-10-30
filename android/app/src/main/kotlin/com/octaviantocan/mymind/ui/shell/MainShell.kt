@@ -37,6 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
@@ -683,14 +687,22 @@ fun ShellFrame(
     page: @Composable () -> Unit,
 ) {
     val bars = remember { FootBars() }
-    CompositionLocalProvider(LocalFootBars provides bars) {
-        Box(modifier.fillMaxSize().background(MymindTheme.colors.page)) {
+    val immersion = remember { ShellImmersion() }
+    CompositionLocalProvider(LocalFootBars provides bars, LocalShellImmersion provides immersion) {
+        val paper = MymindTheme.colors.page
+        ImmersiveSystemBars(immersion)
+        Box(modifier.fillMaxSize().drawBehind { drawRect(lerp(paper, Color.Black, immersion.amount())) }) {
             PageTheme(scheme) {
                 Box(Modifier.fillMaxSize().statusBarsPadding().background(LibraryStyle.colors.background)) {
                     page()
                 }
                 if (footer != null) footer() else MymindTabBar(tab, onSelectTab)
-                FootBarLayer(bars, Modifier.align(Alignment.BottomCenter))
+                // A full-screen page slides the bar down out of sight, and out of reach.
+                FootBarLayer(bars, Modifier.align(Alignment.BottomCenter).graphicsLayer {
+                    val away = immersion.amount()
+                    alpha = 1f - away
+                    translationY = away * size.height
+                })
             }
             overlay()
         }

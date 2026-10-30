@@ -200,13 +200,6 @@ private fun PictureImage(card: Card, modifier: Modifier = Modifier) {
 /** Width over height of the card's cover, kept between tall portrait and wide banner. */
 private fun pictureRatio(card: Card): Float = storedRatio(card)?.coerceIn(0.4f, 3f) ?: DEFAULT_RATIO
 
-/** Width over height the card's cover or file was saved with, or null when it was not. */
-private fun storedRatio(card: Card): Float? {
-    val w = card.cover?.width ?: card.blob?.width
-    val h = card.cover?.height ?: card.blob?.height
-    return if (w != null && h != null && w > 0 && h > 0) w.toFloat() / h else null
-}
-
 /** Colour shown behind a cover while it loads. */
 @Composable
 private fun pictureBackground(card: Card): Color =

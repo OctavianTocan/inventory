@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
@@ -139,7 +140,7 @@ fun EverythingContent(
     onRefreshResults: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
     photoUrl: String? = null,
-    mosaic: MosaicState = rememberMosaicState(),
+    mosaic: MosaicState = rememberMosaicState(reels = true),
     resultsState: LazyListState = rememberLazyListState(),
     ai: AiRank? = null,
     onAiTag: (String) -> Unit = {},
@@ -174,8 +175,9 @@ fun EverythingContent(
                             if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
                         })
                 }
-                GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter), visible = { gridState.scrolledBy() })
-                GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd), photoUrl = photoUrl, photoLoader = accountPhotoLoader)
+                GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = 1f - mosaic.reel },
+                    visible = { gridState.scrolledBy() })
+                GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd).awayInReels(mosaic), photoUrl = photoUrl, photoLoader = accountPhotoLoader)
             }
         }
     }

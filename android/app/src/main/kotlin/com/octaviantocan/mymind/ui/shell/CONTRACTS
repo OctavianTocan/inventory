@@ -32,6 +32,14 @@ ee5cf358333cb1170f1923c7118e12af3f265b74; geometry from Tavi's Google Photos
 comparison in the recorded review of 22 October 2026 ("less tall", "start a bit
 further to the left", "a bit wider").
 
+@cc [owner:OctavianTocan,label:design;motion] library-bar-leaves-for-full-screen
+A page that goes full screen, as a gallery does past one column, MUST register it with
+the shell's ShellImmersion. As far as the page has gone full screen, the bar slides down
+past the bottom of the screen and fades, out of reach of taps, and the shell's paper turns
+black with light status and navigation bar icons. A page that never goes full screen
+leaves the bar where library-bars-rest-alike puts it.
+Source: Tavi, 30 October 2026, the gallery's full-screen mode ("we full screen one thing").
+
 @cc [owner:OctavianTocan,label:product] library-foot-bar-owns-its-taps
 A tap anywhere inside the search pill, including its edge and padding, MUST focus
 its field or expand its compact form. A tap on the navigation capsule's padding

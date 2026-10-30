@@ -156,8 +156,8 @@ class GalleryScreenshotTest(private val dark: Boolean) {
     )
 
     private fun show(columns: Int, searching: Boolean = false,
-        sample: List<Card> = cards, highlights: List<Card> = pins) {
-        mosaicState = MosaicState(columns)
+        sample: List<Card> = cards, highlights: List<Card> = pins, reels: Boolean = false) {
+        mosaicState = MosaicState(columns, reels)
         compose.setPhoneContent(dark) {
             ShellFrame(Tab.Everything, {}, PageScheme.System, footer = {
                 LibraryFootBar(Tab.Everything, {}, searching, "", {}, {}, {})
@@ -200,6 +200,27 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         compose.onRoot().captureRoboImage("screenshots/gallery_scrolled_top_blur_${if (dark) "dark" else "light"}.png")
     }
     @Test fun search() = capture(2, "gallery_search", searching = true)
+
+    @Test fun reels() {
+        show(1, reels = true)
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithContentDescription("Card gallery").performTouchInput {
+            val y = height * 0.45f
+            down(0, Offset(centerX - width * 0.2f, y))
+            down(1, Offset(centerX + width * 0.2f, y))
+            moveTo(0, Offset(centerX - width * 0.26f, y), delayMillis = 120)
+            moveTo(1, Offset(centerX + width * 0.26f, y), delayMillis = 120)
+            up(0)
+            up(1)
+        }
+        compose.waitForIdle()
+        assertEquals(0, mosaicState.columns)
+        val bar = compose.onNodeWithContentDescription("Search").fetchSemanticsNode().boundsInRoot
+        assertTrue("The bar slides down out of sight: $bar", bar.top >= screen.bottom - 1f)
+        val account = compose.onNodeWithContentDescription("Account settings").fetchSemanticsNode().boundsInRoot
+        assertTrue("The top controls slide up out of sight: $account", account.bottom <= screen.top + 1f)
+        compose.onRoot().captureRoboImage("screenshots/gallery_reels_${if (dark) "dark" else "light"}.png")
+    }
 
     @Test fun searchAnsweredByTheEngine() {
         mosaicState = MosaicState(2)

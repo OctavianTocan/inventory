@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.38 (49), 2026-10-30
+Pinch past one column to see one thing at a time, full screen, and pinching runs smoother.
+
+### Added
+- Pinch past one column on Everything, search results or an opened space and the gallery goes full screen: one card fills the screen on black, a photo whole at its own shape. Swipe up or down to move one card at a time. Pinch your fingers together, or press Back, to come back to the grid.
+- The bars slide out of the way as the page goes full screen, and come back as you pinch out.
+
+### Fixed
+- Pinching no longer skips frames as your fingers come down or let go, and the end of a pinch no longer snaps: the tiles stay as they are while they move, and pictures switch to their new size only once the cards have come to rest.
+
 ## 0.6.37 (48), 2026-10-29
 Saved links bring more of their post with them.
 

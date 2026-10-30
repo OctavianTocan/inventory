@@ -3,9 +3,17 @@ package com.octaviantocan.mymind.ui.library
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.ui.theme.LibraryColors
+
+/**
+ * What the blurred fill behind a pinch draws for a card: its [color], and its [picture], the address the tile loads,
+ * once that picture is in memory.
+ */
+internal class MosaicBackdrop(val color: Color, val picture: String?)
 
 /**
  * What a [LibraryMosaic] draws for each of its cards and the shape it gives them. [GalleryMosaicTiles] draws library
@@ -18,6 +26,9 @@ internal interface MosaicTiles {
 
     /** Width over height of the card's cell at one column. */
     fun aspectRatio(card: Card): Float
+
+    /** Width over height a picture tile ([isPicture]) is drawn at on its own page in reels; its one-column shape by default. */
+    fun reelRatio(card: Card): Float = aspectRatio(card)
 
     /**
      * True when the tile is measured to its cell at every size; false when it is laid out once and drawn scaled, as a
@@ -37,7 +48,7 @@ internal interface MosaicTiles {
      * @param card The card.
      * @param onClick Called when the tile is tapped.
      * @param onLongClick Called when the tile is held, or null when holding does nothing.
-     * @param enabled False while a pinch moves the tile, so it takes no touches.
+     * @param enabled False for a drawing that takes no touches; the mosaic passes true and keeps a pinch's touches itself.
      * @param imageRequestSizePx Size, in pixels, to decode the tile's pictures at.
      * @param modifier Modifier for the tile, sized to its cell.
      */
@@ -45,8 +56,8 @@ internal interface MosaicTiles {
     fun Tile(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, enabled: Boolean, imageRequestSizePx: Int, modifier: Modifier)
 
     /**
-     * A drawing of the card that takes no touches and plays nothing: its copy while it changes line, or its layout in
-     * the other grid. The mosaic clears its semantics.
+     * A drawing of the card that takes no touches and plays nothing: its layout in the other grid while a tile with words
+     * changes shape. The mosaic clears its semantics.
      *
      * @param card The card.
      * @param imageRequestSizePx Size, in pixels, to decode the tile's pictures at.
@@ -58,10 +69,10 @@ internal interface MosaicTiles {
      * The card in the blurred fill behind a pinch, which only has to cover the paper between moving tiles.
      *
      * @param card The card.
-     * @param imageRequestSizePx Size, in pixels, to decode the tile's pictures at.
+     * @param colors The page's colours.
+     * @return What to draw, or null to leave the card's place empty.
      */
-    @Composable
-    fun Backdrop(card: Card, imageRequestSizePx: Int)
+    fun backdrop(card: Card, colors: LibraryColors): MosaicBackdrop?
 }
 
 /** The library's own tiles ([GalleryTile]), shaped the way Google Photos breaks up its squares ([mosaicSpan]). */
@@ -69,6 +80,8 @@ internal object GalleryMosaicTiles : MosaicTiles {
     override fun span(card: Card): MosaicSpan = mosaicSpan(card)
 
     override fun aspectRatio(card: Card): Float = mosaicAspectRatio(card)
+
+    override fun reelRatio(card: Card): Float = storedRatio(card) ?: mosaicAspectRatio(card)
 
     override fun isPicture(card: Card): Boolean = galleryTileIsPicture(card)
 
@@ -83,6 +96,5 @@ internal object GalleryMosaicTiles : MosaicTiles {
     override fun Copy(card: Card, imageRequestSizePx: Int) =
         GalleryTile(card, {}, enabled = false, imageRequestSizePx = imageRequestSizePx, playVideo = false, corner = 0.dp)
 
-    @Composable
-    override fun Backdrop(card: Card, imageRequestSizePx: Int) = GalleryTileBackdrop(card, imageRequestSizePx)
+    override fun backdrop(card: Card, colors: LibraryColors): MosaicBackdrop = galleryBackdrop(card, colors)
 }

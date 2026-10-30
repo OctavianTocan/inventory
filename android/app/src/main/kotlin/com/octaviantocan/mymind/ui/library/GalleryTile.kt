@@ -57,6 +57,7 @@ import com.octaviantocan.mymind.data.resolveMediaUrl
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
 import com.octaviantocan.mymind.ui.shell.FootPressTheme
+import com.octaviantocan.mymind.ui.theme.LibraryColors
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
 private val GITHUB_REPOSITORY = Regex("""https://(?:www\.)?github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?(?:[?#].*)?""")
@@ -201,11 +202,9 @@ private fun rememberGalleryImage(picture: String?, imageRequestSizePx: Int?): An
 
 /**
  * A card's paper or picture without its words, labels or touches: what the blurred fill behind a pinch is drawn from,
- * so it stays cheap. It loads the same image request as the card's [GalleryTile].
+ * so it stays cheap. Its picture is the address the card's [GalleryTile] loads, which the fill finds in memory.
  */
-@Composable
-internal fun GalleryTileBackdrop(card: Card, imageRequestSizePx: Int) {
-    val colors = LibraryStyle.colors
+internal fun galleryBackdrop(card: Card, colors: LibraryColors): MosaicBackdrop {
     val picture = galleryPicture(card)
     val paper = when {
         tileKind(card) == TileKind.Post -> postBrand(card.type).paper
@@ -213,11 +212,8 @@ internal fun GalleryTileBackdrop(card: Card, imageRequestSizePx: Int) {
         else -> lerp(colors.raised, cardAccent(card) ?: colors.selected, 0.13f)
     }
     val onlyPicture = picture != null && tileKind(card) != TileKind.Post && !(galleryKeepsText(card) && galleryText(card).isNotBlank())
-    val imageModel = rememberGalleryImage(picture.takeIf { onlyPicture }, imageRequestSizePx)
-    val background = if (onlyPicture) parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper else paper
-    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(TILE_CORNER)).background(background).clearAndSetSemantics {}) {
-        if (imageModel != null) AsyncImage(model = imageModel, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-    }
+    if (!onlyPicture) return MosaicBackdrop(paper, null)
+    return MosaicBackdrop(parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper, resolveMediaUrl(BuildConfig.SERVER_URL, picture))
 }
 
 /** How many pictures a post holds, when it holds more than one. */

@@ -3,6 +3,7 @@ package com.octaviantocan.mymind.ui.library
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import com.octaviantocan.mymind.ui.shell.FootCircleButton
+import com.octaviantocan.mymind.ui.theme.LibraryColors
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
@@ -201,8 +202,7 @@ private class SpaceMosaicTiles(private val spaces: Map<String, Space>, private v
         SpaceStack(space, covers[card.id], {}, Modifier.fillMaxSize(), enabled = false, imageRequestSizePx = imageRequestSizePx)
     }
 
-    @Composable
-    override fun Backdrop(card: Card, imageRequestSizePx: Int) = Unit
+    override fun backdrop(card: Card, colors: LibraryColors): MosaicBackdrop? = null
 }
 
 /**
@@ -233,18 +233,20 @@ fun SpaceContent(
     onRefresh: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
 ) {
+    val mosaic = rememberMosaicState(reels = true)
     Box(modifier.fillMaxSize().background(LibraryStyle.colors.background)) {
         if (feed.empty) {
             PageSpinner()
         } else {
             PullRefresh(feed.refreshing, onRefresh, top = VIEW_HEADER_HEIGHT) {
-                LibraryMosaic(feed, onLoadMore, onOpenCard, onLongPressCard = onLongPressCard, header = {
+                LibraryMosaic(feed, onLoadMore, onOpenCard, mosaic = mosaic, onLongPressCard = onLongPressCard, header = {
                     GalleryTitle(space.name.orEmpty(), start = SPACE_BACK_INSET, end = SPACE_MENU_INSET)
                 })
             }
         }
-        FootCircleButton(R.drawable.ic_sheet_back, "Back", onBack, Modifier.align(Alignment.TopStart).padding(start = 16.dp, top = 12.dp), size = 44.dp)
-        SpaceOptions(onAdd, onDelete, Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = 12.dp))
+        FootCircleButton(R.drawable.ic_sheet_back, "Back", onBack,
+            Modifier.align(Alignment.TopStart).awayInReels(mosaic).padding(start = 16.dp, top = 12.dp), size = 44.dp)
+        SpaceOptions(onAdd, onDelete, Modifier.align(Alignment.TopEnd).awayInReels(mosaic).padding(end = 16.dp, top = 12.dp))
     }
 }
 

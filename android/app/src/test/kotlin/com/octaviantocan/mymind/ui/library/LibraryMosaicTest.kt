@@ -942,4 +942,73 @@ class LibraryMosaicTest {
         assertEquals(1, refreshes)
     }
 
+    /** The cards shown on the gallery now, by their place in [cards], with their bounds. */
+    private fun shownCards(): List<Pair<Int, androidx.compose.ui.geometry.Rect>> {
+        val gallery = compose.onNodeWithContentDescription("Card gallery").fetchSemanticsNode().boundsInRoot
+        return cards.indices.mapNotNull { index ->
+            compose.onAllNodesWithContentDescription("Photo ${index + 1}").fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.let { index to it }
+        }.filter { (_, rect) -> rect.bottom > gallery.top + 1f && rect.top < gallery.bottom - 1f }
+    }
+
+    @Test
+    fun pinchingPastOneColumnOpensReelsThatSwipeOnePageAtATime() {
+        // Tavi, 30 October 2026: "When I zoom all the way in by pinching on the everything screen, we go into a
+        // Instagram-reels-like mode where we full screen one thing and we allow scroll to move between them."
+        val density = MosaicState(1, reels = true)
+        val state = LazyListState(firstVisibleItemIndex = 4)
+        compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(cards, endReached = true), {}, {}, state = state, mosaic = density) } }
+        val gallery = compose.onNodeWithContentDescription("Card gallery")
+        val bounds = gallery.fetchSemanticsNode().boundsInRoot
+        pinch(inward = false, yFraction = 0.4f, stops = 1f)
+        assertEquals(0, density.columns)
+        assertEquals("Full screen", gallery.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+        val (page, rect) = shownCards().single()
+        assertEquals("A page reaches the screen's edges", bounds.width, rect.width, 1f)
+        assertEquals("and stands in the screen's middle", bounds.center.y, rect.center.y, 1f)
+        gallery.performTouchInput { swipe(Offset(centerX, height * 0.7f), Offset(centerX, height * 0.35f), durationMillis = 200) }
+        compose.waitForIdle()
+        val (next, nextRect) = shownCards().single()
+        assertEquals("A swipe up moves one page on", page + 1, next)
+        assertEquals(bounds.center.y, nextRect.center.y, 1f)
+        gallery.performTouchInput { swipe(Offset(centerX, height * 0.4f), Offset(centerX, height * 0.55f), durationMillis = 900) }
+        compose.waitForIdle()
+        assertEquals("A slow, short drag settles back on its page", next, shownCards().single().first)
+        gallery.performTouchInput { swipe(Offset(centerX, height * 0.3f), Offset(centerX, height * 0.6f), durationMillis = 200) }
+        compose.waitForIdle()
+        assertEquals("A swipe down moves one page back", page, shownCards().single().first)
+        pinch(inward = true, yFraction = 0.5f, stops = 1f)
+        assertEquals(1, density.columns)
+        assertTrue("Back at one column the page's card is still in view", page in shownCards().map { it.first })
+    }
+
+    @Test
+    fun backAndTheSmallerCardsActionCloseReels() {
+        val density = MosaicState(0, reels = true)
+        val state = LazyListState(firstVisibleItemIndex = 6)
+        var back: androidx.activity.OnBackPressedDispatcher? = null
+        compose.setContent {
+            back = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+            MymindTheme(dark = true) { LibraryMosaic(FeedState(cards, endReached = true), {}, {}, state = state, mosaic = density) }
+        }
+        val (page, _) = shownCards().single()
+        compose.runOnIdle { checkNotNull(back).onBackPressed() }
+        compose.waitForIdle()
+        assertEquals(1, density.columns)
+        assertTrue(page in shownCards().map { it.first })
+        val larger = compose.onNodeWithContentDescription("Card gallery").fetchSemanticsNode()
+            .config[SemanticsActions.CustomActions].single { it.label == "Larger cards" }
+        compose.runOnIdle { assertTrue(larger.action()) }
+        compose.waitForIdle()
+        assertEquals("Larger cards at one column opens reels", 0, density.columns)
+        assertEquals(1, shownCards().size)
+    }
+
+    @Test
+    fun aGalleryWithoutReelsStopsAtOneColumn() {
+        val density = MosaicState(1)
+        compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(cards, endReached = true), {}, {}, mosaic = density) } }
+        pinch(inward = false, stops = 1f)
+        assertEquals(1, density.columns)
+        assertTrue(shownCards().size > 1)
+    }
 }
