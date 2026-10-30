@@ -32,7 +32,7 @@ screen, the inset Top of Mind starts at, and a card sliding off one end of its l
 leaves at that edge. The space between cards MUST be about a twentieth of a column, from
 6 to 24 dp, as the showcase spaces its wall (`wallGap` in octa-ui's `apps/showcase`): on a
 phone 16 dp at one column, 8 at two and 6 at three and four. The Spaces list keeps its own
-stacks inside the same margins and spacing. Full screen (gallery-reels-past-one-column) is
+stacks inside the same margins and spacing. Full screen (gallery-reels-at-one-column) is
 the one exception: there the corners and side margins shrink to nothing as the pinch goes in.
 Source: Tavi, 29 October 2026, comparing the app with the web showcase ("their corner
 radius looks nicer, their spacing between tiles looks nicer ... I think we should do all
@@ -50,8 +50,8 @@ Source: Tavi, 22 October 2026, preserve text and images in small note previews.
 A two-finger pinch on the mosaic MUST continuously change tile size through multiple
 density levels and reverse while the fingers remain down. Density stops
 MUST offer distinct sizes for uniform portrait, square and landscape cards, with one
-to four columns at their stops, and full screen below one column where
-gallery-reels-past-one-column offers it. Text MUST retain its size and wrapping when
+to four columns at their stops, one column being full screen where
+gallery-reels-at-one-column applies. Text MUST retain its size and wrapping when
 releasing at a stop. A tile with words MUST be a picture of itself: it is laid out
 once, as many squares wide at three columns as its cell spans, in the shape of its
 cell, and drawn scaled to its cell at every density and between them, a big tile's
@@ -124,24 +124,31 @@ Then it pops, instead of being smooth"): the landing started at three times its 
 speed, and the gallery jumped once it had landed. The pace and curve match the web
 showcase's fix of the same day.
 
-@cc [owner:OctavianTocan,label:product;design;motion] gallery-reels-past-one-column
-Everything, search results and an opened space MUST go full screen when a pinch goes past
-one column: each card gets a page the height of the gallery, edge to edge on black, with
-no corners or side margins. A picture shows whole at its own shape, centred on its page; a
-tile with words keeps its one-column shape, drawn scaled to fit. Going in and coming out
-are one more pinch step, following the fingers and landing as
-gallery-pinches-change-tile-size describes. While the page goes full screen, the foot bar
-slides down and the top controls and header slide up out of sight and out of reach, and
-the status bar turns dark, each as far as the pinch has gone. A vertical swipe MUST move
-one card at a time and come to rest on a whole page; a slow drag settles on the nearer
-page. Pinching the fingers together, the Smaller cards action or Back MUST come back to one
-column, and Larger cards at one column goes full screen. A tap
-still opens the card and a hold still opens its actions. The Spaces list MUST NOT go full
-screen; it stops at one column.
+@cc [owner:OctavianTocan,label:product;design;motion] gallery-reels-at-one-column
+In Everything, search results and an opened space, one column MUST be full screen: a pinch
+in from two columns lands there, with no grid of one column before it. Each card gets a page
+the height of the gallery, edge to edge on black, with no corners or side margins, and the
+page MUST show a fuller card than its tile: a picture or video whole at its own shape in the
+page's middle, and at its foot, over a shade, where the card is from (a post's author, a
+product's shop and price, else its site or kind) and when it was saved, its title, its
+words or else its description in up to four lines, and its first tags. A card without a
+picture shows its words, or else its title, large in the middle. Going in and coming out
+are one pinch step, following the fingers and landing as gallery-pinches-change-tile-size
+describes: the tile grows to its page and the page fades in over it near the end. While the
+page goes full screen, the foot bar slides down and the top controls and header slide up
+out of sight and out of reach, and the status bar turns dark, each as far as the pinch has
+gone. A vertical swipe MUST move one card at a time and come to rest on a whole page; a slow
+drag settles on the nearer page. Pinching the fingers together, the Smaller cards action or
+Back MUST come back to two columns, and Larger cards at two columns goes full screen. A tap
+on a page opens its card and a hold opens its actions. The Spaces list MUST NOT go full
+screen; its one column is a grid.
 Source: Tavi, 30 October 2026 ("When I zoom all the way in by pinching on the everything
 screen, we go into a Instagram-reels-like mode where we full screen one thing and we allow
 scroll to move between them. But you can also obviously zoom out or pinch out to come back
-to the other zooms").
+to the other zooms"), then on 0.6.38, which put full screen past a one-column grid and
+showed only the tile: "When you get to one column we already should go into the reels mode,
+not zoom further. And also, what you see in the reels mode should be fuller cards in full
+screen with info and stuff".
 
 @cc [owner:OctavianTocan,label:product;motion] gallery-pinches-everywhere
 Every gallery of cards, Everything, search results and an opened space, MUST pinch as
@@ -168,7 +175,7 @@ Source: Tavi, 22 October 2026, Google Photos layout request and gallery polish i
 The profile and Add controls MUST stay fixed at the top of Everything and the Spaces
 list while the page scrolls under them. They float as their own raised, shadowed
 circles with no solid header strip behind them, except in full screen, where they slide
-away (gallery-reels-past-one-column). The page title ("Your
+away (gallery-reels-at-one-column). The page title ("Your
 mind", "All Spaces") MUST scroll away with the page. The controls MUST remain
 available for an empty, loading or failed feed. Pull to refresh and mosaic gestures
 belong to the scrolling page; search and browsing MUST retain independent scroll

@@ -30,6 +30,7 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
+import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.library.AiRank
 import com.octaviantocan.mymind.ui.library.EverythingContent
 import com.octaviantocan.mymind.ui.library.FeedState
@@ -156,7 +157,7 @@ class GalleryScreenshotTest(private val dark: Boolean) {
     )
 
     private fun show(columns: Int, searching: Boolean = false,
-        sample: List<Card> = cards, highlights: List<Card> = pins, reels: Boolean = false) {
+        sample: List<Card> = cards, highlights: List<Card> = pins, reels: Boolean = false, pictures: Int = 3) {
         mosaicState = MosaicState(columns, reels)
         compose.setPhoneContent(dark) {
             ShellFrame(Tab.Everything, {}, PageScheme.System, footer = {
@@ -168,7 +169,7 @@ class GalleryScreenshotTest(private val dark: Boolean) {
             }
         }
         compose.mainClock.autoAdvance = true
-        if (!searching) compose.waitUntil(10_000) { loaded.size >= 3 }
+        if (!searching) compose.waitUntil(10_000) { loaded.size >= pictures }
         compose.mainClock.advanceTimeBy(1200)
         compose.waitForIdle()
     }
@@ -202,7 +203,7 @@ class GalleryScreenshotTest(private val dark: Boolean) {
     @Test fun search() = capture(2, "gallery_search", searching = true)
 
     @Test fun reels() {
-        show(1, reels = true)
+        show(2, reels = true)
         val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
         compose.onNodeWithContentDescription("Card gallery").performTouchInput {
             val y = height * 0.45f
@@ -214,12 +215,25 @@ class GalleryScreenshotTest(private val dark: Boolean) {
             up(1)
         }
         compose.waitForIdle()
-        assertEquals(0, mosaicState.columns)
+        assertEquals(1, mosaicState.columns)
         val bar = compose.onNodeWithContentDescription("Search").fetchSemanticsNode().boundsInRoot
         assertTrue("The bar slides down out of sight: $bar", bar.top >= screen.bottom - 1f)
         val account = compose.onNodeWithContentDescription("Account settings").fetchSemanticsNode().boundsInRoot
         assertTrue("The top controls slide up out of sight: $account", account.bottom <= screen.top + 1f)
         compose.onRoot().captureRoboImage("screenshots/gallery_reels_${if (dark) "dark" else "light"}.png")
+    }
+
+    @Test fun reelPages() {
+        val tags = listOf(Tag("t1", "ideas"), Tag("t2", "design"), Tag("t3", "slow living"))
+        show(1, sample = mixedNotes.map { it.copy(tags = tags, siteName = it.siteName ?: "reading.example".takeIf { _ -> it.type == "Article" }) },
+            reels = true, pictures = 1)
+        repeat(8) { page ->
+            compose.onRoot().captureRoboImage("screenshots/gallery_reel_page_${page}_${if (dark) "dark" else "light"}.png")
+            compose.onNodeWithContentDescription("Card gallery").performTouchInput {
+                swipe(Offset(centerX, height * 0.7f), Offset(centerX, height * 0.35f), durationMillis = 200)
+            }
+            compose.waitForIdle()
+        }
     }
 
     @Test fun searchAnsweredByTheEngine() {

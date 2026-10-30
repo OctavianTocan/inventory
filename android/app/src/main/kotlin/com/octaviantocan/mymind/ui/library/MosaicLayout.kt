@@ -137,7 +137,7 @@ internal fun mosaicLevel(cards: List<Card>, width: Float, columns: Int, gap: Flo
 }
 
 /**
- * Reels, the size past one column: every card gets a page of the gallery's [page] height, stacked with no space between,
+ * Reels, a gallery's one column: every card gets a page of the gallery's [page] height, stacked with no space between,
  * reaching [bleed] past each side of the grid to the screen's edges. The card is drawn inside its page at its own shape
  * ([MosaicLayouts.reelContent]).
  */
@@ -176,9 +176,8 @@ internal fun mosaicGapDp(columns: Int, width: Float): Float =
 
 /**
  * Cached canonical geometry, with the cards shaped and drawn by [tiles]. Only the visible window is interpolated during a
- * pointer frame. [gaps] holds the space between cards at one to four columns. With a [page] height the layouts also
- * hold reels at zero columns ([reelLevel]), each page reaching [bleed] past the grid's sides; without one, zero columns
- * is one column.
+ * pointer frame. [gaps] holds the space between cards at one to four columns. With a [page] height, one column is the
+ * reels ([reelLevel]), each page reaching [bleed] past the grid's sides.
  */
 internal class MosaicLayouts(
     val cards: List<Card>, val width: Float, gaps: List<Float>, val tiles: MosaicTiles = GalleryMosaicTiles,
@@ -209,8 +208,11 @@ internal class MosaicLayouts(
     /** Whether card [index]'s tile is measured to its cell at every size ([MosaicTiles.isPicture]). */
     fun isPicture(index: Int): Boolean = pictures[index]
 
-    /** The grid at [columns] across, or the reels at zero. */
-    fun level(columns: Int): Level = if (columns <= 0) reels else grids[columns.coerceAtMost(4) - 1]
+    /** The grid at [columns] across, or the reels at one column when the layouts have a [page]. */
+    fun level(columns: Int): Level = if (isReels(columns)) reels else grids[columns.coerceIn(1, 4) - 1]
+
+    /** True when [columns] across is the reels: one column, with a [page] height. */
+    fun isReels(columns: Int): Boolean = page > 0f && columns <= 1
 
     /**
      * Where card [index] is drawn inside [cell], a rectangle on its way from the card's one-column cell to its page
@@ -241,7 +243,7 @@ internal class MosaicLayouts(
      */
     fun wordsFrame(index: Int, columns: Int): Size {
         // A page draws a tile with words at its one-column shape ([reelContent]), so it keeps its one-column frame.
-        val level = level(columns.coerceAtLeast(1))
+        val level = grids[columns.coerceIn(1, 4) - 1]
         val cell = level.cells[index]
         if (level.unit >= width || level.unit <= 0f) return Size(wordsWidth, wordsWidth * cell.height / cell.width)
         fun squares(length: Float) = ((length + level.gap) / (level.unit + level.gap)).roundToInt().coerceAtLeast(1)
@@ -258,7 +260,7 @@ internal class MosaicLayouts(
     }
 
     fun cell(index: Int, position: Float): Rect {
-        val p = position.coerceIn(0f, 4f)
+        val p = position.coerceIn(1f, 4f)
         val a = level(floor(p).toInt()).cells[index]
         val b = level(ceil(p).toInt()).cells[index]
         val t = p - floor(p)
@@ -267,7 +269,7 @@ internal class MosaicLayouts(
     }
 
     fun height(position: Float): Float {
-        val p = position.coerceIn(0f, 4f)
+        val p = position.coerceIn(1f, 4f)
         val a = level(floor(p).toInt()).height
         return a + (level(ceil(p).toInt()).height - a) * (p - floor(p))
     }
@@ -281,7 +283,7 @@ internal class MosaicLayouts(
     /** Binary search keeps lookup O(log n); overscan covers a whole neighbouring brick at either density. */
     fun window(position: Float, origin: Float, viewport: Float): IntRange {
         if (level(1).cells.isEmpty()) return IntRange.EMPTY
-        val p = position.coerceIn(0f, 4f)
+        val p = position.coerceIn(1f, 4f)
         val margin = maxOf(level(floor(p).toInt()).tallest, level(ceil(p).toInt()).tallest)
         fun lowerBound(y: Float): Int {
             var low = 0
@@ -308,32 +310,33 @@ internal class MosaicProjection(val layouts: MosaicLayouts, val columns: Int, va
 }
 
 /**
- * Saveable density with continuous, reversible finger tracking between canonical brick layouts. With [reels], pinching
- * past one column opens full-screen reels, zero columns: one card per page.
+ * Saveable density with continuous, reversible finger tracking between canonical brick layouts. With [reels], one
+ * column is full-screen reels: one card per page.
  */
 @Stable
 class MosaicState(initialColumns: Int = 2, val reels: Boolean = false) {
-    /** The fewest columns: zero, the reels, when [reels] is on, else one. */
-    internal val lowest = if (reels) 0 else 1
-    var columns by mutableIntStateOf(initialColumns.coerceIn(lowest, 4))
+    var columns by mutableIntStateOf(initialColumns.coerceIn(1, 4))
         private set
     internal var isPinching by mutableStateOf(false)
         private set
-    internal var position by mutableFloatStateOf(initialColumns.coerceIn(lowest, 4).toFloat())
-    internal var referenceColumns by mutableIntStateOf(initialColumns.coerceIn(lowest, 4))
+    internal var position by mutableFloatStateOf(initialColumns.coerceIn(1, 4).toFloat())
+    internal var referenceColumns by mutableIntStateOf(initialColumns.coerceIn(1, 4))
 
     /**
      * The density the tiles decode their pictures for. It follows [columns] only once the gallery has come to rest, so
      * letting go never asks every picture again while the cards are still moving.
      */
-    internal var pictureColumns by mutableIntStateOf(initialColumns.coerceIn(lowest, 4))
+    internal var pictureColumns by mutableIntStateOf(initialColumns.coerceIn(1, 4))
 
     /** The stop the last pinch or step started from: the grid the cards move away from (see [between]). */
-    internal var home by mutableIntStateOf(initialColumns.coerceIn(lowest, 4))
+    internal var home by mutableIntStateOf(initialColumns.coerceIn(1, 4))
         private set
 
-    /** How far the gallery has gone into reels: 0 at one column or more, 1 on a page. */
-    internal val reel: Float get() = (1f - position).coerceIn(0f, 1f)
+    /** How far the gallery has gone into reels: 0 at two columns or more, 1 at one column when it has [reels]. */
+    internal val reel: Float get() = if (reels) (2f - position).coerceIn(0f, 1f) else 0f
+
+    /** True while the gallery rests on, or is landing on, its reels. */
+    internal val inReels: Boolean get() = reels && columns == 1
 
     /** Counts the hops a pinch has started, so the gallery eases each one with [advanceHop]. */
     internal var hops by mutableIntStateOf(0)
@@ -356,7 +359,7 @@ class MosaicState(initialColumns: Int = 2, val reels: Boolean = false) {
     fun smaller(): Boolean = changeColumns(columns + 1)
 
     private fun changeColumns(value: Int): Boolean {
-        val next = value.coerceIn(lowest, 4)
+        val next = value.coerceIn(1, 4)
         if (next == columns) return false
         home = columns
         columns = next
@@ -367,11 +370,11 @@ class MosaicState(initialColumns: Int = 2, val reels: Boolean = false) {
     internal fun beginPinch() {
         isPinching = true
         if (abs(position - position.roundToInt()) < 1e-3f) home = position.roundToInt()
-        finger = fingerPosition(position, lowest)
+        finger = fingerPosition(position)
         startFinger = finger
         stop = finger.roundToInt()
         // A pinch that interrupts a landing between the follow ranges eases from the geometry on screen.
-        startHop(position - steppedPosition(finger, lowest))
+        startHop(position - steppedPosition(finger))
         direction = 0
         gestureScale = 1f
     }
@@ -379,22 +382,22 @@ class MosaicState(initialColumns: Int = 2, val reels: Boolean = false) {
     internal fun zoomPinch(factor: Float) {
         if (!factor.isFinite() || factor <= 0f) return
         // Discard overshoot at a limit so the very next reversed pointer delta changes the geometry.
-        gestureScale = (gestureScale * factor).coerceIn(exp((startFinger - 4f) * PINCH_STEP), exp((startFinger - lowest) * PINCH_STEP))
-        val next = (startFinger - ln(gestureScale) / PINCH_STEP).coerceIn(lowest.toFloat(), 4f)
+        gestureScale = (gestureScale * factor).coerceIn(exp((startFinger - 4f) * PINCH_STEP), exp((startFinger - 1f) * PINCH_STEP))
+        val next = (startFinger - ln(gestureScale) / PINCH_STEP).coerceIn(1f, 4f)
         if (abs(next - finger) > 1e-4f) direction = if (next > finger) 1 else -1
         finger = next
         if (finger.roundToInt() != stop) {
             stop = finger.roundToInt()
-            startHop(position - steppedPosition(finger, lowest))
+            startHop(position - steppedPosition(finger))
         }
-        position = steppedPosition(finger, lowest) + hopGap * (1f - hopEase(hopDone))
+        position = steppedPosition(finger) + hopGap * (1f - hopEase(hopDone))
     }
 
     /** Eases the current hop to [fraction] of its length; the cards land where the fingers are at 1. */
     internal fun advanceHop(fraction: Float) {
         if (!isPinching || hopGap == 0f) return
         hopDone = fraction.coerceIn(0f, 1f)
-        position = steppedPosition(finger, lowest) + hopGap * (1f - hopEase(hopDone))
+        position = steppedPosition(finger) + hopGap * (1f - hopEase(hopDone))
         if (hopDone >= 1f) hopGap = 0f
     }
 
@@ -405,14 +408,14 @@ class MosaicState(initialColumns: Int = 2, val reels: Boolean = false) {
     }
 
     internal fun finishPinch() {
-        columns = releaseColumns(finger, direction, lowest)
+        columns = releaseColumns(finger, direction)
         isPinching = false
         hopGap = 0f
     }
 
     /** Ends a pinch the gallery lost, on the stop nearest where it is; a landing already under way keeps its stop. */
     internal fun cancelPinch() {
-        if (isPinching) columns = position.roundToInt().coerceIn(lowest, 4)
+        if (isPinching) columns = position.roundToInt().coerceIn(1, 4)
         isPinching = false
         hopGap = 0f
         gestureScale = 1f
@@ -423,7 +426,7 @@ class MosaicState(initialColumns: Int = 2, val reels: Boolean = false) {
 
         /** Keeps the nearest stop; the state comes back with or without [reels]. */
         fun saver(reels: Boolean): Saver<MosaicState, Int> =
-            Saver(save = { it.position.roundToInt().coerceIn(it.lowest, 4) }, restore = { MosaicState(it, reels) })
+            Saver(save = { it.position.roundToInt().coerceIn(1, 4) }, restore = { MosaicState(it, reels) })
     }
 }
 
@@ -435,7 +438,7 @@ internal class MosaicBetween(val from: Int, val to: Int, val progress: Float)
 
 /** Where the gallery is between its two nearest stops, seen from the stop the last gesture started at. */
 internal fun MosaicState.between(): MosaicBetween {
-    val p = position.coerceIn(lowest.toFloat(), 4f)
+    val p = position.coerceIn(1f, 4f)
     val low = floor(p).toInt()
     val high = minOf(4, low + 1)
     return if (home <= low) MosaicBetween(low, high, p - low) else MosaicBetween(high, low, 1f - (p - low))
@@ -450,11 +453,10 @@ private const val FILL_EDGE = 0.2f
 
 /**
  * The density drawn for a finger position: the nearest stop plus [FOLLOW] of the way the fingers have moved from it, so
- * the cards move with the fingers from the first moment and hop the rest once the fingers pass halfway. [lowest] is the
- * fewest columns the gallery has.
+ * the cards move with the fingers from the first moment and hop the rest once the fingers pass halfway.
  */
-internal fun steppedPosition(finger: Float, lowest: Int = 1): Float {
-    val f = finger.coerceIn(lowest.toFloat(), 4f)
+internal fun steppedPosition(finger: Float): Float {
+    val f = finger.coerceIn(1f, 4f)
     val stop = f.roundToInt()
     return stop + (f - stop) * FOLLOW
 }
@@ -470,18 +472,18 @@ internal fun mosaicFillShown(progress: Float): Float {
 }
 
 /** The finger position whose [steppedPosition] is nearest [position], so a pinch that interrupts a landing starts there. */
-internal fun fingerPosition(position: Float, lowest: Int = 1): Float {
-    val p = position.coerceIn(lowest.toFloat(), 4f)
+internal fun fingerPosition(position: Float): Float {
+    val p = position.coerceIn(1f, 4f)
     val stop = p.roundToInt()
-    return (stop + (p - stop) / FOLLOW).coerceIn(stop - 0.5f, stop + 0.5f).coerceIn(lowest.toFloat(), 4f)
+    return (stop + (p - stop) / FOLLOW).coerceIn(stop - 0.5f, stop + 0.5f).coerceIn(1f, 4f)
 }
 
 /** Where a released pinch lands: the way the fingers were moving, once they are a quarter of the way to the next stop. */
-internal fun releaseColumns(finger: Float, direction: Int, lowest: Int = 1): Int = when {
+internal fun releaseColumns(finger: Float, direction: Int): Int = when {
     direction < 0 -> floor(finger + 0.25f).toInt()
     direction > 0 -> ceil(finger - 0.25f).toInt()
     else -> finger.roundToInt()
-}.coerceIn(lowest, 4)
+}.coerceIn(1, 4)
 
 /**
  * How long a landing of [way] stops takes: 250 ms for a whole stop, the pace of one Larger or Smaller step, and longer
@@ -549,7 +551,7 @@ private fun hopEase(fraction: Float): Float {
 /**
  * Keeps the selected gallery density across tab changes and activity recreation.
  *
- * @param reels Whether pinching past one column opens full-screen reels.
+ * @param reels Whether one column is full-screen reels.
  * @return The gallery's density.
  */
 @Composable

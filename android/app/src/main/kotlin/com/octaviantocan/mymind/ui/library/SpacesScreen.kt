@@ -196,6 +196,11 @@ private class SpaceMosaicTiles(private val spaces: Map<String, Space>, private v
         SpaceStack(space, covers[card.id], onClick, modifier, enabled, imageRequestSizePx)
     }
 
+    /** The Spaces list has no reels; a page would show the space's stack. */
+    @Composable
+    override fun ReelPage(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, imageRequestSizePx: Int, modifier: Modifier) =
+        Tile(card, onClick, onLongClick, enabled = true, imageRequestSizePx = imageRequestSizePx, modifier = modifier)
+
     @Composable
     override fun Copy(card: Card, imageRequestSizePx: Int) {
         val space = spaces[card.id] ?: return

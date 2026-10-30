@@ -148,8 +148,8 @@ private data class MosaicLoadPosition(val count: Int, val last: Int, val total: 
 
 /**
  * Virtualized bricks that follow the fingers between cached density layouts. Stable card keys retain content while
- * only the bounded visible window is measured at its real, interpolated size. When [mosaic] has reels, pinching past
- * one column opens them: one card per page, full screen, a swipe moving one page and Back or a pinch closing them.
+ * only the bounded visible window is measured at its real, interpolated size. When [mosaic] has reels, its one column
+ * is them: one fuller card per page, full screen, a swipe moving one page and Back or a pinch closing them.
  *
  * @param feed The cards and their loading state.
  * @param onLoadMore Called when the gallery nears its last card.
@@ -396,7 +396,7 @@ internal fun LibraryMosaic(
         val settleLatest by rememberUpdatedState<(Float) -> Unit> { speed -> settle(speed) }
         /** In reels at rest, how far a fling at [velocity] must scroll to land on a page's top; null elsewhere. */
         fun reelFling(velocity: Float): Float? {
-            if (mosaic.columns != 0 || mosaic.position != 0f || mosaic.isPinching || layouts.page <= 0f || layouts.cards.isEmpty()) return null
+            if (!mosaic.inReels || mosaic.position != 1f || mosaic.isPinching || layouts.page <= 0f || layouts.cards.isEmpty()) return null
             val origin = scrollOrigin()
             val at = origin / layouts.page
             val threshold = with(density) { REEL_FLING.toPx() }
@@ -410,7 +410,7 @@ internal fun LibraryMosaic(
         val reelFlingLatest by rememberUpdatedState<(Float) -> Float?> { velocity -> reelFling(velocity) }
         val freeFling = ScrollableDefaults.flingBehavior()
         val fling = remember(freeFling) { MosaicFling(freeFling) { velocity -> reelFlingLatest(velocity) } }
-        BackHandler(enabled = mosaic.reels && mosaic.columns == 0) { resize(mosaic::smaller) }
+        BackHandler(enabled = mosaic.inReels) { resize(mosaic::smaller) }
         val immersion = LocalShellImmersion.current
         if (mosaic.reels && immersion != null) DisposableEffect(immersion, mosaic) {
             val source = { mosaic.reel }
@@ -447,7 +447,7 @@ internal fun LibraryMosaic(
         Box(Modifier.fillMaxSize().clipToBounds()
             .semantics {
                 contentDescription = label
-                stateDescription = if (mosaic.columns == 0) "Full screen" else "${mosaic.columns} columns"
+                stateDescription = if (mosaic.inReels) "Full screen" else "${mosaic.columns} columns"
                 verticalScrollAxisRange = ScrollAxisRange(
                     value = { scrollProgress() },
                     maxValue = { if (state.canScrollForward) state.layoutInfo.totalItemsCount.toFloat() else scrollProgress() },
@@ -577,8 +577,12 @@ internal fun LibraryMosaic(
                     val shape by remember(layouts, height) { derivedStateOf { latestFrame().shape(window, layouts) } }
                     // The card under the fingers is drawn over the others, from the same keyed child, so it is never rebuilt.
                     val focalIndex = anchor?.cardId?.let(layouts.byId::get)
+                    // Pages are composed around the viewport while reels show, and tiles only while the gallery is not
+                    // resting on its pages; each changes as a page comes into view or a step begins, not per frame.
+                    val pages by remember(layouts, height) { derivedStateOf { latestFrame().pages(height) } }
+                    val tilesShown by remember(mosaic) { derivedStateOf { mosaic.reel < 1f } }
                     if (shape?.fill == true) MosaicFill(layouts, height, margin, currentFrame, blur = with(density) { BACKDROP_BLUR.toPx() })
-                    ProjectedMosaicCards(layouts, mosaic, window.toList(), focalIndex, shape, currentFrame, margin,
+                    ProjectedMosaicCards(layouts, mosaic, window.toList(), focalIndex, shape, pages, tilesShown, currentFrame, margin,
                         Modifier.fillMaxSize().testTag("mosaic-projection"), onOpenCard, onLongPressCard)
                 }
             }
@@ -617,8 +621,11 @@ private class MosaicDrawings(val card: MosaicDraw, val copy: MosaicDraw?, val pr
  */
 private data class MosaicShape(val wrapping: Set<Int>, val reshaping: Set<Int>, val fill: Boolean)
 
-/** One child of [ProjectedMosaicCards]: card [index]'s tile or its [copy], or the layout drawn [under] it while it changes shape. */
-private data class MosaicSlot(val index: Int, val copy: Boolean, val under: Boolean)
+/**
+ * One child of [ProjectedMosaicCards]: card [index]'s tile or its [copy], the layout drawn [under] it while it changes
+ * shape, or its [page] in reels.
+ */
+private data class MosaicSlot(val index: Int, val copy: Boolean, val under: Boolean, val page: Boolean = false)
 
 /**
  * Where each card is drawn now, in viewport pixels, while the fingers move it between its places in the grids of two
@@ -640,7 +647,7 @@ private class MosaicFrame(
     val moving: Boolean get() = from.columns != to.columns && progress > 0f && progress < 1f
 
     /** True when one of the two grids is the reels, where every card is on its own line, as at one column. */
-    private val reeling: Boolean get() = from.columns == 0 || to.columns == 0
+    private val reeling: Boolean get() = from.layouts.isReels(from.columns) || to.layouts.isReels(to.columns)
 
     private fun place(projection: MosaicProjection, index: Int): Rect = projection.cell(index).translate(Offset(x, -y))
 
@@ -661,7 +668,7 @@ private class MosaicFrame(
         val b = place(to, index)
         val m = wave.progress(index, progress)
         // Into reels a card grows from its cell to its page and is drawn at its own shape inside it.
-        if (reeling) return MosaicDrawings(MosaicDraw(from.layouts.reelContent(index, lerp(a, b, m), if (to.columns == 0) m else 1f - m), 1f), null, m)
+        if (reeling) return MosaicDrawings(MosaicDraw(from.layouts.reelContent(index, lerp(a, b, m), if (to.layouts.isReels(to.columns)) m else 1f - m), 1f), null, m)
         if (!wraps(index)) return MosaicDrawings(MosaicDraw(lerp(a, b, m), 1f), null, m)
         val size = lerp(a.size, b.size, m)
         val past = if (b.top > a.top) wrap else -wrap
@@ -678,6 +685,22 @@ private class MosaicFrame(
 
     /** The cards either grid shows around the viewport, so a card sliding in or out is drawn the whole way. */
     fun window(viewport: Float): IntRange = union(from.window(y, viewport), to.window(y, viewport))
+
+    /** The cards whose pages show around the viewport while one of the grids is the reels; none otherwise. */
+    fun pages(viewport: Float): IntRange = when {
+        to.layouts.isReels(to.columns) -> to.window(y, viewport)
+        from.layouts.isReels(from.columns) -> from.window(y, viewport)
+        else -> IntRange.EMPTY
+    }
+
+    /**
+     * Card [index]'s page: where it is on its way between its cell and the whole screen, and how strongly it shows, fading
+     * in over the last part of the way into reels ([reelPageShown]).
+     */
+    fun page(index: Int): MosaicDraw {
+        val m = wave.progress(index, progress)
+        return MosaicDraw(lerp(place(from, index), place(to, index), m), reelPageShown(if (to.layouts.isReels(to.columns)) m else 1f - m))
+    }
 
     fun shape(window: IntRange, layouts: MosaicLayouts): MosaicShape? = if (!moving) null else MosaicShape(
         window.filter(::wraps).toSet(),
@@ -696,6 +719,12 @@ private class MosaicFrame(
 
     /** How strongly the whole blurred fill shows now ([mosaicFillShown]). */
     val fillShown: Float get() = mosaicFillShown(progress)
+}
+
+/** How strongly a card's page shows [reel] of the way into reels: over the last two fifths, as its tile comes to rest. */
+private fun reelPageShown(reel: Float): Float {
+    val t = ((reel - 0.6f) / 0.4f).coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
 }
 
 /** Both index ranges and everything between them. */
@@ -734,7 +763,7 @@ private class MosaicWaves {
         var first = Int.MAX_VALUE
         var last = -1
         // Into reels every card moves at once, so none slides under a card growing to fill the screen.
-        if (between.from != 0 && between.to != 0) for (columns in setOf(between.from, between.to)) {
+        if (!layouts.isReels(between.from) && !layouts.isReels(between.to)) for (columns in setOf(between.from, between.to)) {
             val level = layouts.level(columns)
             val cell = level.cells[focal]
             val top = cell.top + (anchor?.fraction?.y ?: 0.5f) * cell.height - (anchor?.viewport?.y ?: (viewport / 2f))
@@ -752,15 +781,16 @@ private class MosaicWaves {
     }
 }
 
-/** The children [ProjectedMosaicCards] composes for card [index], in drawing order. */
-private fun mosaicSlots(index: Int, shape: MosaicShape?): List<MosaicSlot> {
-    val copy = shape?.wrapping?.contains(index) == true
-    val under = shape?.reshaping?.contains(index) == true
+/** The children [ProjectedMosaicCards] composes for card [index], in drawing order: its [tile]'s, then its [page]. */
+private fun mosaicSlots(index: Int, shape: MosaicShape?, tile: Boolean, page: Boolean): List<MosaicSlot> {
+    val copy = tile && shape?.wrapping?.contains(index) == true
+    val under = tile && shape?.reshaping?.contains(index) == true
     return listOfNotNull(
         MosaicSlot(index, copy = false, under = true).takeIf { under },
-        MosaicSlot(index, copy = false, under = false),
+        MosaicSlot(index, copy = false, under = false).takeIf { tile },
         MosaicSlot(index, copy = true, under = true).takeIf { copy && under },
         MosaicSlot(index, copy = true, under = false).takeIf { copy },
+        MosaicSlot(index, copy = false, under = false, page = true).takeIf { page },
     )
 }
 
@@ -768,14 +798,16 @@ private fun mosaicSlots(index: Int, shape: MosaicShape?): List<MosaicSlot> {
  * Draws [indices] at their places in the current [MosaicFrame], [left] in from the body's edge. Each card has one tile
  * that takes touches and semantics; a card changing line also has an inert copy, and a tile with words changing shape
  * has its layout in the other grid drawn under it, the two cross-fading with the card's progress. The [focal] card is
- * drawn last, over the others.
+ * drawn last, over the others. While reels show, the cards in [pages] also have their page, laid out at the whole
+ * screen's size and drawn over the tile as it comes to rest; with [tiles] false, at rest in reels, the page is all there
+ * is, and takes the touches and semantics.
  */
 @Composable
 private fun ProjectedMosaicCards(
-    layouts: MosaicLayouts, mosaic: MosaicState, indices: List<Int>, focal: Int?, shape: MosaicShape?, frame: () -> MosaicFrame,
-    left: Float, modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
+    layouts: MosaicLayouts, mosaic: MosaicState, indices: List<Int>, focal: Int?, shape: MosaicShape?, pages: IntRange, tiles: Boolean,
+    frame: () -> MosaicFrame, left: Float, modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
 ) {
-    val slots = indices.flatMap { mosaicSlots(it, shape) }
+    val slots = indices.flatMap { mosaicSlots(it, shape, tiles, it in pages) }
     val corner = with(LocalDensity.current) { layouts.tiles.corner.toPx() }
     Layout(modifier = modifier, content = {
         indices.forEach { index ->
@@ -788,9 +820,13 @@ private fun ProjectedMosaicCards(
                 val tile = remember(drawing) { Modifier.fillMaxSize().recording(drawing) }
                 val underDrawing = if (shape?.reshaping?.contains(index) == true) rememberGraphicsLayer() else null
                 // Keyed, so the tile keeps its place when a layout is added under it or taken away.
-                mosaicSlots(index, shape).forEach { slot ->
-                    key(slot.copy, slot.under) {
+                mosaicSlots(index, shape, tiles, index in pages).forEach { slot ->
+                    key(slot.copy, slot.under, slot.page) {
                         when {
+                            slot.page -> layouts.tiles.ReelPage(card,
+                                onClick = { if (!mosaic.isPinching) onOpenCard(card) },
+                                onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
+                                imageRequestSizePx = reelImageSize(layouts, index), modifier = Modifier.fillMaxSize())
                             slot.copy -> MosaicCopy(if (slot.under) underDrawing ?: drawing else drawing)
                             slot.under -> Box(remember(underDrawing) { Modifier.fillMaxSize().clearAndSetSemantics {}.recording(underDrawing ?: drawing) }) {
                                 layouts.tiles.Copy(card, imageSize)
@@ -812,6 +848,11 @@ private fun ProjectedMosaicCards(
         val round = corner * (1f - mosaic.reel)
         val drawings = HashMap<Int, MosaicDrawings>()
         val placed = children.zip(slots) { child, slot ->
+            if (slot.page) {
+                val page = current.page(slot.index)
+                val whole = layouts.level(1).cells[slot.index]
+                return@zip PlacedTile(child.measure(whole.size.fixed()), page.rect.translate(left, 0f), true, page.alpha, slot.index, page = true)
+            }
             val drawn = drawings.getOrPut(slot.index) { current.draws(slot.index) }
             val draw = if (slot.copy) drawn.copy ?: drawn.card else drawn.card
             val m = drawn.progress
@@ -820,19 +861,23 @@ private fun ProjectedMosaicCards(
             val near = if (m < 0.5f) current.fromColumns else current.toColumns
             val far = if (m < 0.5f) current.toColumns else current.fromColumns
             val reshapes = shape?.reshaping?.contains(slot.index) == true
-            val alpha = draw.alpha * if (reshapes && !slot.under) maxOf(m, 1f - m) else 1f
+            // The tile gives way to its page as the page fades in over it.
+            val paged = if (slot.index in pages) 1f - current.page(slot.index).alpha else 1f
+            val alpha = draw.alpha * paged * if (reshapes && !slot.under) maxOf(m, 1f - m) else 1f
             val tile = child.measureTile(draw.rect, layouts.wordsFrame(slot.index, if (slot.under) far else near).takeIf { words })
             PlacedTile(tile, draw.rect.translate(left, 0f), words, alpha, slot.index)
         }
         layout(constraints.maxWidth, constraints.maxHeight) {
-            placed.forEach { if (it.index != focal) placeTile(it.tile, it.cell, it.words, it.alpha, round) }
-            placed.forEach { if (it.index == focal) placeTile(it.tile, it.cell, it.words, it.alpha, round) }
+            for (pagesNow in listOf(false, true)) {
+                placed.forEach { if (it.page == pagesNow && it.index != focal) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round) }
+                placed.forEach { if (it.page == pagesNow && it.index == focal) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round) }
+            }
         }
     }
 }
 
-/** A tile measured for its cell, as [placeTile] places it; [index] is its card's. */
-private class PlacedTile(val tile: Placeable, val cell: Rect, val words: Boolean, val alpha: Float, val index: Int = -1)
+/** A tile measured for its cell, as [placeTile] places it; [index] is its card's, and [page] is true for its page in reels. */
+private class PlacedTile(val tile: Placeable, val cell: Rect, val words: Boolean, val alpha: Float, val index: Int = -1, val page: Boolean = false)
 
 /** An inert second drawing of what [drawing] recorded: no semantics or touches. */
 @Composable
@@ -902,12 +947,17 @@ private fun Modifier.collapsing(shown: () -> Float): Modifier = layout { measura
     }
 }
 
+/** The size a card's page in reels decodes its picture at: the picture's own shape fitted to the whole screen. */
+private fun reelImageSize(layouts: MosaicLayouts, index: Int): Int =
+    layouts.reelContent(index, layouts.level(1).cells[index], 1f).let { maxOf(it.width, it.height) }.roundToInt().coerceAtLeast(1)
+
 /**
  * The size gallery pictures are decoded at: the card's cell at the density the gallery last came to rest on
- * ([MosaicState.pictureColumns]), so neither a pinch nor its landing changes it.
+ * ([MosaicState.pictureColumns]), so neither a pinch nor its landing changes it; in reels, the size its page asks.
  */
 private fun imageRequestSize(layouts: MosaicLayouts, mosaic: MosaicState, index: Int): Int =
-    layouts.level(mosaic.pictureColumns).cells[index].let { maxOf(it.width, it.height) }.roundToInt().coerceAtLeast(1)
+    if (layouts.isReels(mosaic.pictureColumns)) reelImageSize(layouts, index)
+    else layouts.level(mosaic.pictureColumns).cells[index].let { maxOf(it.width, it.height) }.roundToInt().coerceAtLeast(1)
 
 /**
  * Measures a tile for [cell]. A picture is cut to the cell itself; a tile with words is laid out at its [frame]

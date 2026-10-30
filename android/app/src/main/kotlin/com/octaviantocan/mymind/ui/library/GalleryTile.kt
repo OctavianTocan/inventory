@@ -188,7 +188,7 @@ internal fun GalleryTile(
 
 /** What a tile loads for [picture]: its address, or a request at [imageRequestSizePx] cached under that address. */
 @Composable
-private fun rememberGalleryImage(picture: String?, imageRequestSizePx: Int?): Any? {
+internal fun rememberGalleryImage(picture: String?, imageRequestSizePx: Int?): Any? {
     val context = LocalContext.current
     return remember(picture, imageRequestSizePx, context) {
         picture?.let {
@@ -474,7 +474,7 @@ internal fun galleryTileIsPicture(card: Card): Boolean =
 internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_TYPES
     || !card.note.isNullOrBlank() || card.prose?.let(::proseText)?.isNotBlank() == true
 
-private fun galleryText(card: Card): String = when (tileKind(card)) {
+internal fun galleryText(card: Card): String = when (tileKind(card)) {
     TileKind.Note -> noteText(card)
     TileKind.Post -> if (card.type != "RedditPost") postWords(card)
         else listOfNotNull(card.reddit?.title, postWords(card)).filter { it.isNotBlank() }.distinct().joinToString("\n")
@@ -484,7 +484,7 @@ private fun galleryText(card: Card): String = when (tileKind(card)) {
     else -> card.title?.takeIf { it.isNotBlank() } ?: card.description.orEmpty()
 }
 
-private fun galleryKind(card: Card): String = when (tileKind(card)) {
+internal fun galleryKind(card: Card): String = when (tileKind(card)) {
     TileKind.Note -> if (card.type == "Quote" || card.type == "Quotation") "Quote" else "Note"
     TileKind.Post -> when (card.type) { "XPost" -> "X"; "SubstackNote" -> "Substack"; "ThreadsPost" -> "Threads"; else -> card.siteName ?: "Post" }
     TileKind.Repository -> "Repository"

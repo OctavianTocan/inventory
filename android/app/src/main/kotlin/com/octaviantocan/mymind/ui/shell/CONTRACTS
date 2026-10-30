@@ -33,7 +33,7 @@ comparison in the recorded review of 22 October 2026 ("less tall", "start a bit
 further to the left", "a bit wider").
 
 @cc [owner:OctavianTocan,label:design;motion] library-bar-leaves-for-full-screen
-A page that goes full screen, as a gallery does past one column, MUST register it with
+A page that goes full screen, as a gallery does at one column, MUST register it with
 the shell's ShellImmersion. As far as the page has gone full screen, the bar slides down
 past the bottom of the screen and fades, out of reach of taps, and the shell's paper turns
 black with light status and navigation bar icons. A page that never goes full screen

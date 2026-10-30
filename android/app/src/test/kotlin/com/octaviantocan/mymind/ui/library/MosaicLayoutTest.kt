@@ -354,7 +354,9 @@ class MosaicLayoutTest {
     fun reelsGiveEveryCardAPageAndDrawItWholeInside() {
         val sample = listOf(photo("wide", 1200, 800), photo("tall", 800, 1600), testCard("note", type = "Note", note = "A thought to keep"))
         val layouts = MosaicLayouts(sample, 352f, List(4) { 8f }, page = 800f, bleed = 16f)
-        val reels = layouts.level(0)
+        assertTrue("With a page, one column is the reels", layouts.isReels(1))
+        assertFalse(layouts.isReels(2))
+        val reels = layouts.level(1)
         assertEquals("Each page reaches the screen's edges", androidx.compose.ui.geometry.Rect(-16f, 800f, 368f, 1600f), reels.cells[1])
         assertEquals(sample.map { it.id }, reels.rows.flatMap { it.cards }.map { it.id })
         assertEquals(2400f, reels.height, 0f)
@@ -365,40 +367,46 @@ class MosaicLayoutTest {
         val tall = layouts.reelContent(1, reels.cells[1], 1f)
         assertEquals(384f, tall.width, 0.5f)
         assertEquals(768f, tall.height, 0.5f)
-        assertEquals("Words keep their one-column lines on a page", layouts.wordsFrame(2, 1), layouts.wordsFrame(2, 0))
+        val plain = MosaicLayouts(sample, 352f, List(4) { 8f })
+        assertFalse("Without a page, one column is a grid", plain.isReels(1))
+        assertEquals("Words keep their one-column lines on a page", plain.wordsFrame(2, 1), layouts.wordsFrame(2, 1))
         val note = layouts.reelContent(2, reels.cells[2], 1f)
-        val one = layouts.level(1).cells[2]
+        val one = plain.level(1).cells[2]
         assertEquals("and their one-column shape", one.width / one.height, note.width / note.height, 0.001f)
         assertEquals("Before reels a card fills its cell", one, layouts.reelContent(2, one, 0f))
-        assertEquals("Without a page, zero columns is one column", MosaicLayouts(sample, 352f, 8f).level(1).cells, MosaicLayouts(sample, 352f, 8f).level(0).cells)
     }
 
     @Test
-    fun withReelsAPinchPastOneColumnOpensThemAndAPinchInClosesThem() {
-        val state = MosaicState(1, reels = true)
+    fun withReelsOneColumnIsThemAndAPinchInClosesThem() {
+        val state = MosaicState(2, reels = true)
+        assertEquals(0f, state.reel, 0f)
         state.beginPinch()
         state.zoomPinch(1.3f)
         state.advanceHop(1f)
-        assertEquals(0f, state.position, 0.001f)
+        assertEquals(1f, state.position, 0.001f)
         state.finishPinch()
-        assertEquals(0, state.columns)
+        assertEquals(1, state.columns)
+        assertTrue(state.inReels)
         assertEquals(1f, state.reel, 0f)
-        state.position = 0f
+        state.position = 1f
+        state.beginPinch()
+        state.zoomPinch(1.3f)
+        state.finishPinch()
+        assertEquals("Nothing lies past the reels", 1, state.columns)
+        state.position = 1f
         state.beginPinch()
         state.zoomPinch(1f / 1.3f)
         state.advanceHop(1f)
         state.finishPinch()
-        assertEquals(1, state.columns)
-        assertEquals(0f, MosaicState(2, reels = true).reel, 0f)
+        assertEquals(2, state.columns)
+        assertFalse(state.inReels)
         assertTrue(state.larger())
-        assertEquals(0, state.columns)
+        assertTrue(state.inReels)
         assertFalse(state.larger())
         val plain = MosaicState(1)
-        plain.beginPinch()
-        plain.zoomPinch(1.3f)
-        plain.finishPinch()
-        assertEquals("A gallery without reels stops at one column", 1, plain.columns)
-        assertEquals(0, MosaicState.saver(reels = true).restore(0)!!.columns)
+        assertEquals("A gallery without reels has none", 0f, plain.reel, 0f)
+        assertFalse(plain.inReels)
+        assertEquals("A gallery saved at the reels' old zero columns opens them", 1, MosaicState.saver(reels = true).restore(0)!!.columns)
         assertTrue(MosaicState.saver(reels = true).restore(2)!!.reels)
         assertEquals(1, MosaicState.Saver.restore(0)!!.columns)
     }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.39 (50), 2026-10-30
+One column is now full screen, and each card there shows more of itself.
+
+### Changed
+- Pinching in from two columns goes straight to full screen; there is no one-column grid before it on Everything, search results or an opened space. Pinch your fingers together, or press Back, to come back to two columns. The Spaces list keeps its one column.
+- Each card in full screen is a fuller card: its picture or video whole, and at the foot where it is from and when you saved it, its title, its words or description, and its tags. A note or post without a picture shows its words large. Tap to open the card, hold for its actions.
+
 ## 0.6.38 (49), 2026-10-30
 Pinch past one column to see one thing at a time, full screen, and pinching runs smoother.
 

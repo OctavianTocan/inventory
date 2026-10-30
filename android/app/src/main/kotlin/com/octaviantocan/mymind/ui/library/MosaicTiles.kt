@@ -56,6 +56,18 @@ internal interface MosaicTiles {
     fun Tile(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, enabled: Boolean, imageRequestSizePx: Int, modifier: Modifier)
 
     /**
+     * The card on its own full-screen page in reels, fuller than its tile, which takes its touches and semantics there.
+     *
+     * @param card The card.
+     * @param onClick Called when the page is tapped.
+     * @param onLongClick Called when the page is held, or null when holding does nothing.
+     * @param imageRequestSizePx Size, in pixels, to decode the card's pictures at.
+     * @param modifier Modifier for the page, sized to it.
+     */
+    @Composable
+    fun ReelPage(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, imageRequestSizePx: Int, modifier: Modifier)
+
+    /**
      * A drawing of the card that takes no touches and plays nothing: its layout in the other grid while a tile with words
      * changes shape. The mosaic clears its semantics.
      *
@@ -91,6 +103,10 @@ internal object GalleryMosaicTiles : MosaicTiles {
     override fun Tile(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, enabled: Boolean, imageRequestSizePx: Int, modifier: Modifier) =
         GalleryTile(card, onClick, modifier = modifier, enabled = enabled, onLongClick = onLongClick, imageRequestSizePx = imageRequestSizePx,
             corner = 0.dp)
+
+    @Composable
+    override fun ReelPage(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, imageRequestSizePx: Int, modifier: Modifier) =
+        GalleryReelPage(card, onClick, onLongClick, imageRequestSizePx, modifier)
 
     @Composable
     override fun Copy(card: Card, imageRequestSizePx: Int) =
