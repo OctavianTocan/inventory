@@ -11,9 +11,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
@@ -38,12 +41,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
@@ -57,7 +64,11 @@ import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.uploadFileOf
 import com.octaviantocan.mymind.ui.card.CardDetailDialog
 import com.octaviantocan.mymind.ui.card.CardSheetMotion
+import com.octaviantocan.mymind.ui.card.DarkCardSheetColors
 import com.octaviantocan.mymind.ui.card.FetchedPdfs
+import com.octaviantocan.mymind.ui.card.LightCardSheetColors
+import com.octaviantocan.mymind.ui.card.ReaderSheetLayout
+import com.octaviantocan.mymind.ui.card.ReaderSheetState
 import com.octaviantocan.mymind.ui.card.LocalPdfSource
 import com.octaviantocan.mymind.ui.card.ReaderActions
 import com.octaviantocan.mymind.ui.card.shrunk
@@ -208,11 +219,20 @@ fun MainShell(
     LaunchedEffect(viewModel) { viewModel.deleteFailures.collect { failure = it } }
     LaunchedEffect(pendingDelete) { if (pendingDelete == null) undoReopens = null }
     val keepRecent = { card: Card -> recent.removeAll { it.id == card.id }; recent.add(0, card); if (recent.size > RECENT_KEPT) recent.removeAt(recent.lastIndex) }
+    // The reader rises as a sheet over the gallery, which steps back behind it; a card opened from the reader takes the
+    // sheet's place without it moving.
+    val readerSheet = remember { ReaderSheetState() }
     val openCard = { card: Card, spaceId: String? ->
         opened?.card?.takeIf { it.id != card.id }?.let(keepRecent)
+        val rising = opened == null || readerSheet.closing
         opened = OpenedCard(card, spaceId)
+        if (rising) readerSheet.show(scope, motion)
     }
-    val closeCard = { opened?.card?.let(keepRecent); opened = null }
+    val reopen = { card: OpenedCard -> opened = card; readerSheet.show(scope, motion) }
+    val gone = { keep: Boolean -> if (keep) opened?.card?.let(keepRecent); opened = null; readerSheet.reset() }
+    val closeCard = { readerSheet.hide(scope, motion) { gone(true) } }
+    // Closes the reader without keeping it among the recent cards, as for a card that is going.
+    val dropCard = { readerSheet.hide(scope, motion) { gone(false) } }
     val read = { card: Card, spaceId: String? ->
         if (opened?.card?.id == card.id) opened = opened?.copy(reading = true)
         else {
@@ -315,6 +335,7 @@ fun MainShell(
         onSelectTab = selectTab,
         scheme = scheme,
         modifier = Modifier.blur(MENU_BLUR * menuProgress).shrunk { if (opened == null) shrink else 0f },
+        recede = { if (opened != null) readerSheet.recede() else 0f },
         footer = {
             LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
                 onSearch = { tab = Tab.Everything; searchActive = true }, onCloseSearch = closeSearch,
@@ -346,6 +367,8 @@ fun MainShell(
                                     onPart = { part -> openSheet(open.card, open.spaceId, CardSheetRoot.Part(part), null) },
                                     onReading = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(reading = on) ?: opened },
                                 ),
+                                sheet = readerSheet,
+                                onPulledAway = { gone(true) },
                                 details = ReaderDetails(
                                     spaces = spaces.spaces.filter { it.id in open.card.spaces.orEmpty() }.mapNotNull { it.name },
                                     recent = recent.toList(),
@@ -376,7 +399,7 @@ fun MainShell(
                         cardHeading(card),
                         onUndo = {
                             viewModel.undoDelete()
-                            undoReopens?.let { opened = it }
+                            undoReopens?.let(reopen)
                         },
                         modifier = Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = UPLOAD_STRIP_BOTTOM),
                     )
@@ -451,7 +474,7 @@ fun MainShell(
                     }
                     if (item.action == CardMenuAction.DeleteCard && !item.locked) {
                         undoReopens = opened?.takeIf { it.card.id == target.card.id }
-                        if (undoReopens != null) opened = null
+                        if (undoReopens != null) dropCard()
                         recent.removeAll { it.id == target.card.id }
                         viewModel.deleteLater(target.card)
                         return@launch
@@ -462,13 +485,13 @@ fun MainShell(
                         is CardMenuOutcome.OpenUrl -> runCatching { uriHandler.openUri(outcome.url) }
                         is CardMenuOutcome.Deleted, is CardMenuOutcome.RemovedFromSpace -> {
                             if (outcome is CardMenuOutcome.Deleted) recent.removeAll { it.id == outcome.cardId }
-                            if (opened?.card?.id == target.card.id) opened = null
+                            if (opened?.card?.id == target.card.id) dropCard()
                         }
                         is CardMenuOutcome.PinChanged -> updateCard(outcome.card)
                         is CardMenuOutcome.Downloaded -> Toast.makeText(context, DOWNLOADED, Toast.LENGTH_SHORT).show()
                         is CardMenuOutcome.Read -> read(outcome.card, target.spaceId)
                         is CardMenuOutcome.ShowSimilar -> {
-                            opened = null
+                            dropCard()
                             tab = Tab.Everything
                         }
                         is CardMenuOutcome.Failed -> failure = outcome.failure
@@ -673,6 +696,8 @@ private const val DELETE_SPACE_TEXT = "The cards in it stay in your mind."
  * @param onSelectTab Called with the tab the user tapped.
  * @param scheme Appearance the account picked for the pages.
  * @param modifier Modifier for the full-screen box.
+ * @param recede How far an opened reader's sheet has risen over the page, from 0 to 1, read while drawing: the page and
+ *   its bar step back into a smaller, dimmed card with round corners, on black.
  * @param overlay Drawn over the page and the tab bar, such as an opened card.
  * @param page The selected tab's page.
  */
@@ -683,6 +708,7 @@ fun ShellFrame(
     scheme: PageScheme,
     modifier: Modifier = Modifier,
     footer: (@Composable () -> Unit)? = null,
+    recede: () -> Float = { 0f },
     overlay: @Composable BoxScope.() -> Unit = {},
     page: @Composable () -> Unit,
 ) {
@@ -690,21 +716,45 @@ fun ShellFrame(
     val immersion = remember { ShellImmersion() }
     CompositionLocalProvider(LocalFootBars provides bars, LocalShellImmersion provides immersion) {
         val paper = MymindTheme.colors.page
+        val scrim = if (paper.luminance() < 0.5f) DarkCardSheetColors.scrim else LightCardSheetColors.scrim
+        val top = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat()
         ImmersiveSystemBars(immersion)
-        Box(modifier.fillMaxSize().drawBehind { drawRect(lerp(paper, Color.Black, immersion.amount())) }) {
-            PageTheme(scheme) {
-                Box(Modifier.fillMaxSize().statusBarsPadding().background(LibraryStyle.colors.background)) {
-                    page()
+        Box(modifier.fillMaxSize().drawBehind { drawRect(lerp(lerp(paper, Color.Black, immersion.amount()), Color.Black, recede())) }) {
+            Box(Modifier.fillMaxSize().stepBack(recede, top, scrim).drawBehind { drawRect(lerp(paper, Color.Black, immersion.amount())) }) {
+                PageTheme(scheme) {
+                    Box(Modifier.fillMaxSize().statusBarsPadding().background(LibraryStyle.colors.background)) {
+                        page()
+                    }
+                    if (footer != null) footer() else MymindTabBar(tab, onSelectTab)
+                    // A full-screen page slides the bar down out of sight, and out of reach.
+                    FootBarLayer(bars, Modifier.align(Alignment.BottomCenter).graphicsLayer {
+                        val away = immersion.amount()
+                        alpha = 1f - away
+                        translationY = away * size.height
+                    })
                 }
-                if (footer != null) footer() else MymindTabBar(tab, onSelectTab)
-                // A full-screen page slides the bar down out of sight, and out of reach.
-                FootBarLayer(bars, Modifier.align(Alignment.BottomCenter).graphicsLayer {
-                    val away = immersion.amount()
-                    alpha = 1f - away
-                    translationY = away * size.height
-                })
             }
             overlay()
         }
     }
+}
+
+/**
+ * Steps the page back behind a reader's sheet as far as [recede] says: smaller, its top [top] px plus a little below the
+ * screen's top so its edge shows above the sheet, its corners as round as the sheet's on screen, and under [scrim].
+ */
+private fun Modifier.stepBack(recede: () -> Float, top: Float, scrim: Color): Modifier = graphicsLayer {
+    val r = recede()
+    if (r <= 0f) return@graphicsLayer
+    val scale = 1f - ReaderSheetLayout.GALLERY_SHRINK * r
+    scaleX = scale
+    scaleY = scale
+    transformOrigin = TransformOrigin(0.5f, 0f)
+    translationY = (top + ReaderSheetLayout.GalleryGap.toPx()) * r
+    shape = RoundedCornerShape(ReaderSheetLayout.Corner * r / scale)
+    clip = true
+}.drawWithContent {
+    drawContent()
+    val r = recede()
+    if (r > 0f) drawRect(scrim, alpha = r)
 }

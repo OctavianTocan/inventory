@@ -1,5 +1,7 @@
 @cc [owner:OctavianTocan,label:product;design] card-reader-header-is-one-row
-Card reading MUST remain full screen. Its fixed header MUST have a 44dp Back
+Card reading MUST fill the screen under the status bar, as the sheet of
+`card-reader-rises-as-a-sheet`, leaving only the edge of the gallery behind it showing
+above. Its fixed header MUST have a 44dp Back
 arrow (the reader returns to the gallery; it is not a closing action), a raised
 pill with the card's name and a caret occupying the available middle width, and a
 44dp Share button, which every card has since any card can be shared as an image
@@ -11,7 +13,30 @@ titles; this pill belongs to the reader. The card's actions moved to the foot
 Source: Tavi's attached toolbar reference and one-row requirement, 22 October 2026;
 the recorded review of the same day ("this icon here should actually be a back
 icon"); Tavi's pick of F08 in the reader prototype, 28 October 2026, after his canvas
-comment on G08 ("Maybe we can just put a share button there instead").
+comment on G08 ("Maybe we can just put a share button there instead"); the sheet
+instead of the whole screen from Tavi's pick of 13 and 14 on the card opening page,
+30 October 2026.
+
+@cc [owner:OctavianTocan,label:product;design;motion] card-reader-rises-as-a-sheet
+Opening a card from the gallery MUST raise the reader as a sheet with round top
+corners and a grab handle, from half its height below its rest and out of a slight
+blur, on the panel opening time and curve of DESIGN rule 73, while the gallery and its
+bar step back behind it as one card: a little smaller from its top centre, with round
+corners, under the sheets' scrim, on black. The sheet rests a little lower than the
+stepped-back gallery so the gallery's edge shows above it. Back, Back to Everything,
+Show similar, Delete card and a card removed from the space it was opened in MUST sink
+the sheet the way it came, on the panel closing time, while the gallery comes forward,
+and only then remove the reader. A finger MUST be able to pull the sheet down by its
+header, or from the top of its content when the drag began with the content at its
+top (Pully's H2, as the card's sheets do); the gallery comes forward as far as the
+sheet goes down. Letting go more than 30% of the way down, or throwing it down, MUST
+carry the sheet off the bottom and close the reader, as the card's sheets do (pulls.review
+DESIGN rule 105); anything less springs it back to rest.
+A card opened from inside the reader takes its place without the sheet moving. With
+animations off, the sheet and the gallery go straight to where they end.
+Source: Tavi's pick on the card opening page, 30 October 2026 ("Let's do 13 and 14
+together"): 13 is transitions.dev's Panel reveal, 14 its Banner stacking; times and
+curve from pulls.review DESIGN rule 73.
 
 @cc [owner:OctavianTocan,label:product;design] card-reader-shows-the-whole-card
 The reader MUST show every part of a card it has, each once, in its own raised

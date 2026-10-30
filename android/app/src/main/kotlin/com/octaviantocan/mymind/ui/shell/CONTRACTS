@@ -65,3 +65,11 @@ recorded review of 23 October 2026 ("some of our buttons, they're like off someh
 "the Google font ... has a higher weight", "look at their icon inside");
 pulls.review kit-segment-highlight-slides, DESIGN rule 67, Kit.kt at
 ee5cf358333cb1170f1923c7118e12af3f265b74.
+
+@cc [owner:OctavianTocan,label:design;motion] library-steps-back-behind-the-reader
+While a card's reader is open, ShellFrame MUST draw the page and its bar as one card
+that steps back as far as the reader's sheet is up (`card-reader-rises-as-a-sheet`),
+on black, and MUST come forward with the sheet as it sinks or is pulled down. Anything
+drawn over the page as an overlay stays where it is.
+Source: Tavi's pick of 13 and 14 on the card opening page, 30 October 2026 ("Let's do
+13 and 14 together"), transitions.dev's Banner stacking.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.40 (51), 2026-10-30
+Opening a card now has motion: the card rises as a sheet and the gallery steps back behind it.
+
+### Changed
+- Tapping a card raises it from below as a sheet with round top corners, while the gallery behind shrinks a little, dims and rounds its corners, its top edge still showing above the card.
+- Back sinks the card the way it came and brings the gallery forward again.
+- Pull the card down by its top, or from the top of its page, to close it: let go about a third of the way down or flick it down and it goes; let go sooner and it springs back.
+
 ## 0.6.39 (50), 2026-10-30
 One column is now full screen, and each card there shows more of itself.
 

@@ -12,7 +12,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -34,13 +37,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -133,11 +139,16 @@ class ReaderActions(
 data class ReaderDetails(val spaces: List<String> = emptyList(), val recent: List<Card> = emptyList(), val sameVibe: List<Card> = emptyList())
 
 /**
- * A full-window card reader; contextual menu windows opened afterward remain above it.
+ * A card reader in its own window, as a sheet that rises over the gallery and rests just under the status bar;
+ * contextual menu windows opened afterward remain above it. A finger pulls it down from its header, or from the top of
+ * its content, and letting it go far enough or throwing it down closes it.
  *
+ * @param onClose Called on Back; the caller sinks [sheet] and then removes the reader.
  * @param actionsProgress How far the card's sheet has risen over it, from 0 to 1; the reader blurs with it.
  * @param shrink How far Delete card's hold has come, from 0 to 1; the reader shrinks and fades with it.
  * @param reading True for Reader Mode: the page's text alone, in larger type.
+ * @param sheet Where the sheet is; the default rests in place, as a reader shown on its own does.
+ * @param onPulledAway Called once a finger has taken the sheet off the bottom of the screen, to remove the reader.
  */
 @Composable
 fun CardDetailDialog(
@@ -151,6 +162,8 @@ fun CardDetailDialog(
     scrollState: ScrollState = rememberScrollState(),
     actions: ReaderActions = ReaderActions(),
     details: ReaderDetails = ReaderDetails(),
+    sheet: ReaderSheetState = remember { ReaderSheetState(risen = true) },
+    onPulledAway: () -> Unit = onClose,
 ) {
     Dialog(
         onDismissRequest = onClose,
@@ -158,6 +171,8 @@ fun CardDetailDialog(
     ) {
         val view = LocalView.current
         val light = MymindTheme.page.document.luminance() > 0.5f
+        // Behind the status bar is the black the gallery stepped back onto, until a finger brings the gallery back.
+        val overBlack by remember(sheet) { derivedStateOf { sheet.recede() > 0.5f } }
         SideEffect {
             val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
             window.setDimAmount(0f)
@@ -165,16 +180,52 @@ fun CardDetailDialog(
             window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             window.isNavigationBarContrastEnforced = false
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = light
+                isAppearanceLightStatusBars = light && !overBlack
                 isAppearanceLightNavigationBars = light
             }
         }
+        val density = LocalDensity.current
+        val scope = rememberCoroutineScope()
+        val motion = rememberSheetMotionEnabled()
+        val latestMotion by rememberUpdatedState(motion)
+        val latestGone by rememberUpdatedState(onPulledAway)
+        val speed = with(density) { THROW_SPEED.toPx() }
+        val connection = remember(sheet, scope, speed) { ReaderSheetScroll(sheet, scope, speed, { latestMotion }, { latestGone() }) }
+        val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + ReaderSheetLayout.SheetGap
+        val corner = RoundedCornerShape(topStart = ReaderSheetLayout.Corner, topEnd = ReaderSheetLayout.Corner)
         Box(Modifier.fillMaxSize()) {
-            CardDetail(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress).shrunk { shrink }, onRemoveTag = onRemoveTag,
-                scrollState = scrollState, actions = actions, details = details, reading = reading)
+            Box(Modifier.fillMaxSize().padding(top = top)
+                .consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                .onSizeChanged { sheet.height = it.height.toFloat() }
+                .graphicsLayer {
+                    val rise = sheet.rise
+                    translationY = (1f - rise) * size.height * RISE_FROM + sheet.pull
+                    alpha = rise
+                    val blur = SHEET_BLUR.toPx() * (1f - rise)
+                    renderEffect = if (blur > 0.1f) BlurEffect(blur, blur, TileMode.Decal) else null
+                    shape = corner
+                    clip = true
+                }
+                .nestedScroll(connection)
+                .draggable(rememberDraggableState { sheet.drag(it) }, Orientation.Vertical,
+                    onDragStopped = { velocity -> sheet.release(scope, velocity, speed, latestMotion) { latestGone() } })) {
+                CardDetail(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress).shrunk { shrink }, onRemoveTag = onRemoveTag,
+                    scrollState = scrollState, actions = actions, details = details, reading = reading)
+                Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp).clip(CircleShape)
+                    .background((if (light) LightCardSheetColors else DarkCardSheetColors).grabber))
+            }
         }
     }
 }
+
+/** How far below its rest the sheet starts rising, as a share of its height (transitions.dev's Panel reveal: half). */
+private const val RISE_FROM = 0.5f
+
+/** How blurred the sheet is as it starts rising and as it finishes sinking. */
+private val SHEET_BLUR = 2.dp
+
+/** A throw faster than this closes the sheet however short it was, as on the card's sheets. */
+private val THROW_SPEED = 200.dp
 
 /**
  * Shrinks and fades the page as Delete card is held, so the card visibly goes.

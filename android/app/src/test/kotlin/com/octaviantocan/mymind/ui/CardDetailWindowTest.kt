@@ -4,6 +4,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import com.octaviantocan.mymind.ui.card.CardSheetPosition
@@ -22,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.ui.card.CardDetailDialog
@@ -107,6 +109,7 @@ class CardDetailWindowTest {
         compose.mainClock.advanceTimeBy(500)
         val before = scroll.value
         assertTrue(before > 0)
+        val rest = panel.fetchSemanticsNode().boundsInRoot.top
         compose.onNodeWithContentDescription("Card actions").performClick()
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(1500)
@@ -116,7 +119,29 @@ class CardDetailWindowTest {
         compose.waitForIdle()
         assertEquals(0, closed)
         assertEquals(before, scroll.value)
-        assertEquals(0f, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
+        assertEquals(rest, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
         compose.onNodeWithContentDescription("Back").assertIsDisplayed()
+    }
+
+    @Test
+    fun aShortSlowPullSpringsTheSheetBackAndALongPullClosesTheReader() {
+        show()
+        val rest = panel.fetchSemanticsNode().boundsInRoot.top
+        panel.performTouchInput {
+            val start = Offset(centerX, 8.dp.toPx())
+            swipe(start, start + Offset(0f, 60.dp.toPx()), durationMillis = 1000)
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.waitForIdle()
+        assertEquals(0, closed)
+        assertEquals(rest, panel.fetchSemanticsNode().boundsInRoot.top, 2f)
+        panel.performTouchInput {
+            val start = Offset(centerX, 8.dp.toPx())
+            swipe(start, start + Offset(0f, height * 0.6f), durationMillis = 300)
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.waitForIdle()
+        assertEquals(1, closed)
+        panel.assertDoesNotExist()
     }
 }
