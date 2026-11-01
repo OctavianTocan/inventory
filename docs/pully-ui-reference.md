@@ -52,8 +52,9 @@ Rule 198 makes the whole pill, including its padding, own its taps. Rule 67 make
 the selected segment slide. These obligations and their regression tests are
 recorded in [`ui/shell/CONTRACTS`](../android/app/src/main/kotlin/com/octaviantocan/mymind/ui/shell/CONTRACTS).
 
-The Google Photos reference supplies the product arrangement: Everything and
-Spaces share the navigation capsule, Search is a separate circle, and there is no
+Everything and Spaces are two icon tabs in a small navigation pill centred with
+Search's separate circle, the chosen place's name showing for a moment after a change
+(version 03 of the Everything bar, Tavi's pick on 1 November 2026); there is no
 Create tab. Search replaces that arrangement through the same bar layer. Rediscover
 and account settings remain available in the gallery header.
 

@@ -28,6 +28,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.octaviantocan.mymind.ui.shell.FOOT_PILL_TAG
 import com.octaviantocan.mymind.ui.shell.FootBarLayer
@@ -118,8 +119,14 @@ class FootBarTest {
         }
         val searchBounds = compose.onNodeWithContentDescription("Search").fetchSemanticsNode().boundsInRoot
         val before = searchBounds.bottom
-        compose.onRoot().performTouchInput { click(Offset(47f, searchBounds.center.y)) }
+        val pill = compose.onNodeWithTag(FOOT_PILL_TAG).fetchSemanticsNode().boundsInRoot
+        val inset = with(compose.density) { 4.dp.toPx() }
+        // The pill's own padding, before its first tab, is the pill's.
+        compose.onRoot().performTouchInput { click(Offset(pill.left + inset, pill.center.y)) }
         compose.runOnIdle { assertEquals(0, openedCard) }
+        // Beside the small navigation pill the screen's corners belong to the cards (version 03).
+        compose.onRoot().performTouchInput { click(Offset(pill.left / 2, pill.center.y)) }
+        compose.runOnIdle { assertEquals(1, openedCard); openedCard = 0 }
         compose.onNodeWithContentDescription("Search").performClick()
         settle()
         val close = compose.onNodeWithContentDescription("Close search").fetchSemanticsNode().boundsInRoot
@@ -142,27 +149,41 @@ class FootBarTest {
         compose.runOnIdle { assertEquals(1, bars.slots.size); assertEquals(0, openedCard) }
     }
 
-    @Test fun searchMorphsTheOnePillAndCircleOfTheNavigationInPlace() {
+    @Test fun searchWidensTheOnePillAndCarriesTheOneCircleToTheEnd() {
         val bars = FootBars()
         var searching by mutableStateOf(false)
         show(bars) {
             LibraryFootBar(Tab.Spaces, {}, searching, "", {}, { searching = true }, { searching = false })
         }
+        val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val (side, gap) = with(compose.density) { 12.dp.toPx() to 8.dp.toPx() }
         val pill = compose.onNodeWithTag(FOOT_PILL_TAG).fetchSemanticsNode().boundsInRoot
         val circle = compose.onNodeWithContentDescription("Search").fetchSemanticsNode().boundsInRoot
         assertEquals(pill.height, circle.height, 1f)
+        assertEquals("The circle sits 8dp beside the pill", gap, circle.left - pill.right, 1f)
+        assertEquals("The pill and circle are centred together", pill.left - root.left, root.right - circle.right, 2f)
+        assertTrue("The navigation pill is only as wide as its two icons", pill.width < root.width / 2)
         compose.mainClock.autoAdvance = false
         compose.onNodeWithContentDescription("Search").performClick()
-        // Halfway through the change the tabs and the field share the one pill, and the one circle already closes.
+        // Partway through, the tabs and the field share the one pill, already wider, and the one circle already closes.
         compose.mainClock.advanceTimeBy(100)
         compose.onAllNodesWithTag(FOOT_PILL_TAG).assertCountEquals(1)
         compose.onAllNodesWithContentDescription("Search").assertCountEquals(0)
-        assertEquals(pill, compose.onNodeWithTag(FOOT_PILL_TAG).fetchSemanticsNode().boundsInRoot)
-        assertEquals(circle, compose.onNodeWithContentDescription("Close search").fetchSemanticsNode().boundsInRoot)
+        val opening = compose.onNodeWithTag(FOOT_PILL_TAG).fetchSemanticsNode().boundsInRoot
+        assertTrue("The pill widens", opening.width > pill.width + 1f)
+        assertEquals(pill.top, opening.top, 1f)
+        assertEquals(pill.bottom, opening.bottom, 1f)
         compose.mainClock.autoAdvance = true
         settle()
+        val wide = compose.onNodeWithTag(FOOT_PILL_TAG).fetchSemanticsNode().boundsInRoot
+        val close = compose.onNodeWithContentDescription("Close search").fetchSemanticsNode().boundsInRoot
+        assertEquals(side, wide.left - root.left, 1f)
+        assertEquals(side, root.right - close.right, 1f)
+        assertEquals(gap, close.left - wide.right, 1f)
+        assertEquals(circle.size, close.size)
+        assertEquals(pill.bottom, wide.bottom, 1f)
         val field = compose.onNodeWithContentDescription("Search your mind").fetchSemanticsNode().boundsInRoot
-        assertTrue("The field sits inside the navigation's pill", pill.contains(field.center))
+        assertTrue("The field sits inside the navigation's pill", wide.contains(field.center))
         compose.onNodeWithText("Spaces").assertDoesNotExist()
         compose.onNodeWithContentDescription("Close search").performClick()
         settle()
@@ -186,16 +207,33 @@ class FootBarTest {
         compose.runOnIdle { assertEquals(1, expanded); assertEquals(0, behind) }
     }
 
-    @Test fun eachTabKeepsHalfTheCapsuleToTapWhileItsLabelSitsAtItsOuterEdge() {
+    @Test fun tabsAreIconsWhoseNameShowsForAMomentAfterAChange() {
         var selected by mutableStateOf(Tab.Everything)
         show(FootBars()) { MymindTabBar(selected, onSelect = { selected = it }) }
-        val everything = compose.onNodeWithText("Everything").fetchSemanticsNode().boundsInRoot
-        val spaces = compose.onNodeWithText("Spaces").fetchSemanticsNode().boundsInRoot
-        val label = compose.onNodeWithText("Spaces", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        assertEquals(everything.width, spaces.width, 1f)
-        assertTrue("The last label sits at the end of its half", spaces.right - label.right < spaces.width / 3)
-        compose.onRoot().performTouchInput { click(Offset(spaces.left + 6f, spaces.center.y)) }
-        compose.runOnIdle { assertEquals(Tab.Spaces, selected) }
+        val target = with(compose.density) { 44.dp.toPx() }
+        fun name(tab: Tab) = compose.onNodeWithText(tab.label, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        fun pill() = compose.onNodeWithTag(FOOT_PILL_TAG).fetchSemanticsNode().boundsInRoot
+        val rest = pill()
+        // Arriving shows no name, only the two icons; each tab is still a full touch target.
+        assertEquals(0f, name(Tab.Everything).width, 1f)
+        assertEquals(0f, name(Tab.Spaces).width, 1f)
+        for (tab in Tab.entries) {
+            val bounds = compose.onNodeWithText(tab.label).fetchSemanticsNode().boundsInRoot
+            assertTrue("${tab.label} is at least 44dp wide and tall", bounds.width >= target && bounds.height >= target)
+        }
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("Spaces").performClick()
+        compose.mainClock.advanceTimeBy(600)
+        compose.onNodeWithText("Spaces").assertIsSelected()
+        assertTrue("The chosen place's name shows", name(Tab.Spaces).width > target)
+        assertEquals(0f, name(Tab.Everything).width, 1f)
+        val named = pill()
+        assertTrue("The pill grows with the name", named.width > rest.width + target)
+        assertEquals("It grows on both sides, the pill and circle staying centred", rest.center.x, named.center.x, 1f)
+        compose.mainClock.advanceTimeBy(1600)
+        assertEquals("The name folds away after a moment", 0f, name(Tab.Spaces).width, 1f)
+        assertEquals(rest.width, pill().width, 1f)
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun navigationRespondsWithSystemAnimationsDisabled() {
@@ -208,6 +246,10 @@ class FootBarTest {
             compose.onNodeWithText("Spaces").performClick()
             compose.onNodeWithText("Spaces").assertIsSelected()
             compose.runOnIdle { assertTrue(selected == Tab.Spaces) }
+            // Without animations the name is there at once rather than easing out.
+            compose.mainClock.advanceTimeByFrame()
+            val name = compose.onNodeWithText("Spaces", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue("The name shows at once", name.width > 0f)
         } finally {
             Settings.Global.putFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, previous)
         }

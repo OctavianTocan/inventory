@@ -23,15 +23,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +51,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.IntrinsicMeasurable
+import androidx.compose.ui.layout.IntrinsicMeasureScope
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -60,12 +66,13 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.lerp
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
+import kotlin.math.roundToInt
 
 // Ported from pulls.review ee5cf358333cb1170f1923c7118e12af3f265b74, ui/design/FootBar.kt.
 /*
@@ -98,6 +105,7 @@ internal class FootSlot {
     var search by mutableStateOf(false)
     var button by mutableStateOf(false)
     var compact by mutableStateOf<String?>(null)
+    var hug by mutableStateOf(false)
     var onExpand by mutableStateOf<(() -> Unit)?>(null)
     var veil by mutableStateOf<Modifier>(Modifier)
     var inset by mutableStateOf<Dp?>(null)
@@ -139,6 +147,9 @@ class FootCircle(@DrawableRes val icon: Int, val label: String, val onClick: () 
  * page with one shares. [trailing] sits beside the pill, as the Inbox's sort does, and leaves with the page. With
  * [compact] the pill is short and reads that one word, centred, until a tap ([onExpand]) opens it to the full width with
  * its field focused ("a shorter bar that says Ask. And when you tap on it ... it kind of expands", Q5).
+ * With [hug] the pill is only as wide as what it holds and sits centred with its circle, growing and shrinking as its
+ * contents do; the next bar that does not hug widens it to the full width, and back (the gallery's two icons opening
+ * into search, Tavi's pick of 03 on 1 November 2026).
  * [veil] dims or holds the bar with its page. Outside a [FootBarLayer] the bar draws here, placed by [modifier].
  */
 @Composable
@@ -149,6 +160,7 @@ fun FootPill(
     button: Boolean = false,
     compact: String? = null,
     onExpand: (() -> Unit)? = null,
+    hug: Boolean = false,
     veil: Modifier = Modifier,
     inset: Dp? = null,
     field: Boolean = true,
@@ -165,6 +177,7 @@ fun FootPill(
         this.button = button
         this.compact = compact
         this.onExpand = onExpand
+        this.hug = hug
         this.veil = veil
         this.inset = inset
         this.field = field
@@ -238,11 +251,19 @@ fun FootBarLayer(bars: FootBars, modifier: Modifier = Modifier) {
 private fun PillBar(slot: FootSlot, moving: Boolean) {
     val c = LibraryStyle.colors
     val short = slot.compact != null
-    val open by animateFloatAsState(
+    val open = animateFloatAsState(
         if (short) 0f else 1f,
         if (moving) tween(FootMotion.MEDIUM, easing = FootMotion.SmoothOut) else tween(0),
         label = "foot-open",
     )
+    val hug = animateFloatAsState(
+        if (slot.hug && !short) 1f else 0f,
+        if (moving) tween(FootMotion.MEDIUM, easing = FootMotion.SmoothOut) else tween(0),
+        label = "foot-hug",
+    )
+    val hugging by remember { derivedStateOf { hug.value > 0f } }
+    // The hugging contents' width, kept while they fade out so the pill widens from where they were.
+    val hugged = remember { IntArray(1) }
     // The field takes the cursor once the pill a tap opened is there.
     LaunchedEffect(slot, short) {
         if (short || !slot.focusOnOpen) return@LaunchedEffect
@@ -253,11 +274,25 @@ private fun PillBar(slot: FootSlot, moving: Boolean) {
     val trailing = slot.trailing
     val keptTrailing = remember { arrayOfNulls<@Composable () -> Unit>(1) }
     if (trailing != null) keptTrailing[0] = trailing
-    Row(slot.veil.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            val width: Dp = lerp(COMPACT_WIDTH.coerceAtMost(maxWidth), maxWidth, open)
+    Row(slot.veil.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+        // A hugging pill leaves the row's spare width to both sides, so it and its circle sit centred together.
+        Box(Modifier.weight(1f, fill = !hugging), contentAlignment = Alignment.Center) {
             Box(
-                Modifier.width(width).height(FieldHeight).testTag(FOOT_PILL_TAG)
+                Modifier
+                    .layout { measurable, constraints ->
+                        val full = constraints.maxWidth
+                        val height = FieldHeight.roundToPx()
+                        var width = mix(COMPACT_WIDTH.roundToPx().coerceAtMost(full), full, open.value)
+                        val toward = hug.value
+                        if (toward > 0f) {
+                            val natural = measurable.maxIntrinsicWidth(height)
+                            if (natural > 0) hugged[0] = natural
+                            if (hugged[0] > 0) width = mix(width, hugged[0].coerceAtMost(full), toward)
+                        }
+                        val placeable = measurable.measure(Constraints.fixed(width, height))
+                        layout(width, height) { placeable.place(0, 0) }
+                    }
+                    .testTag(FOOT_PILL_TAG)
                     .footShadow(CircleShape, FootShadow.Search)
                     .clip(CircleShape).background(c.raised)
                     // A tap anywhere on the pill is the pill's: it opens a short one, or puts the cursor in the field, and
@@ -289,7 +324,8 @@ private fun PillBar(slot: FootSlot, moving: Boolean) {
                     contentAlignment = Alignment.Center,
                     label = "foot-pill",
                 ) { face ->
-                    Box(Modifier.fillMaxSize().blurredBy(transition), contentAlignment = Alignment.Center) {
+                    val wish = if (face.slot.hug && !face.short) Modifier else Modifier.then(NoWidthWish)
+                    Box(Modifier.fillMaxSize().then(wish).blurredBy(transition), contentAlignment = Alignment.Center) {
                         if (face.short) {
                             Text(face.slot.compact.orEmpty(), style = LibraryStyle.body.copy(fontWeight = FontWeight.Medium), color = c.text, maxLines = 1)
                         } else {
@@ -348,6 +384,31 @@ private fun besideEnter(moving: Boolean): EnterTransition =
     if (!moving) EnterTransition.None else fadeIn(tween(FootMotion.FAST, easing = FootMotion.SmoothOut)) + expandHorizontally(tween(FootMotion.FAST, easing = FootMotion.SmoothOut))
 private fun besideExit(moving: Boolean): ExitTransition =
     if (!moving) ExitTransition.None else fadeOut(tween(FootMotion.QUICK, easing = FootMotion.SmoothOut)) + shrinkHorizontally(tween(FootMotion.QUICK, easing = FootMotion.SmoothOut))
+
+private fun mix(from: Int, to: Int, fraction: Float): Int = (from + (to - from) * fraction).roundToInt()
+
+/**
+ * Tells a hugging pill that a face wants no width of its own: a field fading in or out under a hugging bar does not
+ * widen the pill, which follows only the hugging contents and its own animation toward the full width.
+ */
+private object NoWidthWish : ModifierNodeElement<NoWidthWishNode>() {
+    override fun create() = NoWidthWishNode()
+    override fun update(node: NoWidthWishNode) = Unit
+    override fun hashCode(): Int = 0
+    override fun equals(other: Any?): Boolean = other === this
+}
+
+/** The node of [NoWidthWish]: it measures and places as if it were not there. */
+private class NoWidthWishNode : Modifier.Node(), LayoutModifierNode {
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val placeable = measurable.measure(constraints)
+        return layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }
+
+    override fun IntrinsicMeasureScope.minIntrinsicWidth(measurable: IntrinsicMeasurable, height: Int): Int = 0
+
+    override fun IntrinsicMeasureScope.maxIntrinsicWidth(measurable: IntrinsicMeasurable, height: Int): Int = 0
+}
 
 /** What the pill shows: a page's field, or its one word while short. Short pills of any page are one face, so "Ask" never fades into "Ask". */
 private class PillFace(val slot: FootSlot, val short: Boolean) {

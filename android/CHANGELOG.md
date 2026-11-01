@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.41 (52), 2026-11-01
+The bar at the foot of Everything and Spaces is smaller: two icons in the middle, with Search beside them.
+
+### Changed
+- Everything and Spaces are now two icons in a small pill in the middle of the bar, the one you are on filled and highlighted. The corners of the screen are left to your cards.
+- When you switch between Everything and Spaces, the name of the place you switched to shows beside its icon for a moment, then folds away.
+- Tapping Search widens the same pill into the search field across the bar, and closing search shrinks it back to the two icons.
+
 ## 0.6.40 (51), 2026-10-30
 Opening a card now has motion: the card rises as a sheet and the gallery steps back behind it.
 

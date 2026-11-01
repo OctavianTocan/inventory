@@ -10,14 +10,18 @@ ee5cf358333cb1170f1923c7118e12af3f265b74; requested by Tavi on 22 October 2026.
 Everything, Spaces and Search MUST show the same bar: one FootPill with one round
 button, FootCircle, beside it. The tabs and the search field MUST be contents of that
 pill, never a capsule or pill of their own, and Search and Close MUST be glyphs of that
-circle. Opening or closing search MUST keep the pill and the circle in place and at
-the same size; only what is inside them changes, the tabs blurring out as the field
-blurs in and the magnifier with a sparkle turning into the close cross, through Pully's
-blur fade. A page that adds its own bar MUST do so through the same pill and circle.
+circle. Opening or closing search MUST keep the one pill and the one circle on the same
+line and at the same height: the pill widens from its two icons to the full width,
+carrying the circle to the end, and narrows back when search closes, while the tabs
+blur out as the field blurs in and the magnifier with a sparkle turns into the close
+cross, through Pully's blur fade. A page that adds its own bar MUST do so through the
+same pill and circle.
 Source: Tavi, 28 October 2026 ("the bottom bar of the search and spaces isn't the same
 one as it is on the everything section. if you look at pully, you will see that the
 best is to use exactly the same one and morph it depending on the page");
-pulls.review kit-one-foot-bar.
+pulls.review kit-one-foot-bar. The pill widening replaced "in place and at the same
+size" when Tavi picked version 03 of the Everything bar on 1 November 2026 ("Yeah!
+Let's use 03").
 
 @cc [owner:OctavianTocan,label:design] library-bars-rest-alike
 Every library foot bar MUST use floatingBar for its position: 12dp in from the sides,
@@ -48,23 +52,22 @@ targets of at least 44dp.
 Source: pulls.review kit-foot-bar-owns-its-taps, DESIGN rule 198, FootBar.kt at
 ee5cf358333cb1170f1923c7118e12af3f265b74.
 
-@cc [owner:OctavianTocan,label:product;motion] library-navigation-is-the-gallery-capsule
-The library navigation capsule MUST offer Everything and Spaces, with Search as a
-separate circular control showing a magnifier with a sparkle. It MUST NOT add a Create
-tab. As in Google Photos, the selected highlight MUST hug the selected tab's icon and
-label rather than fill half the capsule, while each tab keeps half the capsule as its
-touch target; the first tab sits at the start and the last at the end. The highlight
-MUST slide and resize between tabs on Pully's capsule curve; when system animations
-are disabled it MUST finish immediately. Changing the selected tab MUST preserve the
-one bar registration rather than creating a second visible bar. Labels are medium
-weight, the unselected one in a dark grey. Only the selected tab MAY show its filled
-icon; both tab labels MUST remain visible. Narrow widths and large system text MAY
-hide the selected icon to preserve label space and touch targets.
-Source: Tavi's Google Photos reference and no-Create decision, 22 October 2026; the
-recorded review of 23 October 2026 ("some of our buttons, they're like off somehow",
-"the Google font ... has a higher weight", "look at their icon inside");
-pulls.review kit-segment-highlight-slides, DESIGN rule 67, Kit.kt at
-ee5cf358333cb1170f1923c7118e12af3f265b74.
+@cc [owner:OctavianTocan,label:product;design;motion] library-navigation-is-the-gallery-capsule
+The library navigation pill MUST offer Everything and Spaces as two icon tabs, with
+Search as a separate circular control showing a magnifier with a sparkle. It MUST NOT
+add a Create tab. The pill is only as wide as its two tabs and sits centred with the
+circle beside it, leaving the corners of the screen to the cards. The chosen tab shows
+its filled icon on the selected highlight, the other its outline icon in a dark grey.
+Changing the tab MUST show the chosen place's name beside its icon for about a second
+and a half and then fold it away, the pill growing and shrinking with it; arriving on
+a page or closing search MUST NOT show a name. The names MUST stay readable by
+accessibility services while folded. Each tab keeps the pill's full height to tap.
+When system animations are disabled the highlight and the name MUST change at once.
+Changing the selected tab MUST preserve the one bar registration rather than creating
+a second visible bar.
+Source: Tavi's pick of version 03, "Two icons, names on change", from the 15 Everything
+bars, 1 November 2026 ("Yeah! Let's use 03"), which replaced the Google Photos capsule
+with both labels of 22 and 23 October 2026; Tavi's no-Create decision, 22 October 2026.
 
 @cc [owner:OctavianTocan,label:design;motion] library-steps-back-behind-the-reader
 While a card's reader is open, ShellFrame MUST draw the page and its bar as one card
