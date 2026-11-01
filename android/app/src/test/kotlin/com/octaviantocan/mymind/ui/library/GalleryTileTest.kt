@@ -51,7 +51,7 @@ class GalleryTileTest(private val width: Int) {
         val text = compose.onNodeWithText(body, useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         val image = compose.onNodeWithContentDescription("Image preview", useUnmergedTree = true)
             .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        assertTrue("Text and image need separate visible areas", text.bottom <= image.top)
+        assertTrue("Text and image need separate visible areas", text.top >= image.bottom || text.bottom <= image.top)
         assertTrue(image.height > 0f && image.width > 0f)
     }
 
@@ -121,6 +121,12 @@ class GalleryTileTest(private val width: Int) {
         render(testCard("text-note", type = "Note", title = "A thought", note = body))
         compose.onNodeWithText(body, useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("Image preview", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test fun anArticleShowsItsDescriptionUnderItsTitle() {
+        render(testCard("described", type = "Article", title = "Small spaces, better ideas")
+            .copy(description = "Why the best workshops are a little too small.", cover = Cover(source, 1200, 800)))
+        compose.onNodeWithText("Small spaces, better ideas\nWhy the best workshops are a little too small.", useUnmergedTree = true).assertExists()
     }
 
     @Test fun aProductIsAPinWithItsPriceOnThePhoto() {

@@ -334,6 +334,30 @@ class LibraryModelsTest {
     }
 
     @Test
+    fun aTileSaysWhereItsWordsComeFrom() {
+        val cover = com.octaviantocan.mymind.data.Cover("https://gallery.example.test/forest.jpg", 1200, 800)
+        assertEquals("Outwalks", gallerySource(testCard("link", type = "WebPage", title = "Ten walks").copy(siteName = "Outwalks")))
+        assertEquals("outwalks.org", gallerySource(testCard("bare", type = "WebPage", title = "Ten walks").copy(domain = "outwalks.org")))
+        assertEquals("John Muir", gallerySource(testCard("quote", type = "Quote", note = "In every walk with nature").copy(author = "John Muir")))
+        assertEquals("Maya Walks", gallerySource(testCard("film", type = "YouTubeVideo", title = "Folding a lamp").copy(cover = cover, author = "by Maya Walks")))
+        assertNull("A note says nothing under its words", gallerySource(testCard("note", type = "Note", note = "A thought").copy(domain = "example.test")))
+        assertNull("A photo's own note has no source", gallerySource(testCard("photo", type = "Image", note = "Mine").copy(cover = cover, domain = "pictures.example")))
+        assertNull("A post shows its byline instead", gallerySource(testCard("post", type = "XPost", title = "A post").copy(siteName = "X")))
+        assertNull("A source that repeats the words is left out", gallerySource(testCard("same", type = "WebPage", title = "example.test").copy(domain = "example.test")))
+    }
+
+    @Test
+    fun aLinkLeadsWithItsTitleOverItsDescription() {
+        val article = tileWords(testCard("article", type = "Article", title = "Small spaces").copy(description = "Why workshops are small."))
+        assertEquals("Small spaces", article.lead)
+        assertEquals("Why workshops are small.", article.body)
+        val note = tileWords(testCard("note", type = "Note", title = "Weekend", note = "A quiet place to think.").copy(description = "Weekend"))
+        assertNull("A note shows its own words alone", note.lead)
+        assertEquals("A quiet place to think.", note.body)
+        assertNull("A title alone has no lead", tileWords(testCard("plain", type = "WebPage", title = "Ten walks")).lead)
+    }
+
+    @Test
     fun aKindLabelThatRepeatsTheTilesWordsIsLeftOut() {
         assertTrue(sameWords("example.test", "https://www.example.test/"))
         assertTrue(sameWords("Note", " note"))

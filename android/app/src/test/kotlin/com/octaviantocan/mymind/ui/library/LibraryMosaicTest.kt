@@ -17,7 +17,10 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.click
@@ -519,6 +522,7 @@ class LibraryMosaicTest {
             down(1, focal + Offset(this.width * 0.1f, 0f))
         }
         val widths = mutableListOf<Float>()
+        val seen = mutableListOf<List<Int>>()
         for (step in 1..6) {
             gallery.performTouchInput {
                 updatePointerTo(0, focal - Offset(this.width * (0.1f + step * 0.004f), 0f))
@@ -527,33 +531,48 @@ class LibraryMosaicTest {
             }
             compose.waitForIdle()
             assertTrue("The pinch must stay between 4 and 3 columns: ${density.position}", density.position > 3f && density.position < 4f)
-            assertEquals("The note's words must keep their lines while it grows", before, lines())
+            seen += lines()
             widths += bounds().width
         }
         assertTrue("The note must grow with the fingers: $width -> $widths", widths.zipWithNext().all { (a, b) -> b > a } && widths.last() > width + 8f)
         gallery.performTouchInput { up(0); up(1) }
         compose.waitForIdle()
+        assertEquals(3, density.columns)
+        // Between two stops the note shows its layout at one or the other, cross-fading, and never a third one.
+        val after = lines()
+        assertTrue("The note's words must keep the lines of a stop while it grows: $before, $after, $seen", seen.all { it == before || it == after })
     }
 
     @Test
-    fun aNoteKeepsItsLinesAtEveryDensity() {
+    fun aNoteShowsItsWordsAtEachStopsSize() {
         val density = MosaicState(3)
         compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(notes, endReached = true), {}, {}, mosaic = density) } }
-        fun width() = compose.onNodeWithContentDescription("Note 6").fetchSemanticsNode().boundsInRoot.width
-        val before = noteLines()
-        val small = width()
+        // The words are laid out at 13 sp in a frame drawn scaled to the tile (look 07 Prints, Tavi, 1 November 2026).
+        fun shown(): Float {
+            val results = mutableListOf<TextLayoutResult>()
+            val node = compose.onNode(hasText(longNote) and hasAnyAncestor(hasClickAction()), useUnmergedTree = true)
+            node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+            return 13f * node.fetchSemanticsNode().boundsInRoot.width / results.single().size.width
+        }
+        assertEquals(13f, shown(), 0.2f)
         val gallery = compose.onNodeWithContentDescription("Card gallery").fetchSemanticsNode()
         compose.runOnIdle { gallery.config[SemanticsActions.CustomActions].first { it.label == "Larger cards" }.action() }
         compose.waitForIdle()
         assertEquals(2, density.columns)
-        assertEquals("A note is a picture of itself, with the same lines at every density", before, noteLines())
-        assertTrue("The note must be drawn larger: $small -> ${width()}", width() > small * 1.4f)
+        assertEquals("Two across shows words at 16 sp", 16f, shown(), 0.2f)
+        compose.runOnIdle { gallery.config[SemanticsActions.CustomActions].first { it.label == "Smaller cards" }.action() }
+        compose.runOnIdle { gallery.config[SemanticsActions.CustomActions].first { it.label == "Smaller cards" }.action() }
+        compose.waitForIdle()
+        assertEquals(4, density.columns)
+        assertEquals("Four across shows words at 11 sp", 11f, shown(), 0.2f)
     }
 
     /** Where each line of [longNote] ends in its tile's layout. */
     private fun noteLines(): List<Int> {
         val results = mutableListOf<TextLayoutResult>()
-        compose.onNodeWithText(longNote, useUnmergedTree = true).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+        // The card's own tile, not its inert layout at the other stop while a pinch cross-fades the two.
+        compose.onNode(hasText(longNote) and hasAnyAncestor(hasClickAction()), useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
         val layout = results.single()
         return (0 until layout.lineCount).map { layout.getLineEnd(it, visibleEnd = true) }
     }

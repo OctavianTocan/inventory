@@ -172,7 +172,7 @@ class LibraryChromeTest {
             hasContentDescription("Image preview") and hasAnyAncestor(hasContentDescription("Weekend")),
             useUnmergedTree = true,
         ).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        assertTrue("The note and its image must keep separate visible areas", text.bottom <= picture.top + 1f)
+        assertTrue("The note and its image must keep separate visible areas, the words under it", text.top >= picture.bottom - 1f)
         assertTrue(picture.height > 0f && picture.width > 0f)
     }
 }

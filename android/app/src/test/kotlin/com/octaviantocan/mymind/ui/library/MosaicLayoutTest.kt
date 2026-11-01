@@ -69,8 +69,19 @@ class MosaicLayoutTest {
             assertEquals(level.cells[0].height / level.cells[0].width,
                 layouts.wordsFrame(0, columns).let { it.height / it.width }, 0.01f)
         }
-        assertEquals(layouts.wordsFrame(0, 2), layouts.wordsFrame(0, 3))
-        assertEquals(layouts.wordsFrame(1, 2), layouts.wordsFrame(1, 4))
+    }
+
+    @Test
+    fun wordsGrowGentlyWithTheTiles() {
+        // Look 07 Prints with its Gentle sizes (Tavi, 1 November 2026): 11 sp at four columns, 13 at three, 16 at two.
+        val sample = (1..8).map { testCard("n$it", type = "Note", note = "Note $it") }
+        val layouts = MosaicLayouts(sample, 352f, listOf(16f, 8f, 6f, 6f))
+        val shown = (2..4).associateWith { columns -> 13f * layouts.level(columns).cells[0].width / layouts.wordsFrame(0, columns).width }
+        assertEquals(16f, shown.getValue(2), 0.01f)
+        assertEquals(13f, shown.getValue(3), 0.01f)
+        assertEquals(11f, shown.getValue(4), 0.01f)
+        assertEquals("At three columns a tile is laid out at its own size", layouts.level(3).cells[0].size, layouts.wordsFrame(0, 3))
+        assertTrue("Neighbouring stops lay a tile out apart, so a pinch cross-fades them", layouts.wordsFrame(0, 2) != layouts.wordsFrame(0, 3))
     }
 
     @Test

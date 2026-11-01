@@ -5,6 +5,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
@@ -26,10 +29,12 @@ import coil3.request.SuccessResult
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.data.AiSpace
 import com.octaviantocan.mymind.data.AiUnderstood
+import com.octaviantocan.mymind.data.AppInfo
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
+import com.octaviantocan.mymind.data.Product
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.library.AiRank
 import com.octaviantocan.mymind.ui.library.EverythingContent
@@ -156,6 +161,20 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         )),
     )
 
+    /** One of each kind of print (look 07 Prints, Tavi, 1 November 2026): sources under words, pins, apps, videos and a PDF. */
+    private val kinds: List<Card> get() = listOf(
+        testCard("quote", type = "Quote", note = "In every walk with nature one receives far more than he seeks.").copy(author = "John Muir"),
+        photo("pin", "hills", 900, 1200, "Speckled stoneware mug").copy(type = "Product", siteName = "Hearth & Clay", product = Product(price = "GBP 24.00")),
+        testCard("link", type = "WebPage", title = "Ten walks from the end of a tube line").copy(siteName = "Outwalks"),
+        photo("film", "coast", 1280, 720, "Reading a river: where trout hold in fast water").copy(type = "YouTubeVideo", author = "by Upstream Notes", videoLength = 768),
+        photo("described", "mountains", 900, 1300, "Small spaces, better ideas").copy(type = "Article", siteName = "Workroom Weekly",
+            description = "Why the best workshops are a little too small, and what that does to the work made in them."),
+        photo("app", "forest", 512, 512, "Trailhead: offline maps").copy(type = "SoftwareApplication", app = AppInfo(distributor = "play-store")),
+        photo("pdf", "hills", 642, 840, "The Ridgeway, a walker's guide").copy(type = "Document"),
+        testCard("soup", type = "Note", note = "Call Mum about the 14th, and ask how she makes the barley soup."),
+        photo("street", "forest", 800, 1200, "A street I never turned into"),
+    )
+
     private fun show(columns: Int, searching: Boolean = false,
         sample: List<Card> = cards, highlights: List<Card> = pins, reels: Boolean = false, pictures: Int = 3) {
         mosaicState = MosaicState(columns, reels)
@@ -263,6 +282,10 @@ class GalleryScreenshotTest(private val dark: Boolean) {
     }
     @Test fun differentNoteTypes() = capture(2, "gallery_notes", sample = mixedNotes, highlights = emptyList())
     @Test fun compactNoteTypes() = capture(4, "gallery_notes_compact", sample = mixedNotes, highlights = emptyList())
+    @Test fun threeAcrossNoteTypes() = capture(3, "gallery_notes_three", sample = mixedNotes, highlights = emptyList())
+    @Test fun threeAcrossGallery() = capture(3, "gallery_three")
+    @Test fun printsOfEveryKind() = capture(3, "gallery_kinds", sample = kinds, highlights = emptyList())
+    @Test fun printsOfEveryKindTwoAcross() = capture(2, "gallery_kinds_two", sample = kinds, highlights = emptyList())
 
     @Test fun mixedNotePreviewsFollowThePinchBeforeRelease() {
         val watchedUrl = "https://gallery.example.test/forest.jpg?pinch-fixture=walk"
@@ -275,7 +298,8 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         fun noteWidth() = compose.onNodeWithContentDescription("Weekend walk").fetchSemanticsNode().boundsInRoot.width
         fun textLayout(): TextLayoutResult {
             val results = mutableListOf<TextLayoutResult>()
-            compose.onNodeWithText(sample.first { it.id == "walk" }.note!!, useUnmergedTree = true)
+            // The card's own tile, not its inert layout at the other stop while a pinch cross-fades the two.
+            compose.onNode(hasText(sample.first { it.id == "walk" }.note!!) and hasAnyAncestor(hasClickAction()), useUnmergedTree = true)
                 .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { assertTrue(it(results)) }
             return results.single()
         }

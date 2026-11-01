@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.42 (53), 2026-11-01
+Cards look like prints now, and words stay close to one size as you pinch.
+
+### Changed
+- Every picture stands in a thin white border with a soft shadow, like a photo print. A card with a picture and words carries the words on the print's white foot, under the picture.
+- Notes, quotes and links are plain white cards. The coloured edge and the grey label on top are gone; a link shows its site, and a quote its author, under the words when there is room.
+- Words that do not fit fade out on their last line instead of ending in dots.
+- Words are 11 sp at four across, 13 at three and 16 at two, instead of under 10 to about 20: a bigger card shows more words, not much bigger ones. While you pinch, each card's words cross-fade from one size to the next instead of growing and shrinking with the card.
+- Products, apps and Top of Mind cards are prints too.
+
 ## 0.6.41 (52), 2026-11-01
 The bar at the foot of Everything and Spaces is smaller: two icons in the middle, with Search beside them.
 

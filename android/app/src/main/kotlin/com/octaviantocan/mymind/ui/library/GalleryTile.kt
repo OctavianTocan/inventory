@@ -6,8 +6,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,25 +29,37 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -65,15 +78,55 @@ private val VISUAL_CARD_TYPES = setOf("Image", "Screenshot", "Video", "YouTubeVi
 private val TILE_TEXT = 13.sp
 private val HIGHLIGHT_TEXT = 17.sp
 
+/** The line height of a tile's words, as [TileText] sets them, and of its source line, as [KindLabel] does. */
+private val TILE_LINE = 18.5.sp
+private val SOURCE_LINE = 16.sp
+
 /** The corner radius of a gallery tile, the web showcase's `rounded-lg` (Tavi, 29 October 2026). */
 internal val TILE_CORNER = 12.dp
 
 /** The corner radius of a Top of Mind card. */
 private val HIGHLIGHT_CORNER = 28.dp
 
+/** How high a gallery tile stands off the paper: the soft shadow every print casts, as look 07 Prints draws them. */
+internal val TILE_ELEVATION = 2.dp
+
+/** A photo print's white border, on screen at every density: a picture tile is measured to its cell. */
+private val PRINT_BORDER = 4.dp
+
+/** The border round the picture of a print with words under it; it is drawn scaled with the words. */
+private val PRINT_WORDS_BORDER = 5.dp
+
+/** The border round a Top of Mind print's picture. */
+private val HIGHLIGHT_BORDER = 6.dp
+
 /**
- * A gallery brick keeps both the words and picture of a mixed card visible at every density. It rounds its own corners
- * to [corner]; the mosaic passes 0 and rounds them itself, so a tile drawn scaled keeps [TILE_CORNER] on screen.
+ * How big a gallery tile's words show at [columns] across, in sp: 11 at four columns, 13 at three and 16 at two, the
+ * Gentle rule of look 07 Prints (Tavi's pick on the card looks canvas, 1 November 2026). A tile lays its words out at
+ * [TILE_TEXT] in a frame drawn scaled to its cell ([MosaicLayouts.wordsFrame]), so this is the frame's scale times 13.
+ *
+ * @param columns Columns across, two to four; fewer count as two and more as four.
+ * @return The size the words show at.
+ */
+internal fun galleryTextSize(columns: Int): Float = when {
+    columns >= 4 -> 11f
+    columns == 3 -> 13f
+    else -> 16f
+}
+
+/** How much larger than they are laid out a gallery tile's words show at [columns] across ([galleryTextSize]). */
+internal fun galleryWordsScale(columns: Int): Float = galleryTextSize(columns) / TILE_TEXT.value
+
+/** True when [card]'s tile casts the soft shadow of a print; a PDF's page casts its own on the paper instead. */
+internal fun galleryTileCastsShadow(card: Card): Boolean = !pdfStandsTall(card)
+
+/**
+ * A gallery brick keeps both the words and picture of a mixed card visible at every density. Every tile is drawn as a
+ * print, the look Tavi picked on 1 November 2026 (07 Prints): a picture stands in a thin white border, a card with words
+ * and a picture carries the words on the print's white foot, and a card of words is a plain white card. Posts keep their
+ * network's colour, products are pins in the same border, and a PDF's page stands on the paper. It rounds its own corners
+ * to [corner]; the mosaic passes 0 and rounds them itself, with the print's shadow, so a tile drawn scaled keeps
+ * [TILE_CORNER] on screen.
  */
 @Composable
 internal fun GalleryTile(
@@ -88,7 +141,6 @@ internal fun GalleryTile(
     corner: Dp = if (highlight) HIGHLIGHT_CORNER else TILE_CORNER,
 ) {
     val colors = LibraryStyle.colors
-    val accent = cardAccent(card) ?: colors.selected
     val kind = tileKind(card)
     val picture = galleryPicture(card)
     val imageModel = rememberGalleryImage(picture, imageRequestSizePx)
@@ -99,13 +151,10 @@ internal fun GalleryTile(
     val page = picture != null && pdfStandsTall(card)
     val caption = remember(card) { videoCaption(card) }
     val mixed = picture != null && text.isNotBlank() && galleryKeepsText(card) && !pin && !app && !page
-    val paper = lerp(colors.raised, accent, 0.13f)
     val background = when {
         kind == TileKind.Post -> postBrand(card.type).paper
-        pin || page -> colors.background
-        caption != null -> colors.raised
-        picture == null || mixed || app -> paper
-        else -> parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper
+        page -> colors.background
+        else -> colors.raised
     }
     val heading = card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card)
     val previews = LocalVideoPreviews.current
@@ -127,9 +176,22 @@ internal fun GalleryTile(
                 contentScale = ContentScale.Crop, modifier = pictureModifier)
         }
     }
+    // The video badge and the picture count sit on the print's picture, inside its border.
+    val marks = @Composable { scope: BoxScope ->
+        with(scope) {
+            if (kind == TileKind.Video) BoxWithConstraints(Modifier.matchParentSize()) {
+                VideoBadge(card.type == "YouTubeVideo", length?.takeIf { maxWidth >= 96.dp }, Modifier.align(Alignment.TopEnd).padding(8.dp))
+            }
+            GalleryCount(card, Modifier.align(Alignment.TopEnd))
+        }
+    }
+    val shape = RoundedCornerShape(corner)
     FootPressTheme {
         Box(
-            modifier.fillMaxSize().then(if (corner > 0.dp) Modifier.clip(RoundedCornerShape(corner)) else Modifier).background(background)
+            modifier.fillMaxSize()
+                .then(if (corner > 0.dp) Modifier.shadow(if (highlight && galleryTileCastsShadow(card)) TILE_ELEVATION else 0.dp, shape,
+                    clip = true, ambientColor = colors.shadow, spotColor = colors.shadow) else Modifier)
+                .background(background)
                 .semantics(mergeDescendants = true) { contentDescription = heading }
                 .then(if (enabled) Modifier.combinedClickable(
                     interactionSource = null, indication = CardSheetIndication, role = Role.Button,
@@ -144,44 +206,33 @@ internal fun GalleryTile(
                 PdfTile(card, highlight) { pictureModifier -> tilePicture("First page", pictureModifier) }
             } else if (app) {
                 AppTile(card, highlight) { pictureModifier -> tilePicture("App icon", pictureModifier) }
-                Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
             } else if (caption != null) {
-                VideoCaptionTile(caption, highlight) { pictureModifier -> tilePicture(null, pictureModifier) }
+                PrintTile(TileWords(null, caption.title), caption.channel, highlight, marks) { pictureModifier -> tilePicture(null, pictureModifier) }
             } else if (mixed) {
-                BoxWithConstraints(Modifier.fillMaxSize()) {
-                    // The words take what they need, up to a little over half, so a big tile's picture fills the rest.
-                    val most = maxHeight * 0.56f
-                    Column(Modifier.fillMaxSize()) {
-                        GalleryTextPreview(card, text, highlight,
-                            if (highlight) Modifier.weight(0.56f).fillMaxWidth() else Modifier.heightIn(max = most).fillMaxWidth(),
-                            fit = !highlight)
-                        tilePicture("Image preview", Modifier.weight(if (highlight) 0.44f else 1f).fillMaxWidth())
-                    }
+                PrintTile(remember(card) { tileWords(card) }, remember(card) { gallerySource(card) }, highlight, marks) { pictureModifier ->
+                    tilePicture("Image preview", pictureModifier)
                 }
-                Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
             } else if (picture != null) {
-                tilePicture(null, Modifier.fillMaxSize())
-                if (highlight || kind !in setOf(TileKind.Media, TileKind.Video)) {
-                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.78f))))
-                    Text(
-                        card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card),
-                        Modifier.align(Alignment.BottomStart).padding(if (highlight) 18.dp else 12.dp).clearAndSetSemantics {},
-                        color = Color.White, style = LibraryStyle.body.copy(
-                            fontSize = if (highlight) HIGHLIGHT_TEXT else TILE_TEXT,
-                            lineHeight = if (highlight) 23.sp else 18.sp,
-                        ),
-                        maxLines = if (highlight) 3 else 2, overflow = TextOverflow.Ellipsis,
-                    )
+                val border = if (highlight) HIGHLIGHT_BORDER else PRINT_BORDER
+                Box(Modifier.fillMaxSize().padding(border).clip(RoundedCornerShape(corner.coerceAtLeast(TILE_CORNER) - border))) {
+                    tilePicture(null, Modifier.fillMaxSize())
+                    if (highlight || kind !in setOf(TileKind.Media, TileKind.Video)) {
+                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.78f))))
+                        Text(
+                            card.title?.takeIf { it.isNotBlank() } ?: galleryKind(card),
+                            Modifier.align(Alignment.BottomStart).padding(if (highlight) 14.dp else 8.dp).clearAndSetSemantics {},
+                            color = Color.White, style = LibraryStyle.body.copy(
+                                fontSize = if (highlight) HIGHLIGHT_TEXT else TILE_TEXT,
+                                lineHeight = if (highlight) 23.sp else 18.sp,
+                            ),
+                            maxLines = if (highlight) 3 else 2, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    marks(this)
                 }
             } else {
-                GalleryTextPreview(card, text, highlight, Modifier.fillMaxSize())
-                Box(Modifier.fillMaxWidth().height(3.dp).background(accent))
+                WordsTile(card, highlight)
             }
-            if (picture != null && kind == TileKind.Video) BoxWithConstraints(Modifier.matchParentSize()) {
-                VideoBadge(card.type == "YouTubeVideo", length?.takeIf { maxWidth >= 96.dp },
-                    Modifier.align(if (mixed) Alignment.BottomStart else Alignment.TopEnd).padding(8.dp))
-            }
-            if (kind != TileKind.Post) GalleryCount(card, Modifier.align(if (mixed) Alignment.BottomEnd else Alignment.TopEnd))
         }
     }
 }
@@ -208,8 +259,8 @@ internal fun galleryBackdrop(card: Card, colors: LibraryColors): MosaicBackdrop 
     val picture = galleryPicture(card)
     val paper = when {
         tileKind(card) == TileKind.Post -> postBrand(card.type).paper
-        picture != null && (productStandsTall(card) || pdfStandsTall(card)) -> colors.background
-        else -> lerp(colors.raised, cardAccent(card) ?: colors.selected, 0.13f)
+        picture != null && pdfStandsTall(card) -> colors.background
+        else -> colors.raised
     }
     val onlyPicture = picture != null && tileKind(card) != TileKind.Post && !(galleryKeepsText(card) && galleryText(card).isNotBlank())
     if (!onlyPicture) return MosaicBackdrop(paper, null)
@@ -265,19 +316,20 @@ private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Co
 }
 
 /**
- * A product as a pin, as Pinterest shows one: its photo with round corners standing on the gallery's paper, the price
- * on the photo when the shop gives one, and the name in up to two lines with the brand or shop under it.
+ * A product as a pin, as Pinterest shows one, in a print's white border: its photo with round corners, the price on the
+ * photo when the shop gives one, and the name in up to two lines with the brand or shop under it on the print's foot.
  */
 @Composable
 private fun PinTile(card: Card, highlight: Boolean, picture: @Composable (Modifier) -> Unit) {
     val price = remember(card) { productPrice(card) }
     val shop = productShop(card)
-    Column(Modifier.fillMaxSize().padding(start = 2.dp, top = 2.dp, end = 2.dp)) {
-        Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(if (highlight) 22.dp else TILE_CORNER))) {
+    val border = if (highlight) HIGHLIGHT_BORDER else PRINT_WORDS_BORDER
+    Column(Modifier.fillMaxSize().padding(start = border, top = border, end = border)) {
+        Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape((if (highlight) HIGHLIGHT_CORNER else TILE_CORNER) - border))) {
             picture(Modifier.fillMaxSize())
             if (price != null) PriceChip(price, Modifier.align(Alignment.BottomStart).padding(7.dp))
         }
-        Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 5.dp, bottom = 6.dp)) {
+        Column(Modifier.fillMaxWidth().padding(start = 7.dp, end = 7.dp, top = 7.dp, bottom = 8.dp)) {
             TileText(cardHeading(card), highlight, Modifier, maxLines = 2)
             if (shop != null) KindLabel(shop)
         }
@@ -343,18 +395,30 @@ private fun AppTile(card: Card, highlight: Boolean, picture: @Composable (Modifi
 }
 
 /**
- * A video from another site: its still, with the corner badge the gallery draws over it, then its title and channel
- * under it, on white. A tall tile gives the title three lines; others one.
+ * A print with words under its picture: the picture in a thin white border with round corners, with [marks] on it, then
+ * [words] on the print's white foot, with [source] under them once the foot holds two lines of words besides it. The
+ * words take what they need, up to a little over half the tile (two fifths of a tile standing tall), the last line fading when they
+ * run out of room, and the picture fills the rest (Tavi's pick of 07 Prints, 1 November 2026).
  */
 @Composable
-private fun VideoCaptionTile(caption: VideoCaption, highlight: Boolean, picture: @Composable (Modifier) -> Unit) {
+private fun PrintTile(words: TileWords, source: String?, highlight: Boolean, marks: @Composable (BoxScope) -> Unit,
+    picture: @Composable (Modifier) -> Unit) {
+    val density = LocalDensity.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val lines = if (maxHeight > maxWidth * 1.5f) 3 else 1
-        Column(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().weight(1f)) { picture(Modifier.fillMaxSize()) }
-            Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 8.dp)) {
-                TileText(caption.title, highlight, Modifier, maxLines = lines)
-                if (caption.channel != null) KindLabel(caption.channel)
+        val compact = maxWidth < 110.dp
+        val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
+        val border = if (highlight) HIGHLIGHT_BORDER else PRINT_WORDS_BORDER
+        val foot = maxHeight * if (maxHeight > maxWidth * 1.6f) 0.4f else 0.56f
+        val line = with(density) { (if (highlight) HIGHLIGHT_LINE else TILE_LINE).toDp() }
+        val room = foot - inset * 1.55f >= line * 2 + with(density) { SOURCE_LINE.toDp() }
+        Column(Modifier.fillMaxSize().padding(start = border, top = border, end = border)) {
+            Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape((if (highlight) HIGHLIGHT_CORNER else TILE_CORNER) - border - 1.dp))) {
+                picture(Modifier.fillMaxSize())
+                marks(this)
+            }
+            Column(Modifier.fillMaxWidth().heightIn(max = foot).padding(start = inset - border, end = inset - border, top = inset * 0.7f, bottom = inset * 0.85f)) {
+                TileText(words.text(LibraryStyle.colors), highlight, Modifier.weight(1f, fill = false).fillMaxWidth())
+                if (room && source != null) KindLabel(source, Modifier.padding(top = inset * 0.35f))
             }
         }
     }
@@ -394,49 +458,140 @@ private fun PostArticleBox(title: String, brand: PostBrand, compact: Boolean, pi
     }
 }
 
-/** The muted line naming a tile's kind or site. */
+/** The muted line naming a tile's kind or where its words come from. */
 @Composable
-private fun KindLabel(kind: String) {
-    Text(kind, Modifier.clearAndSetSemantics {}, color = LibraryStyle.colors.muted,
+private fun KindLabel(kind: String, modifier: Modifier = Modifier) {
+    Text(kind, modifier.clearAndSetSemantics {}, color = LibraryStyle.colors.muted,
         style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 /**
  * A tile's words at the gallery's one text size and weight, so every tile reads alike and its text keeps its size
- * while a pinch changes the tile. A word too long for the line breaks with a hyphen.
+ * while a pinch changes the tile. A word too long for the line breaks with a hyphen. Words with no [maxLines] that run
+ * out of room stop at the last whole line that fits, which fades out towards its end, as look 07 Prints draws them;
+ * with [maxLines] the last line ends in an ellipsis.
  */
 @Composable
-private fun TileText(text: String, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text, maxLines: Int = Int.MAX_VALUE) {
+private fun TileText(text: AnnotatedString, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text, maxLines: Int = Int.MAX_VALUE) {
+    val fade = maxLines == Int.MAX_VALUE
+    val layout = remember { WordsLayout() }
     Text(
-        text, modifier, color = color, maxLines = maxLines,
+        text, if (fade) modifier.fadeLastLine(layout) else modifier, color = color, maxLines = maxLines,
         style = LibraryStyle.body.copy(
-            fontSize = if (highlight) HIGHLIGHT_TEXT else TILE_TEXT, lineHeight = (if (highlight) 1.34f else 1.42f).em,
+            fontSize = if (highlight) HIGHLIGHT_TEXT else TILE_TEXT, lineHeight = if (highlight) HIGHLIGHT_LINE else TILE_LINE,
             fontWeight = FontWeight.Normal, hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph,
         ),
-        overflow = TextOverflow.Ellipsis,
+        overflow = if (fade) TextOverflow.Clip else TextOverflow.Ellipsis,
+        onTextLayout = { layout.result = it },
     )
 }
 
+@Composable
+private fun TileText(text: String, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text, maxLines: Int = Int.MAX_VALUE) =
+    TileText(AnnotatedString(text), highlight, modifier, color, maxLines)
+
+/** The line height of a Top of Mind card's words. */
+private val HIGHLIGHT_LINE = 22.8.sp
+
+/** The last layout of a tile's words, which [fadeLastLine] reads as it draws; drawing follows every layout. */
+private class WordsLayout {
+    var result: TextLayoutResult? = null
+}
+
 /**
- * Text gets its own paper area; compact tiles spend that space on the excerpt before the type label. With [fit] the
- * area is only as tall as its words, up to the height it is given; otherwise it fills that height.
+ * Words that overflow their box stop at the last whole line that fits, and that line fades out over the last two
+ * thirds of its width, towards its end in the words' own direction.
+ */
+private fun Modifier.fadeLastLine(layout: WordsLayout): Modifier = drawWithContent {
+    val result = layout.result
+    if (result == null || !result.didOverflowHeight || result.lineCount == 0) {
+        drawContent()
+        return@drawWithContent
+    }
+    var last = -1
+    while (last + 1 < result.lineCount && result.getLineBottom(last + 1) <= size.height + 0.5f) last++
+    if (last < 0) return@drawWithContent
+    val top = result.getLineTop(last)
+    val bottom = result.getLineBottom(last)
+    val rtl = result.getParagraphDirection(result.getLineStart(last)) == ResolvedTextDirection.Rtl
+    val fade = if (rtl) Brush.horizontalGradient(0.06f to Color.Transparent, 0.7f to Color.Black, endX = size.width)
+        else Brush.horizontalGradient(0.3f to Color.Black, 0.94f to Color.Transparent, endX = size.width)
+    drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, bottom), Paint())
+    clipRect(bottom = bottom) { this@drawWithContent.drawContent() }
+    drawRect(fade, Offset(0f, top), Size(size.width, bottom - top), blendMode = BlendMode.DstIn)
+    drawContext.canvas.restore()
+}
+
+/**
+ * A card of words as a plain white card: its words fill it, the last line fading when they run out of room, with where
+ * they come from under them, a site, a quote's author, once the card holds three lines of words besides it. No kind
+ * label shows (Tavi's pick of 07 Prints, 1 November 2026).
  */
 @Composable
-private fun GalleryTextPreview(card: Card, text: String, highlight: Boolean, modifier: Modifier, fit: Boolean = false) {
-    BoxWithConstraints(modifier) {
+private fun WordsTile(card: Card, highlight: Boolean) {
+    val density = LocalDensity.current
+    val words = remember(card) { tileWords(card) }
+    val source = remember(card) { gallerySource(card) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 110.dp
         val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
-        val words = text.ifBlank { cardHeading(card) }
-        val kind = galleryKind(card)
-        val showKind = !compact && maxHeight >= 112.dp && !sameWords(kind, words)
-        Column((if (fit) Modifier.fillMaxWidth() else Modifier.fillMaxSize()).padding(inset)) {
-            if (showKind) {
-                KindLabel(kind)
-                Spacer(Modifier.height(6.dp))
-            }
-            TileText(words, highlight, if (fit) Modifier else Modifier.weight(1f))
+        val line = with(density) { (if (highlight) HIGHLIGHT_LINE else TILE_LINE).toDp() }
+        val room = maxHeight - inset * 2 >= line * 3 + with(density) { SOURCE_LINE.toDp() }
+        Column(Modifier.fillMaxSize().padding(inset)) {
+            TileText(words.text(LibraryStyle.colors), highlight, Modifier.weight(1f).fillMaxWidth())
+            if (room && source != null) KindLabel(source, Modifier.padding(top = inset * 0.4f))
         }
     }
+}
+
+/**
+ * What a tile's words say: a [lead], such as an article's title, in the words' own colour, then the [body] in the
+ * quieter one; without a lead the body is in the words' colour.
+ */
+internal class TileWords(val lead: String?, val body: String) {
+    /** The words as the tile sets them, in [colors]. */
+    fun text(colors: LibraryColors): AnnotatedString = buildAnnotatedString {
+        if (lead == null) append(body)
+        else {
+            append(lead)
+            append("\n")
+            withStyle(SpanStyle(color = colors.muted)) { append(body) }
+        }
+    }
+}
+
+/**
+ * @param card A card drawn with words, other than a post.
+ * @return Its words: a note's text; a link's title with its description under it when it has both; else its title or
+ *   description, else its heading.
+ */
+internal fun tileWords(card: Card): TileWords {
+    val text = galleryText(card).ifBlank { cardHeading(card) }
+    val title = card.title?.trim()?.takeIf { it.isNotEmpty() }
+    val description = card.description?.trim()?.takeIf { it.isNotEmpty() }
+    return if (tileKind(card) != TileKind.Note && title != null && description != null && !sameWords(title, description) && text.trim() == title) TileWords(title, description)
+    else TileWords(null, text)
+}
+
+/** True when a card's words are its title or description, not a note of its own. */
+private fun galleryKeepsTitle(card: Card): Boolean = card.note.isNullOrBlank() && card.prose?.let(::proseText).isNullOrBlank()
+
+/**
+ * @param card A card drawn with words, other than a post.
+ * @return Where its words come from, shown under them: a quote's author, a video's channel, a link's site or address;
+ *   null for a note, for a picture with a note of its own, and when it would only repeat the words.
+ */
+internal fun gallerySource(card: Card): String? {
+    val kind = tileKind(card)
+    val source = when {
+        kind == TileKind.Post -> null
+        card.type == "Quote" || card.type == "Quotation" -> card.author
+        kind == TileKind.Note -> null
+        (kind == TileKind.Media || kind == TileKind.Video) && !galleryKeepsTitle(card) -> null
+        kind == TileKind.Video -> videoCaption(card)?.channel ?: card.siteName
+        else -> card.siteName ?: card.domain
+    }?.trim()?.removePrefix("by ")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return source.takeUnless { sameWords(it, galleryText(card)) }
 }
 
 /**

@@ -37,6 +37,16 @@ internal interface MosaicTiles {
     fun isPicture(card: Card): Boolean
 
     /**
+     * How much larger than they are laid out a tile's words show at [columns] across, two to four: a tile with words is
+     * laid out in a frame its cell's size divided by this and drawn scaled to its cell ([MosaicLayouts.wordsFrame]). 1, a
+     * tile laid out at its cell's own size, by default.
+     */
+    fun wordsScale(columns: Int): Float = 1f
+
+    /** How high the card's tile stands off the paper: the mosaic draws its shadow on screen at every size. None by default. */
+    fun elevation(card: Card): Dp = 0.dp
+
+    /**
      * The radius the mosaic rounds every tile's corners to, the same on screen at every density and while a tile with
      * words is drawn scaled; 0 when the tiles draw their own edges.
      */
@@ -87,7 +97,10 @@ internal interface MosaicTiles {
     fun backdrop(card: Card, colors: LibraryColors): MosaicBackdrop?
 }
 
-/** The library's own tiles ([GalleryTile]), shaped the way Google Photos breaks up its squares ([mosaicSpan]). */
+/**
+ * The library's own tiles ([GalleryTile]), shaped the way Google Photos breaks up its squares ([mosaicSpan]), as prints
+ * with a soft shadow and words at [galleryTextSize].
+ */
 internal object GalleryMosaicTiles : MosaicTiles {
     override fun span(card: Card): MosaicSpan = mosaicSpan(card)
 
@@ -96,6 +109,10 @@ internal object GalleryMosaicTiles : MosaicTiles {
     override fun reelRatio(card: Card): Float = storedRatio(card) ?: mosaicAspectRatio(card)
 
     override fun isPicture(card: Card): Boolean = galleryTileIsPicture(card)
+
+    override fun wordsScale(columns: Int): Float = galleryWordsScale(columns)
+
+    override fun elevation(card: Card): Dp = if (galleryTileCastsShadow(card)) TILE_ELEVATION else 0.dp
 
     override val corner: Dp = TILE_CORNER
 

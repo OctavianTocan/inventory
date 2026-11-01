@@ -228,27 +228,26 @@ internal class MosaicLayouts(
         return Rect(cell.center.x - width / 2f, cell.center.y - height / 2f, cell.center.x + width / 2f, cell.center.y + height / 2f)
     }
 
-    /** The space between cards at three columns, where every tile with words is laid out. */
+    /** The space between cards at three columns. */
     private val wordsGap = mosaicGap(width, gaps.getOrElse(2) { 0f })
 
-    /** One square's width at three columns: every tile with words is laid out this wide per square, at every density. */
+    /** One square's width at three columns: a tile with words at one column is laid out this wide. */
     private val wordsWidth = (width - 2 * wordsGap) / 3
 
     /**
-     * The size a tile with words is laid out at while the grid of [columns] is shown: the squares its cell spans there,
-     * at their size in the three-column grid, or [wordsWidth] wide in the cell's shape at one column. The tile is then
-     * drawn scaled to its cell, a picture of itself, so its words keep the same lines at every density and between
-     * them, and a big tile's words are the size of its neighbours'. A tile that spans the same squares in two grids has
-     * one frame in both, so a pinch between them never lays it out twice.
+     * The size a tile with words is laid out at while the grid of [columns] is shown: its cell there, divided by how much
+     * larger the tiles show their words at that size ([MosaicTiles.wordsScale]), or [wordsWidth] wide in the cell's shape
+     * at one column. The tile is drawn scaled to its cell, so every tile of one grid shows its words at the same size, a
+     * big tile's the size of its neighbours', and a pinch between two grids cross-fades the tile's layouts in both rather
+     * than rewrapping it under the fingers.
      */
     fun wordsFrame(index: Int, columns: Int): Size {
         // A page draws a tile with words at its one-column shape ([reelContent]), so it keeps its one-column frame.
         val level = grids[columns.coerceIn(1, 4) - 1]
         val cell = level.cells[index]
         if (level.unit >= width || level.unit <= 0f) return Size(wordsWidth, wordsWidth * cell.height / cell.width)
-        fun squares(length: Float) = ((length + level.gap) / (level.unit + level.gap)).roundToInt().coerceAtLeast(1)
-        fun span(squares: Int) = squares * wordsWidth + (squares - 1) * wordsGap
-        return Size(span(squares(cell.width)), span(squares(cell.height)))
+        val scale = tiles.wordsScale(columns).takeIf { it > 0f && it.isFinite() } ?: 1f
+        return Size(cell.width / scale, cell.height / scale)
     }
 
 /** Projects a whole canonical grid around one shared focal rectangle; row neighbours never cross. */

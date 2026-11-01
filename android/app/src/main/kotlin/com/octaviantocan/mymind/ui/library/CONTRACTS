@@ -27,7 +27,7 @@ the web showcase ("the way some tiles are bigger and some are smaller looks nice
 @cc [owner:OctavianTocan,label:product;design] gallery-tiles-look-like-the-showcase
 Every gallery tile MUST have 12 dp round corners, the web showcase's, and they MUST stay
 12 dp on screen at every density and at every moment of a pinch, including a tile with
-words drawn scaled from its frame. The cards MUST sit 16 dp in from each side of the
+words drawn scaled from its frame, and so MUST a print's shadow (gallery-tiles-are-prints). The cards MUST sit 16 dp in from each side of the
 screen, the inset Top of Mind starts at, and a card sliding off one end of its line
 leaves at that edge. The space between cards MUST be about a twentieth of a column, from
 6 to 24 dp, as the showcase spaces its wall (`wallGap` in octa-ui's `apps/showcase`): on a
@@ -37,6 +37,27 @@ the one exception: there the corners and side margins shrink to nothing as the p
 Source: Tavi, 29 October 2026, comparing the app with the web showcase ("their corner
 radius looks nicer, their spacing between tiles looks nicer ... I think we should do all
 those").
+
+@cc [owner:OctavianTocan,label:product;design] gallery-tiles-are-prints
+Every gallery tile MUST be drawn as a print on the gallery's paper, casting the soft
+shadow of a card standing a little off it, the same on screen at every density and fading
+with the tile while it moves. A picture stands in a thin white border, 4 dp on screen,
+with round corners inside it. A card with words and a picture carries its picture in a
+border the same way, with its words on the print's white foot under it, taking what they
+need up to a little over half the tile (two fifths of a tile standing tall), while the
+picture fills the rest. A card of words is a plain white card, its words filling it. A
+product's pin stands in the same border with its name and shop on the foot, its price on
+the photo (gallery-products-are-pins). A tile MUST NOT show a coloured edge or a kind label
+("Note", "Quote", a site) above its words. Where the words come from, a link's site, a
+quote's author or a video's channel, MAY show under them once the tile has room for two
+lines of words beside it (three on a card of words), and MUST NOT repeat them. A post keeps
+its network's colour (gallery-posts-look-like-posts) and casts the same shadow; a PDF's
+page stands on the paper with its own (gallery-pdfs-show-their-first-page). In the dark
+scheme the prints are the raised colour. Top of Mind's cards are prints too, with a wider
+border.
+Source: Tavi, 1 November 2026 ("I still don't like how they look, nor the size of the text
+as you zoom"), then his pick of 07 Prints on the card looks canvas the same day ("Let's do
+07").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-mixed-cards-keep-text-and-images
 A note, social post, article or saved link with text and a picture MUST show both in its gallery
@@ -52,12 +73,17 @@ density levels and reverse while the fingers remain down. Density stops
 MUST offer distinct sizes for uniform portrait, square and landscape cards, with one
 to four columns at their stops, one column being full screen where
 gallery-reels-at-one-column applies. Text MUST retain its size and wrapping when
-releasing at a stop. A tile with words MUST be a picture of itself: it is laid out
-once, as many squares wide at three columns as its cell spans, in the shape of its
-cell, and drawn scaled to its cell at every density and between them, a big tile's
-words the size of its neighbours', so it MUST NOT rewrap, change its
-inset, or show or hide its labels while the fingers move (Tavi, 28 Oct 2026: notes
-"still shift weirdly" when pinching; he picked version 13 of the design canvas).
+releasing at a stop. At each stop every tile with words MUST show its words at that
+stop's size (gallery-text-is-one-size): it is laid out in the shape of its cell, in a
+frame its cell's size divided by how much larger than 13 sp its words show there, and
+drawn scaled to its cell, so a big tile's words are the size of its neighbours'. It
+MUST NOT rewrap, change its inset, or show or hide its labels under the fingers: it
+keeps its layouts at the stops on either side, each drawn scaled to where the card is,
+and the two cross-fade with its progress. The layout at the other stop is composed as
+the fingers come down and kept until they lift, so crossing a stop composes nothing new
+(Tavi's pick of 07 Prints, with its Gentle sizes, on the card looks canvas, 1 November
+2026, replacing version 13 of the design canvas he picked on 28 October 2026, where
+every tile was laid out once at three columns and drawn scaled with its cell).
 Adjacent cached grids MUST remain coherent and nonoverlapping within each projection, sharing one focal card's fractional X/Y point and physical
 size. Cards MUST move with the fingers from their first movement: no stop holds them
 still and no glide starts at a threshold. One stop takes about a 30% pinch at every
@@ -73,8 +99,7 @@ squares high in one grid and one in the other, slides, and the focal card never
 changes line. Behind the cards both grids MUST be drawn
 whole and blurred, the old one fading out, so no blank paper shows between moving
 cards. The fill MUST fade in over the first fifth of a step and out over the last, so
-it never appears or vanishes in one frame. When a tile with words changes shape between the two grids (one column
-against two), its layouts in the two grids cross-fade with its progress. Only a
+it never appears or vanishes in one frame. Only a
 card's own tile exposes semantics or hit targets: its copy while it changes line, its
 layout in the other grid and the blurred fill expose none, and the focal card is
 drawn once. Reduced motion skips the hop. A new single-finger press MUST retain its
@@ -226,9 +251,10 @@ Source: Tavi's recorded reviews, 22 October 2026 ("I don't really like this came
 much more helpful") and 23 October 2026 ("that YouTube icon, if you look at the Google
 Photos ... it was a lot more interesting", "the videos aren't auto playing").
 A YouTube or Instagram video with a title and no note of its own MUST show the title under
-its still, in up to three lines when the tile stands tall and one otherwise, with its
-channel under it, on the raised paper; the badge stays on the still. Source: Tavi's
-recorded review of the card previews canvas, 29 October 2026, picking V1.
+its still on the print's foot (gallery-tiles-are-prints), in as many lines as fit, with its
+channel under it once there is room; the badge stays on the still. Source: Tavi's
+recorded review of the card previews canvas, 29 October 2026, picking V1; the print's foot
+from his pick of 07 Prints, 1 November 2026.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-posts-look-like-posts
 A social post tile MUST read as the post itself, drawn on its network's own colour: X in
@@ -254,13 +280,14 @@ recommended and build it", 29 October 2026.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-products-are-pins
 A product with a photo MUST show as a pin, as Pinterest's feed does: the photo with round
-corners standing on the gallery's paper, the shop's price on the photo as a small white
-pill with the currency's sign (such as £24 for GBP 24.00), and under the photo the name
-in up to two lines with the brand, else the shop, under it. It MUST NOT show counts or
+corners standing in a print's white border (gallery-tiles-are-prints), the shop's price on
+the photo as a small white pill with the currency's sign (such as £24 for GBP 24.00), and
+under the photo the name in up to two lines with the brand, else the shop, under it. It MUST NOT show counts or
 ratings. A product without a photo keeps the text tile.
 Source: Tavi's recorded review of the card previews canvas, 29 October 2026 (P1 "kind of
 nice", and look at how Pinterest shows products), and his pick of P5, a tall pin with
-P1's price on the photo, the same day ("Pick recommended and build it").
+P1's price on the photo, the same day ("Pick recommended and build it"); the print's border
+from his pick of 07 Prints, 1 November 2026.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-pdfs-show-their-first-page
 A PDF with a picture of its first page MUST show that page whole, at its own shape, on
@@ -271,23 +298,28 @@ first three PDF versions, "none of the ones you showed. I wanted to see the cont
 and his pick of D5 the same day ("Pick recommended and build it").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-apps-show-their-icon
-An app MUST show its icon whole, with rounded corners, in the middle of paper of its type
-colour, with its name in one line and the store it is on under it: Google Play or the App
-Store with the store's mark, else the address it was saved from.
+An app MUST show its icon whole, with rounded corners, in the middle of a white print
+(gallery-tiles-are-prints), with its name in one line and the store it is on under it:
+Google Play or the App Store with the store's mark, else the address it was saved from.
 Source: Tavi's pick of A1 on the card previews canvas, 29 October 2026 ("Pick recommended
-and build it").
+and build it"); the white print, in place of paper of its type colour, from his pick of 07
+Prints, 1 November 2026.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-text-is-one-size
-All gallery tile text MUST use one size and one regular weight, so neighbouring tiles
-read alike; only a highlight card's text is larger. Long text wraps with hyphenation and
-fills the tile before it is cut with an ellipsis; it never shrinks to fit. A tile's kind
-label MUST NOT repeat the words shown under it, such as a link whose only text is its
-own address. That size is the tile's at three columns; at other densities every tile
-with words is drawn scaled with its cell (gallery-pinches-change-tile-size), so the
-tiles of one grid still read alike.
+All gallery tile text in one grid MUST use one size and one regular weight, so
+neighbouring tiles read alike; only a highlight card's text is larger. The size changes
+gently with the grid: tile words show at 11 sp at four columns, 13 at three and 16 at two
+(gallery-pinches-change-tile-size), so a bigger tile shows more words rather than words
+much larger, never under 11 sp. Long text wraps with hyphenation and fills the tile; when
+it runs out of room it stops at the last whole line that fits, which fades out towards its
+end, and it never shrinks to fit. A line under a tile's words, such as its site, MUST NOT
+repeat them, such as a link whose only text is its own address.
 Source: Tavi's recorded review, 23 October 2026 ("some fonts are bigger, some fonts are
 smaller ... this is just weird", "some of them are bold"), replacing the shrinking text
-of 22 October; scaling with the cell from Tavi's pick of version 13, 28 October 2026.
+of 22 October; the sizes and the fading last line from Tavi's pick of 07 Prints, with its
+Gentle sizes, on the card looks canvas, 1 November 2026 ("I still don't like ... the size
+of the text as you zoom"), replacing version 13 of 28 October 2026, where words were
+under 10 sp at four columns and about 20 at two.
 
 @cc [owner:OctavianTocan,label:product;design;privacy] gallery-repositories-have-covers
 A GitHub repository card without a stored cover MUST show GitHub's generated preview

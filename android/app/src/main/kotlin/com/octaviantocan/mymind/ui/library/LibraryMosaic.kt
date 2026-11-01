@@ -290,7 +290,7 @@ internal fun LibraryMosaic(
             val fillTo = projection(between.to)
             val wrap = width + maxOf(layouts.level(between.from).gap, layouts.level(between.to).gap)
             return MosaicFrame(from, to, x, y, t, waves.of(layouts, between, focal, anchor, height), wrap,
-                fillFrom, coverShift(fillFrom, shift), fillTo, coverShift(fillTo, shift))
+                fillFrom, coverShift(fillFrom, shift), fillTo, coverShift(fillTo, shift), held = mosaic.isPinching)
         }
         fun capture(focal: Offset?): MosaicAnchor? {
             if (layouts.level(1).cells.isEmpty()) return null
@@ -633,12 +633,14 @@ private data class MosaicSlot(val index: Int, val copy: Boolean, val under: Bool
  * slides to its new place; one that changes line slides out past one edge of its old line and in from the other edge
  * of its new one, shrinking a little and fading between the two drawings. Lines further down start later, like a
  * wave. Behind the cards both grids are drawn whole and blurred ([fill]), so no blank paper shows between them.
+ * [held] is true while the fingers are down.
  */
 private class MosaicFrame(
     private val from: MosaicProjection, private val to: MosaicProjection, private val x: Float, val y: Float,
     private val progress: Float, private val wave: MosaicWave, private val wrap: Float,
     private val fillFrom: MosaicProjection, private val fillFromX: Float,
     private val fillTo: MosaicProjection, private val fillToX: Float,
+    private val held: Boolean = false,
 ) {
     val fromColumns: Int get() = from.columns
     val toColumns: Int get() = to.columns
@@ -702,11 +704,21 @@ private class MosaicFrame(
         return MosaicDraw(lerp(place(from, index), place(to, index), m), reelPageShown(if (to.layouts.isReels(to.columns)) m else 1f - m))
     }
 
-    fun shape(window: IntRange, layouts: MosaicLayouts): MosaicShape? = if (!moving) null else MosaicShape(
-        window.filter(::wraps).toSet(),
-        window.filter { !layouts.isPicture(it) && layouts.wordsFrame(it, from.columns) != layouts.wordsFrame(it, to.columns) }.toSet(),
-        fill = !reeling,
-    )
+    /**
+     * What this step composes beyond the tiles. While the fingers are down, a tile with words keeps its layout in the
+     * other grid even as the cards rest on a stop, so crossing a stop composes nothing new; it goes once they lift and
+     * the cards land.
+     */
+    fun shape(window: IntRange, layouts: MosaicLayouts): MosaicShape? {
+        if (!moving && !held) return null
+        // Resting on the last stop, the other grid is the one the fingers can only head for.
+        val other = if (to.columns != from.columns) to.columns else (from.columns - 1).coerceAtLeast(1)
+        return MosaicShape(
+            if (moving) window.filter(::wraps).toSet() else emptySet(),
+            window.filter { !layouts.isPicture(it) && layouts.wordsFrame(it, from.columns) != layouts.wordsFrame(it, other) }.toSet(),
+            fill = moving && !reeling,
+        )
+    }
 
     /** The cards each blurred grid shows, by its columns: the new grid first, drawn whole, then the old one fading out over it. */
     fun fill(viewport: Float): List<Pair<Int, IntRange>> =
@@ -808,7 +820,9 @@ private fun ProjectedMosaicCards(
     frame: () -> MosaicFrame, left: Float, modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
 ) {
     val slots = indices.flatMap { mosaicSlots(it, shape, tiles, it in pages) }
-    val corner = with(LocalDensity.current) { layouts.tiles.corner.toPx() }
+    val density = LocalDensity.current
+    val corner = with(density) { layouts.tiles.corner.toPx() }
+    val shadow = LibraryStyle.colors.shadow
     Layout(modifier = modifier, content = {
         indices.forEach { index ->
             key(layouts.cards[index].id) {
@@ -844,8 +858,9 @@ private fun ProjectedMosaicCards(
         }
     }) { children, constraints ->
         val current = frame()
-        // Reels reach the screen's edges, so their pages have square corners.
+        // Reels reach the screen's edges, so their pages have square corners and no shadow.
         val round = corner * (1f - mosaic.reel)
+        val lifted = 1f - mosaic.reel
         val drawings = HashMap<Int, MosaicDrawings>()
         val placed = children.zip(slots) { child, slot ->
             if (slot.page) {
@@ -865,19 +880,25 @@ private fun ProjectedMosaicCards(
             val paged = if (slot.index in pages) 1f - current.page(slot.index).alpha else 1f
             val alpha = draw.alpha * paged * if (reshapes && !slot.under) maxOf(m, 1f - m) else 1f
             val tile = child.measureTile(draw.rect, layouts.wordsFrame(slot.index, if (slot.under) far else near).takeIf { words })
-            PlacedTile(tile, draw.rect.translate(left, 0f), words, alpha, slot.index)
+            // A tile with words changing shape casts one shadow, from its layout underneath, which is always opaque.
+            val lift = if (reshapes && !slot.under) 0f else with(density) { layouts.tiles.elevation(layouts.cards[slot.index]).toPx() } * lifted
+            PlacedTile(tile, draw.rect.translate(left, 0f), words, alpha, slot.index, lift = lift)
         }
         layout(constraints.maxWidth, constraints.maxHeight) {
             for (pagesNow in listOf(false, true)) {
-                placed.forEach { if (it.page == pagesNow && it.index != focal) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round) }
-                placed.forEach { if (it.page == pagesNow && it.index == focal) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round) }
+                placed.forEach { if (it.page == pagesNow && it.index != focal) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round, it.lift, shadow) }
+                placed.forEach { if (it.page == pagesNow && it.index == focal) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round, it.lift, shadow) }
             }
         }
     }
 }
 
-/** A tile measured for its cell, as [placeTile] places it; [index] is its card's, and [page] is true for its page in reels. */
-private class PlacedTile(val tile: Placeable, val cell: Rect, val words: Boolean, val alpha: Float, val index: Int = -1, val page: Boolean = false)
+/**
+ * A tile measured for its cell, as [placeTile] places it; [index] is its card's, [page] is true for its page in reels,
+ * and [lift] is the elevation, in pixels, its shadow is cast from.
+ */
+private class PlacedTile(val tile: Placeable, val cell: Rect, val words: Boolean, val alpha: Float, val index: Int = -1, val page: Boolean = false,
+    val lift: Float = 0f)
 
 /** An inert second drawing of what [drawing] recorded: no semantics or touches. */
 @Composable
@@ -969,13 +990,15 @@ private fun Measurable.measureTile(cell: Rect, frame: Size?): Placeable = measur
 private fun Size.fixed(): Constraints = Constraints.fixed(width.roundToInt().coerceAtLeast(1), height.roundToInt().coerceAtLeast(1))
 
 /**
- * Places a tile measured by [measureTile] in [cell] at [alpha], with its corners rounded to [corner] pixels on screen;
- * a tile with words is scaled from its frame, as a picture zooms.
+ * Places a tile measured by [measureTile] in [cell] at [alpha], with its corners rounded to [corner] pixels on screen
+ * and, when [lift] is above 0, a soft [shadow] cast from that height; a tile with words is scaled from its frame, as a
+ * picture zooms. The shadow fades with the tile.
  */
-private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, words: Boolean, alpha: Float, corner: Float = 0f) {
+private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, words: Boolean, alpha: Float, corner: Float = 0f,
+    lift: Float = 0f, shadow: Color = Color.Black) {
     val x = cell.left.roundToInt()
     val y = cell.top.roundToInt()
-    if (!words && alpha >= 1f && corner <= 0f) {
+    if (!words && alpha >= 1f && corner <= 0f && lift <= 0f) {
         tile.place(x, y)
         return
     }
@@ -986,10 +1009,15 @@ private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, word
             scaleX = cell.width / tile.width
             scaleY = cell.height / tile.height
         }
-        if (corner > 0f) {
+        if (corner > 0f || lift > 0f) {
             // The layer scales its own outline, so a tile drawn scaled gets corners that scale cancels.
             shape = RoundedCornerShape(corner / sqrt(scaleX * scaleY))
             clip = true
+        }
+        if (lift > 0f) {
+            shadowElevation = lift
+            ambientShadowColor = shadow
+            spotShadowColor = shadow
         }
     }
 }
