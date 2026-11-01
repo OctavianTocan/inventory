@@ -252,6 +252,8 @@ impl<'a> Enricher<'a> {
             row.data.set("title", title.clone());
             row.extras.set("title", title.clone());
             row.extras.set("capturedTitle", title);
+        } else if result.get("title").truthy() {
+            set_note_name(&mut row, &result.get("title").to_js_string());
         }
         update_flags(&mut row.data, |flags| flags & !PROCESSING);
         let vocabulary: Vec<String> = db
@@ -293,6 +295,28 @@ impl<'a> Enricher<'a> {
             &[id.into(), SqlValue::from(self.user.id.as_str()), bytes.into()],
         )?;
         hooks.save(&mut row, Some("object:analyzed"))
+    }
+
+    /// Give a note the name the model chose for it, and nothing else (the sweep through notes saved before names were
+    /// generated).
+    ///
+    /// # Arguments
+    /// * `id` - Card id.
+    /// * `title` - The model's title for the note.
+    ///
+    /// # Returns
+    /// Whether the card took the name: false for a deleted card, a card that is not a note, a note the user named, a
+    /// note that has a name of its own, and a title that is empty once cleaned.
+    ///
+    /// # Errors
+    /// Status 404 `Card not found`, or the writer's or database's error.
+    pub fn name_note(&self, id: &str, title: &str) -> Result<bool> {
+        let mut row = self.hooks.card(id)?;
+        if row.data.get("deleted").truthy() || !set_note_name(&mut row, title) {
+            return Ok(false);
+        }
+        self.hooks.save(&mut row, Some("object:updated"))?;
+        Ok(true)
     }
 
     /// Fill only the AI fields a card still lacks. Manual tags and a summary the user wrote stay as they are.
@@ -401,6 +425,40 @@ fn set_member(root: &mut Value, group: &str, key: &str, value: Value) {
     if let Some(target) = root.get_mut(group) {
         target.set(key, value);
     }
+}
+
+/// Card types the app shows as a note, which the model names while the user has not.
+pub const NAMED_NOTE_TYPES: [&str; 2] = ["Note", "Content"];
+
+fn blank(value: &Value) -> bool {
+    value.is_nullish() || text::trim(&value.to_js_string()).is_empty()
+}
+
+/// Whether the model may name this card: a note the user has not named, with no name of its own or only one the
+/// model gave it, so a later analysis of edited words may rename it.
+///
+/// # Arguments
+/// * `data` - The card's `data`.
+/// * `extras` - The card's `extras`.
+pub fn note_needs_name(data: &Value, extras: &Value) -> bool {
+    NAMED_NOTE_TYPES.iter().any(|name| data.get("type").as_str() == Some(name))
+        && !extras.get("titleEdited").truthy()
+        && (extras.get("titleSource").as_str() == Some("ai") || (blank(data.get("title")) && blank(extras.get("title"))))
+}
+
+// Name a note from the model's title, without quotes or a closing full stop; false when it may not be named.
+fn set_note_name(row: &mut EditCard, title: &str) -> bool {
+    if !note_needs_name(&row.data, &row.extras) {
+        return false;
+    }
+    let name = headline(title);
+    let name = text::trim(name.trim_matches(|c| matches!(c, '"' | '\'' | '“' | '”' | '‘' | '’')).trim_end_matches('.')).to_owned();
+    if name.is_empty() {
+        return false;
+    }
+    row.data.set("title", name);
+    row.extras.set("titleSource", "ai");
+    true
 }
 
 fn headline(title: &str) -> String {

@@ -376,6 +376,21 @@ impl Writer {
         Enricher::new(&self.store, self)?.analysis(id, result)
     }
 
+    /// Give a note the model's name for it (`Enricher::name_note`).
+    ///
+    /// # Arguments
+    /// * `id` - Card id.
+    /// * `title` - The model's title.
+    ///
+    /// # Returns
+    /// Whether the note took the name.
+    ///
+    /// # Errors
+    /// The enricher's error.
+    pub fn name_note(&self, id: &str, title: &str) -> Result<bool> {
+        Enricher::new(&self.store, self)?.name_note(id, title)
+    }
+
     /// Fill missing AI fields without replacing a summary or tags already on the card.
     ///
     /// # Arguments
@@ -586,6 +601,7 @@ impl Writer {
         if has(body, "title")? {
             row.extras.set("titleEdited", true);
             row.extras.remove("title");
+            row.extras.remove("titleSource");
             if row.extras.get("reddit").truthy()
                 && let Some(reddit) = row.extras.get_mut("reddit")
             {

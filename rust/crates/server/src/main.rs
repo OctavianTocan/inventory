@@ -115,6 +115,7 @@ async fn start(root: PathBuf) -> Result<(), String> {
         };
         let hosted = Hosted::new(options).await.map_err(|error| error.to_js_string())?;
         hosted.api().jobs().hash_pictures(usize::MAX);
+        hosted.api().jobs().name_notes(usize::MAX);
         site = Some(Rc::new(hosted));
     } else if let Some(database) = var("STORE_DB").map_or_else(|| Some(root.join("data/mymind.db")), |path| (!path.is_empty()).then(|| resolve(&cwd, path)))
         && database.exists()
@@ -136,6 +137,7 @@ async fn start(root: PathBuf) -> Result<(), String> {
         };
         let opened = Api::new(options).await.map_err(|error| error.to_js_string())?;
         opened.jobs().hash_pictures(usize::MAX);
+        opened.jobs().name_notes(usize::MAX);
         api = Some(Rc::new(opened));
     }
     let server = Rc::new(Server {

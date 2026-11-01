@@ -17,6 +17,7 @@ use crate::host::{Fetch, Media, MediaUser, Resource, Screenshot};
 use crate::search_document::analysis_item;
 use crate::sql::SqlExt;
 use crate::store::{CardRow, Store};
+use crate::store_enrich::{NAMED_NOTE_TYPES, note_needs_name};
 use crate::store_write::Writer;
 use crate::{Error, Result, runtime, thumb_hash};
 
@@ -53,6 +54,10 @@ struct Inner {
     sweep: Cell<usize>,
     swept: Cell<bool>,
     unhashed: RefCell<HashSet<String>>,
+    // The same for notes saved before the model named notes.
+    naming: Cell<usize>,
+    named: Cell<bool>,
+    unnamed: RefCell<HashSet<String>>,
 }
 
 /// The post-save job queue: capture and hosted AI, serialized and coalesced per card (`createEnrichment`'s result).
@@ -124,6 +129,34 @@ fn text_of(value: &Value) -> Option<String> {
     }
 }
 
+// What one step of the naming sweep did.
+enum Naming {
+    Next,
+    Failed,
+    Done,
+}
+
+// Notes without a name, newest first: visible or private, never drafts, stubs or trash.
+fn unnamed_notes(store: &Store, limit: usize) -> Result<Vec<String>> {
+    let types = NAMED_NOTE_TYPES.iter().map(|name| format!("'{name}'")).collect::<Vec<_>>().join(", ");
+    let rows = store.db().query(
+        &format!(
+            "SELECT id, data, extras FROM cards WHERE user_id = ? AND deleted_ns IS NULL AND (flags & {HIDDEN}) = 0 AND type IN ({types})
+               AND trim(COALESCE(json_extract(data, '$.title'), '')) = '' AND trim(COALESCE(json_extract(extras, '$.title'), '')) = ''
+               AND COALESCE(json_extract(extras, '$.titleEdited'), 0) = 0
+             ORDER BY bumped_ns DESC LIMIT ?"
+        ),
+        &[store.default_user_id()?.into(), (limit as i64).into()],
+    )?;
+    let mut ids = Vec::new();
+    for row in &rows {
+        if note_needs_name(&parse(row.text("data").unwrap_or(""))?, &parse(row.text("extras").unwrap_or(""))?) {
+            ids.extend(row.text("id").map(str::to_owned));
+        }
+    }
+    Ok(ids)
+}
+
 fn first_present<'a>(values: &[&'a Value]) -> &'a Value {
     values.iter().copied().find(|value| !value.is_nullish()).unwrap_or(&mm_js::UNDEFINED)
 }
@@ -142,6 +175,9 @@ impl Enrichment {
             sweep: Cell::new(0),
             swept: Cell::new(false),
             unhashed: RefCell::default(),
+            naming: Cell::new(0),
+            named: Cell::new(false),
+            unnamed: RefCell::default(),
         }))
     }
 
@@ -207,6 +243,24 @@ impl Enrichment {
         self.run();
     }
 
+    /// Name up to `limit` notes that have no name, newest first, one at a time whenever no saved card waits for
+    /// enrichment and no picture waits for its ThumbHash. New notes get theirs from their analysis; this sweep is for
+    /// the ones saved before. Each takes one call to the chat model and changes only the note's title. A note the
+    /// model could not name is left for the next queue, and the failure ends this call's naming so a provider that is
+    /// down or rate-limiting is not asked again at once. Once a sweep finds none left, later calls do nothing until the
+    /// queue is made anew. Nothing runs without hosted AI ([`Enrichment::enabled`]).
+    ///
+    /// # Arguments
+    /// * `limit` - Most notes this call names, so a host can spread the work over its requests.
+    pub fn name_notes(&self, limit: usize) {
+        let inner = &self.0;
+        if inner.closed.get() || inner.named.get() || !self.enabled() {
+            return;
+        }
+        inner.naming.set(inner.naming.get().max(limit));
+        self.run();
+    }
+
     // Work through the queue on a later turn of the event loop, unless that is under way.
     fn run(&self) {
         if self.0.running.replace(true) {
@@ -230,6 +284,17 @@ impl Enrichment {
                             queue.0.swept.set(true);
                         }
                     }
+                    None if queue.0.naming.get() > 0 => {
+                        queue.0.naming.set(queue.0.naming.get() - 1);
+                        match queue.name_next().await {
+                            Naming::Next => {}
+                            Naming::Failed => queue.0.naming.set(0),
+                            Naming::Done => {
+                                queue.0.naming.set(0);
+                                queue.0.named.set(true);
+                            }
+                        }
+                    }
                     None => break,
                 }
             }
@@ -247,6 +312,54 @@ impl Enrichment {
             inner.unhashed.borrow_mut().insert(id);
         }
         true
+    }
+
+    // Name the newest note still without a name.
+    async fn name_next(&self) -> Naming {
+        let inner = &self.0;
+        let skipped = inner.unnamed.borrow().len();
+        let Ok(waiting) = unnamed_notes(&inner.options.store, skipped + 1) else { return Naming::Done };
+        let Some(id) = waiting.into_iter().find(|id| !inner.unnamed.borrow().contains(id)) else { return Naming::Done };
+        match self.name(&id).await {
+            Ok(true) => Naming::Next,
+            Ok(false) => {
+                inner.unnamed.borrow_mut().insert(id);
+                Naming::Next
+            }
+            Err(_) => {
+                inner.unnamed.borrow_mut().insert(id);
+                if !inner.closed.get() {
+                    runtime::log("[ai] naming a note failed; note retained");
+                }
+                Naming::Failed
+            }
+        }
+    }
+
+    // Ask the model for one note's name and store it unless the note changed meanwhile; false when the note has no
+    // words to name it by or took no name.
+    async fn name(&self, id: &str) -> Result<bool> {
+        let options = &self.0.options;
+        let store = &options.store;
+        let Some(row) = store.card(id, None)? else { return Ok(false) };
+        if deleted(&row) || row.flags & HIDDEN != 0 {
+            return Ok(false);
+        }
+        let item = analysis_item(&row.data, &row.extras, None)?;
+        if text_of(&item.title).is_some_and(|title| !title.trim().is_empty()) || item.text.trim().is_empty() {
+            return Ok(false);
+        }
+        let before = signature(&row, store)?;
+        let item = AiItem { title: None, kind: text_of(&item.kind), text: Some(item.text), url: text_of(&item.url), domain: text_of(&item.domain), image: None };
+        let description = Ai::new(&*options.fetch).describe(&item).await?;
+        if self.0.closed.get() {
+            return Ok(false);
+        }
+        let Some(current) = store.card(id, None)? else { return Ok(false) };
+        if signature(&current, store)? != before {
+            return Ok(false);
+        }
+        options.writer.run(|writer| writer.name_note(id, &description.title))
     }
 
     // Whether the card's gallery picture took a ThumbHash; a failure leaves the card as it was.

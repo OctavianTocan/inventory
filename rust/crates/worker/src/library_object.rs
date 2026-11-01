@@ -35,6 +35,9 @@ const SESSION_CHECK_MS: i64 = 60_000;
 // Pictures given a ThumbHash after each sync of a phone, a few seconds of the object's time, so the library's older
 // pictures fill in while it is in use.
 const PICTURES_PER_SYNC: usize = 50;
+// Notes saved before notes were named that get a name after each sync, one chat call each, as few as a backfill
+// request enriches so the object's subrequest budget holds.
+const NOTES_PER_SYNC: usize = mm_core::backfill::HOSTED_BATCH;
 
 type Opening = Shared<LocalBoxFuture<'static, Result<Rc<Hosted>>>>;
 
@@ -294,6 +297,7 @@ impl Library {
         let mut incoming = request_from(request)?;
         if incoming.pathname() == "/app/v1/changes" {
             site.api().jobs().hash_pictures(PICTURES_PER_SYNC);
+            site.api().jobs().name_notes(NOTES_PER_SYNC);
         }
         match site.handle(&mut incoming).await {
             Ok(response) => Ok(response),
