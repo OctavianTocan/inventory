@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.44 (55), 2026-11-04
+Scrolling and pinching the gallery are smoother.
+
+### Changed
+- Cards are made ready a screen ahead as you scroll, a few at a time, instead of several at once in the moment they come into view.
+- A pinch no longer stalls as your fingers land: the second text layout each card cross-fades to is ready before you pinch.
+- After a pinch lands on smaller cards, the pictures stay as they are instead of all loading again.
+- The fade on a card's last line of words and the soft fade at the foot of the gallery take less work to draw on every frame.
 ## 0.6.43 (54), 2026-11-04
 A card's page is quieter: no Edit tags button and no hint line at the end.
 

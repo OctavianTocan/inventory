@@ -69,17 +69,20 @@ private fun DrawScope.fadeBand(source: GraphicsLayer, layers: List<GraphicsLayer
             val radius = blur * (i + 1) / layers.size
             val reach = height * (layers.size - i) / layers.size
             val pad = ceil(radius * 3f)
-            val edge = if (atTop) pad else pad + height
+            // Each layer is blurred only over the part of the band it reaches, so the band blurs two band-heights of
+            // pixels a frame rather than three; past its reach the mask has already taken it to nothing.
+            val from = if (atTop) y else y + height - reach
+            val edge = if (atTop) pad else pad + reach
             layer.renderEffect = BlurEffect(radius, radius, TileMode.Decal)
             layer.compositingStrategy = CompositingStrategy.Offscreen
             layer.alpha = amount
-            layer.record(size = IntSize(size.width.toInt(), (height + 2f * pad).toInt())) {
-                translate(top = pad - y) { drawLayer(source) }
+            layer.record(size = IntSize(size.width.toInt(), ceil(reach + 2f * pad).toInt())) {
+                translate(top = pad - from) { drawLayer(source) }
                 // raw-value-ok: an alpha mask, never drawn as a colour
                 val keep = Brush.verticalGradient(0f to Color.Black, 1f to Color.Transparent, startY = edge, endY = if (atTop) edge + reach else edge - reach)
                 drawRect(keep, blendMode = BlendMode.DstIn)
             }
-            clipRect(0f, y, size.width, y + height) { translate(top = y - pad) { drawLayer(layer) } }
+            clipRect(0f, y, size.width, y + height) { translate(top = from - pad) { drawLayer(layer) } }
         }
     }
     val stops = Array(FADE_CURVE.size) { n ->

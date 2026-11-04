@@ -79,8 +79,11 @@ frame its cell's size divided by how much larger than 13 sp its words show there
 drawn scaled to its cell, so a big tile's words are the size of its neighbours'. It
 MUST NOT rewrap, change its inset, or show or hide its labels under the fingers: it
 keeps its layouts at the stops on either side, each drawn scaled to where the card is,
-and the two cross-fade with its progress. The layout at the other stop is composed as
-the fingers come down and kept until they lift, so crossing a stop composes nothing new
+and the two cross-fade with its progress. The layout at the other stop is composed
+ahead, while the gallery rests, and kept while the card shows, so neither the fingers
+coming down nor crossing a stop composes a burst of layouts in one frame (Tavi, 4 November
+2026: "Same for pinching. It's laggy right now."; every tile's second layout was composed
+in the frame the fingers landed)
 (Tavi's pick of 07 Prints, with its Gentle sizes, on the card looks canvas, 1 November
 2026, replacing version 13 of the design canvas he picked on 28 October 2026, where
 every tile was laid out once at three columns and drawn scaled with its cell).
@@ -126,7 +129,9 @@ card's tile: the cards move, and their copies and the blurred fill draw what the
 last drew. Pictures change their decode size only once the gallery is at rest, after the
 landing's last frame (Tavi, 30 Oct 2026: "There are some frames that skip and at the end
 it kind of snaps weirdly"; every tile rebuilt as the fingers came down and again as they
-let go, and every picture reloaded at its new size on the landing's first frame). Ending a landing MUST draw every frame, even when the new size
+let go, and every picture reloaded at its new size on the landing's first frame). A
+picture keeps the largest size it has been decoded at, so landing on more, smaller cards
+rebuilds and reloads nothing. Ending a landing MUST draw every frame, even when the new size
 has fewer rows than the list still holds, and MUST leave every card where the
 landing's last frame drew it: the list takes the new size's rows and its scroll
 position in the same pass. Equivalent larger/smaller actions MUST be accessible, and
@@ -148,6 +153,15 @@ end of the transition it all pops for a frame"): the fill vanished in one frame;
 Then it pops, instead of being smooth"): the landing started at three times its average
 speed, and the gallery jumped once it had landed. The pace and curve match the web
 showcase's fix of the same day.
+
+@cc [owner:OctavianTocan,label:product;motion;architecture] gallery-scrolls-without-hitches
+Scrolling the gallery MUST NOT compose a burst of cards in one frame: the cards a screen
+above and below what shows are composed ahead, one a frame, nearest first, so a card is
+ready before it scrolls into view. Drawing a frame MUST NOT need an offscreen layer per
+card: a tile's fading last line is its paper laid over the words, and the blurred fade
+at the foot of the gallery blurs each of its layers only as far as that layer reaches.
+Source: Tavi, 4 November 2026: "We gotta optimize the app for scrolling to be super
+smooth with no hitches or pops or lag of any sort."
 
 @cc [owner:OctavianTocan,label:product;design;motion] gallery-reels-at-one-column
 In Everything, search results and an opened space, one column MUST be full screen: a pinch

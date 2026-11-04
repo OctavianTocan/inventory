@@ -8,6 +8,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -167,9 +169,11 @@ class LibraryChromeTest {
     }
 
     private fun assertMixedPreview(body: String) {
-        val text = compose.onNodeWithText(body, useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        // The card's own tile, not its layout at the next stop, which the gallery readies, unseen, for a pinch.
+        val text = compose.onNode(hasText(body) and hasAnyAncestor(hasClickAction()), useUnmergedTree = true).assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
         val picture = compose.onNode(
-            hasContentDescription("Image preview") and hasAnyAncestor(hasContentDescription("Weekend")),
+            hasContentDescription("Image preview") and hasAnyAncestor(hasContentDescription("Weekend")) and hasAnyAncestor(hasClickAction()),
             useUnmergedTree = true,
         ).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
         assertTrue("The note and its image must keep separate visible areas, the words under it", text.top >= picture.bottom - 1f)

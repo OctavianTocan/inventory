@@ -1,6 +1,7 @@
 package com.octaviantocan.mymind.ui.library
 
 import android.graphics.Bitmap
+import android.util.LruCache
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.asImageBitmap
@@ -19,7 +20,13 @@ import com.octaviantocan.mymind.data.thumbHashPicture
 @Composable
 internal fun rememberPicturePreview(card: Card): Painter? {
     val hash = card.cover?.thumbHash?.takeIf { it.isNotBlank() } ?: card.blob?.thumbHash?.takeIf { it.isNotBlank() }
-    return remember(hash) {
-        hash?.let(::thumbHashPicture)?.let { BitmapPainter(Bitmap.createBitmap(it.argb, it.width, it.height, Bitmap.Config.ARGB_8888).asImageBitmap()) }
-    }
+    return remember(hash) { hash?.let(::picturePreview) }
 }
+
+/** Stand-ins already drawn, so a card scrolling back into view does not decode its hash again on the frame it shows. */
+private val previews = LruCache<String, BitmapPainter>(256)
+
+/** The stand-in drawn from [hash], from [previews] when it is there. */
+private fun picturePreview(hash: String): BitmapPainter? = previews.get(hash)
+    ?: thumbHashPicture(hash)?.let { BitmapPainter(Bitmap.createBitmap(it.argb, it.width, it.height, Bitmap.Config.ARGB_8888).asImageBitmap()) }
+        ?.also { previews.put(hash, it) }

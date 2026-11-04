@@ -34,11 +34,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -302,7 +300,7 @@ private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Co
                 Spacer(Modifier.height(6.dp))
             }
             if (words.isNotBlank()) {
-                TileText(words, highlight, if (picture == null) Modifier.weight(1f) else Modifier.heightIn(max = wordsHeight), brand.text)
+                TileText(words, highlight, if (picture == null) Modifier.weight(1f) else Modifier.heightIn(max = wordsHeight), brand.text, paper = brand.paper)
             }
             val gap = Modifier.padding(top = if (words.isBlank()) 0.dp else 7.dp).fillMaxWidth()
             if (article != null) PostArticleBox(article.title.orEmpty(), brand, compact, picture, if (picture != null) gap.weight(1f) else gap)
@@ -469,14 +467,15 @@ private fun KindLabel(kind: String, modifier: Modifier = Modifier) {
  * A tile's words at the gallery's one text size and weight, so every tile reads alike and its text keeps its size
  * while a pinch changes the tile. A word too long for the line breaks with a hyphen. Words with no [maxLines] that run
  * out of room stop at the last whole line that fits, which fades out towards its end, as look 07 Prints draws them;
- * with [maxLines] the last line ends in an ellipsis.
+ * with [maxLines] the last line ends in an ellipsis. The fade is drawn in [paper], the colour the words sit on.
  */
 @Composable
-private fun TileText(text: AnnotatedString, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text, maxLines: Int = Int.MAX_VALUE) {
+private fun TileText(text: AnnotatedString, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text,
+    maxLines: Int = Int.MAX_VALUE, paper: Color = LibraryStyle.colors.raised) {
     val fade = maxLines == Int.MAX_VALUE
     val layout = remember { WordsLayout() }
     Text(
-        text, if (fade) modifier.fadeLastLine(layout) else modifier, color = color, maxLines = maxLines,
+        text, if (fade) modifier.fadeLastLine(layout, paper) else modifier, color = color, maxLines = maxLines,
         style = LibraryStyle.body.copy(
             fontSize = if (highlight) HIGHLIGHT_TEXT else TILE_TEXT, lineHeight = if (highlight) HIGHLIGHT_LINE else TILE_LINE,
             fontWeight = FontWeight.Normal, hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph,
@@ -487,8 +486,8 @@ private fun TileText(text: AnnotatedString, highlight: Boolean, modifier: Modifi
 }
 
 @Composable
-private fun TileText(text: String, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text, maxLines: Int = Int.MAX_VALUE) =
-    TileText(AnnotatedString(text), highlight, modifier, color, maxLines)
+private fun TileText(text: String, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text, maxLines: Int = Int.MAX_VALUE,
+    paper: Color = LibraryStyle.colors.raised) = TileText(AnnotatedString(text), highlight, modifier, color, maxLines, paper)
 
 /** The line height of a Top of Mind card's words. */
 private val HIGHLIGHT_LINE = 22.8.sp
@@ -500,9 +499,10 @@ private class WordsLayout {
 
 /**
  * Words that overflow their box stop at the last whole line that fits, and that line fades out over the last two
- * thirds of its width, towards its end in the words' own direction.
+ * thirds of its width, towards its end in the words' own direction. The fade is [paper] laid over the line, which on
+ * opaque paper looks the same as fading the words themselves and needs no offscreen layer, so it costs nothing per frame.
  */
-private fun Modifier.fadeLastLine(layout: WordsLayout): Modifier = drawWithContent {
+private fun Modifier.fadeLastLine(layout: WordsLayout, paper: Color): Modifier = drawWithContent {
     val result = layout.result
     if (result == null || !result.didOverflowHeight || result.lineCount == 0) {
         drawContent()
@@ -514,12 +514,11 @@ private fun Modifier.fadeLastLine(layout: WordsLayout): Modifier = drawWithConte
     val top = result.getLineTop(last)
     val bottom = result.getLineBottom(last)
     val rtl = result.getParagraphDirection(result.getLineStart(last)) == ResolvedTextDirection.Rtl
-    val fade = if (rtl) Brush.horizontalGradient(0.06f to Color.Transparent, 0.7f to Color.Black, endX = size.width)
-        else Brush.horizontalGradient(0.3f to Color.Black, 0.94f to Color.Transparent, endX = size.width)
-    drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, bottom), Paint())
+    val clear = paper.copy(alpha = 0f)
+    val fade = if (rtl) Brush.horizontalGradient(0.06f to paper, 0.7f to clear, endX = size.width)
+        else Brush.horizontalGradient(0.3f to clear, 0.94f to paper, endX = size.width)
     clipRect(bottom = bottom) { this@drawWithContent.drawContent() }
-    drawRect(fade, Offset(0f, top), Size(size.width, bottom - top), blendMode = BlendMode.DstIn)
-    drawContext.canvas.restore()
+    drawRect(fade, Offset(0f, top), Size(size.width, bottom - top))
 }
 
 /**
