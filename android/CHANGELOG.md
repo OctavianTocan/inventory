@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.51 (62), 2026-11-04
+Scrolling and pinching draw less on every frame.
+
+### Changed
+- While the gallery scrolls or moves under your fingers, the soft fade at its foot drops its blur and keeps only the colour fade; the blur comes back as soon as it is still. Its three blur layers each drew the whole gallery again on every frame.
+
 ## 0.6.50 (61), 2026-11-04
 Pinching out of full-screen cards builds less.
 

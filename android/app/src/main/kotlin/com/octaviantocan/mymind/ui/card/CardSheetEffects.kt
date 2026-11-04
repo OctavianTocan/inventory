@@ -40,7 +40,10 @@ internal fun rememberSheetMotionEnabled(): Boolean {
     return remember(resolver) { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
 }
 
-/** Pully's progressively blurred fade under a stationary sheet header. */
+/**
+ * Pully's progressively blurred fade under a stationary sheet header. While [blurred] is false the bands are the colour
+ * fade alone: each blur layer draws everything under the band again, which a page moving every frame cannot afford.
+ */
 @Composable
 fun Modifier.sheetEdgeFade(
     top: Dp = 20.dp,
@@ -50,6 +53,7 @@ fun Modifier.sheetEdgeFade(
     topStrength: () -> Float = { 1f },
     bottomStrength: () -> Float = { 1f },
     topInset: () -> Float = { 0f },
+    blurred: () -> Boolean = { true },
 ): Modifier {
     if (top <= 0.dp && bottom <= 0.dp) return this
     val source = rememberGraphicsLayer()
@@ -58,8 +62,9 @@ fun Modifier.sheetEdgeFade(
     return this.drawWithContent {
         source.record { this@drawWithContent.drawContent() }
         drawLayer(source)
-        if (top > 0.dp) fadeBand(source, topLayers, color, topInset(), top.toPx(), true, blur.toPx(), topStrength())
-        if (bottom > 0.dp) fadeBand(source, bottomLayers, color, size.height - bottom.toPx(), bottom.toPx(), false, blur.toPx(), bottomStrength())
+        val radius = if (blurred()) blur.toPx() else 0f
+        if (top > 0.dp) fadeBand(source, topLayers, color, topInset(), top.toPx(), true, radius, topStrength())
+        if (bottom > 0.dp) fadeBand(source, bottomLayers, color, size.height - bottom.toPx(), bottom.toPx(), false, radius, bottomStrength())
     }
 }
 

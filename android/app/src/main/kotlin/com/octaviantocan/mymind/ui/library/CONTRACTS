@@ -165,7 +165,10 @@ or other-size layout is composed ahead: those are readied at rest, so a pinch's 
 move cards. On the way into reels the full-screen pages around the
 fingers are composed one a frame, before they fade in. Drawing a frame MUST NOT need an offscreen layer per
 card: a tile's fading last line is its paper laid over the words, and the blurred fade
-at the foot of the gallery blurs each of its layers only as far as that layer reaches.
+at the foot of the gallery blurs each of its layers only as far as that layer reaches. While
+the cards scroll or move under the fingers, the foot fade MUST NOT blur, only fade: each
+blur layer draws the whole gallery again, and Tavi's 4 November recording of the
+phone's frame bars showed drawing, not the app's own work, made frames late.
 Source: Tavi, 4 November 2026: "We gotta optimize the app for scrolling to be super
 smooth with no hitches or pops or lag of any sort." and "Same for pinching. It's laggy right now."
 
