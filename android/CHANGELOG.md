@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.48 (59), 2026-11-04
+The whole app runs faster: its code is now optimised when the release is built.
+
+### Changed
+- The release app is built with code shrinking and optimisation (R8), which makes scrolling, pinching and opening cards cheaper on every frame.
+
 ## 0.6.47 (58), 2026-11-04
 Pinching into full-screen cards is smoother.
 

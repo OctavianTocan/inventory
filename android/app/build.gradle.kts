@@ -113,7 +113,8 @@ android {
             manifestPlaceholders["networkSecurityConfig"] = "@xml/network_loopback"
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
             manifestPlaceholders["appLabel"] = "mymind"
             // Cleartext to the emulator's host only for a release pointed at a local server, as in the end-to-end run.
