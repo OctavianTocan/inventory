@@ -612,7 +612,8 @@ private fun MosaicBody(
     val prefetch = remember(layouts) { MosaicPrefetch() }
     LaunchedEffect(prefetch, height) {
         // At rest in reels the tiles of the grid around are readied, unplaced, so pinching out of reels composes none.
-        snapshotFlow { MosaicPrefetchWindow(window, if (tilesShown) ahead else window, mosaic.isPinching, scrolling(), reels = !tilesShown,
+        snapshotFlow { MosaicPrefetchWindow(window, if (tilesShown) ahead else window,
+            moving = mosaic.isPinching || mosaic.position != mosaic.columns.toFloat(), scrolling(), reels = !tilesShown,
             pages = if (tilesShown) pages else IntRange.EMPTY) }
             .collectLatest { prefetch.fill(it, layouts, focalIndex = focal) }
     }
@@ -1101,16 +1102,20 @@ private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, word
     }
 }
 
-/** What [MosaicPrefetch] readies: the cards [shown], those [ahead] of them, and whether the fingers pinch or the list scrolls. */
-private data class MosaicPrefetchWindow(val shown: IntRange, val ahead: IntRange, val pinching: Boolean, val scrolling: Boolean,
+/**
+ * What [MosaicPrefetch] readies: the cards [shown], those [ahead] of them, and whether the cards move under the fingers or
+ * land ([moving]) or the list scrolls.
+ */
+private data class MosaicPrefetchWindow(val shown: IntRange, val ahead: IntRange, val moving: Boolean, val scrolling: Boolean,
     val reels: Boolean = false, val pages: IntRange = IntRange.EMPTY)
 
 /**
  * Cards composed before they are needed, one a frame, so neither scrolling nor a pinch composes a burst of them in one
  * frame: the [tiles] a screen above and below what shows and those the grids a stop further show, nearest first, and,
  * for the cards with words that show, their layouts in the other grid ([unders]), which a pinch cross-fades with their
- * own, once the list is not scrolling. While the fingers pinch, one of each is readied a frame; at rest in reels, two
- * tiles a frame. On the way into reels the [pages] around the fingers come first, one a frame, long before they fade in.
+ * own, once the list is not scrolling. Each frame readies one of each. While the cards move under the fingers or land,
+ * nothing but [pages] is readied, so a pinch's frames only move cards; on the way into reels the [pages] around the
+ * fingers come first, one a frame, long before they fade in.
  */
 @Stable
 private class MosaicPrefetch {
@@ -1136,23 +1141,19 @@ private class MosaicPrefetch {
                 pages = pages + page
                 continue
             }
+            // While the cards move under the fingers or land, nothing is built but pages: what a pinch needs is
+            // readied at rest, so its frames only move cards.
+            if (window.moving) return
             // Layouts for a pinch wait while the list scrolls, so scrolling composes only the cards ahead.
-            val under = if (window.reels || window.scrolling && !window.pinching) null
+            val under = if (window.reels || window.scrolling) null
                 else shown.filter { !layouts.isPicture(it) && it !in unders }.minByOrNull { abs(it - middle) }
             val tile = window.ahead.filter { (window.reels || it !in shown) && it !in tiles }.minByOrNull {
                 if (window.reels) abs(it - middle) else if (it < shown.first) shown.first - it else it - shown.last
             }
             if (under == null && tile == null) return
             withFrameNanos { }
-            // While the fingers pinch, a layout and a card ahead are readied together, so neither waits on the other.
-            if (window.pinching) {
-                if (under != null) unders = unders + under
-                if (tile != null) tiles = tiles + tile
-            } else if (tile != null) {
-                // At rest in reels nothing else is composed, and a pinch out needs a whole grid, so two come a frame.
-                val next = if (window.reels) window.ahead.filter { it != tile && it !in tiles }.minByOrNull { abs(it - middle) } else null
-                tiles = tiles + listOfNotNull(tile, next)
-            } else unders = unders + under!!
+            if (tile != null) tiles = tiles + tile
+            if (under != null) unders = unders + under
         }
     }
 }

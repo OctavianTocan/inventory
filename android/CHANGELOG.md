@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.49 (60), 2026-11-04
+Pinching the gallery is smoother again.
+
+### Changed
+- While a pinch moves the cards or they settle, nothing new is built: the cards and layouts a pinch needs are made ready while the gallery is still, so a pinch's frames only move cards.
+- A post's text is read from its HTML once and remembered, instead of each time its card is built.
+
 ## 0.6.48 (59), 2026-11-04
 The whole app runs faster: its code is now optimised when the release is built.
 

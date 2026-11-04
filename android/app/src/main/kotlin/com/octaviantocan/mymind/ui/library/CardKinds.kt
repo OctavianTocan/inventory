@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui.library
 
+import android.util.LruCache
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
@@ -95,12 +96,19 @@ fun noteText(card: Card): String =
         ?: card.note?.takeIf { it.isNotBlank() }
         ?: card.description.orEmpty()
 
+/** Plain text of each post's HTML already read, so a card composed again, or its second layout, parses none. */
+private val HTML_TEXT = LruCache<String, String>(512)
+
+/** The plain text of [html], parsed once and then remembered. */
+private fun htmlText(html: String): String =
+    HTML_TEXT.get(html) ?: HtmlCompat.fromHtml(html, HtmlCompat.FROM_HTML_MODE_COMPACT).toString().also { HTML_TEXT.put(html, it) }
+
 /**
  * @param card A social post.
  * @return The post's words without the bare media links the platform appends, such as `pic.twitter.com/…`.
  */
 fun postText(card: Card): String =
-    (card.post?.bodyHtml?.let { HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_COMPACT).toString() }?.takeIf { it.isNotBlank() }
+    (card.post?.bodyHtml?.let(::htmlText)?.takeIf { it.isNotBlank() }
         ?: card.description.takeIf { postArticle(card) == null }.orEmpty()).replace(MEDIA_LINK, "").replace(LINE_END_SPACE, "$1").trim()
 
 /**
@@ -231,7 +239,7 @@ fun postThread(card: Card): List<ThreadPost> =
  * @return Its words as plain text, without the bare media links X appends.
  */
 fun threadPostWords(post: ThreadPost): String =
-    post.bodyHtml?.let { HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_COMPACT).toString() }.orEmpty()
+    post.bodyHtml?.let(::htmlText).orEmpty()
         .replace(MEDIA_LINK, "").replace(LINE_END_SPACE, "$1").trim()
 
 /**
