@@ -1,5 +1,7 @@
 package com.octaviantocan.mymind.ui.library
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.octaviantocan.mymind.ui.card.LocalSheetMotionEnabled
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -610,13 +612,20 @@ private fun MosaicBody(
     val prefetch = remember(layouts) { MosaicPrefetch() }
     LaunchedEffect(prefetch, height) {
         // At rest in reels the tiles of the grid around are readied, unplaced, so pinching out of reels composes none.
-        snapshotFlow { MosaicPrefetchWindow(window, if (tilesShown) ahead else window, mosaic.isPinching, scrolling(), reels = !tilesShown) }
+        snapshotFlow { MosaicPrefetchWindow(window, if (tilesShown) ahead else window, mosaic.isPinching, scrolling(), reels = !tilesShown,
+            pages = if (tilesShown) pages else IntRange.EMPTY) }
             .collectLatest { prefetch.fill(it, layouts, focalIndex = focal) }
     }
     if (shape?.fill == true) MosaicFill(layouts, height, margin, currentFrame, blur = with(LocalDensity.current) { BACKDROP_BLUR.toPx() })
     val composed = union(window, prefetch.tiles.filter { it in ahead })
-    ProjectedMosaicCards(layouts, mosaic, composed, focalIndex, shape, prefetch.unders.filterTo(HashSet()) { it in window }, pages,
-        tilesShown, if (tilesShown) emptySet() else prefetch.tiles, currentFrame, margin, Modifier.fillMaxSize().testTag("mosaic-projection"), onOpenCard, onLongPressCard)
+    // Read once here, not by every card as it is composed.
+    val motion = rememberSheetMotionEnabled()
+    CompositionLocalProvider(LocalSheetMotionEnabled provides motion) {
+        ProjectedMosaicCards(layouts, mosaic, composed, focalIndex, shape, prefetch.unders.filterTo(HashSet()) { it in window },
+            // At rest in reels every page shows at once; on the way there each waits until it is readied.
+            if (tilesShown) prefetch.pages.filterTo(HashSet()) { it in pages } else pages.toSet(),
+            tilesShown, if (tilesShown) emptySet() else prefetch.tiles, currentFrame, margin, Modifier.fillMaxSize().testTag("mosaic-projection"), onOpenCard, onLongPressCard)
+    }
 }
 
 /**
@@ -864,7 +873,7 @@ private fun mosaicSlots(index: Int, shape: MosaicShape?, unders: Set<Int>, tile:
  */
 @Composable
 private fun ProjectedMosaicCards(
-    layouts: MosaicLayouts, mosaic: MosaicState, indices: List<Int>, focal: Int?, shape: MosaicShape?, unders: Set<Int>, pages: IntRange, tiles: Boolean,
+    layouts: MosaicLayouts, mosaic: MosaicState, indices: List<Int>, focal: Int?, shape: MosaicShape?, unders: Set<Int>, pages: Set<Int>, tiles: Boolean,
     readied: Set<Int>, frame: () -> MosaicFrame, left: Float, modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
 ) {
     val slots = indices.flatMap { mosaicSlots(it, shape, unders, tiles || it in readied, it in pages) }
@@ -916,6 +925,7 @@ private fun ProjectedMosaicCards(
         val round = corner * (1f - mosaic.reel)
         val lifted = 1f - mosaic.reel
         val drawings = HashMap<Int, MosaicDrawings>()
+        val reach = constraints.maxHeight * 0.05f
         val placed = children.zip(slots) { child, slot ->
             if (slot.page) {
                 val page = current.page(slot.index)
@@ -944,7 +954,11 @@ private fun ProjectedMosaicCards(
             // The tile gives way to its page as the page fades in over it.
             val paged = if (slot.index in pages) 1f - current.page(slot.index).alpha else 1f
             val alpha = draw.alpha * paged * if (reshapes && !slot.under) maxOf(m, 1f - m) else 1f
-            val tile = child.measureTile(draw.rect, layouts.wordsFrame(slot.index, if (slot.under) far else near).takeIf { words })
+            // A picture off screen keeps its size at rest, so a pinch lays out again only the pictures it shows, not
+            // those composed ahead; it is placed all the same, so its place stays true for touch and accessibility.
+            val off = draw.rect.bottom < -reach || draw.rect.top > constraints.maxHeight + reach
+            val cell = if (off && !words) layouts.level(current.fromColumns).cells[slot.index] else draw.rect
+            val tile = child.measureTile(cell, layouts.wordsFrame(slot.index, if (slot.under) far else near).takeIf { words })
             // A tile with words changing shape casts one shadow, from its layout underneath, which is always opaque.
             val lift = if (reshapes && !slot.under) 0f else with(density) { layouts.tiles.elevation(layouts.cards[slot.index]).toPx() } * lifted
             PlacedTile(tile, draw.rect.translate(left, 0f), words, alpha, slot.index, lift = lift)
@@ -1089,14 +1103,14 @@ private fun Placeable.PlacementScope.placeTile(tile: Placeable, cell: Rect, word
 
 /** What [MosaicPrefetch] readies: the cards [shown], those [ahead] of them, and whether the fingers pinch or the list scrolls. */
 private data class MosaicPrefetchWindow(val shown: IntRange, val ahead: IntRange, val pinching: Boolean, val scrolling: Boolean,
-    val reels: Boolean = false)
+    val reels: Boolean = false, val pages: IntRange = IntRange.EMPTY)
 
 /**
  * Cards composed before they are needed, one a frame, so neither scrolling nor a pinch composes a burst of them in one
  * frame: the [tiles] a screen above and below what shows and those the grids a stop further show, nearest first, and,
  * for the cards with words that show, their layouts in the other grid ([unders]), which a pinch cross-fades with their
  * own, once the list is not scrolling. While the fingers pinch, one of each is readied a frame; at rest in reels, two
- * tiles a frame.
+ * tiles a frame. On the way into reels the [pages] around the fingers come first, one a frame, long before they fade in.
  */
 @Stable
 private class MosaicPrefetch {
@@ -1104,15 +1118,24 @@ private class MosaicPrefetch {
         private set
     var unders by mutableStateOf<Set<Int>>(emptySet())
         private set
+    var pages by mutableStateOf<Set<Int>>(emptySet())
+        private set
 
     /** Readies [window] a frame at a time, nearest [focalIndex] or the middle of what shows first, until all of it is. */
     suspend fun fill(window: MosaicPrefetchWindow, layouts: MosaicLayouts, focalIndex: () -> Int?) {
         val shown = window.shown
         tiles = tiles.filterTo(HashSet()) { it in window.ahead && (window.reels || it !in shown) }
         unders = unders.filterTo(HashSet()) { it in shown }
+        pages = pages.filterTo(HashSet()) { it in window.pages }
         if (shown.isEmpty()) return
         while (true) {
             val middle = focalIndex() ?: ((shown.first + shown.last) / 2)
+            val page = window.pages.filter { it !in pages }.minByOrNull { abs(it - middle) }
+            if (page != null) {
+                withFrameNanos { }
+                pages = pages + page
+                continue
+            }
             // Layouts for a pinch wait while the list scrolls, so scrolling composes only the cards ahead.
             val under = if (window.reels || window.scrolling && !window.pinching) null
                 else shown.filter { !layouts.isPicture(it) && it !in unders }.minByOrNull { abs(it - middle) }

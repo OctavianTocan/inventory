@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.47 (58), 2026-11-04
+Pinching into full-screen cards is smoother.
+
+### Changed
+- Pinching towards full-screen cards no longer builds four or five full pages in the pinch's first moment: they are made ready one at a time, long before they fade in.
+- Pictures off screen keep their size during a pinch instead of being laid out again on every frame.
+- New cards no longer each read the system's animation setting as they are made.
+
 ## 0.6.46 (57), 2026-11-04
 Pinching the gallery is smoother.
 

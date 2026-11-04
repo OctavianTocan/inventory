@@ -160,7 +160,8 @@ above and below what shows are composed ahead, one a frame, nearest first, so a 
 ready before it scrolls into view. Pinching MUST NOT compose a burst either: the cards the
 grids a stop past either side show are composed ahead too, and at rest in reels the tiles of
 the grid around are readied, unplaced and hidden from touch and accessibility, so pinching
-out of reels composes none at once. Drawing a frame MUST NOT need an offscreen layer per
+out of reels composes none at once. On the way into reels the full-screen pages around the
+fingers are composed one a frame, before they fade in. Drawing a frame MUST NOT need an offscreen layer per
 card: a tile's fading last line is its paper laid over the words, and the blurred fade
 at the foot of the gallery blurs each of its layers only as far as that layer reaches.
 Source: Tavi, 4 November 2026: "We gotta optimize the app for scrolling to be super

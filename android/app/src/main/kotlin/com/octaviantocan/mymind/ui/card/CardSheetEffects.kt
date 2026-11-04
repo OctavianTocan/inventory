@@ -3,6 +3,7 @@ package com.octaviantocan.mymind.ui.card
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -25,9 +26,16 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.ceil
 
+/**
+ * The reduced-motion setting read once for a whole screen of cards, so each card composed does not read it again;
+ * null where no screen provides it.
+ */
+internal val LocalSheetMotionEnabled = staticCompositionLocalOf<Boolean?> { null }
+
 /** Follow the native reduced-motion setting for the sheet's position and reveal. */
 @Composable
 internal fun rememberSheetMotionEnabled(): Boolean {
+    LocalSheetMotionEnabled.current?.let { return it }
     val resolver = LocalContext.current.contentResolver
     return remember(resolver) { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
 }
