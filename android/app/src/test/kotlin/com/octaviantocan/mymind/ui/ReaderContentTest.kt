@@ -14,7 +14,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.data.Cover
+import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
+import com.octaviantocan.mymind.data.ThreadPost
 import com.octaviantocan.mymind.data.PostArticle
 import com.octaviantocan.mymind.data.RedditComment
 import com.octaviantocan.mymind.data.RedditInfo
@@ -176,6 +178,28 @@ class ReaderContentTest {
         compose.onAllNodesWithContentDescription("Preview").assertCountEquals(0)
         compose.onNodeWithContentDescription("Article, ${article.title}").performClick()
         compose.runOnIdle { assertEquals(listOf("https://x.com/noor/status/1844"), opened) }
+    }
+
+    @Test
+    fun anXThreadSaysWhatItSaysThenShowsEveryPost() {
+        val summary = "Theo redrew every map in a 1931 walking guide by hand, with one pen weight."
+        val thread = testCard("xt", type = "XPost", url = "https://x.com/theo_maps/status/1844", title = "One pen weight: a 1931 walking guide")
+            .copy(summary = summary, post = Post(bodyHtml = "<p>A folding booklet this winter.</p>", author = "by Theo Park", thread = listOf(
+                ThreadPost("<p>I spent a year redrawing every map in a 1931 walking guide.</p>", gallery = listOf(GalleryImage("/media/hills.jpg", 1200, 800))),
+                ThreadPost("<p>Every contour is drawn with the same pen.</p>"),
+                ThreadPost("<p>A folding booklet this winter.</p>"),
+            )))
+        compose.setPhoneContent(true) {
+            PageTheme(PageScheme.Light) { CardDetail(thread, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons(), onOpenSource = {}) }
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithText("What the thread says").assertExists()
+        compose.onNodeWithText(summary).assertExists()
+        compose.onNodeWithText("Every contour is drawn with the same pen.", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithText("A folding booklet this winter.", useUnmergedTree = true).assertCountEquals(1)
+        compose.onNodeWithText("3 posts", substring = true, useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithContentDescription("Picture in the thread", useUnmergedTree = true).assertCountEquals(1)
+        compose.onRoot().captureRoboImage("screenshots/S11_reader_x_thread_light.png")
     }
 
     @Test

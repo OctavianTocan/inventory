@@ -292,6 +292,17 @@ if the original post changes, ours changes too. That's not what we want"), and h
 of X10, R4 and O2 the same day; the article box from XA5, which he took with "Pick
 recommended and build it", 29 October 2026.
 
+@cc [owner:OctavianTocan,label:product;design] gallery-x-threads-lead-with-their-name
+An X post saved with the thread it ends (the server keeps the author's own posts before
+it) MUST stand two squares tall in X's black and lead with the name the model gave the
+whole thread, in the gallery's one text size and weight (`gallery-text-is-one-size`),
+under one muted line with X's mark, the author's name and how many posts the thread has,
+such as "Theo Park · 7 posts", over the thread's first picture. Until the thread has
+been named and summed up, the tile shows its first post's words instead of the name.
+Source: Tavi's pick of 08 Summary first on the X threads page, 4 November 2026 ("Let's
+implement 08"); the name stays at the gallery's one size rather than the page's larger
+bold line, keeping `gallery-text-is-one-size`.
+
 @cc [owner:OctavianTocan,label:product;design] gallery-products-are-pins
 A product with a photo MUST show as a pin, as Pinterest's feed does: the photo with round
 corners standing in a print's white border (gallery-tiles-are-prints), the shop's price on

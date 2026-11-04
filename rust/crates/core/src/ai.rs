@@ -42,10 +42,11 @@ const JEV_MAX_BYTES: usize = 16 * 1024 * 1024;
 const MAX_RETRIES: u32 = 3;
 const TIMEOUT_MS: u64 = 60_000;
 
-const SUMMARY_PROMPT_LINES: [&str; 9] = [
+const SUMMARY_PROMPT_LINES: [&str; 10] = [
     "You file items saved to a personal visual notebook, like mymind. Reply with one JSON object: {\"title\": string, \"summary\": string, \"tags\": string[]}.",
     "title: a specific short headline of at most 8 words, in the language of the item.",
     "For a Note or Content item, which the person wrote or kept, the title is its name, the way they would name it: 2 to 6 plain words in sentence case saying what it is about, never \"Note\", \"Untitled\" or a date, no quotes, no full stop.",
+    "An XPost whose text holds several posts is a thread its author wrote: the title names what the whole thread is about and the summary covers all of it, not only the first post.",
     "summary: the TL;DR. One or two plain sentences (at most 40 words) saying what the item is and what it is about.",
     "For articles, web pages, repositories, apps and posts, derive the summary and tags from the supplied text. A cover illustration is not the subject.",
     "Use the image to inform the summary and tags only for Image, Screenshot or Video items, or when the supplied text has fewer than 200 characters.",

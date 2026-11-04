@@ -79,6 +79,19 @@ his pick of D5 ("I wanted to see the content"); the top comments from R4 ("the t
 comments stay, from R3") and the article from XA5, both taken with "Pick recommended and
 build it" the same day.
 
+@cc [owner:OctavianTocan,label:product;design] card-reader-shows-x-threads
+An X thread (`gallery-x-threads-lead-with-their-name`) MUST open with its summary in a
+raised section headed What the thread says, then every kept post, oldest first, in one
+section in X's black as X shows a thread: each post with a circle of the author's
+initials, the name and handle, its words and its pictures whole, and a line in X's line
+colour running down from each circle to the next post; then when the saved post was
+posted and saved and how many posts the thread has. It shows no counts of likes or
+reposts. Holding the posts' words offers the post's Copy and Share, of every post's
+words; a picture opens the post on X. The server keeps only posts written before the
+saved one, because the posts after it need X's paid API.
+Source: Tavi's pick of 08 Summary first on the X threads page, 4 November 2026 ("Let's
+implement 08").
+
 @cc [owner:OctavianTocan,label:product] card-reader-opens-its-source
 A card with a web link MUST open it from a tap on its picture and from the foot's
 Open source pill, which speaks the site's name. Holding the picture MUST open its

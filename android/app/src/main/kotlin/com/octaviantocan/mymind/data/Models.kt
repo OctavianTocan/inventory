@@ -37,13 +37,24 @@ data class Blob(
 @Serializable
 data class GalleryImage(val src: String? = null, val width: Int? = null, val height: Int? = null)
 
+/**
+ * A social post's saved copy.
+ *
+ * @property thread For an X post that ends a thread its author wrote, every post of the thread kept when it was saved,
+ *   oldest first, this post last; null for a single post.
+ */
 @Serializable
 data class Post(
     val bodyHtml: String? = null,
     val author: String? = null,
     val hasVideo: Boolean? = null,
     val gallery: List<GalleryImage>? = null,
+    val thread: List<ThreadPost>? = null,
 )
+
+/** One post of an X thread as it was saved: its words as HTML, whether it held a video, and its pictures. */
+@Serializable
+data class ThreadPost(val bodyHtml: String? = null, val hasVideo: Boolean? = null, val gallery: List<GalleryImage>? = null)
 
 @Serializable
 data class AppInfo(
@@ -79,6 +90,8 @@ data class Card(
     val deleted: String? = null,
     val title: String? = null,
     val description: String? = null,
+    /** The model's summary, which the server sends only for an X thread. */
+    val summary: String? = null,
     val url: String? = null,
     val domain: String? = null,
     val siteName: String? = null,

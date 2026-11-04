@@ -1,6 +1,6 @@
 //! What a saved link's own site says beyond its page, read once the page is captured ([`capture_link`]): a Reddit
 //! post's words and top comments from Reddit's public JSON, a YouTube video's length from its watch page, Bluesky and
-//! Mastodon posts from their public APIs, and the article an X post carries from X's embed data.
+//! Mastodon posts from their public APIs, and the article an X post carries and the thread it ends from X's embed data.
 //!
 //! It runs as its own stage after the capture so the capture's stages stay as they were. A site that does not answer,
 //! or answers with something else, leaves the card as the capture left it.
@@ -41,6 +41,12 @@ const COMMENT_CHARS: usize = 600;
 /// How many of a Bluesky or Mastodon post's pictures a card keeps, as the networks show at most four.
 const POST_IMAGES: usize = 4;
 
+/// Most posts of an X thread a card keeps, the saved post included: X is asked once for each.
+pub const THREAD_POSTS: usize = 16;
+
+/// Most pictures a card keeps across an X thread's posts.
+pub const THREAD_PICTURES: usize = 8;
+
 /// A Bluesky or Mastodon post as its network's public API gives it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SocialPost {
@@ -73,7 +79,7 @@ pub async fn capture_more(card: &Value, options: &CaptureOptions<'_>, resource: 
     let patch = match data.get("type").as_str() {
         Some("RedditPost") => reddit(link, extras, offline, resource).await.map(extras_patch),
         Some("YouTubeVideo") => youtube_length(link, offline, resource).await.map(extras_patch),
-        Some("XPost") => x_article(link, extras, options, resource).await,
+        Some("XPost") => x_post(link, extras, options, resource).await,
         Some("WebPage" | "Article") => match social_post(link, offline, resource).await {
             Some(post) => Some(social_patch(post, data, options, resource).await),
             None => None,
@@ -236,6 +242,48 @@ pub fn x_article_extras(tweet: &Value) -> Option<Value> {
     Some(extras.into())
 }
 
+/// One post of an X thread as a card keeps it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ThreadPost {
+    /// The post's words as [`sanitize_post`] leaves them: the replied-to names before them and the media link after
+    /// them dropped, its other links written out.
+    pub html: String,
+    /// Its pictures and its video's poster, at most [`POST_IMAGES`].
+    pub images: Vec<String>,
+    /// Whether it holds a video or a moving picture.
+    pub video: bool,
+}
+
+/// A post of an X thread from X's embed data for it.
+///
+/// # Arguments
+/// * `tweet` - X's answer from `cdn.syndication.twimg.com/tweet-result`.
+///
+/// # Returns
+/// The post's words, pictures and whether it holds a video.
+pub fn x_thread_post(tweet: &Value) -> ThreadPost {
+    let words: Vec<char> = tweet.get("text").as_str().unwrap_or("").chars().collect();
+    let range = tweet.get("display_text_range");
+    let start = range.at(0).as_f64().map_or(0, |at| at as usize).min(words.len());
+    let end = range.at(1).as_f64().map_or(words.len(), |at| at as usize).clamp(start, words.len());
+    let mut html = escape(&words[start..end].iter().collect::<String>());
+    for found in tweet.get("entities").get("urls").as_array().map(Vec::as_slice).unwrap_or_default() {
+        let (Some(short), Some(long)) = (found.get("url").as_str(), found.get("expanded_url").as_str()) else { continue };
+        let shown = found.get("display_url").as_str().unwrap_or(long);
+        html = html.replace(&escape(short), &format!("<a href=\"{}\">{}</a>", escape(long).replace('"', "&quot;"), escape(shown)));
+    }
+    let mut images = Vec::new();
+    let mut video = false;
+    for media in tweet.get("mediaDetails").as_array().map(Vec::as_slice).unwrap_or_default() {
+        if matches!(media.get("type").as_str(), Some("video" | "animated_gif")) {
+            video = true;
+        }
+        images.extend(media.get("media_url_https").as_str().map(str::to_owned));
+    }
+    images.truncate(POST_IMAGES);
+    ThreadPost { html: sanitize_post(&paragraphs(&html), "https://x.com/"), images, video }
+}
+
 /// The `token` X's embed data asks for: the post's id over 10^15 times π, written in base 36 as JavaScript writes
 /// it, without its zeros and its point, as X's own embeds make it.
 ///
@@ -313,39 +361,101 @@ async fn social_patch(post: SocialPost, data: &Value, options: &CaptureOptions<'
     obj! { "data" => obj! { "type" => post.kind, "author" => author, "description" => words }, "extras" => extras }.into()
 }
 
-async fn x_article(link: &str, extras: &Value, options: &CaptureOptions<'_>, resource: &dyn Resource) -> Option<Value> {
+async fn x_post(link: &str, extras: &Value, options: &CaptureOptions<'_>, resource: &dyn Resource) -> Option<Value> {
     let id: u64 = X_STATUS.captures(link)?[1].parse().ok()?;
-    let url = format!("https://cdn.syndication.twimg.com/tweet-result?id={id}&lang=en&token={}", syndication_token(id));
-    let tweet = json::parse(&fetch_text(&url, 1024 * 1024, options.offline, resource).await?).ok()?;
-    let mut article = x_article_extras(&tweet)?;
-    let title = article.get("title").to_js_string();
-    let preview = article.get("preview").to_js_string();
-    let image = article.remove("image");
-    let mut patch = obj! {
-        "title" => title.as_str(),
-        "capturedTitle" => title.as_str(),
-        "captureText" => format!("{title}\n{preview}").trim().to_owned(),
-        "article" => article,
-    };
+    let tweet = x_tweet(id, options.offline, resource).await?;
+    let mut data_patch = obj! {};
+    let mut patch = obj! {};
     let mut post = extras.get("post").clone();
-    if let Some(body) = post.get("bodyHtml").as_str() {
-        let links = tweet.get("entities").get("urls").as_array().map(Vec::as_slice).unwrap_or_default();
-        let mut words = body.to_owned();
-        for found in links.iter().filter(|found| found.get("expanded_url").as_str().is_some_and(|url| url.contains("/i/article/"))) {
-            if let Some(short) = found.get("url").as_str() {
-                let short = escape_html(short);
-                words = words.replace(&format!("<a href=\"{short}\">{short}</a>"), "");
+    if let Some(mut article) = x_article_extras(&tweet) {
+        let title = article.get("title").to_js_string();
+        let preview = article.get("preview").to_js_string();
+        let image = article.remove("image");
+        patch.insert("title", title.as_str());
+        patch.insert("capturedTitle", title.as_str());
+        patch.insert("captureText", format!("{title}\n{preview}").trim().to_owned());
+        patch.insert("article", article);
+        if let Some(body) = post.get("bodyHtml").as_str() {
+            let links = tweet.get("entities").get("urls").as_array().map(Vec::as_slice).unwrap_or_default();
+            let mut words = body.to_owned();
+            for found in links.iter().filter(|found| found.get("expanded_url").as_str().is_some_and(|url| url.contains("/i/article/"))) {
+                if let Some(short) = found.get("url").as_str() {
+                    let short = escape_html(short);
+                    words = words.replace(&format!("<a href=\"{short}\">{short}</a>"), "");
+                }
             }
+            post.set("bodyHtml", EMPTY_PARAGRAPH.replace_all(&words, "").into_owned());
         }
-        post.set("bodyHtml", EMPTY_PARAGRAPH.replace_all(&words, "").into_owned());
+        if let Some(image) = image.as_ref().and_then(Value::as_str)
+            && let Some(cover) = prepared_image(image, options, resource).await {
+                patch.insert("cover", cover);
+            }
+        data_patch.insert("title", text::slice(&title, 0, Some(200)));
+        data_patch.insert("description", preview);
+    }
+    let chain = x_thread_chain(tweet, options.offline, resource).await;
+    if chain.len() > 1 && post.is_object() {
+        let mut posts = Vec::new();
+        let mut words = Vec::new();
+        let mut pictures = 0;
+        for tweet in &chain {
+            let found = x_thread_post(tweet);
+            let mut gallery = Vec::new();
+            for image in &found.images {
+                if pictures == THREAD_PICTURES {
+                    break;
+                }
+                if let Some(cover) = prepared_image(image, options, resource).await {
+                    gallery.push(cover);
+                    pictures += 1;
+                }
+            }
+            words.push(plain_text(&found.html));
+            posts.push(Value::from(obj! { "bodyHtml" => found.html.as_str(), "hasVideo" => found.video, "gallery" => Value::Array(gallery) }));
+        }
+        if !patch.contains_key("cover")
+            && let Some(first) = posts.iter().find_map(|found| found.get("gallery").as_array().and_then(|gallery| gallery.first()).cloned()) {
+                patch.insert("cover", first);
+            }
+        if !patch.contains_key("captureText") {
+            patch.insert("captureText", words.iter().map(|words| words.trim()).filter(|words| !words.is_empty()).collect::<Vec<_>>().join("\n\n"));
+        }
+        post.set("thread", Value::Array(posts));
+    }
+    if patch.is_empty() && !post.get("thread").truthy() {
+        return None;
+    }
+    if post.is_object() && post != *extras.get("post") {
         patch.insert("post", post);
     }
-    if let Some(image) = image.as_ref().and_then(Value::as_str)
-        && let Some(cover) = prepared_image(image, options, resource).await {
-            patch.insert("cover", cover);
+    Some(obj! { "data" => data_patch, "extras" => patch }.into())
+}
+
+// X's embed data for one post, or `None` when X does not answer with that post.
+async fn x_tweet(id: u64, offline: bool, resource: &dyn Resource) -> Option<Value> {
+    let url = format!("https://cdn.syndication.twimg.com/tweet-result?id={id}&lang=en&token={}", syndication_token(id));
+    let tweet = json::parse(&fetch_text(&url, 1024 * 1024, offline, resource).await?).ok()?;
+    (tweet.get("id_str").as_str() == Some(id.to_string().as_str())).then_some(tweet)
+}
+
+// The thread a post ends: the posts its author wrote before it, each answering the one before, oldest first, up to
+// [`THREAD_POSTS`] with the saved post last. A post that answers someone else, or a post X does not give, ends the walk.
+async fn x_thread_chain(tweet: Value, offline: bool, resource: &dyn Resource) -> Vec<Value> {
+    let author = tweet.get("user").get("id_str").as_str().unwrap_or("").to_owned();
+    let mut chain = vec![tweet];
+    while chain.len() < THREAD_POSTS && !author.is_empty() {
+        let last = chain.last().expect("one post");
+        if last.get("in_reply_to_user_id_str").as_str() != Some(author.as_str()) {
+            break;
         }
-    let data = obj! { "title" => text::slice(&title, 0, Some(200)), "description" => preview };
-    Some(obj! { "data" => data, "extras" => patch }.into())
+        let Some(parent) = last.get("in_reply_to_status_id_str").as_str().and_then(|id| id.parse::<u64>().ok()) else { break };
+        match x_tweet(parent, offline, resource).await {
+            Some(found) if found.get("user").get("id_str").as_str() == Some(author.as_str()) => chain.push(found),
+            _ => break,
+        }
+    }
+    chain.reverse();
+    chain
 }
 
 // A picture fetched and stored as a cover; `None` when it cannot be, its address refused included.

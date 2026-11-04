@@ -91,6 +91,16 @@ import com.octaviantocan.mymind.ui.library.readerVideo
 import com.octaviantocan.mymind.ui.library.redditComments
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import coil3.compose.AsyncImage
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import com.octaviantocan.mymind.BuildConfig
+import com.octaviantocan.mymind.data.ThreadPost
+import com.octaviantocan.mymind.data.resolveMediaUrl
+import com.octaviantocan.mymind.ui.library.VideoBadge
+import com.octaviantocan.mymind.ui.library.postThread
+import com.octaviantocan.mymind.ui.library.threadPostWords
 
 private val BODY_SIDE = 16.dp
 
@@ -418,13 +428,17 @@ private fun ReaderBody(
     val document = isPdf(card)
     Column(Modifier.fillMaxWidth().padding(horizontal = BODY_SIDE).padding(top = 12.dp, bottom = FOOT_ROOM),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (post) PostSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions", hold(ReaderPart.Post))
+        val thread = remember(card) { postThread(card) }
+        if (thread.isNotEmpty()) {
+            sections.filter { it.part == ReaderPart.Summary }.forEach { TextSection(it, card, hold(it.part), THREAD_SUMMARY) }
+            ThreadSection(card, thread, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions", hold(ReaderPart.Post))
+        } else if (post) PostSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions", hold(ReaderPart.Post))
         else if (document) PdfHeadSection(card, pdf?.count, pdfMinutes, onRead)
         else HeadSection(card, onOpenSource, pictureHold ?: onMenu, if (pictureHold != null) "Picture actions" else "Card actions")
         if (document) PdfPagesSection(card, pdf, onMenu)
         val comments = redditComments(card)
         if (comments.isNotEmpty()) CommentsSection(comments, onMenu)
-        sections.filter { it.part in LEAD_PARTS && !(post && it.part == ReaderPart.Post) }.forEach { TextSection(it, card, hold(it.part)) }
+        sections.filter { it.part in LEAD_PARTS && !(post && it.part == ReaderPart.Post) && !(thread.isNotEmpty() && it.part == ReaderPart.Summary) }.forEach { TextSection(it, card, hold(it.part)) }
         if (sameVibe.isNotEmpty()) SameVibeSection(sameVibe, onOpenCard)
         TagsSection(card, onRemoveTag, onDoneTags, onAddTags, hold(ReaderPart.Tags))
         sections.filter { it.part == ReaderPart.YourNote }.forEach { TextSection(it, card, hold(it.part)) }
@@ -609,6 +623,80 @@ private fun PostSection(card: Card, onOpenSource: (() -> Unit)?, onPictureHold: 
     }
 }
 
+/** The heading an X thread's summary goes under, before the thread itself. */
+private const val THREAD_SUMMARY = "What the thread says"
+
+/**
+ * An X thread as one section in X's colours, as X shows a thread: every post with its author's initials in a circle,
+ * the name and handle, its words and its pictures whole, a line running down from each circle to the next post, then
+ * when the last post was posted and saved and how many posts the thread has (Tavi's pick of 08 Summary first, 4 November
+ * 2026). Holding the words opens the post's sheet ([onHold]); a picture opens the source when tapped and calls
+ * [onPictureHold] when held. It shows no counts of likes or reposts.
+ */
+@Composable
+private fun ThreadSection(card: Card, thread: List<ThreadPost>, onOpenSource: (() -> Unit)?, onPictureHold: () -> Unit, pictureHoldLabel: String,
+    onHold: (() -> Unit)?) {
+    val brand = postBrand(card.type)
+    val byline = remember(card) { postByline(card) }
+    val name = byline?.name ?: sourceName(card)
+    val time = listOfNotNull(postTimeLine(card), "${thread.size} posts").joinToString(" · ")
+    val shape = RoundedCornerShape(24.dp)
+    val muted = TextStyle(color = brand.muted, fontSize = 15.sp, lineHeight = 21.sp, fontFamily = MymindTheme.fonts.body)
+    Column(Modifier.fillMaxWidth().cardSurfaceShadow(shape, note = true).clip(shape).background(brand.paper)
+        .padding(start = 18.dp, top = 16.dp, end = 18.dp, bottom = 16.dp)) {
+        brand.icon?.let { Image(painterResource(it), null, Modifier.align(Alignment.End).size(20.dp), colorFilter = ColorFilter.tint(brand.text)) }
+        Column(Modifier.fillMaxWidth().padding(top = 4.dp).held("Post actions", onHold)) {
+            thread.forEachIndexed { index, item ->
+                ThreadRow(item, name, byline?.handle, brand, last = index == thread.lastIndex, onOpenSource, onPictureHold, pictureHoldLabel)
+            }
+        }
+        Text(time, style = muted)
+    }
+}
+
+/** One post of an X thread: the author's circle with the thread's line under it, then the name, words and pictures. */
+@Composable
+private fun ThreadRow(item: ThreadPost, name: String, handle: String?, brand: PostBrand, last: Boolean, onOpenSource: (() -> Unit)?,
+    onPictureHold: () -> Unit, pictureHoldLabel: String) {
+    val words = remember(item) { threadPostWords(item) }
+    val body = TextStyle(color = brand.text, fontSize = 16.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body)
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.width(36.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(36.dp).clip(CircleShape).background(brand.line).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+                Text(initials(name), color = brand.text, style = body.copy(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold))
+            }
+            if (!last) Box(Modifier.padding(top = 4.dp).width(2.dp).weight(1f).background(brand.line))
+        }
+        Column(Modifier.weight(1f).padding(bottom = 16.dp)) {
+            Text(buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(name) }
+                if (handle != null) withStyle(SpanStyle(color = brand.muted)) { append(" $handle") }
+            }, style = body.copy(fontSize = 15.sp, lineHeight = 20.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (words.isNotEmpty()) Text(words, Modifier.padding(top = 2.dp), style = body)
+            item.gallery.orEmpty().forEach { picture ->
+                val src = picture.src ?: return@forEach
+                val ratio = if ((picture.width ?: 0) > 0 && (picture.height ?: 0) > 0) picture.width!!.toFloat() / picture.height!! else 1.5f
+                Box(Modifier.padding(top = 10.dp).fillMaxWidth().aspectRatio(ratio.coerceIn(0.6f, 2.4f)).clip(RoundedCornerShape(16.dp))
+                    .background(brand.line)
+                    .semantics { contentDescription = "Picture in the thread" }
+                    .combinedClickable(
+                        interactionSource = null, indication = CardSheetIndication, role = Role.Button,
+                        onClickLabel = if (onOpenSource != null) "Open source" else null, onClick = { onOpenSource?.invoke() },
+                        onLongClickLabel = pictureHoldLabel, onLongClick = onPictureHold,
+                    )) {
+                    AsyncImage(model = resolveMediaUrl(BuildConfig.SERVER_URL, src), contentDescription = null, contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize())
+                    if (item.hasVideo == true) VideoBadge(false, null, Modifier.align(Alignment.TopEnd).padding(8.dp))
+                }
+            }
+        }
+    }
+}
+
+/** Up to two initials of [name], as the thread's circles show them, such as TP for Theo Park. */
+internal fun initials(name: String): String =
+    name.split(Regex("\\s+")).mapNotNull { word -> word.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar() }.take(2).joinToString("").ifEmpty { "X" }
+
 /**
  * The X article a post carries, as X draws it in the post: a box ruled in the network's line colour holding the
  * article's cover whole, its title, its opening lines and Article on X. A tap opens the post on X, where the article
@@ -760,10 +848,10 @@ private const val SAME_VIBE_SHOWN = 3
 
 /** One part of the card's words under its small heading; the page text's heading also says how long it takes to read. */
 @Composable
-private fun TextSection(section: ReaderText, card: Card, onHold: (() -> Unit)? = null) {
+private fun TextSection(section: ReaderText, card: Card, onHold: (() -> Unit)? = null, heading: String = section.part.heading) {
     val colors = LocalCardSheetColors.current
     ReaderSection(SECTION_PADDING, holdLabel = "${section.part.heading} actions", onHold = onHold) {
-        SectionHeading(partIcon(section.part), section.part.heading, trailing = if (section.part == ReaderPart.Page) readingTime(card) else null)
+        SectionHeading(partIcon(section.part), heading, trailing = if (section.part == ReaderPart.Page) readingTime(card) else null)
         Spacer(Modifier.height(8.dp))
         Text(section.text, style = TextStyle(color = colors.text, fontSize = 16.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body))
     }

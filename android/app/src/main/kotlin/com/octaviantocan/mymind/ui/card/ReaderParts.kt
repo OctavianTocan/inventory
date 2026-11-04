@@ -4,7 +4,9 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.ui.library.TileKind
 import com.octaviantocan.mymind.ui.library.galleryPicture
 import com.octaviantocan.mymind.ui.library.noteText
+import com.octaviantocan.mymind.ui.library.postThread
 import com.octaviantocan.mymind.ui.library.postWords
+import com.octaviantocan.mymind.ui.library.threadPostWords
 import com.octaviantocan.mymind.ui.library.postedAt
 import com.octaviantocan.mymind.ui.library.proseText
 import com.octaviantocan.mymind.ui.library.tileKind
@@ -50,14 +52,18 @@ data class ReaderText(val part: ReaderPart, val text: String)
 
 /**
  * @param card A card.
- * @return The reader's text sections, in order: the post or note itself, the saved summary, the user's own note and the
+ * @return The reader's text sections, in order: an X thread's summary, the post or note itself (every post of a thread),
+ *   the saved summary, the user's own note and the
  *   text from the page, without blanks or repeats. The reader shows the tags between the summary and the note.
  */
 fun readerSections(card: Card): List<ReaderText> {
     val prose = card.prose?.let(::proseText)
     val parts = when (tileKind(card)) {
         TileKind.Note -> listOf(ReaderPart.Note to noteText(card), ReaderPart.YourNote to card.note)
-        TileKind.Post -> listOf(ReaderPart.Post to postWords(card), ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
+        TileKind.Post -> postThread(card).takeIf { it.isNotEmpty() }?.let { thread ->
+            listOf(ReaderPart.Summary to card.summary, ReaderPart.Post to thread.map(::threadPostWords).filter { it.isNotEmpty() }.joinToString("\n\n"),
+                ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
+        } ?: listOf(ReaderPart.Post to postWords(card), ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
         else -> listOf(ReaderPart.Summary to card.description, ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
     }
     val seen = mutableSetOf<String>()

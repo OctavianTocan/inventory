@@ -222,6 +222,7 @@ impl AppApi {
             ("deleted", deleted),
             ("title", first(extras.get("title"), data.get("title"))),
             ("description", data.get("description").clone()),
+            ("summary", if extras.get("post").get("thread").truthy() { data.get("summary").clone() } else { Value::Undefined }),
             ("url", first(extras.get("linkUrl"), data.get("source").get("url"))),
             ("domain", data.get("domain").clone()),
             ("siteName", data.get("siteName").clone()),

@@ -5,6 +5,7 @@ import com.octaviantocan.mymind.data.Post
 import com.octaviantocan.mymind.data.PostArticle
 import com.octaviantocan.mymind.data.RedditComment
 import com.octaviantocan.mymind.data.RedditInfo
+import com.octaviantocan.mymind.data.ThreadPost
 import com.octaviantocan.mymind.ui.card.postDay
 import com.octaviantocan.mymind.ui.card.postTimeLine
 import org.junit.Assert.assertEquals
@@ -54,6 +55,24 @@ class PostCardsTest {
     fun aBlueskyLinkThatNamesItsAuthorByIdShowsNoHandle() {
         val card = testCard("b", type = "BlueskyPost", url = "https://bsky.app/profile/did:plc:fern/post/3k").copy(post = Post(author = "by Fern Hollow"))
         assertEquals(PostByline("Fern Hollow", null), postByline(card))
+    }
+
+    @Test
+    fun anXThreadLeadsWithItsNameOnceSummedUp() {
+        val posts = listOf(ThreadPost("<p>I spent a year redrawing maps. https://t.co/pic</p>"), ThreadPost("<p>One pen weight.</p>"))
+        val card = xPost("One pen weight.").copy(title = "One pen weight: a 1931 walking guide", post = Post(bodyHtml = "<p>One pen weight.</p>", thread = posts))
+        assertEquals(posts, postThread(card))
+        assertTrue("A thread stands two squares high", postStandsTall(card))
+        assertNull("Until it is summed up, the tile shows the post's words", threadName(card))
+        assertEquals("One pen weight: a 1931 walking guide", galleryText(card.copy(summary = "Theo redrew every map.")))
+        assertEquals("One post is not a thread", emptyList<ThreadPost>(), postThread(card.copy(post = Post(thread = posts.take(1)))))
+        assertEquals("Only X keeps threads", emptyList<ThreadPost>(), postThread(card.copy(type = "BlueskyPost")))
+    }
+
+    @Test
+    fun initialsNameTheThreadsCircles() {
+        assertEquals("TP", com.octaviantocan.mymind.ui.card.initials("Theo Park"))
+        assertEquals("M", com.octaviantocan.mymind.ui.card.initials("@maya"))
     }
 
     @Test

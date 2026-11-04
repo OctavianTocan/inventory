@@ -7,6 +7,7 @@ import androidx.core.text.HtmlCompat
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.PostArticle
+import com.octaviantocan.mymind.data.ThreadPost
 import com.octaviantocan.mymind.data.RedditComment
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -218,6 +219,29 @@ fun postedAt(card: Card): Instant? {
 }
 
 /**
+ * @param card A card.
+ * @return The posts of the X thread [card] ends, oldest first and [card]'s own post last, when the server kept one;
+ *   empty for a single post and every other card.
+ */
+fun postThread(card: Card): List<ThreadPost> =
+    if (card.type == "XPost") card.post?.thread.orEmpty().takeIf { it.size > 1 }.orEmpty() else emptyList()
+
+/**
+ * @param post A post of an X thread.
+ * @return Its words as plain text, without the bare media links X appends.
+ */
+fun threadPostWords(post: ThreadPost): String =
+    post.bodyHtml?.let { HtmlCompat.fromHtml(it, HtmlCompat.FROM_HTML_MODE_COMPACT).toString() }.orEmpty()
+        .replace(MEDIA_LINK, "").replace(LINE_END_SPACE, "$1").trim()
+
+/**
+ * @param card An X thread ([postThread]).
+ * @return The name the model gave the whole thread, which the server sends with its summary; null until the thread has
+ *   been summed up, when its tile shows the first post's words instead.
+ */
+fun threadName(card: Card): String? = card.title?.trim()?.takeIf { it.isNotEmpty() && !card.summary.isNullOrBlank() }
+
+/**
  * @param card A social post.
  * @return The words its tile and reader show: the post's own words, or a Reddit post's description unless it is only
  *   the page's "Posted in r/… by …" line.
@@ -248,7 +272,7 @@ fun redditComments(card: Card): List<RedditComment> = if (card.type != "RedditPo
  */
 internal fun postStandsTall(card: Card): Boolean {
     if (tileKind(card) != TileKind.Post) return false
-    if (galleryPicture(card) != null || postArticle(card) != null) return true
+    if (galleryPicture(card) != null || postArticle(card) != null || postThread(card).isNotEmpty()) return true
     val words = card.post?.bodyHtml?.replace(HTML_TAG, "") ?: card.description.orEmpty()
     val title = if (card.type == "RedditPost") card.reddit?.title.orEmpty() else ""
     return words.replace(MEDIA_LINK, "").trim().length + title.length > POST_SQUARE_CHARS

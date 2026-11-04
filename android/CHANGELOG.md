@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.45 (56), 2026-11-04
+X threads you save keep the whole thread, named and summed up.
+
+### Added
+- Saving a post that ends a thread on X keeps every post of the thread before it, with their pictures (up to 16 posts). Save the thread's last post to keep all of it: posts written after the one you save cannot be read without X's paid API.
+- A thread's card leads with the name ThyMind gives the whole thread, with the author and how many posts it has above it.
+- Opened, a thread shows What the thread says first, then every post in one black section joined by X's thread line, pictures whole.
+
 ## 0.6.44 (55), 2026-11-04
 Scrolling and pinching the gallery are smoother.
 
@@ -8,6 +16,7 @@ Scrolling and pinching the gallery are smoother.
 - A pinch no longer stalls as your fingers land: the second text layout each card cross-fades to is ready before you pinch.
 - After a pinch lands on smaller cards, the pictures stay as they are instead of all loading again.
 - The fade on a card's last line of words and the soft fade at the foot of the gallery take less work to draw on every frame.
+
 ## 0.6.43 (54), 2026-11-04
 A card's page is quieter: no Edit tags button and no hint line at the end.
 

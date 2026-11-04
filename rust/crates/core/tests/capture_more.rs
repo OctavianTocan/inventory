@@ -1,5 +1,5 @@
 //! What a saved link's own site adds after its capture: a Reddit post's words and top comments, a YouTube video's
-//! length, Bluesky and Mastodon posts, the article an X post carries, and sites that do not answer or are refused
+//! length, Bluesky and Mastodon posts, the article an X post carries and the thread it ends, and sites that do not answer or are refused
 //! leaving the card as it was.
 
 use std::cell::RefCell;
@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use futures_executor::block_on;
 use mm_core::capture_link::CaptureOptions;
 use mm_core::capture_http::forbidden;
-use mm_core::capture_more::{bluesky_post, capture_more, mastodon_post, reddit_extras, reddit_json_url, syndication_token, x_article_extras, youtube_seconds};
+use mm_core::capture_more::{bluesky_post, capture_more, mastodon_post, reddit_extras, reddit_json_url, syndication_token, x_article_extras, x_thread_post, youtube_seconds};
 use mm_core::host::{AnalysisImage, FetchedResource, Media, MediaInput, MediaResult, MediaUser, PreparedMedia, Resource, ResourceOptions};
 use mm_core::http::{Headers, Response};
 use mm_core::{Error, Result, Value, obj};
@@ -402,4 +402,75 @@ fn capture_gives_an_x_post_its_article_card() {
     assert_eq!(extras.get("post").get("author").as_str(), Some("by Fern"));
     let plain = Pages(vec![], RefCell::default());
     assert!(run(&card, &plain).is_empty(), "a post X says nothing about stays as it was");
+}
+
+fn syndication(id: u64) -> &'static str {
+    Box::leak(format!("https://cdn.syndication.twimg.com/tweet-result?id={id}&lang=en&token={}", syndication_token(id)).into_boxed_str())
+}
+
+const THREAD_FIRST: &str = r#"{"id_str":"100","text":"I spent a year redrawing every map in a 1931 walking guide. https://t.co/pic1",
+  "display_text_range":[0,59],"user":{"id_str":"7"},"entities":{"urls":[]},
+  "mediaDetails":[{"type":"photo","media_url_https":"https://pbs.example.test/hills.jpg"}]}"#;
+const THREAD_SECOND: &str = r#"{"id_str":"200","text":"@theo_maps Every contour drawn with one pen & no shading. See https://t.co/AbC",
+  "display_text_range":[11,78],"user":{"id_str":"7"},"in_reply_to_status_id_str":"100","in_reply_to_user_id_str":"7",
+  "entities":{"urls":[{"url":"https://t.co/AbC","expanded_url":"https://theopark.example/1931","display_url":"theopark.example/1931"}]}}"#;
+const THREAD_LAST: &str = r#"{"id_str":"300","text":"@theo_maps A folding booklet this winter.","display_text_range":[11,41],
+  "user":{"id_str":"7"},"in_reply_to_status_id_str":"200","in_reply_to_user_id_str":"7",
+  "mediaDetails":[{"type":"video","media_url_https":"https://pbs.example.test/poster.jpg"}]}"#;
+
+#[test]
+fn a_thread_post_keeps_its_own_words_links_and_pictures() {
+    let second = x_thread_post(&json::parse(THREAD_SECOND).unwrap());
+    assert_eq!(second.html, "<p>Every contour drawn with one pen &amp; no shading. See <a href=\"https://theopark.example/1931\">theopark.example/1931</a></p>");
+    assert!(second.images.is_empty() && !second.video);
+    let first = x_thread_post(&json::parse(THREAD_FIRST).unwrap());
+    assert_eq!(first.html, "<p>I spent a year redrawing every map in a 1931 walking guide.</p>", "the picture's own link goes");
+    assert_eq!(first.images, vec!["https://pbs.example.test/hills.jpg".to_owned()]);
+    let last = x_thread_post(&json::parse(THREAD_LAST).unwrap());
+    assert!(last.video);
+}
+
+#[test]
+fn capture_keeps_the_thread_a_saved_x_post_ends() {
+    let pages = Pages(
+        vec![
+            (syndication(300), 200, THREAD_LAST),
+            (syndication(200), 200, THREAD_SECOND),
+            (syndication(100), 200, THREAD_FIRST),
+            ("https://pbs.example.test/hills.jpg", 200, "hills"),
+            ("https://pbs.example.test/poster.jpg", 200, "poster"),
+        ],
+        RefCell::default(),
+    );
+    let card: Value = obj! {
+        "data" => obj! { "type" => "XPost", "title" => "Theo Park on X" },
+        "extras" => obj! { "linkUrl" => "https://x.com/theo_maps/status/300", "post" => obj! { "bodyHtml" => "<p>A folding booklet this winter.</p>", "author" => "by Theo Park" } },
+    }
+    .into();
+    let patches = run_with(&card, &pages, &Covers);
+    assert_eq!(patches.len(), 1);
+    let extras = patches[0].get("extras");
+    let thread = extras.get("post").get("thread").as_array().unwrap();
+    assert_eq!(thread.len(), 3, "oldest first, the saved post last");
+    assert!(thread[0].get("bodyHtml").as_str().unwrap().contains("1931 walking guide"));
+    assert_eq!(thread[0].get("gallery").at(0).get("src").as_str(), Some("/media/hills"));
+    assert_eq!(thread[2].get("hasVideo"), &Value::Bool(true));
+    assert_eq!(extras.get("post").get("author").as_str(), Some("by Theo Park"), "the saved post stays as it was");
+    assert_eq!(extras.get("cover").get("src").as_str(), Some("/media/hills"), "the thread's first picture is the cover");
+    assert!(extras.get("captureText").as_str().unwrap().starts_with("I spent a year"));
+    assert!(extras.get("captureText").as_str().unwrap().ends_with("A folding booklet this winter."));
+    assert!(patches[0].get("data").get("title").is_undefined(), "the title is left for the analysis to name");
+}
+
+#[test]
+fn a_reply_to_someone_else_is_not_a_thread() {
+    let reply = r#"{"id_str":"300","text":"Agreed.","user":{"id_str":"7"},"in_reply_to_status_id_str":"200","in_reply_to_user_id_str":"9"}"#;
+    let pages = Pages(vec![(syndication(300), 200, reply)], RefCell::default());
+    let card: Value = obj! {
+        "data" => obj! { "type" => "XPost" },
+        "extras" => obj! { "linkUrl" => "https://x.com/theo_maps/status/300", "post" => obj! { "bodyHtml" => "<p>Agreed.</p>" } },
+    }
+    .into();
+    assert!(run(&card, &pages).is_empty());
+    assert_eq!(pages.1.borrow().len(), 1, "X is asked only for the saved post");
 }

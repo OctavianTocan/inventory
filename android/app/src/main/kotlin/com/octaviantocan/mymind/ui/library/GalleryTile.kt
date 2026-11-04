@@ -288,6 +288,7 @@ private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Co
     val brand = postBrand(card.type)
     val byline = remember(card) { postByline(card) ?: PostByline(galleryKind(card), null) }
     val article = postArticle(card)
+    val posts = postThread(card).size
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 110.dp
         val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
@@ -296,7 +297,7 @@ private fun PostTile(card: Card, text: String, highlight: Boolean, picture: (@Co
         val wordsHeight = ((maxHeight - inset * 2 - if (head) POST_HEAD else 0.dp) * 0.45f).coerceAtLeast(19.dp)
         Column(Modifier.fillMaxSize().padding(start = inset, end = inset, top = inset - 2.dp, bottom = inset - 3.dp)) {
             if (head) {
-                PostHead(brand, byline)
+                if (posts > 0) ThreadHead(brand, byline.name, posts) else PostHead(brand, byline)
                 Spacer(Modifier.height(6.dp))
             }
             if (words.isNotBlank()) {
@@ -436,6 +437,19 @@ private fun PostHead(brand: PostBrand, byline: PostByline) {
             Text(byline.name, color = brand.text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (byline.handle != null) Text(byline.handle, color = brand.muted, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+    }
+}
+
+/**
+ * An X thread's tile head: X's mark, then the author's name and how many posts the thread has, in one muted line, as
+ * the thread's name leads the tile under it (Tavi's pick of 08 Summary first, 4 November 2026).
+ */
+@Composable
+private fun ThreadHead(brand: PostBrand, name: String, posts: Int) {
+    val style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp)
+    Row(Modifier.fillMaxWidth().clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (brand.icon != null) Image(painterResource(brand.icon), null, Modifier.size(13.dp), colorFilter = ColorFilter.tint(brand.text))
+        Text("$name · $posts posts", Modifier.weight(1f), color = brand.muted, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -630,7 +644,7 @@ internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_T
 
 internal fun galleryText(card: Card): String = when (tileKind(card)) {
     TileKind.Note -> noteText(card)
-    TileKind.Post -> if (card.type != "RedditPost") postWords(card)
+    TileKind.Post -> if (card.type != "RedditPost") threadName(card).takeIf { postThread(card).isNotEmpty() } ?: postWords(card)
         else listOfNotNull(card.reddit?.title, postWords(card)).filter { it.isNotBlank() }.distinct().joinToString("\n")
     TileKind.Media, TileKind.Video -> card.prose?.let(::proseText)?.takeIf { it.isNotBlank() }
         ?: card.note?.takeIf { it.isNotBlank() }
