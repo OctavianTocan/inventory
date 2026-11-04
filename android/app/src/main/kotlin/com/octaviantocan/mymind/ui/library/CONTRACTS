@@ -159,8 +159,8 @@ Scrolling the gallery MUST NOT compose a burst of cards in one frame: the cards 
 above and below what shows are composed ahead, one a frame, nearest first, so a card is
 ready before it scrolls into view. Pinching MUST NOT compose a burst either: the cards the
 grids a stop past either side show are composed ahead too, and at rest in reels the tiles of
-the grid around are readied, unplaced and hidden from touch and accessibility, so pinching
-out of reels composes none at once. While the cards move under the fingers or land, no card
+the grids around and a stop past are readied, unplaced and hidden from touch and accessibility,
+and the pages stay composed, so pinching out of reels composes none at once. While the cards move under the fingers or land, no card
 or other-size layout is composed ahead: those are readied at rest, so a pinch's frames only
 move cards. On the way into reels the full-screen pages around the
 fingers are composed one a frame, before they fade in. Drawing a frame MUST NOT need an offscreen layer per

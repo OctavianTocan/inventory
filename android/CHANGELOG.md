@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.50 (61), 2026-11-04
+Pinching out of full-screen cards builds less.
+
+### Changed
+- Full-screen cards stay ready while you browse them, so pinching back out no longer builds them again.
+- While full-screen cards show, the cards of the grids a pinch out reaches are made ready ahead, a stop further than before.
+
 ## 0.6.49 (60), 2026-11-04
 Pinching the gallery is smoother again.
 

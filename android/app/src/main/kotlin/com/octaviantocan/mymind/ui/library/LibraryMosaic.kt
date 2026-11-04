@@ -611,10 +611,12 @@ private fun MosaicBody(
     val ahead by remember(layouts, height) { derivedStateOf { latestFrame().ahead(height, height) } }
     val prefetch = remember(layouts) { MosaicPrefetch() }
     LaunchedEffect(prefetch, height) {
-        // At rest in reels the tiles of the grid around are readied, unplaced, so pinching out of reels composes none.
-        snapshotFlow { MosaicPrefetchWindow(window, if (tilesShown) ahead else window,
+        // At rest in reels the tiles of the grids around and a stop past are readied, unplaced, so pinching out of reels
+        // composes none.
+        snapshotFlow { MosaicPrefetchWindow(window, ahead,
             moving = mosaic.isPinching || mosaic.position != mosaic.columns.toFloat(), scrolling(), reels = !tilesShown,
-            pages = if (tilesShown) pages else IntRange.EMPTY) }
+            // Pages stay readied through reels, so pinching out of them builds none again.
+            pages = pages) }
             .collectLatest { prefetch.fill(it, layouts, focalIndex = focal) }
     }
     if (shape?.fill == true) MosaicFill(layouts, height, margin, currentFrame, blur = with(LocalDensity.current) { BACKDROP_BLUR.toPx() })
