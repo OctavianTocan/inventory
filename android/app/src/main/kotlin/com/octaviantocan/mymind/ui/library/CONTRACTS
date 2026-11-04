@@ -157,11 +157,14 @@ showcase's fix of the same day.
 @cc [owner:OctavianTocan,label:product;motion;architecture] gallery-scrolls-without-hitches
 Scrolling the gallery MUST NOT compose a burst of cards in one frame: the cards a screen
 above and below what shows are composed ahead, one a frame, nearest first, so a card is
-ready before it scrolls into view. Drawing a frame MUST NOT need an offscreen layer per
+ready before it scrolls into view. Pinching MUST NOT compose a burst either: the cards the
+grids a stop past either side show are composed ahead too, and at rest in reels the tiles of
+the grid around are readied, unplaced and hidden from touch and accessibility, so pinching
+out of reels composes none at once. Drawing a frame MUST NOT need an offscreen layer per
 card: a tile's fading last line is its paper laid over the words, and the blurred fade
 at the foot of the gallery blurs each of its layers only as far as that layer reaches.
 Source: Tavi, 4 November 2026: "We gotta optimize the app for scrolling to be super
-smooth with no hitches or pops or lag of any sort."
+smooth with no hitches or pops or lag of any sort." and "Same for pinching. It's laggy right now."
 
 @cc [owner:OctavianTocan,label:product;design;motion] gallery-reels-at-one-column
 In Everything, search results and an opened space, one column MUST be full screen: a pinch

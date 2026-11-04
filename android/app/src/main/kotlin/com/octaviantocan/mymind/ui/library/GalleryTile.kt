@@ -39,6 +39,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -177,9 +181,7 @@ internal fun GalleryTile(
     // The video badge and the picture count sit on the print's picture, inside its border.
     val marks = @Composable { scope: BoxScope ->
         with(scope) {
-            if (kind == TileKind.Video) BoxWithConstraints(Modifier.matchParentSize()) {
-                VideoBadge(card.type == "YouTubeVideo", length?.takeIf { maxWidth >= 96.dp }, Modifier.align(Alignment.TopEnd).padding(8.dp))
-            }
+            if (kind == TileKind.Video) VideoBadgeFor(card.type == "YouTubeVideo", length, Modifier.matchParentSize())
             GalleryCount(card, Modifier.align(Alignment.TopEnd))
         }
     }
@@ -402,25 +404,50 @@ private fun AppTile(card: Card, highlight: Boolean, picture: @Composable (Modifi
 @Composable
 private fun PrintTile(words: TileWords, source: String?, highlight: Boolean, marks: @Composable (BoxScope) -> Unit,
     picture: @Composable (Modifier) -> Unit) {
-    val density = LocalDensity.current
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val compact = maxWidth < 110.dp
-        val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
-        val border = if (highlight) HIGHLIGHT_BORDER else PRINT_WORDS_BORDER
-        val foot = maxHeight * if (maxHeight > maxWidth * 1.6f) 0.4f else 0.56f
-        val line = with(density) { (if (highlight) HIGHLIGHT_LINE else TILE_LINE).toDp() }
-        val room = foot - inset * 1.55f >= line * 2 + with(density) { SOURCE_LINE.toDp() }
-        Column(Modifier.fillMaxSize().padding(start = border, top = border, end = border)) {
-            Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape((if (highlight) HIGHLIGHT_CORNER else TILE_CORNER) - border - 1.dp))) {
-                picture(Modifier.fillMaxSize())
-                marks(this)
-            }
-            Column(Modifier.fillMaxWidth().heightIn(max = foot).padding(start = inset - border, end = inset - border, top = inset * 0.7f, bottom = inset * 0.85f)) {
-                TileText(words.text(LibraryStyle.colors), highlight, Modifier.weight(1f, fill = false).fillMaxWidth())
-                if (room && source != null) KindLabel(source, Modifier.padding(top = inset * 0.35f))
-            }
+    val border = if (highlight) HIGHLIGHT_BORDER else PRINT_WORDS_BORDER
+    val corner = (if (highlight) HIGHLIGHT_CORNER else TILE_CORNER) - border - 1.dp
+    // Laid out, not composed, by its size: a pinch that changes the tile's frame lays it out again but composes nothing.
+    Layout(content = {
+        Box(Modifier.clip(RoundedCornerShape(corner))) {
+            picture(Modifier.fillMaxSize())
+            marks(this)
+        }
+        TileText(words.text(LibraryStyle.colors), highlight, Modifier)
+        if (source != null) KindLabel(source)
+    }, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val inset = tileInset(width, highlight)
+        val edge = border.toPx()
+        val foot = height * if (height > width * 1.6f) 0.4f else 0.56f
+        val line = (if (highlight) HIGHLIGHT_LINE else TILE_LINE).toPx()
+        val room = foot - inset * 1.55f >= line * 2 + SOURCE_LINE.toPx()
+        val wordsWidth = (width - 2 * inset).roundToInt().coerceAtLeast(0)
+        val top = (inset * 0.7f).roundToInt()
+        val bottom = (inset * 0.85f).roundToInt()
+        val gap = (inset * 0.35f).roundToInt()
+        val label = measurables.getOrNull(2)?.takeIf { room }?.measure(Constraints(maxWidth = wordsWidth))
+        val labelHeight = label?.let { it.height + gap } ?: 0
+        val text = measurables[1].measure(Constraints(minWidth = wordsWidth, maxWidth = wordsWidth,
+            maxHeight = (foot.roundToInt() - top - bottom - labelHeight).coerceAtLeast(0)))
+        val footHeight = (top + text.height + labelHeight + bottom).coerceAtMost(foot.roundToInt())
+        val pictureWidth = (width - 2 * edge).roundToInt().coerceAtLeast(0)
+        val pictureHeight = (height - edge.roundToInt() - footHeight).coerceAtLeast(0)
+        val shown = measurables[0].measure(Constraints.fixed(pictureWidth, pictureHeight))
+        layout(width, height) {
+            shown.place(edge.roundToInt(), edge.roundToInt())
+            val wordsTop = edge.roundToInt() + pictureHeight + top
+            text.place(inset.roundToInt(), wordsTop)
+            label?.place(inset.roundToInt(), wordsTop + text.height + gap)
         }
     }
+}
+
+/** A tile's inset, in pixels, at [width] pixels across: tighter on a narrow tile, wider on a Top of Mind card. */
+private fun Density.tileInset(width: Int, highlight: Boolean): Float = when {
+    highlight -> 16.dp.toPx()
+    width < 110.dp.toPx() -> 8.dp.toPx()
+    else -> 12.dp.toPx()
 }
 
 /** Height of a post tile's head: the name and the handle under it, as [PostHead] draws them. */
@@ -542,17 +569,28 @@ private fun Modifier.fadeLastLine(layout: WordsLayout, paper: Color): Modifier =
  */
 @Composable
 private fun WordsTile(card: Card, highlight: Boolean) {
-    val density = LocalDensity.current
     val words = remember(card) { tileWords(card) }
     val source = remember(card) { gallerySource(card) }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val compact = maxWidth < 110.dp
-        val inset = if (highlight) 16.dp else if (compact) 8.dp else 12.dp
-        val line = with(density) { (if (highlight) HIGHLIGHT_LINE else TILE_LINE).toDp() }
-        val room = maxHeight - inset * 2 >= line * 3 + with(density) { SOURCE_LINE.toDp() }
-        Column(Modifier.fillMaxSize().padding(inset)) {
-            TileText(words.text(LibraryStyle.colors), highlight, Modifier.weight(1f).fillMaxWidth())
-            if (room && source != null) KindLabel(source, Modifier.padding(top = inset * 0.4f))
+    // Laid out, not composed, by its size, as a print is ([PrintTile]).
+    Layout(content = {
+        TileText(words.text(LibraryStyle.colors), highlight, Modifier)
+        if (source != null) KindLabel(source)
+    }, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val inset = tileInset(width, highlight)
+        val line = (if (highlight) HIGHLIGHT_LINE else TILE_LINE).toPx()
+        val room = height - inset * 2 >= line * 3 + SOURCE_LINE.toPx()
+        val side = inset.roundToInt()
+        val innerWidth = (width - 2 * side).coerceAtLeast(0)
+        val innerHeight = (height - 2 * side).coerceAtLeast(0)
+        val gap = (inset * 0.4f).roundToInt()
+        val label = measurables.getOrNull(1)?.takeIf { room }?.measure(Constraints(maxWidth = innerWidth))
+        val labelHeight = label?.let { it.height + gap } ?: 0
+        val text = measurables[0].measure(Constraints.fixed(innerWidth, (innerHeight - labelHeight).coerceAtLeast(0)))
+        layout(width, height) {
+            text.place(side, side)
+            label?.place(side, side + text.height + gap)
         }
     }
 }

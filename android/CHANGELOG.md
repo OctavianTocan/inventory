@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.46 (57), 2026-11-04
+Pinching the gallery is smoother.
+
+### Changed
+- Pinching out of full-screen cards no longer builds a dozen cards in one frame: the cards around are ready before you pinch.
+- Cards a step further out are made ready before a pinch reaches them, alongside the second text layouts, so neither waits on the other.
+- Cards with words and pictures lay themselves out with less work while their size changes.
+
 ## 0.6.45 (56), 2026-11-04
 X threads you save keep the whole thread, named and summed up.
 

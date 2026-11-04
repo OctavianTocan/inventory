@@ -1,5 +1,7 @@
 package com.octaviantocan.mymind.ui.library
 
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.compose.foundation.Image
@@ -197,6 +199,31 @@ internal fun VideoPreview(url: String, previews: VideoPreviews, onLength: (Long)
     }
     val current = player
     if (current == null) still() else ContentFrame(current, Modifier.fillMaxSize(), SURFACE_TYPE_TEXTURE_VIEW, ContentScale.Crop, false) { still() }
+}
+
+/**
+ * A video tile's corner badge ([VideoBadge]) in the top end corner of [modifier]'s box, 8 dp in: with the video's
+ * length, [millis], once the box is 96 dp wide or more. Both badges are composed and the one that fits is laid out, so a
+ * pinch that changes the tile's size composes nothing.
+ *
+ * @param youtube True for a YouTube video.
+ * @param millis The video's length in milliseconds, or null.
+ * @param modifier Modifier for the box the badge sits in.
+ */
+@Composable
+internal fun VideoBadgeFor(youtube: Boolean, millis: Long?, modifier: Modifier = Modifier) {
+    Layout(content = {
+        VideoBadge(youtube, null)
+        if (millis != null) VideoBadge(youtube, millis)
+    }, modifier = modifier) { measurables, constraints ->
+        val wide = constraints.maxWidth >= 96.dp.roundToPx()
+        val badge = (if (wide) measurables.getOrNull(1) else null) ?: measurables[0]
+        val edge = 8.dp.roundToPx()
+        val shown = badge.measure(Constraints(maxWidth = (constraints.maxWidth - 2 * edge).coerceAtLeast(0)))
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            shown.placeRelative(constraints.maxWidth - edge - shown.width, edge)
+        }
+    }
 }
 
 /**
