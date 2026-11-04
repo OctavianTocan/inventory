@@ -125,18 +125,20 @@ class ReaderContentTest {
     }
 
     @Test
-    fun tagsStayQuietUntilEditShowsTheirCrosses() {
+    fun tagsStayQuietUntilEditTagsShowsTheirCrosses() {
         val removed = mutableListOf<String>()
+        val editing = mutableStateOf(false)
         compose.setPhoneContent(false) {
             PageTheme(PageScheme.Dark) {
                 CardDetail(page, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons(), onRemoveTag = { removed += it.name.orEmpty() },
-                    onOpenSource = {})
+                    onOpenSource = {}, editingTags = editing.value, actions = ReaderActions(onEditingTags = { editing.value = it }))
             }
         }
         compose.mainClock.autoAdvance = true
         compose.onNodeWithText("Linting").performScrollTo()
+        compose.onNodeWithText("Edit tags").assertDoesNotExist()
         compose.onNodeWithContentDescription("Remove tag Linting").assertDoesNotExist()
-        compose.onNodeWithText("Edit tags").performClick()
+        compose.runOnIdle { editing.value = true }
         compose.onNodeWithContentDescription("Remove tag Formatting").performClick()
         compose.onNodeWithText("Done").performClick()
         compose.onNodeWithContentDescription("Remove tag Linting").assertDoesNotExist()

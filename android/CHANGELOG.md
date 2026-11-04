@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.43 (54), 2026-11-04
+A card's page is quieter: no Edit tags button and no hint line at the end.
+
+### Changed
+- The Tags section no longer shows Edit tags. Hold the tags and pick Edit tags to show the crosses that take tags off; Done hides them again.
+- The line "Hold any part for its own actions" at the end of a card's page is gone.
+
 ## 0.6.42 (53), 2026-11-01
 Cards look like prints now, and words stay close to one size as you pinch.
 

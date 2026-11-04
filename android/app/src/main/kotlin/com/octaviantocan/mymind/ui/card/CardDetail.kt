@@ -21,7 +21,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -114,6 +113,7 @@ private val LEAD_PARTS = setOf(ReaderPart.Post, ReaderPart.Note, ReaderPart.Summ
  * @property onEverything Leaves the reader for the Everything gallery.
  * @property onPart Opens the sheet of a part that was held; null leaves the parts without one.
  * @property onReading Turns Reader Mode on or off.
+ * @property onEditingTags Shows the crosses that take tags off, or hides them again with Done.
  */
 @Immutable
 class ReaderActions(
@@ -126,6 +126,7 @@ class ReaderActions(
     val onEverything: (() -> Unit)? = null,
     val onPart: ((ReaderPart) -> Unit)? = null,
     val onReading: ((Boolean) -> Unit)? = null,
+    val onEditingTags: ((Boolean) -> Unit)? = null,
 )
 
 /**
@@ -147,6 +148,7 @@ data class ReaderDetails(val spaces: List<String> = emptyList(), val recent: Lis
  * @param actionsProgress How far the card's sheet has risen over it, from 0 to 1; the reader blurs with it.
  * @param shrink How far Delete card's hold has come, from 0 to 1; the reader shrinks and fades with it.
  * @param reading True for Reader Mode: the page's text alone, in larger type.
+ * @param editingTags True while the tags show the crosses that take them off, after Edit tags from their held sheet.
  * @param sheet Where the sheet is; the default rests in place, as a reader shown on its own does.
  * @param onPulledAway Called once a finger has taken the sheet off the bottom of the screen, to remove the reader.
  */
@@ -159,6 +161,7 @@ fun CardDetailDialog(
     actionsProgress: Float = 0f,
     shrink: Float = 0f,
     reading: Boolean = false,
+    editingTags: Boolean = false,
     scrollState: ScrollState = rememberScrollState(),
     actions: ReaderActions = ReaderActions(),
     details: ReaderDetails = ReaderDetails(),
@@ -210,7 +213,8 @@ fun CardDetailDialog(
                 .draggable(rememberDraggableState { sheet.drag(it) }, Orientation.Vertical,
                     onDragStopped = { velocity -> sheet.release(scope, velocity, speed, latestMotion) { latestGone() } })) {
                 CardDetail(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress).shrunk { shrink }, onRemoveTag = onRemoveTag,
-                    scrollState = scrollState, actions = actions, details = details, reading = reading)
+                    scrollState = scrollState, actions = actions, details = details, reading = reading,
+                    editingTags = editingTags)
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp).clip(CircleShape)
                     .background((if (light) LightCardSheetColors else DarkCardSheetColors).grabber))
             }
@@ -261,6 +265,7 @@ internal fun CardDetail(
     actions: ReaderActions = ReaderActions(),
     details: ReaderDetails = ReaderDetails(),
     reading: Boolean = false,
+    editingTags: Boolean = false,
 ) {
     val colors = if (MymindTheme.page.document.luminance() < 0.5f) DarkCardSheetColors else LightCardSheetColors
     val density = LocalDensity.current
@@ -299,7 +304,8 @@ internal fun CardDetail(
                         .sheetEdgeFade(color = colors.paper, topStrength = { (shown.value / fade).coerceIn(0f, 1f) })
                         .verticalScroll(shown)) {
                         if (inReader) ReaderModeBody(card, paragraphs, onBack = back)
-                        else ReaderBody(card, onRemoveTag, actions.onAddTags, source, onMenu, actions.onPart, details.sameVibe, actions.onOpenRecent,
+                        else ReaderBody(card, onRemoveTag?.takeIf { editingTags }, actions.onEditingTags?.let { set -> { set(false) } },
+                            actions.onAddTags, source, onMenu, actions.onPart, details.sameVibe, actions.onOpenRecent,
                             pdf, pdfText?.let(::readingMinutes), actions.onReading?.takeIf { paragraphs.isNotEmpty() }?.let { read -> { read(true) } })
                     }
                     if (!inReader) ReaderFoot(card, source ?: viewPdf, onMenu, Modifier.align(Alignment.BottomCenter),
@@ -387,12 +393,13 @@ internal fun readerTitleStyle(colors: CardSheetColors) = TextStyle(
 /**
  * The card's parts, each in its own raised section: picture and title, its words, tags, the user's note and the page.
  * With [onPart], each part but the picture opens its own sheet when held, a card that is not a note always shows Your
- * note so one can be written, and a closing line says so.
+ * note so one can be written.
  */
 @Composable
 private fun ReaderBody(
     card: Card,
     onRemoveTag: ((Tag) -> Unit)?,
+    onDoneTags: (() -> Unit)?,
     onAddTags: (() -> Unit)?,
     onOpenSource: (() -> Unit)?,
     onMenu: () -> Unit,
@@ -419,12 +426,10 @@ private fun ReaderBody(
         if (comments.isNotEmpty()) CommentsSection(comments, onMenu)
         sections.filter { it.part in LEAD_PARTS && !(post && it.part == ReaderPart.Post) }.forEach { TextSection(it, card, hold(it.part)) }
         if (sameVibe.isNotEmpty()) SameVibeSection(sameVibe, onOpenCard)
-        TagsSection(card, onRemoveTag, onAddTags, hold(ReaderPart.Tags))
+        TagsSection(card, onRemoveTag, onDoneTags, onAddTags, hold(ReaderPart.Tags))
         sections.filter { it.part == ReaderPart.YourNote }.forEach { TextSection(it, card, hold(it.part)) }
         if (emptyNote) EmptyNoteSection(hold(ReaderPart.YourNote))
         sections.filter { it.part == ReaderPart.Page }.forEach { TextSection(it, card, hold(it.part)) }
-        if (onPart != null) Text("Hold any part for its own actions", Modifier.fillMaxWidth().padding(top = 4.dp),
-            style = detailStyle(LocalCardSheetColors.current).copy(fontFamily = MymindTheme.fonts.body, textAlign = TextAlign.Center))
     }
 }
 
@@ -794,29 +799,29 @@ private fun SectionHeading(@DrawableRes icon: Int, label: String, trailing: Stri
 private fun detailStyle(colors: CardSheetColors) = TextStyle(color = colors.text.copy(alpha = 0.65f), fontSize = 15.sp, lineHeight = 21.sp)
 
 /**
- * The card's tags as quiet pills, with + Add when tags can be added. Edit tags shows a cross on each, which takes that
- * tag off, and Done hides them again. A card without tags shows the section only when tags can be added.
+ * The card's tags as quiet pills, with + Add when tags can be added. With [onRemove], after Edit tags from the tags'
+ * held sheet, each shows a cross that takes it off and Done calls [onDone]. A card without tags shows the section only
+ * when tags can be added.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TagsSection(card: Card, onRemove: ((Tag) -> Unit)?, onAdd: (() -> Unit)?, onHold: (() -> Unit)? = null) {
+private fun TagsSection(card: Card, onRemove: ((Tag) -> Unit)?, onDone: (() -> Unit)?, onAdd: (() -> Unit)?, onHold: (() -> Unit)? = null) {
     val tags = card.tags.orEmpty().filter { !it.name.isNullOrEmpty() }
     if (tags.isEmpty() && onAdd == null) return
     val colors = LocalCardSheetColors.current
     val haptic = LocalHapticFeedback.current
-    var editing by remember(card.id) { mutableStateOf(false) }
     val style = TextStyle(color = colors.text, fontSize = 15.sp, lineHeight = 21.sp, fontFamily = MymindTheme.fonts.body)
     ReaderSection(SECTION_PADDING, holdLabel = "Tags actions", onHold = onHold) {
-        SectionHeading(partIcon(ReaderPart.Tags), ReaderPart.Tags.heading, action = if (onRemove != null && tags.isNotEmpty()) ({
+        SectionHeading(partIcon(ReaderPart.Tags), ReaderPart.Tags.heading, action = if (onRemove != null && onDone != null && tags.isNotEmpty()) ({
             Box(Modifier.heightIn(min = 32.dp).clip(RoundedCornerShape(50))
-                .clickable(role = Role.Button) { editing = !editing }.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-                Text(if (editing) "Done" else "Edit tags", style = style.copy(fontWeight = FontWeight.Medium))
+                .clickable(role = Role.Button) { onDone() }.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                Text("Done", style = style.copy(fontWeight = FontWeight.Medium))
             }
         }) else null)
         Spacer(Modifier.height(10.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             tags.forEach { tag ->
-                val removable = editing && onRemove != null
+                val removable = onRemove != null
                 Row(
                     Modifier.heightIn(min = 32.dp).clip(RoundedCornerShape(50)).background(colors.active)
                         .padding(start = 12.dp, end = if (removable) 2.dp else 12.dp),

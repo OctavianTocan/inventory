@@ -64,9 +64,12 @@ the pages itself, only those near the screen; until then the first page shows as
 server drew it.
 The card's type colour MUST wash the top of the reader as a faint fade, as it does
 on the card's sheets, and never tint the body. Tags are quiet pills without crosses;
-Edit tags reveals a cross on each and Done hides them again, and + Add opens Add
+the Tags section MUST NOT show Edit tags itself: Edit tags, from the tags' held
+sheet, reveals a cross on each and Done hides them again, and + Add opens Add
 tags. A card that is not itself a note MUST show Your note even before one is
-written, inviting one, and the page ends with a line saying any part can be held.
+written, inviting one. The page MUST NOT end with a line saying any part can be held.
+Tavi took the always-shown Edit tags and the "Hold any part for its own actions"
+line off, 4 November 2026.
 Source: Tavi's recorded review, 22 October 2026 ("why is there nothing here", "can't
 just tint only the bottom sheet", "some tags which look really weird"); Tavi's pick
 of F08, whose page is the prototype's 02 raised sections, 28 October 2026; the post
@@ -100,7 +103,9 @@ offers only what that part has: the picture offers Save picture (for a picture
 file), Copy picture and Share picture; a summary, post or note offers Copy and
 Share; Tags offers Edit tags and Copy tags; Your note offers Write a note, or Edit
 note and Copy note; the page text offers Read in Reader Mode and Copy text. Edit
-tags and Edit note open their page in the same sheet, and Your note saves with
+tags closes the sheet and shows the tags' crosses (`card-reader-shows-the-whole-card`;
+a card without tags opens Add tags in the same sheet), Edit note opens its page in
+the same sheet, and Your note saves with
 Done, an emptied note taking the note off. Each hold MUST also be offered to
 accessibility services as an action.
 Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M20, hold a

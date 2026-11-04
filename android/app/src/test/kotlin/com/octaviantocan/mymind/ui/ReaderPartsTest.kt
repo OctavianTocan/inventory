@@ -81,7 +81,7 @@ class ReaderPartsTest {
         compose.onNodeWithText("An essay on walking.").performScrollTo().performTouchInput { longClick() }
         compose.onNodeWithText("No note yet. Hold here to write one.").performScrollTo().performTouchInput { longClick() }
         compose.onNode(longClickLabelled("Tags actions")).performSemanticsAction(SemanticsActions.OnLongClick)
-        compose.onNodeWithText("Hold any part for its own actions").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Hold any part for its own actions").assertDoesNotExist()
         compose.onNodeWithContentDescription("Preview").performScrollTo().performTouchInput { longClick() }
         compose.runOnIdle { assertEquals(listOf(ReaderPart.Summary, ReaderPart.YourNote, ReaderPart.Tags, ReaderPart.Picture), held) }
     }

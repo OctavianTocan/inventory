@@ -139,8 +139,9 @@ private val MENU_BLUR = 8.dp
  * @property card The card.
  * @property spaceId Space it was opened from, or null.
  * @property reading True while it shows in Reader Mode.
+ * @property editingTags True while its tags show the crosses that take them off.
  */
-data class OpenedCard(val card: Card, val spaceId: String?, val reading: Boolean = false)
+data class OpenedCard(val card: Card, val spaceId: String?, val reading: Boolean = false, val editingTags: Boolean = false)
 
 /**
  * Where the + button was tapped.
@@ -353,6 +354,7 @@ fun MainShell(
                                 actionsProgress = menuProgress,
                                 shrink = shrink,
                                 reading = open.reading,
+                                editingTags = open.editingTags,
                                 actions = ReaderActions(
                                     onShare = { openSheet(open.card, open.spaceId, CardSheetRoot.Share, null) },
                                     onAddTags = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Tags) },
@@ -366,6 +368,7 @@ fun MainShell(
                                     },
                                     onPart = { part -> openSheet(open.card, open.spaceId, CardSheetRoot.Part(part), null) },
                                     onReading = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(reading = on) ?: opened },
+                                    onEditingTags = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(editingTags = on) ?: opened },
                                 ),
                                 sheet = readerSheet,
                                 onPulledAway = { gone(true) },
@@ -527,7 +530,10 @@ fun MainShell(
                                 scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(root.part.heading, text))) }
                             }
                             PartAction.Share -> partText(root.part, card)?.let { text -> closeMenu(); send(text, card.title) }
-                            PartAction.EditTags -> {
+                            PartAction.EditTags -> if (opened?.card?.id == card.id && card.tags.orEmpty().any { !it.name.isNullOrEmpty() }) {
+                                closeMenu()
+                                opened = opened?.copy(editingTags = true)
+                            } else {
                                 viewModel.loadTagChoices()
                                 submenu = CardSubmenu.Tags
                             }
