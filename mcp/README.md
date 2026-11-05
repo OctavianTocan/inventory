@@ -9,9 +9,13 @@ brief (`thymind-mcp/concepts_brief.md` in the project files).
   person sees a plain consent page, then signs in with Google; the Worker trades that Google sign-in for an app
   token from the `mymind` Worker (`/app/v1/auth/google`), so the same accounts are allowed as in the app. The app
   token stays inside the encrypted OAuth grant and is never sent to the agent.
-- **Scopes:** `thymind.read` (always) and `thymind.write` (the consent checkbox; no write tools yet).
-- **Limit:** every request to the library is checked against `ALLOWED` in `src/library.ts` before it leaves.
-  Only GET reads and picture renditions are on it today.
+- **Scopes:** `thymind.read` (always) and `thymind.write` (the consent checkbox, ticked by default). A write tool
+  called on a read-only connection answers 403 `insufficient_scope` naming `thymind.write`, so the client can ask the
+  person again.
+- **Limit:** every request to the library is checked against `ALLOWED` in `src/library.ts` before it leaves: GET
+  reads and picture renditions, `POST /app/v1/push` with only the change names in `CHANGES` (no `delete-space`), and
+  `POST /objects/<id>/restore`. Each push names a fresh client id, so concurrent calls never skip each other's
+  changes.
 
 ## Tools
 
@@ -22,6 +26,13 @@ brief (`thymind-mcp/concepts_brief.md` in the project files).
 | `thymind_get_picture` | A card's picture as an image (128–1024 px). |
 | `thymind_list_spaces` | Spaces with card counts. |
 | `thymind_list_tags` | Tags with card counts. |
+| `thymind_save` | Save a link or text, with a note, tags and spaces. A link already saved is bumped. |
+| `thymind_set_note` | Replace a card's note; returns the note it replaced. |
+| `thymind_tag` | Add and remove tags on up to 25 cards. |
+| `thymind_sort` | Put up to 25 cards in a space (or a new one by name), or take them out. |
+| `thymind_pin` | Pin or unpin up to 25 cards. |
+| `thymind_trash` | Move up to 25 cards to the trash. |
+| `thymind_restore` | Take up to 25 cards out of the trash. |
 
 Saved text comes back inside `<saved-content>` fences, and the server instructions tell the agent to treat it as
 data, never as instructions.

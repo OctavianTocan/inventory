@@ -34,7 +34,14 @@ const api = {
     }
     const library = new Library(env.LIBRARY_API, env.PUBLIC_URL, ctx.props.appToken);
     const onSignedOut = () => ctx.waitUntil(revoke(env, ctx.auth));
-    return createMcpHandler(() => createServer(library, onSignedOut)).fetch(request);
+    const authInfo = {
+      token: ctx.auth.token,
+      clientId: ctx.auth.clientId ?? "",
+      scopes: ctx.auth.scope,
+      resource: new URL(`${env.PUBLIC_URL}/mcp`),
+      ...(ctx.auth.expiresAt !== undefined ? { expiresAt: ctx.auth.expiresAt } : {}),
+    };
+    return createMcpHandler(() => createServer(library, onSignedOut)).fetch(request, { authInfo });
   },
 };
 

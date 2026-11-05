@@ -168,8 +168,11 @@ describe("connecting an AI app", () => {
 
     const client = await mcp(call, access_token);
     const { tools } = await client.listTools();
-    expect(tools.map((tool) => tool.name)).toEqual(["thymind_search", "thymind_get_card", "thymind_get_picture", "thymind_list_spaces", "thymind_list_tags"]);
-    expect(tools.every((tool) => tool.annotations?.readOnlyHint)).toBe(true);
+    const reading = ["thymind_search", "thymind_get_card", "thymind_get_picture", "thymind_list_spaces", "thymind_list_tags"];
+    const writing = ["thymind_save", "thymind_set_note", "thymind_tag", "thymind_sort", "thymind_pin", "thymind_trash", "thymind_restore"];
+    expect(tools.map((tool) => tool.name)).toEqual([...reading, ...writing]);
+    expect(tools.filter((tool) => tool.annotations?.readOnlyHint).map((tool) => tool.name)).toEqual(reading);
+    expect(tools.filter((tool) => tool.annotations?.destructiveHint).map((tool) => tool.name)).toEqual(["thymind_set_note", "thymind_trash"]);
 
     const search = await client.callTool({ name: "thymind_search", arguments: { query: "pasta" } });
     expect(search.isError).toBeFalsy();
@@ -194,9 +197,68 @@ describe("connecting an AI app", () => {
     const pinned = await client.callTool({ name: "thymind_search", arguments: { pinned: true } });
     expect(pinned.structuredContent).toMatchObject({ count: 1, has_more: false });
 
-    // Every library request was a read on the allowed list, carrying the app token.
+    // Every library request so far was a read on the allowed list, carrying the app token.
     const reads = library.calls.filter((found) => !found.path.startsWith("/app/v1/auth/"));
     expect(reads.every((found) => found.method === "GET" && found.authorization === "Bearer app-token-1")).toBe(true);
+  });
+
+  it("changes cards when the person allowed changes", async () => {
+    const { call, library } = setup();
+    const { client_id, back } = await connect(call);
+    const { access_token } = await tokens(call, client_id, back);
+    const client = await mcp(call, access_token);
+    const tool = async (name: string, args: Record<string, unknown>) => {
+      const result = await client.callTool({ name, arguments: args });
+      expect(result.isError, `${name}: ${JSON.stringify(result.content)}`).toBeFalsy();
+      return result.structuredContent as Record<string, unknown>;
+    };
+
+    expect(await tool("thymind_save", { content: CARDS.link.url, note: "again" })).toEqual({ id: CARDS.link.id, already_saved: true, not_applied: [] });
+    const saved = await tool("thymind_save", { content: "A thought", tags: ["ideas"], space_ids: ["00000002SpaceAAAAAAAAA", "00000002NoSpaceAAAAAAA"] });
+    expect(saved).toMatchObject({ already_saved: false, not_applied: ["space 00000002NoSpaceAAAAAAA"] });
+    expect(saved.id).toMatch(/^[0-9a-f]{32}$/);
+
+    expect(await tool("thymind_set_note", { id: CARDS.link.id, note: "made it" })).toEqual({ id: CARDS.link.id, previous_note: "try this weekend" });
+    expect(await tool("thymind_tag", { ids: [CARDS.note.id], add: ["dinner"], remove: ["Recipes"] })).toEqual({ changed: [CARDS.note.id], not_changed: [] });
+    expect(await tool("thymind_tag", { ids: ["00000002GoneAAAAAAAAAA"], remove: ["recipes"] })).toEqual({ changed: [], not_changed: ["00000002GoneAAAAAAAAAA"] });
+
+    const sorted = await tool("thymind_sort", { ids: [CARDS.note.id, CARDS.link.id], new_space_name: "Reading" });
+    expect(sorted).toMatchObject({ changed: [CARDS.note.id, CARDS.link.id], not_changed: [] });
+    expect(await tool("thymind_sort", { ids: [CARDS.note.id], new_space_name: "kitchen", remove: false })).toMatchObject({ space_id: "00000002SpaceAAAAAAAAA" });
+    expect(await tool("thymind_pin", { ids: [CARDS.note.id], pinned: false })).toEqual({ changed: [CARDS.note.id], not_changed: [] });
+    expect(await tool("thymind_trash", { ids: [CARDS.note.id, "00000002GoneAAAAAAAAAA"] })).toEqual({ changed: [CARDS.note.id], not_changed: ["00000002GoneAAAAAAAAAA"] });
+    expect(await tool("thymind_restore", { ids: [CARDS.note.id, "00000002GoneAAAAAAAAAA"] })).toEqual({ changed: [CARDS.note.id], not_changed: ["00000002GoneAAAAAAAAAA"] });
+
+    const pushes = library.calls.filter((found) => found.path === "/app/v1/push").map((found) => found.body as { clientId: string; changes: Array<{ id: number; name: string; args: Record<string, unknown> }> });
+    expect(new Set(pushes.map((push) => push.clientId)).size).toBe(pushes.length);
+    const names = pushes.flatMap((push) => push.changes.map((change) => change.name));
+    expect(names).toContain("create-space");
+    expect(names).not.toContain("delete-space");
+    const removed = pushes.flatMap((push) => push.changes).find((change) => change.name === "remove-tag");
+    expect(removed?.args).toEqual({ tagId: "t1" });
+    const space = pushes.flatMap((push) => push.changes).find((change) => change.name === "create-space");
+    expect(space?.args).toMatchObject({ name: "Reading", spaceId: sorted.space_id });
+    expect(library.calls.filter((found) => found.method !== "GET" && !found.path.startsWith("/app/v1/auth/")).every((found) => found.path === "/app/v1/push" || found.path.endsWith("/restore"))).toBe(true);
+  });
+
+  it("asks a read-only connection to connect again before it changes anything", async () => {
+    const { call, library } = setup();
+    const { client_id, back } = await connect(call, false);
+    const { access_token } = await tokens(call, client_id, back);
+    const answers: Response[] = [];
+    const recording = async (input: string | Request, init?: RequestInit) => {
+      const response = await call(input, init);
+      answers.push(response.clone());
+      return response;
+    };
+    const client = await mcp(recording, access_token);
+    const search = await client.callTool({ name: "thymind_search", arguments: {} });
+    expect(search.isError).toBeFalsy();
+    await expect(client.callTool({ name: "thymind_pin", arguments: { ids: [CARDS.note.id] } })).rejects.toThrow();
+    const challenge = answers.find((answer) => answer.status === 403)!;
+    expect(challenge.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
+    expect(challenge.headers.get("www-authenticate")).toContain("thymind.write");
+    expect(library.calls.some((found) => found.path === "/app/v1/push")).toBe(false);
   });
 
   it("connects a client that names itself with a metadata document (CIMD), as ChatGPT does, and speaks MCP 2026-07-28", async () => {

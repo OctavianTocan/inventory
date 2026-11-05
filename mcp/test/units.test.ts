@@ -8,17 +8,26 @@ import { CARDS } from "./fakes";
 const SPACES = new Map([["00000002SpaceAAAAAAAAA", "Kitchen"]]);
 
 describe("allowed library requests", () => {
-  it("lets through only the read routes and pictures", () => {
+  it("lets through the listed reads, pictures, the push and restore", () => {
     expect(allowed("GET", "/app/v1/cards")).toBe(true);
     expect(allowed("GET", "/app/v1/cards/00000002NoteAAAAAAAAAA")).toBe(true);
     expect(allowed("GET", "/app/v1/spaces/00000002SpaceAAAAAAAAA/cards")).toBe(true);
     expect(allowed("GET", "/app/v1/search")).toBe(true);
     expect(allowed("GET", "/media/abc/shot.png;512x512-t.jpg")).toBe(true);
+    expect(allowed("POST", "/app/v1/push")).toBe(true);
+    expect(allowed("POST", "/objects/00000002NoteAAAAAAAAAA/restore")).toBe(true);
   });
 
   it("refuses everything else", () => {
     for (const [method, path] of [
-      ["POST", "/app/v1/push"],
+      ["GET", "/app/v1/push"],
+      ["POST", "/objects/abc"],
+      ["POST", "/objects/abc/pin"],
+      ["DELETE", "/objects/abc"],
+      ["POST", "/objects/../restore"],
+      ["POST", "/spaces"],
+      ["DELETE", "/spaces/abc"],
+      ["POST", "/uploads/authorize"],
       ["GET", "/app/v1/ai/search"],
       ["POST", "/app/v1/ai/search"],
       ["GET", "/app/v1/me"],
@@ -48,6 +57,32 @@ describe("Library", () => {
     await expect(library.bytes("//evil.example/media/x.jpg")).rejects.toBeInstanceOf(LibraryError);
     await library.json("/app/v1/tags");
     expect(sent).toEqual(["https://mymind.example/app/v1/tags"]);
+  });
+
+  it("pushes only the changes agents may make, each push under a new client", async () => {
+    const bodies: Array<{ clientId: string; changes: Array<{ id: number; name: string }> }> = [];
+    const binding = {
+      fetch: async (_url: string, init: RequestInit) => (bodies.push(JSON.parse(String(init.body))), Response.json({ lastChangeId: 2, refused: [2], tagIds: { "1": "t9" } })),
+    } as unknown as Fetcher;
+    const library = new Library(binding, "https://mymind.example", "token");
+    await expect(library.push([{ name: "delete-space" as "pin", args: { spaceId: "abc" } }])).rejects.toBeInstanceOf(LibraryError);
+    await expect(library.push([])).rejects.toBeInstanceOf(LibraryError);
+    expect(bodies).toEqual([]);
+    const pushed = await library.push([
+      { name: "add-tag", args: { cardId: "a", name: "x" } },
+      { name: "pin", args: { cardId: "b", pinned: true } },
+    ]);
+    await library.push([{ name: "trash", args: { cardId: "a" } }]);
+    expect(pushed.refused).toEqual([1]);
+    expect(pushed.tagIds.get(0)).toBe("t9");
+    expect(bodies.map((body) => body.changes.map((change) => change.id))).toEqual([[1, 2], [1]]);
+    expect(bodies[0]!.clientId).toMatch(/^mcp-[0-9a-f]{32}$/);
+    expect(bodies[0]!.clientId).not.toBe(bodies[1]!.clientId);
+  });
+
+  it("says when the server is too old to take pushes", async () => {
+    const binding = { fetch: async () => Response.json({}) } as unknown as Fetcher;
+    await expect(new Library(binding, "https://mymind.example", "token").push([{ name: "trash", args: { cardId: "a" } }])).rejects.toMatchObject({ status: 501 });
   });
 });
 

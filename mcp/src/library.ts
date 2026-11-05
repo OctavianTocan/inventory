@@ -32,7 +32,39 @@ export const ALLOWED: ReadonlyArray<readonly [string, RegExp]> = [
   ["GET", /^\/app\/v1\/search$/],
   ["GET", /^\/app\/v1\/top-of-mind$/],
   ["GET", /^\/media\/[^?#]+$/],
+  ["POST", /^\/app\/v1\/push$/],
+  ["POST", new RegExp(`^/objects/${ID}/restore$`)],
 ];
+
+/**
+ * Named changes this Worker may push (`POST /app/v1/push`, `docs/app-api.md`). Tavi chose (2026-11-05) that agents
+ * read, save and edit; deleting a space, uploads, sharing and account settings stay out.
+ */
+export const CHANGES = ["create-card", "note", "add-tag", "remove-tag", "add-to-space", "remove-from-space", "create-space", "pin", "trash"] as const;
+
+/** One change for the library's push. */
+export interface Change {
+  name: (typeof CHANGES)[number];
+  args: Record<string, string | boolean>;
+}
+
+/** What the library answered for a push, by the change's place in the list (0-based). */
+export interface Pushed {
+  /** Places of the changes the library turned down (a card or tag that is gone, a blank name). */
+  refused: number[];
+  /** Tag id each `add-tag` change made, by place. */
+  tagIds: Map<number, string>;
+  /** Card id the library keeps for each `create-card` change, by place. */
+  cardIds: Map<number, string>;
+}
+
+/** The push takes at most this many changes at once. */
+export const PUSH_LIMIT = 100;
+
+/** @returns 32 random lowercase hex digits: the id shape the push accepts for a new card or space. */
+export function newId(): string {
+  return [...crypto.getRandomValues(new Uint8Array(16))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 /**
  * Whether a library request is on the allowed list.
@@ -83,7 +115,39 @@ export class Library {
     return { data: await response.arrayBuffer(), type: response.headers.get("content-type") ?? "application/octet-stream" };
   }
 
-  private async send(method: string, path: string, query: Record<string, string | number | undefined>): Promise<Response> {
+  /**
+   * Apply changes through the library's push, in order.
+   *
+   * Every push names a new client, so its change ids start at 1 and no earlier push can make the library skip them;
+   * concurrent tool calls never share a counter.
+   *
+   * @param changes 1 to `PUSH_LIMIT` changes, each named in `CHANGES`.
+   * @returns Which changes the library turned down and the ids it made.
+   * @throws LibraryError for an unknown change name, too many changes, or as for `json`.
+   */
+  async push(changes: readonly Change[]): Promise<Pushed> {
+    if (changes.length === 0 || changes.length > PUSH_LIMIT || changes.some((change) => !CHANGES.includes(change.name))) {
+      throw new LibraryError(0, "This request is not one ThyMind's MCP server makes.");
+    }
+    const body = { clientId: `mcp-${newId()}`, changes: changes.map((change, place) => ({ id: place + 1, name: change.name, args: change.args })) };
+    const response = await this.send("POST", "/app/v1/push", {}, body);
+    const answer = (await response.json()) as { lastChangeId?: number; refused?: number[]; tagIds?: Record<string, string>; cardIds?: Record<string, string> };
+    if (answer.lastChangeId === undefined) throw new LibraryError(501, "This ThyMind server is too old to take changes from agents.");
+    const byPlace = (ids: Record<string, string> = {}) => new Map(Object.entries(ids).map(([id, value]) => [Number(id) - 1, value]));
+    return { refused: (answer.refused ?? []).map((id) => id - 1), tagIds: byPlace(answer.tagIds), cardIds: byPlace(answer.cardIds) };
+  }
+
+  /**
+   * Take a card out of the trash.
+   *
+   * @param id The card's id.
+   * @throws LibraryError as for `json` (404 for a card that does not exist).
+   */
+  async restore(id: string): Promise<void> {
+    await this.send("POST", `/objects/${id}/restore`, {});
+  }
+
+  private async send(method: string, path: string, query: Record<string, string | number | undefined>, body?: unknown): Promise<Response> {
     if (!allowed(method, path)) {
       throw new LibraryError(0, "This request is not one ThyMind's MCP server makes.");
     }
@@ -97,7 +161,8 @@ export class Library {
     }
     const response = await this.binding.fetch(url.toString(), {
       method,
-      headers: { authorization: `Bearer ${this.appToken}`, accept: "application/json" },
+      headers: { authorization: `Bearer ${this.appToken}`, accept: "application/json", ...(body === undefined ? {} : { "content-type": "application/json" }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
       redirect: "manual",
     });
     if (response.ok) return response;

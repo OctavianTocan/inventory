@@ -75,7 +75,8 @@ export const CARDS = {
 };
 
 /**
- * A fake `mymind` Worker behind the service binding: answers the app sign-in and the read API for one token.
+ * A fake `mymind` Worker behind the service binding: answers the app sign-in, the read API, the push and restore for
+ * one token.
  *
  * @param token The app token it hands out and accepts.
  * @param options `refuse` answers Google sign-in with 401 not-allowed; `dead` makes the token stop working.
@@ -83,7 +84,8 @@ export const CARDS = {
  */
 export function fakeLibrary(token = "app-token-1", options: { refuse?: boolean } = {}) {
   const calls: Call[] = [];
-  const state = { dead: false, nonces: new Set<string>() };
+  const state = { dead: false, nonces: new Set<string>(), made: new Set<string>(), spaces: new Set(["00000002SpaceAAAAAAAAA"]) };
+  const known = (id: unknown) => typeof id === "string" && (Object.values(CARDS).some((card) => card.id === id) || state.made.has(id));
   const binding = {
     async fetch(input: string | Request, init?: RequestInit): Promise<Response> {
       const request = new Request(input, init);
@@ -102,6 +104,30 @@ export function fakeLibrary(token = "app-token-1", options: { refuse?: boolean }
         return Response.json({ token, expiresAt: "2027-02-01T00:00:00Z", user: { email: "tavi@octaviantocan.com", kind: "google" } });
       }
       if (state.dead || request.headers.get("authorization") !== `Bearer ${token}`) return new Response("{}", { status: 401 });
+      if (url.pathname === "/app/v1/push") {
+        const { changes } = body as { clientId: string; changes: Array<{ id: number; name: string; args: Record<string, unknown> }> };
+        const refused: number[] = [];
+        const tagIds: Record<string, string> = {};
+        const cardIds: Record<string, string> = {};
+        for (const { id, name, args } of changes) {
+          if (name === "create-card") {
+            const saved = Object.values(CARDS).find((card) => "url" in card && card.url === args.content);
+            state.made.add(args.cardId as string);
+            cardIds[id] = saved?.id ?? (args.cardId as string);
+          } else if (name === "create-space") {
+            state.spaces.add(args.spaceId as string);
+          } else if (name === "remove-tag") {
+            if (args.tagId !== "t1") refused.push(id);
+          } else if (!known(args.cardId) || ((name === "add-to-space" || name === "remove-from-space") && !state.spaces.has(args.spaceId as string))) {
+            refused.push(id);
+          } else if (name === "add-tag") {
+            tagIds[id] = `tag-${id}`;
+          }
+        }
+        return Response.json({ lastChangeId: changes.at(-1)?.id ?? 0, refused, tagIds, cardIds });
+      }
+      const restore = /^\/objects\/([^/]+)\/restore$/.exec(url.pathname);
+      if (restore && request.method === "POST") return known(restore[1]) ? Response.json({}) : Response.json({ error: "not-found" }, { status: 404 });
       if (url.pathname === "/app/v1/spaces") return Response.json({ spaces: [{ id: "00000002SpaceAAAAAAAAA", name: "Kitchen", count: 1, smart: false }] });
       if (url.pathname === "/app/v1/tags") return Response.json({ tags: [{ name: "recipes", count: 1 }] });
       if (url.pathname === "/app/v1/search" || url.pathname === "/app/v1/cards") return Response.json({ cards: [CARDS.note, CARDS.link], next: "cursor-2" });
