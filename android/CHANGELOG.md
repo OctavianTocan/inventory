@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.58 (69), 2026-11-05
+You can send feedback from the app, and ThyMind tells you how it goes.
+
+### Added
+- Profile has a new Send feedback page. Write what should change, pick Claude Code or Codex with a model and effort (they are kept apart from AI search), and tap Send. It uses your own Claude or Codex plan, and the change ships to everyone using ThyMind. If neither is signed in, the page asks you to sign in first.
+- One Feedback notification follows what you sent. It updates in place as the change is worked on, tested and shipped, and ends with the result. When a change ships, ThyMind checks for the update, and tapping the notification opens the app on it.
+
+### Changed
+- For now only Tavi can send feedback; for everyone else the page says so when you tap Send.
+- The model and effort pages are now titled Search model and Search effort.
+
 ## 0.6.57 (68), 2026-11-05
 See and remove the AI apps connected to your ThyMind.
 

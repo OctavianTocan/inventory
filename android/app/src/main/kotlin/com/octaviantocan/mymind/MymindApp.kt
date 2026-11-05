@@ -8,6 +8,7 @@ import coil3.disk.DiskCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.octaviantocan.mymind.data.PictureWorker
+import com.octaviantocan.mymind.feedback.FeedbackWorker
 import com.octaviantocan.mymind.update.ForegroundTracker
 import com.octaviantocan.mymind.update.UpdateInstallWorker
 import com.octaviantocan.mymind.update.UpdateState
@@ -25,6 +26,7 @@ class MymindApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         UpdateWorker.schedule(this)
+        if (container.feedbackStore.hasActive()) FeedbackWorker.schedule(this)
         PictureWorker.schedule(this)
         val updater = container.updater
         ProcessLifecycleOwner.get().lifecycle.addObserver(

@@ -1,9 +1,12 @@
 package com.octaviantocan.mymind.ui.settings
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -45,8 +48,10 @@ import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import com.octaviantocan.aikit.AiCli
 import com.octaviantocan.aikit.AiSignInServices
+import com.octaviantocan.mymind.MymindApp
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.AiAccount
+import com.octaviantocan.mymind.feedback.FeedbackTracker
 import com.octaviantocan.mymind.ui.library.rememberPublicAccountPhotoLoader
 import com.octaviantocan.mymind.ui.menu.CardMenuFont
 import com.octaviantocan.mymind.ui.menu.CardMenuGroup
@@ -67,6 +72,7 @@ const val SIGN_OUT = "Sign out"
  * @param updates Update rows of the sheet.
  * @param onClose Called once the sheet has closed.
  * @param ai The account's Claude Code and Codex, or null for a sheet without the AI rows.
+ * @param feedback Sends feedback, or null for a sheet without the Send feedback row.
  * @param photoLoader The gallery's account-photo loader, whose memory already holds the photo, or null for one of its own.
  */
 @Composable
@@ -75,13 +81,14 @@ fun ProfileSheetHost(
     updates: SettingsUpdates,
     onClose: () -> Unit,
     ai: AiAccount? = null,
+    feedback: FeedbackTracker? = null,
     photoLoader: ImageLoader? = null,
 ) {
     val state by settings.state.collectAsStateWithLifecycle()
     val agents by settings.agents.collectAsStateWithLifecycle()
     LaunchedEffect(settings) { settings.refresh() }
     ProfileSheet(state, appVersion(LocalContext.current), updates, onSignOut = settings::signOut, onClose = onClose,
-        photoLoader = photoLoader ?: rememberPublicAccountPhotoLoader(), ai = ai,
+        photoLoader = photoLoader ?: rememberPublicAccountPhotoLoader(), ai = ai, feedback = feedback,
         agents = AgentsActions(agents, settings::loadAgents, settings::removeAgent))
 }
 
@@ -96,6 +103,7 @@ fun ProfileSheetHost(
  * @param onClose Called once the sheet has closed.
  * @param photoLoader Loader for the account photo that never carries the library session, or null for the glyph.
  * @param ai The account's Claude Code and Codex, or null for a sheet without the AI rows.
+ * @param feedback Sends feedback, or null for a sheet without the Send feedback row and page.
  * @param agents The Connected agents page's state and actions, or null for a sheet without that row.
  */
 @Composable
@@ -107,25 +115,50 @@ fun ProfileSheet(
     onClose: () -> Unit,
     photoLoader: ImageLoader? = null,
     ai: AiAccount? = null,
+    feedback: FeedbackTracker? = null,
     agents: AgentsActions? = null,
 ) {
     var page by remember { mutableStateOf<ProfilePage?>(null) }
     val services = ai?.let { rememberAiSignInServices(it) }
     val context = LocalContext.current
     val notify = { text: String -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    val askNotifications = rememberAskNotifications()
     PullyPagedSheet("Profile", page, onBack = { page = null }, onClose = onClose) { shown ->
         if (shown == ProfilePage.Agents && agents != null) {
             ConnectedAgentsPage(agents.state, agents.onLoad, agents.onRemove)
         } else if (shown == null || shown == ProfilePage.Agents || ai == null || services == null) {
             ProfileSheetContent(account, version, updates, onSignOut, onClose, photoLoader,
-                aiRows = ai?.let { mine -> { AiRows(mine) { page = it } } },
+                aiRows = ai?.let { mine -> { AiRows(mine, feedback = feedback != null) { page = it } } },
                 onAgents = agents?.let { { page = ProfilePage.Agents } })
         } else when (shown) {
-            ProfilePage.Model -> ModelPage(ai, open = { page = it }, onDone = { page = null })
-            ProfilePage.Effort -> EffortPage(ai, onDone = { page = null })
+            ProfilePage.Model -> ModelPage(ai, ai.prefs, open = { page = it }, onDone = { page = null })
+            ProfilePage.Effort -> EffortPage(ai, ai.prefs, onDone = { page = null })
+            ProfilePage.Feedback -> if (feedback != null) {
+                FeedbackPage(ai, feedback, open = { page = it }, onProviders = { page = null }, askNotifications = askNotifications)
+            }
+            ProfilePage.FeedbackModel -> ModelPage(ai, ai.feedbackPrefs, open = { page = it }, onDone = { page = ProfilePage.Feedback })
+            ProfilePage.FeedbackEffort -> EffortPage(ai, ai.feedbackPrefs, onDone = { page = ProfilePage.Feedback })
             ProfilePage.ClaudeSignIn -> AiSignInPage(services, AiCli.Claude, notify)
             ProfilePage.CodexSignIn -> AiSignInPage(services, AiCli.Codex, notify)
             ProfilePage.Agents -> Unit
+        }
+    }
+}
+
+/**
+ * Asks for the notification permission once, so a feedback's progress can show; does nothing when it is granted or was asked for.
+ *
+ * @return The call that asks, to be made as feedback is sent.
+ */
+@Composable
+private fun rememberAskNotifications(): () -> Unit {
+    val context = LocalContext.current
+    val container = (context.applicationContext as? MymindApp)?.container
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    return {
+        if (container != null && !container.updateNotifier.allowed() && !container.updatePrefs.askedNotifications) {
+            container.updatePrefs.askedNotifications = true
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }

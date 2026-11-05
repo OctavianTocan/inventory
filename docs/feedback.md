@@ -56,19 +56,19 @@ secret and never enters a sandbox. Pushes, pull requests and merges appear as th
 
 ## Deploying
 
-Before the first deploy, once:
+Before the first deploy, once, make the GitHub sign-in: GitHub's device flow with the GitHub CLI's client and scope
+`repo`, as Pully's `backend/src/personal_auth/` and the spike's `run.mjs` did (the spike kept it in
+`~/.config/thymind/feedback-github.json` on the machine that ran it). Set it with `cd feedback-runner && npx wrangler
+secret put GITHUB_TOKEN`. `main` needs no branch protection for feedback: the runner merges only when every check in
+its `REQUIRED_CHECKS` var (`android,rust`) passed.
 
-1. Make the GitHub sign-in: GitHub's device flow with the GitHub CLI's client and scope `repo`, as Pully's
-   `backend/src/personal_auth/` and the spike's `run.mjs` did (the spike kept it in
-   `~/.config/thymind/feedback-github.json` on the machine that ran it). Set it with
-   `cd feedback-runner && npx wrangler secret put GITHUB_TOKEN`.
-2. Make `rust` a required check next to `android` in `main`'s branch protection.
-
-Then `deploy/deploy-workers.sh` (or `npm run deploy` in `rust/crates/worker`) deploys `feedback-runner` first and
+Then `deploy/deploy-workers.sh` (or `npm run deploy:all` in `rust/crates/worker`) deploys `feedback-runner` first and
 `mymind` second, since each binds to the other. Before deploying it lists every commit with a `Feedback-Id:` trailer
 since the last deploy and flags changes to the sign-in files (`rust/crates/core/src/auth.rs`,
-`rust/crates/server/src/serve.rs`, `rust/crates/server/src/download.rs`), any `wrangler.jsonc` (which carries
-Durable Object migrations), `feedback-runner/` and the ai-kit pin, so they are read before saying yes.
+`rust/crates/server/src/serve.rs`, `rust/crates/server/src/download.rs`), any `wrangler.jsonc` (which carries Durable
+Object migrations), `feedback-runner/` and the ai-kit pin, so they are read before saying yes. `npm run deploy` stays
+the plain `mymind` deploy, because the VPS timer `mymind-worker-update.timer` runs it every two minutes when `main`
+moves and cannot answer a prompt; `feedback-runner` is only deployed by hand.
 
 ## Kill switch
 

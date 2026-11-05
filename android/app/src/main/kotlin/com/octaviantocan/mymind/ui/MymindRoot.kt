@@ -9,6 +9,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
@@ -36,6 +37,7 @@ import com.octaviantocan.mymind.ui.signin.SignInScreen
 import com.octaviantocan.mymind.ui.splash.LaunchState
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // The pause after a sync the hub asked for, so a burst of announcements brings one more sync, not one each.
 private const val HUB_SYNC_GAP_MS = 1_000L
@@ -115,10 +117,12 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
         )
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val scope = rememberCoroutineScope()
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) {
                 updates.onResume()
+                scope.launch { container.feedback.pollActive() }
                 library.syncNow()
                 container.hub.start()
             }
@@ -143,6 +147,6 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
     val previews = remember { VideoPreviews(context.applicationContext, container.httpClient) }
     ClosePreviewsOnDispose(previews)
     CompositionLocalProvider(LocalVideoPreviews provides previews) {
-        MainShell(library, settings, rows.copy(onAllow = allow), ai = container.ai) { UpdateOverlays(updates, allow) }
+        MainShell(library, settings, rows.copy(onAllow = allow), ai = container.ai, feedback = container.feedback) { UpdateOverlays(updates, allow) }
     }
 }

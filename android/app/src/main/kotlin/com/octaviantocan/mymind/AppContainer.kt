@@ -10,6 +10,7 @@ import com.octaviantocan.mymind.data.AiClient
 import com.octaviantocan.mymind.data.AiPrefs
 import com.octaviantocan.mymind.data.AuthInterceptor
 import com.octaviantocan.mymind.data.Connectivity
+import com.octaviantocan.mymind.data.FeedbackClient
 import com.octaviantocan.mymind.data.HubListener
 import com.octaviantocan.mymind.data.KeystoreTokenStore
 import com.octaviantocan.mymind.data.LibraryCopy
@@ -25,6 +26,10 @@ import com.octaviantocan.mymind.data.Repository
 import com.octaviantocan.mymind.data.Session
 import com.octaviantocan.mymind.data.SessionState
 import com.octaviantocan.mymind.data.refusedNotice
+import com.octaviantocan.mymind.feedback.FeedbackNotifier
+import com.octaviantocan.mymind.feedback.FeedbackStore
+import com.octaviantocan.mymind.feedback.FeedbackTracker
+import com.octaviantocan.mymind.feedback.FeedbackWorker
 import com.octaviantocan.mymind.ui.menu.DownloadsSaver
 import com.octaviantocan.mymind.update.AutoInstaller
 import com.octaviantocan.mymind.update.SessionApkInstaller
@@ -32,6 +37,7 @@ import com.octaviantocan.mymind.update.UploadActivity
 import com.octaviantocan.mymind.update.UploadService
 import com.octaviantocan.mymind.update.UpdateNotifier
 import com.octaviantocan.mymind.update.UpdatePrefs
+import com.octaviantocan.mymind.update.UpdateWorker
 import com.octaviantocan.mymind.update.Updater
 import com.octaviantocan.mymind.update.WhatsNew
 import kotlinx.coroutines.CoroutineScope
@@ -51,6 +57,18 @@ class AppContainer(context: Context) {
 
     /** The account's own Claude Code and Codex, for the Profile sheet and AI search. */
     val ai = AiAccount(AiClient(httpClient, BuildConfig.SERVER_URL), AiPrefs(context), session)
+
+    /** The feedback jobs this phone waits on. */
+    val feedbackStore = FeedbackStore(context)
+
+    /** Sends feedback and follows its jobs: their notification, the background check and the update check on a release. */
+    val feedback = FeedbackTracker(
+        api = FeedbackClient(httpClient, BuildConfig.SERVER_URL),
+        store = feedbackStore,
+        notifier = FeedbackNotifier(context.applicationContext),
+        onShipped = { UpdateWorker.checkNow(context.applicationContext) },
+        schedule = { FeedbackWorker.schedule(context.applicationContext) },
+    )
 
     /** The searches last pressed on this phone, for the opened search page. */
     val recentSearches = RecentSearches(context)

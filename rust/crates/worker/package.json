@@ -5,10 +5,10 @@
   "scripts": {
     "dev": "wrangler dev --config wrangler.jsonc --port 8787 --ip 127.0.0.1 --persist-to ../../../data/hosted/wrangler-state",
     "sidecars": "../../../deploy/worker-dev-sidecars.sh",
-    "deploy": "../../../deploy/deploy-workers.sh",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
     "check": "node ../../../tools/check-worker.mjs",
     "check:container": "node ../../../tools/check-worker.mjs --container-smoke",
-    "deploy:mymind-only": "wrangler deploy --config wrangler.jsonc"
+    "deploy:all": "../../../deploy/deploy-workers.sh"
   },
   "devDependencies": {
     "wrangler": "4.151.1"

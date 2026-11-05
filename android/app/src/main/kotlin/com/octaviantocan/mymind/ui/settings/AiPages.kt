@@ -71,6 +71,7 @@ import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.AI_ENGINES
 import com.octaviantocan.mymind.data.AiAccount
 import com.octaviantocan.mymind.data.AiChoice
+import com.octaviantocan.mymind.data.AiPrefs
 import com.octaviantocan.mymind.data.CODEX
 import com.octaviantocan.mymind.data.cli
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
@@ -94,7 +95,10 @@ enum class ProfilePage(override val title: String) : SheetPage {
     ClaudeSignIn(AiCli.Claude.title),
     CodexSignIn(AiCli.Codex.title),
     Model("Search model"),
-    Effort("Effort"),
+    Effort("Search effort"),
+    Feedback("Send feedback"),
+    FeedbackModel("Feedback model"),
+    FeedbackEffort("Feedback effort"),
     Agents(CONNECTED_AGENTS),
     ;
 
@@ -130,9 +134,9 @@ fun modelName(choice: AiChoice, catalog: CliCatalog?): String =
 
 /** Claude's and OpenAI's marks, Claude's in its own colour as on Pully's rows. */
 @Composable
-private fun engineMark(cli: AiCli): Painter = painterResource(if (cli == AiCli.Codex) R.drawable.ic_si_openai else R.drawable.ic_si_claude)
+internal fun engineMark(cli: AiCli): Painter = painterResource(if (cli == AiCli.Codex) R.drawable.ic_si_openai else R.drawable.ic_si_claude)
 
-private fun engineTint(cli: AiCli): Color? = if (cli == AiCli.Claude) Color(0xFFD97757) else null
+internal fun engineTint(cli: AiCli): Color? = if (cli == AiCli.Claude) Color(0xFFD97757) else null
 
 /**
  * The AI rows of the Profile sheet's root, laid out as Pully's Settings has them: the search model with its effort
@@ -140,10 +144,11 @@ private fun engineTint(cli: AiCli): Color? = if (cli == AiCli.Claude) Color(0xFF
  * them, so a row is never blank while it loads.
  *
  * @param ai The account's AI.
+ * @param feedback True to end with the "Send feedback" row that opens [ProfilePage.Feedback].
  * @param open Opens a child page.
  */
 @Composable
-internal fun AiRows(ai: AiAccount, open: (ProfilePage) -> Unit) {
+internal fun AiRows(ai: AiAccount, feedback: Boolean = false, open: (ProfilePage) -> Unit) {
     val signIns by ai.signIns.collectAsState()
     val choice by ai.prefs.choice.collectAsState()
     var catalog by remember(choice.engine) { mutableStateOf(ai.cachedModels(choice.engine)) }
@@ -172,6 +177,12 @@ internal fun AiRows(ai: AiAccount, open: (ProfilePage) -> Unit) {
             if (index > 0) SheetRowDivider()
             SheetRow(engineMark(cli), cli.title, { open(cli.page) }, detail = signIns?.let { if (it[cli].signedIn) "Signed in" else "Not signed in" },
                 iconTint = engineTint(cli), trailing = { SheetRowChevron() })
+        }
+    }
+    if (feedback) {
+        CardMenuHeading("Feedback")
+        CardMenuGroup(Modifier.padding(top = 12.dp)) {
+            SheetRow(painterResource(R.drawable.ic_comment), "Send feedback", { open(ProfilePage.Feedback) }, trailing = { SheetRowChevron() })
         }
     }
 }
@@ -334,16 +345,17 @@ internal fun ColumnScope.AiSignInPage(services: AiSignInServices, cli: AiCli, no
 /**
  * Pully's model page: the engine tabs, the newest models, and the older ones under their own heading. A row is a
  * name with a "Recommended" pill on the CLI's own pick and a plain ✓ on the one in use. Switching engine swaps the
- * lists where they stand.
+ * lists where they stand. The sheet's header names the page ([ProfilePage.title]), so search and feedback differ there.
  *
- * @param ai The account's AI.
+ * @param ai The account's AI, whose sign-ins and model lists the page reads.
+ * @param prefs The choice the page edits: [AiAccount.prefs] for AI search, [AiAccount.feedbackPrefs] for feedback.
  * @param open Opens another page, such as a sign-in page.
  * @param onDone Called once a model is chosen.
  */
 @Composable
-internal fun ColumnScope.ModelPage(ai: AiAccount, open: (ProfilePage) -> Unit, onDone: () -> Unit) {
+internal fun ColumnScope.ModelPage(ai: AiAccount, prefs: AiPrefs, open: (ProfilePage) -> Unit, onDone: () -> Unit) {
     val colors = menuColors()
-    val choice by ai.prefs.choice.collectAsState()
+    val choice by prefs.choice.collectAsState()
     val signIns by ai.signIns.collectAsState()
     val engine = choice.engine
     var attempt by remember { mutableIntStateOf(0) }
@@ -360,10 +372,10 @@ internal fun ColumnScope.ModelPage(ai: AiAccount, open: (ProfilePage) -> Unit, o
     val groups = catalog?.let { groupModels(it.models) }
     fun choose(model: CliModel) {
         val chosen = catalog ?: return
-        ai.prefs.chooseModel(model.id, chosen)
+        prefs.chooseModel(model.id, chosen)
         onDone()
     }
-    EngineTabs(engine, enabled = { !signedOut(it) }, onSelect = ai.prefs::chooseEngine)
+    EngineTabs(engine, enabled = { !signedOut(it) }, onSelect = prefs::chooseEngine)
     if (signedOut(engine)) {
         CardMenuGroup(Modifier.padding(top = 12.dp)) {
             SheetRow(engineMark(engine.cli), "${engine.cli.title} is not signed in", { open(engine.cli.page) },
@@ -400,15 +412,17 @@ internal fun ColumnScope.ModelPage(ai: AiAccount, open: (ProfilePage) -> Unit, o
 }
 
 /**
- * The efforts the chosen model supports, "Recommended" on its default and ✓ on the one in use.
+ * The efforts the chosen model supports, "Recommended" on its default and ✓ on the one in use. The sheet's header
+ * names the page ([ProfilePage.title]).
  *
- * @param ai The account's AI.
+ * @param ai The account's AI, whose model lists the page reads.
+ * @param prefs The choice the page edits: [AiAccount.prefs] for AI search, [AiAccount.feedbackPrefs] for feedback.
  * @param onDone Called once an effort is chosen.
  */
 @Composable
-internal fun ColumnScope.EffortPage(ai: AiAccount, onDone: () -> Unit) {
+internal fun ColumnScope.EffortPage(ai: AiAccount, prefs: AiPrefs, onDone: () -> Unit) {
     val colors = menuColors()
-    val choice by ai.prefs.choice.collectAsState()
+    val choice by prefs.choice.collectAsState()
     var catalog by remember(choice.engine) { mutableStateOf(ai.cachedModels(choice.engine)) }
     LaunchedEffect(choice.engine) { if (catalog == null) catalog = runCatching { ai.models(choice.engine) }.getOrNull() }
     val model = AiSettingsLogic.current(catalog, choice.model)
@@ -419,7 +433,7 @@ internal fun ColumnScope.EffortPage(ai: AiAccount, onDone: () -> Unit) {
         }
         model?.efforts.orEmpty().forEachIndexed { index, id ->
             if (index > 0) SheetRowDivider(start = 16.dp)
-            SheetRow(null, effortName(id), { ai.prefs.chooseEffort(if (id == model?.defaultEffort) "" else id); onDone() }, role = Role.RadioButton) {
+            SheetRow(null, effortName(id), { prefs.chooseEffort(if (id == model?.defaultEffort) "" else id); onDone() }, role = Role.RadioButton) {
                 if (id == model?.defaultEffort) RecommendedPill()
                 Tick(id == current)
             }
@@ -506,7 +520,7 @@ private fun CodeField(code: String, onChange: (String) -> Unit, enabled: Boolean
 
 /** The page's one action: a full-width pill in the row ink, or in the destructive colour for Sign out. */
 @Composable
-private fun PrimaryButton(label: String, enabled: Boolean, danger: Boolean = false, onClick: () -> Unit) {
+internal fun PrimaryButton(label: String, enabled: Boolean, danger: Boolean = false, onClick: () -> Unit) {
     val colors = menuColors()
     val fill = if (danger) colors.dangerText else colors.rowText
     val haptic = rememberSheetHaptics()
@@ -528,7 +542,7 @@ private fun Cancel(services: AiSignInServices, cli: AiCli, state: AiSignInState,
 
 /** Muted words under a group, or the last problem in the destructive colour. */
 @Composable
-private fun Explain(text: String, error: Boolean = false) {
+internal fun Explain(text: String, error: Boolean = false) {
     val colors = menuColors()
     Text(text, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp),
         style = TextStyle(fontFamily = CardMenuFont, fontSize = 14.sp, lineHeight = 20.sp, textAlign = TextAlign.Start,

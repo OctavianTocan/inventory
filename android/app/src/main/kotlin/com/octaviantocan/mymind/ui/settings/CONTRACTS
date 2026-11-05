@@ -59,3 +59,24 @@ MUST leave the list at once. The page MUST list only this account's AI apps, nev
 phone or browser session, and removing one MUST NOT sign out the phone.
 Source: Tavi, 5 November 2026 ("Nice. Build it." on the MCP brief, step 3: list and
 remove your own MCP tokens, Rust routes plus a Profile row in the app).
+
+@cc [owner:OctavianTocan,label:product;security] profile-feedback-sends-with-the-senders-ai
+The Profile sheet MUST list a Send feedback row under Providers that opens a page with a text field,
+Send, and under Send the line "Uses your Claude or Codex plan. Your change ships to
+everyone using ThyMind." The page MUST offer only engines the account has signed in; with
+none it MUST say "Sign in to Claude Code or Codex first" and take the person back to Providers. It MUST keep
+its own engine, model and effort apart from AI search (the model and effort pages are
+titled Feedback model and Feedback effort, search's Search model and Search effort), so a
+feedback pick MUST NOT change AI search and an AI search pick MUST NOT change feedback.
+With no model chosen it MUST start at the engine's first recommended model at medium. A
+refusal MUST show the server's sentence and MUST NOT sign the account out.
+Source: design_draft.md decision 4 and decision 5 (Tavi, 5 Nov 2026).
+
+@cc [owner:OctavianTocan,label:product] feedback-one-notification-per-job
+A feedback job MUST have one notification, on the feedback channel, with the job id as its
+identity, updated in place as the job moves and alerting only the first time, using the
+server's title and detail. It MUST end in a final state (shipped, merged_server,
+merged_not_released, no_change or failed), after which the phone MUST stop asking about
+the job. A shipped job MUST start the update check, and its tap MUST open the app on the
+update screen. A denied notification permission MUST NOT crash or block the job.
+Source: design_draft.md decision 2 (Tavi, 5 Nov 2026).

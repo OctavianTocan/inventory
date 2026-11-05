@@ -109,6 +109,7 @@ import com.octaviantocan.mymind.ui.menu.rememberCardMenuPosition
 import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
 import com.octaviantocan.mymind.ui.menu.CardSubmenu
 import com.octaviantocan.mymind.ui.menu.cardMenuItems
+import com.octaviantocan.mymind.feedback.FeedbackTracker
 import com.octaviantocan.mymind.ui.settings.ProfileSheetHost
 import com.octaviantocan.mymind.ui.settings.SettingsUpdates
 import com.octaviantocan.mymind.ui.settings.SettingsViewModel
@@ -161,6 +162,7 @@ private data class AddTarget(val spaceId: String?, val title: String = "Add to y
  * @param settingsViewModel State and actions behind the profile sheet.
  * @param updates Update rows of the profile sheet.
  * @param ai The account's Claude Code and Codex, for the profile sheet's AI rows, or null for none.
+ * @param feedback Sends feedback from the profile sheet, or null for a sheet without the Send feedback row.
  * @param extras Drawn over everything, such as the update sheets.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -170,6 +172,7 @@ fun MainShell(
     settingsViewModel: SettingsViewModel,
     updates: SettingsUpdates = SettingsUpdates(),
     ai: AiAccount? = null,
+    feedback: FeedbackTracker? = null,
     extras: @Composable () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Everything) }
@@ -682,7 +685,7 @@ fun MainShell(
             onClose = { adding = null },
         )
     }
-    if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false }, ai = ai, photoLoader = photoLoader)
+    if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false }, ai = ai, feedback = feedback, photoLoader = photoLoader)
     if (newSpaceOpen) {
         PageTheme(scheme) {
             NewSpaceSheet(

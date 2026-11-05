@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -38,6 +40,19 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+        }
+
+        /**
+         * Runs the same check once, now, such as when a feedback ships a release. Does nothing when WorkManager did not start.
+         *
+         * @param context Any context of the app.
+         */
+        fun checkNow(context: Context) {
+            if (!WorkManager.isInitialized()) return
+            val request = OneTimeWorkRequestBuilder<UpdateWorker>()
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork("$NAME-now", ExistingWorkPolicy.REPLACE, request)
         }
     }
 }

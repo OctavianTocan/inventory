@@ -13,9 +13,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalDate
 
-/** The engine, model and effort AI search runs with, kept on this phone, and the model last chosen for each engine. */
-class AiPrefs(private val prefs: SharedPreferences) {
-    constructor(context: Context) : this(context.applicationContext.getSharedPreferences(NAME, Context.MODE_PRIVATE))
+/**
+ * An engine, model and effort kept on this phone, and the model last chosen for each engine. AI search keeps its own
+ * with the empty prefix; feedback keeps another beside it under [FEEDBACK_PREFIX], so neither changes the other's choice.
+ *
+ * @param prefs The preferences file holding the keys.
+ * @param prefix Put before every key (`engine`, `effort`, `model.<engine>`); empty for AI search.
+ */
+class AiPrefs(private val prefs: SharedPreferences, private val prefix: String = "") {
+    constructor(context: Context, prefix: String = "") :
+        this(context.applicationContext.getSharedPreferences(NAME, Context.MODE_PRIVATE), prefix)
+
+    /**
+     * @param other The prefix of the second choice.
+     * @return A choice kept in the same file under [other].
+     */
+    fun withPrefix(other: String): AiPrefs = AiPrefs(prefs, other)
 
     private val mutableChoice = MutableStateFlow(read())
 
@@ -52,16 +65,17 @@ class AiPrefs(private val prefs: SharedPreferences) {
     fun chooseEffort(effort: String) = write(mutableChoice.value.copy(effort = effort))
 
     private fun read(): AiChoice {
-        val engine = prefs.getString(ENGINE, CLAUDE_CODE).takeIf { it in AI_ENGINES } ?: CLAUDE_CODE
-        return AiChoice(engine, prefs.getString(modelKey(engine), "").orEmpty(), prefs.getString(EFFORT, "").orEmpty())
+        val engine = prefs.getString(prefix + ENGINE, CLAUDE_CODE).takeIf { it in AI_ENGINES } ?: CLAUDE_CODE
+        return AiChoice(engine, prefs.getString(modelKey(engine), "").orEmpty(), prefs.getString(prefix + EFFORT, "").orEmpty())
     }
 
     private fun write(choice: AiChoice) {
-        prefs.edit().putString(ENGINE, choice.engine).putString(modelKey(choice.engine), choice.model).putString(EFFORT, choice.effort).apply()
+        prefs.edit().putString(prefix + ENGINE, choice.engine).putString(modelKey(choice.engine), choice.model)
+            .putString(prefix + EFFORT, choice.effort).apply()
         mutableChoice.value = choice
     }
 
-    private fun modelKey(engine: String) = "model.$engine"
+    private fun modelKey(engine: String) = "${prefix}model.$engine"
 
     private companion object {
         const val NAME = "ai"
@@ -69,6 +83,9 @@ class AiPrefs(private val prefs: SharedPreferences) {
         const val EFFORT = "effort"
     }
 }
+
+/** Key prefix of the feedback choice in [AiPrefs]. */
+const val FEEDBACK_PREFIX = "feedback."
 
 /** Reads, ranks and answers a pressed search with Claude Code or Codex. */
 interface AiRanking {
@@ -100,6 +117,9 @@ interface AiRanking {
  */
 class AiAccount(private val client: AiClient, val prefs: AiPrefs, private val session: Session) : AiRanking {
     private var owner: String? = null
+
+    /** The engine, model and effort feedback is sent with, kept apart from AI search's [prefs]. */
+    val feedbackPrefs: AiPrefs = prefs.withPrefix(FEEDBACK_PREFIX)
     private val mutableSignIns = MutableStateFlow<AiSignIns?>(null)
     private val catalogs = mutableMapOf<String, CliCatalog>()
 
