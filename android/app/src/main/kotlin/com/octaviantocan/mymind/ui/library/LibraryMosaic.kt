@@ -106,6 +106,7 @@ import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
 import com.octaviantocan.mymind.ui.card.sheetEdgeFade
 import com.octaviantocan.mymind.ui.shell.LoadingSpinner
 import com.octaviantocan.mymind.ui.shell.LocalShellImmersion
+import com.octaviantocan.mymind.ui.shell.LocalSidePagesAtRest
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -182,6 +183,7 @@ internal fun LibraryMosaic(
     val colors = LibraryStyle.colors
     val density = LocalDensity.current
     val moving = rememberSheetMotionEnabled()
+    val pagesAtRest = LocalSidePagesAtRest.current
     val scope = rememberCoroutineScope()
     val overscroll = rememberOverscrollEffect()
     var anchor by remember { mutableStateOf<MosaicAnchor?>(null) }
@@ -535,7 +537,7 @@ internal fun LibraryMosaic(
             .sheetEdgeFade(top = 0.dp, bottom = 130.dp, color = colors.background, bottomStrength = { 1f - mosaic.reel },
                 // While the cards scroll or move under the fingers the fade is not blurred, so a frame draws the gallery
                 // once rather than once more for each blur layer.
-                blurred = { !state.isScrollInProgress && !mosaic.isPinching && mosaic.position == mosaic.columns.toFloat() })) {
+                blurred = { !state.isScrollInProgress && !mosaic.isPinching && mosaic.position == mosaic.columns.toFloat() && pagesAtRest() })) {
             LazyColumn(modifier = Modifier.fillMaxSize(), state = state, userScrollEnabled = false) {
                 if (header != null) item(key = MOSAIC_HEADER, contentType = "header") {
                     Column(Modifier.collapsing { 1f - mosaic.reel }.onSizeChanged { headerHeight = it.height }.padding(bottom = MOSAIC_HEADER_GAP)) { header() }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.52 (63), 2026-11-05
+Swipe between Everything, Spaces and Ask.
+
+### Added
+- Everything, Spaces and Ask now sit side by side, as Pully's Inbox and Tours do: drag sideways anywhere on a page and the next one comes in with your finger; let go and it settles on the nearer page, or carries on the way you threw it. The bar changes as you let go.
+- Swiping onto Ask leaves the keyboard down; the search button still opens it with the cursor in the field. Closing Ask goes back to the page you opened it from.
+
+### Changed
+- Two fingers on a page are always a pinch, never a swipe, and a page in full-screen cards does not swipe.
+- While the pages move, the gallery's foot fade drops its blur, as it does while the gallery scrolls.
 ## 0.6.51 (62), 2026-11-04
 Scrolling and pinching draw less on every frame.
 

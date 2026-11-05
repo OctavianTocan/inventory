@@ -5,6 +5,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToIndex
@@ -84,7 +89,7 @@ class GalleryIntegrationTest {
         compose.onNodeWithText("Create").assertDoesNotExist()
     }
 
-    @Test fun searchFromSpacesUsesTheSharedFieldAndClosesBackToTheGallery() {
+    @Test fun searchFromSpacesUsesTheSharedFieldAndClosesBackToSpaces() {
         val model = showShell()
         compose.onNodeWithText("Spaces").performClick()
         compose.onNodeWithContentDescription("Search").performClick()
@@ -92,10 +97,42 @@ class GalleryIntegrationTest {
         field.assertIsFocused().performTextInput("forest")
         compose.runOnIdle { assertEquals("forest", model.search.query.value) }
         compose.onNodeWithContentDescription("Close search").performClick()
-        compose.onNodeWithContentDescription("Account settings").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Card gallery").assertExists()
+        compose.onNodeWithText("Spaces").assertIsSelected()
         compose.onNodeWithContentDescription("Search your mind").assertDoesNotExist()
         compose.runOnIdle { assertEquals("", model.search.query.value) }
+        compose.onNodeWithText("Everything").performClick()
+        compose.onNodeWithContentDescription("Card gallery").assertExists()
+    }
+
+    @Test fun aSwipeMovesBetweenEverythingSpacesAndAsk() {
+        // "I want to be able to swipe between the everything, spaces, and ask pages ... Just as it does in Pully" (Tavi,
+        // 5 Nov 2026).
+        showShell()
+        compose.onRoot().performTouchInput { swipeLeft(startX = width * 0.9f, endX = width * 0.1f) }
+        compose.onNodeWithText("Spaces").assertIsSelected()
+        compose.onNodeWithContentDescription("Card gallery").assertDoesNotExist()
+        compose.onRoot().performTouchInput { swipeLeft(startX = width * 0.9f, endX = width * 0.1f) }
+        compose.onNodeWithText("Find something").assertIsDisplayed()
+        // A swipe onto Ask leaves the keyboard down.
+        compose.onNodeWithContentDescription("Search your mind").assertIsNotFocused()
+        compose.onRoot().performTouchInput { swipeRight(startX = width * 0.1f, endX = width * 0.9f) }
+        compose.onNodeWithText("Spaces").assertIsSelected()
+        compose.onNodeWithContentDescription("Search your mind").assertDoesNotExist()
+        compose.onRoot().performTouchInput { swipeRight(startX = width * 0.1f, endX = width * 0.9f) }
+        compose.onNodeWithText("Everything").assertIsSelected()
+        compose.onNodeWithContentDescription("Card gallery").assertIsDisplayed()
+    }
+
+    @Test fun aShortSlowDragSettlesBackOnTheSamePage() {
+        showShell()
+        compose.onRoot().performTouchInput {
+            down(Offset(width * 0.6f, height * 0.5f))
+            moveBy(Offset(-width * 0.2f, 0f), delayMillis = 400)
+            moveBy(Offset(0f, 0f), delayMillis = 400)
+            up()
+        }
+        compose.onNodeWithText("Everything").assertIsSelected()
+        compose.onNodeWithContentDescription("Card gallery").assertIsDisplayed()
     }
 
     @Test fun changingTabsRetainsGalleryDensityAndScrollPosition() {
@@ -131,6 +168,7 @@ class GalleryIntegrationTest {
         }
         compose.waitForIdle()
         assertEquals("4 columns", gallery.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+        compose.onNodeWithContentDescription("Search your mind").assertExists()
     }
 
     @Test fun theSpacesListPinchesLikeTheGalleryAndKeepsItsSizeAcrossASpace() {
@@ -148,6 +186,8 @@ class GalleryIntegrationTest {
         }
         compose.waitForIdle()
         assertEquals("4 columns", list.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+        // Two fingers drawing together sideways are a pinch, never a swipe to the next page.
+        compose.onNodeWithText("Spaces").assertIsSelected()
         compose.onNodeWithText("Space 1").performClick()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.waitForIdle()

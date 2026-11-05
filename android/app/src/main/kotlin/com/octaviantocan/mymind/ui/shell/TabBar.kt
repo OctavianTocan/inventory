@@ -93,6 +93,7 @@ fun MymindTabBar(
  * width, its tabs blurring into the field and the circle's Search into Close, as Pully's pages share theirs.
  *
  * @param onSubmit Called when the keyboard's search key is pressed, after the keyboard hides.
+ * @param focusOnOpen True when opening search puts the cursor in its field; a swipe onto Ask leaves the keyboard down.
  */
 @Composable
 fun LibraryFootBar(
@@ -105,6 +106,7 @@ fun LibraryFootBar(
     onCloseSearch: () -> Unit,
     modifier: Modifier = Modifier,
     onSubmit: () -> Unit = {},
+    focusOnOpen: Boolean = true,
 ) {
     if (!searching) {
         MymindTabBar(selected, onSelect, modifier, onSearch)
@@ -121,6 +123,7 @@ fun LibraryFootBar(
         val focus = LocalFootFocus.current
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(focus) {
+            if (!focusOnOpen) return@LaunchedEffect
             withFrameNanos { }
             focus?.requestFocus()
         }

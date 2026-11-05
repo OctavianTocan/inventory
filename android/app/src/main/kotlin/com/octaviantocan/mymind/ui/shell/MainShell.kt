@@ -35,7 +35,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -128,6 +127,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/** Index of Ask among the library's side pages, after Everything and Spaces. */
+private const val ASK_PAGE = 2
+
+/** Everything, Spaces and Ask. */
+private const val PAGE_COUNT = 3
+
 /** Distance from the bottom of the screen to the end of the library page; the tab bar covers the rest. */
 val PAGE_BOTTOM_GAP = 80.dp
 
@@ -173,7 +178,8 @@ fun MainShell(
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Everything) }
     var searchActive by rememberSaveable { mutableStateOf(false) }
-    val pageStates = rememberSaveableStateHolder()
+    // Ask was opened by its button, so its field takes the cursor; a swipe onto it leaves the keyboard down.
+    var askFocus by remember { mutableStateOf(true) }
     var openSpace by remember { mutableStateOf<Space?>(null) }
     var opened by remember { mutableStateOf<OpenedCard?>(null) }
     var menuFor by remember { mutableStateOf<OpenedCard?>(null) }
@@ -200,12 +206,22 @@ fun MainShell(
     val cardSpaceCreation by viewModel.cardSpaceCreation.collectAsStateWithLifecycle()
     val uploads by viewModel.uploads.state.collectAsStateWithLifecycle()
     val query by viewModel.search.query.collectAsStateWithLifecycle()
-    val filter by viewModel.search.filter.collectAsStateWithLifecycle()
     val account by settingsViewModel.state.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
-    val searching = tab == Tab.Everything && (searchActive || query.isNotEmpty() || filter != null)
+    val searching = searchActive
     val closeSearch = { viewModel.search.clear(); searchActive = false; focusManager.clearFocus() }
     val selectTab: (Tab) -> Unit = { next -> focusManager.clearFocus(); searchActive = false; tab = next }
+    // Everything, Spaces and Ask sit side by side in the bar's order, the circle's Ask last (Tavi, 5 November 2026).
+    val page = if (searching) ASK_PAGE else tab.ordinal
+    val pages = rememberSidePages(page, PAGE_COUNT) { next ->
+        if (next == ASK_PAGE) {
+            focusManager.clearFocus()
+            askFocus = false
+            searchActive = true
+        } else {
+            selectTab(Tab.entries[next])
+        }
+    }
     LaunchedEffect(settingsViewModel) { settingsViewModel.refresh() }
     val photoLoader = if (account.photoUrl != null) rememberPublicAccountPhotoLoader() else null
     BackHandler(enabled = opened == null && !menuOpen && searching, onBack = closeSearch)
@@ -339,8 +355,8 @@ fun MainShell(
         recede = { if (opened != null) readerSheet.recede() else 0f },
         footer = {
             LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
-                onSearch = { tab = Tab.Everything; searchActive = true }, onCloseSearch = closeSearch,
-                onSubmit = viewModel.search::submit)
+                onSearch = { askFocus = true; searchActive = true }, onCloseSearch = closeSearch,
+                onSubmit = viewModel.search::submit, focusOnOpen = askFocus)
         },
         overlay = {
             opened?.let { open ->
@@ -410,15 +426,15 @@ fun MainShell(
             }
         },
     ) {
-        pageStates.SaveableStateProvider(tab.name) {
-            when (tab) {
-                Tab.Everything -> EverythingScreen(
+        SidePages(pages, PAGE_COUNT) { shown ->
+            when (shown) {
+                ASK_PAGE -> EverythingScreen(
                     viewModel,
                     onOpenCard = { openCard(it, null) },
                     onOpenSettings = { profileOpen = true },
                     onAdd = { adding = AddTarget(null) },
                     onLongPressCard = { openMenu(it, null) },
-                    searching = searching,
+                    searching = true,
                     photoUrl = account.photoUrl,
                     onOpenSpace = { found ->
                         openSpace = viewModel.spaces.value.spaces.firstOrNull { it.id == found.id } ?: Space(found.id, found.name)
@@ -426,7 +442,16 @@ fun MainShell(
                     },
                     photoLoader = photoLoader,
                 )
-                Tab.Spaces -> SpacesScreen(
+                Tab.Everything.ordinal -> EverythingScreen(
+                    viewModel,
+                    onOpenCard = { openCard(it, null) },
+                    onOpenSettings = { profileOpen = true },
+                    onAdd = { adding = AddTarget(null) },
+                    onLongPressCard = { openMenu(it, null) },
+                    photoUrl = account.photoUrl,
+                    photoLoader = photoLoader,
+                )
+                else -> SpacesScreen(
                     viewModel,
                     openSpace,
                     onOpenSpace = { openSpace = it },
@@ -495,7 +520,9 @@ fun MainShell(
                         is CardMenuOutcome.Read -> read(outcome.card, target.spaceId)
                         is CardMenuOutcome.ShowSimilar -> {
                             dropCard()
-                            tab = Tab.Everything
+                            // The similar cards are a search, so they show on Ask.
+                            askFocus = false
+                            searchActive = true
                         }
                         is CardMenuOutcome.Failed -> failure = outcome.failure
                         is CardMenuOutcome.NotAvailable -> Unit

@@ -76,3 +76,22 @@ on black, and MUST come forward with the sheet as it sinks or is pulled down. An
 drawn over the page as an overlay stays where it is.
 Source: Tavi's pick of 13 and 14 on the card opening page, 30 October 2026 ("Let's do
 13 and 14 together"), transitions.dev's Banner stacking.
+
+@cc [owner:OctavianTocan,label:product;motion] library-pages-swipe-side-by-side
+Everything, Spaces and Ask MUST sit side by side in the bar's order, Ask (the search the
+circle opens) last, through SidePages, ported from Pully's: a sideways drag anywhere a page
+does not use itself moves both pages exactly with the finger, nothing fading or blurring,
+and letting go settles on the nearer page, or on the next one the way a throw went once the
+finger has moved it part of the way, on Pully's critically damped page spring. A tab or the
+circle glides the row to its page. The bar MUST change with the page as the finger lets go,
+through library-navigation-is-the-gallery-capsule and library-search-morphs-the-navigation.
+A swipe onto Ask MUST NOT raise the keyboard; the circle still focuses the field. Closing
+Ask goes back to the page it was opened from. Two fingers are a pinch and MUST NOT turn a
+page; a page in full screen (library-bar-leaves-for-full-screen) MUST NOT swipe, and a
+page's full screen MUST only hide the bar while that page is on screen. Each page keeps its
+scroll and column count while away, and the page beside the one on screen is built ahead so
+a swipe never holds at its start.
+Source: Tavi, 5 November 2026 ("I want to be able to swipe between the everything, spaces,
+and ask pages. Should feel seamless to go from one to another. Just as it does in Pully");
+pulls.review kit-side-pages-slide-whole, kit-side-pages-keep-state and
+kit-drags-carry-on-or-settle.
