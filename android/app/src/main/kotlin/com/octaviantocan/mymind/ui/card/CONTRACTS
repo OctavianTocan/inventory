@@ -163,6 +163,17 @@ Source: Tavi's recorded review, 23 October 2026 ("we should be showing things li
 of more similar to how Google Photos shows a video", "they open kind of a video player,
 which makes far more sense for a video").
 
+@cc [owner:OctavianTocan,label:product;design] card-reader-beside-the-gallery
+On an unfolded window (window-shapes-follow-pully) the reader MUST show in the pane beside
+the gallery, fading in and out instead of rising as a sheet, with no grab handle or pull to
+close, and its header MUST leave Back out, because the gallery it would go back to is in
+sight; Reader Mode keeps its Back to the card, and system Back still closes the reader. On
+a phone held sideways the reader's sheet MUST be no wider than ReadableWidth, centred over
+the stepped-back gallery.
+Source: Tavi, 5 November 2026 (follow Pully's foldable and rotated layouts); pulls.review
+first-page-beside-the-list-has-no-back and sheets-and-foot-bars-stay-column-wide, DESIGN
+rules 206, 208 and 210 (PRs #137 and #138).
+
 @cc [owner:OctavianTocan,label:product;design;motion] card-reader-plays-audio
 An audio file the library server keeps MUST open in the reader with a compact player above
 the title: a round play or pause button, a bar the person can drag to move through the

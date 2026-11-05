@@ -92,6 +92,7 @@ import com.octaviantocan.mymind.ui.library.redditComments
 import com.octaviantocan.mymind.ui.library.tileKind
 import com.octaviantocan.mymind.ui.theme.CardSheetColors
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import com.octaviantocan.mymind.ui.theme.ReadableWidth
 import coil3.compose.AsyncImage
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -208,7 +209,8 @@ fun CardDetailDialog(
         val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + ReaderSheetLayout.SheetGap
         val corner = RoundedCornerShape(topStart = ReaderSheetLayout.Corner, topEnd = ReaderSheetLayout.Corner)
         Box(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().padding(top = top)
+            // No wider than a readable column, centred, on a phone held sideways or any wide window (Pully's rule 208).
+            Box(Modifier.align(Alignment.TopCenter).widthIn(max = ReadableWidth).fillMaxSize().padding(top = top)
                 .consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
                 .onSizeChanged { sheet.height = it.height.toFloat() }
                 .graphicsLayer {
@@ -230,6 +232,41 @@ fun CardDetailDialog(
                     .background(MymindTheme.palette.sheet.grabber))
             }
         }
+    }
+}
+
+/**
+ * A card reader in the pane beside the gallery of an unfolded window (Pully's rule 206): the same page as the sheet,
+ * without its handle, drag or the gallery stepping back. It fades in and out with [sheet]'s rise, and leaves Back out of
+ * its header since the gallery is in sight; system Back still closes it.
+ *
+ * @param onClose Called on Back; the caller fades [sheet] out and then removes the reader.
+ * @param actionsProgress How far the card's sheet has risen over it, from 0 to 1; the reader blurs with it.
+ * @param shrink How far Delete card's hold has come, from 0 to 1; the reader shrinks and fades with it.
+ * @param reading True for Reader Mode.
+ * @param editingTags True while the tags show the crosses that take them off.
+ * @param sheet How far the reader has come in, read for its fade.
+ */
+@Composable
+fun CardDetailPane(
+    card: Card,
+    onClose: () -> Unit,
+    onMenu: () -> Unit,
+    modifier: Modifier = Modifier,
+    onRemoveTag: ((Tag) -> Unit)? = null,
+    actionsProgress: Float = 0f,
+    shrink: Float = 0f,
+    reading: Boolean = false,
+    editingTags: Boolean = false,
+    scrollState: ScrollState = rememberScrollState(),
+    actions: ReaderActions = ReaderActions(),
+    details: ReaderDetails = ReaderDetails(),
+    sheet: ReaderSheetState = remember { ReaderSheetState(risen = true) },
+) {
+    Box(modifier.fillMaxSize().graphicsLayer { alpha = sheet.rise }) {
+        CardDetail(card, onClose, onMenu, modifier = Modifier.blur(8.dp * actionsProgress).shrunk { shrink }, onRemoveTag = onRemoveTag,
+            scrollState = scrollState, actions = actions, details = details, reading = reading, editingTags = editingTags,
+            backShown = false)
     }
 }
 
@@ -277,6 +314,7 @@ internal fun CardDetail(
     details: ReaderDetails = ReaderDetails(),
     reading: Boolean = false,
     editingTags: Boolean = false,
+    backShown: Boolean = true,
 ) {
     val colors = MymindTheme.palette.sheet
     val density = LocalDensity.current
@@ -306,7 +344,7 @@ internal fun CardDetail(
             }) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                 Spacer(Modifier.height(16.dp))
-                ReaderHeader(cardHeading(card), named, onBack = back, onName = { named = !named }, onShare = actions.onShare, icons = headerIcons,
+                ReaderHeader(cardHeading(card), named, onBack = back.takeIf { backShown || inReader }, onName = { named = !named }, onShare = actions.onShare, icons = headerIcons,
                     progress = if (inReader) ({ readingScroll.value / readingScroll.maxValue.coerceAtLeast(1).toFloat() }) else null)
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     val shown = if (inReader) readingScroll else scrollState
@@ -343,7 +381,7 @@ internal fun CardDetail(
 internal fun ReaderHeader(
     title: String,
     open: Boolean,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onName: () -> Unit,
     onShare: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -353,7 +391,8 @@ internal fun ReaderHeader(
     Row(modifier.fillMaxWidth().zIndex(1f).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         // The reader returns to the gallery, so it leads with Back rather than a closing cross.
-        CardHeaderButton(icons.back ?: painterResource(R.drawable.ic_sheet_back), "Back", onBack, true)
+        // Beside the gallery on an unfolded window the gallery is in sight, so the reader leaves Back out (Pully's rule 210).
+        if (onBack != null) CardHeaderButton(icons.back ?: painterResource(R.drawable.ic_sheet_back), "Back", onBack, true)
         NamePill(title, open, onName, Modifier.weight(1f), progress)
         if (onShare != null) CardHeaderButton(icons.share ?: painterResource(R.drawable.ic_share), "Share", onShare, true)
         else Spacer(Modifier.size(44.dp))

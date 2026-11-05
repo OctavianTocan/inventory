@@ -114,3 +114,22 @@ The tab of the whole library, mymind's Everything, MUST be named "All" wherever 
 shows or speaks it, such as the bar's tab and the reader's Back to All.
 Source: Tavi, 5 November 2026 ("Rename it to 'All'"), picked over Mind, Home and All
 cards when asked what to call Everything.
+
+@cc [owner:OctavianTocan,label:product;design;architecture] window-shapes-follow-pully
+The app MUST read its window as one of three shapes (WindowShape): narrower than 600dp is a
+phone and MUST look exactly as before; 600dp or wider but under 600dp tall is a phone held
+sideways; at least 600dp both ways is unfolded (a foldable opened, a tablet). Sideways, one
+page shows at a time and the library's pages sit in a column no wider than ReadableWidth,
+centred, with the page colour either side, and the foot bar is no wider than that column.
+Unfolded, ShellFrame MUST show the gallery with its foot bar on the left, a little under half
+the width and between 340 and 420dp (listPaneWidth), a hairline, and the opened card beside
+it as a page of its own rather than a sheet over a stepped-back gallery; with nothing open
+the right pane shows only one muted line saying a card you open shows there. Opening another
+card from the gallery replaces the one beside it. Every shape MUST keep pages clear of a
+camera cutout or navigation bar at the side, and turning the phone or opening the foldable
+MUST keep the open card, page and scroll (the activity handles the change itself rather than
+being recreated).
+Source: Tavi, 5 November 2026 ("Let's also follow Pully in how it adapted its layouts for
+foldable phones and rotated states a while ago (look into it), and do that for this as
+well"); pulls.review unfolded-window-reads-one-stack-as-two-panes and
+wide-window-pages-keep-a-readable-column, DESIGN rules 206, 207 and 209 (PR #137).

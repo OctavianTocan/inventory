@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.71 (82), 2026-11-05
+ThyMind turns sideways and opens up on a foldable.
+
+### Added
+- On an unfolded foldable or a tablet, your gallery stays on the left and the card you open shows beside it. Tap another card and it takes that card's place. Before anything is open, the right side says a card you open shows there. Back isn't shown beside the gallery, since the gallery is right there; the back gesture still closes the card.
+- ThyMind now turns with your phone. Held sideways, the gallery, the bar, the reader and every sheet sit in a centred column instead of stretching across the screen, and sheets open tall so there is room to read.
+
+### Changed
+- Sheets are never wider than a column. On an unfolded foldable, a card's sheet opens over the card, and sheets you open from the gallery open over the gallery.
+- Turning the phone or opening the foldable keeps the card you had open and where you were in it.
+- Nothing sits under the camera or the navigation buttons when they are at the side of the screen.
+
 ## 0.6.70 (81), 2026-11-05
 Share big videos without filling up the phone.
 

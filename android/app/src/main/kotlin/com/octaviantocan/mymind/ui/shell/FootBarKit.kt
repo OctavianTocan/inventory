@@ -33,6 +33,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.widthIn
+import com.octaviantocan.mymind.ui.theme.ReadableWidth
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.card.CardSheetMotion
 import com.octaviantocan.mymind.ui.card.LocalCardSheetColors
@@ -57,6 +59,8 @@ internal val FieldGap = 10.dp
 
 /** Pully Kit.floatingBar at the gallery's Google Photos geometry: one position for every bar, including while the keyboard is shown. */
 fun Modifier.floatingBar(): Modifier = imePadding().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
+    // As wide as the readable column it sits under, never across a sideways phone (Pully's rule 207).
+    .widthIn(max = ReadableWidth - 24.dp)
 
 @Composable
 internal fun rememberFootMotionEnabled(): Boolean = rememberSheetMotionEnabled()

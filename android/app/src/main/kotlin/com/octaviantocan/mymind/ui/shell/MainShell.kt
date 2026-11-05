@@ -9,9 +9,30 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.Stable
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.text.style.TextAlign
+import com.octaviantocan.mymind.ui.theme.LocalPaneSpan
+import com.octaviantocan.mymind.ui.theme.PaneSpan
+import com.octaviantocan.mymind.ui.theme.ReadableWidth
+import com.octaviantocan.mymind.ui.theme.SideInsets
+import com.octaviantocan.mymind.ui.theme.WindowShape
+import com.octaviantocan.mymind.ui.theme.listPaneWidth
+import com.octaviantocan.mymind.ui.theme.readableWidth
+import com.octaviantocan.mymind.ui.theme.rememberWindowShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -59,6 +80,8 @@ import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.uploadFileOf
 import com.octaviantocan.mymind.ui.card.CardDetailDialog
+import com.octaviantocan.mymind.ui.card.CardDetailPane
+import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.card.CardSheetMotion
 import com.octaviantocan.mymind.ui.card.FetchedPdfs
 import com.octaviantocan.mymind.ui.card.ReaderSheetLayout
@@ -258,6 +281,10 @@ fun MainShell(
     }
     // The opened card follows the phone's copy too, such as a shared link the server has just read.
     val openedId = opened?.card?.id
+    // The reader keeps its place when the window changes shape, as a phone turns or a foldable opens.
+    val readerScroll = remember(openedId) { ScrollState(0) }
+    val unfolded = rememberWindowShape() == WindowShape.Unfolded
+    val panes = remember { ShellPanes() }
     // Opened PDFs, fetched once into the phone's cache so the reader draws their pages.
     val pdfs = remember(viewModel, context) { FetchedPdfs(File(context.cacheDir, PDF_DIR)) { card, file -> viewModel.fetchFile(card, file) } }
     // The cards nearest an opened product, for its Same Vibe section, kept with the id they were found for.
@@ -346,12 +373,65 @@ fun MainShell(
         }
     }
 
+    // The opened card: a sheet over the gallery, or beside it on an unfolded window (Pully's rule 206).
+    val reader: @Composable (Boolean) -> Unit = { inPane ->
+        opened?.let { open ->
+            key(open.card.id) {
+                val actions = ReaderActions(
+                    onShare = { openSheet(open.card, open.spaceId, CardSheetRoot.Share, null) },
+                    onAddTags = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Tags) },
+                    onCopyLink = { copyLink(open.card) },
+                    onTogglePin = { togglePin(open.card) },
+                    onSpaces = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Spaces) },
+                    onOpenRecent = { openCard(it, null) },
+                    onEverything = {
+                        closeCard()
+                        selectTab(Tab.Everything)
+                    },
+                    onPart = { part -> openSheet(open.card, open.spaceId, CardSheetRoot.Part(part), null) },
+                    onReading = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(reading = on) ?: opened },
+                    onEditingTags = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(editingTags = on) ?: opened },
+                )
+                val details = ReaderDetails(
+                    spaces = spaces.spaces.filter { it.id in open.card.spaces.orEmpty() }.mapNotNull { it.name },
+                    recent = recent.toList(),
+                    sameVibe = sameVibe?.takeIf { it.first == open.card.id }?.second.orEmpty(),
+                )
+                val removeTag = { tag: Tag ->
+                    scope.launch {
+                        when (val answer = viewModel.removeTag(open.card, tag)) {
+                            is ApiResult.Ok -> updateCard(answer.value)
+                            is ApiResult.Failed -> failure = answer.failure
+                        }
+                    }
+                    Unit
+                }
+                PageTheme(scheme) {
+                    CompositionLocalProvider(LocalPdfSource provides pdfs) {
+                        if (inPane) {
+                            CardDetailPane(open.card, onClose = closeCard, onMenu = { openMenu(open.card, open.spaceId) }, onRemoveTag = removeTag,
+                                actionsProgress = menuProgress, shrink = shrink, reading = open.reading, editingTags = open.editingTags,
+                                scrollState = readerScroll, actions = actions, details = details, sheet = readerSheet)
+                        } else {
+                            CardDetailDialog(open.card, onClose = closeCard, onMenu = { openMenu(open.card, open.spaceId) }, onRemoveTag = removeTag,
+                                actionsProgress = menuProgress, shrink = shrink, reading = open.reading, editingTags = open.editingTags,
+                                scrollState = readerScroll, actions = actions, details = details, sheet = readerSheet,
+                                onPulledAway = { gone(true) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     ShellFrame(
         tab = tab,
         onSelectTab = selectTab,
         scheme = scheme,
         modifier = Modifier.blur(MENU_BLUR * menuProgress).shrunk { if (opened == null) shrink else 0f },
-        recede = { if (opened != null) readerSheet.recede() else 0f },
+        recede = { if (opened != null && !unfolded) readerSheet.recede() else 0f },
+        panes = panes,
+        beside = if (unfolded) ({ if (opened == null) NothingOpen() else reader(true) }) else null,
         footer = {
             LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
                 onSearch = { askFocus = true; searchActive = true }, onCloseSearch = closeSearch,
@@ -359,58 +439,12 @@ fun MainShell(
                 hint = searchFilter?.takeUnless { it.similar }?.let { "Search in ${it.label}" } ?: SEARCH_HINT)
         },
         overlay = {
-            opened?.let { open ->
-                key(open.card.id) {
-                    PageTheme(scheme) {
-                        CompositionLocalProvider(LocalPdfSource provides pdfs) {
-                            CardDetailDialog(
-                                open.card,
-                                onClose = closeCard,
-                                onMenu = { openMenu(open.card, open.spaceId) },
-                                actionsProgress = menuProgress,
-                                shrink = shrink,
-                                reading = open.reading,
-                                editingTags = open.editingTags,
-                                actions = ReaderActions(
-                                    onShare = { openSheet(open.card, open.spaceId, CardSheetRoot.Share, null) },
-                                    onAddTags = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Tags) },
-                                    onCopyLink = { copyLink(open.card) },
-                                    onTogglePin = { togglePin(open.card) },
-                                    onSpaces = { openSheet(open.card, open.spaceId, CardSheetRoot.Actions, CardSubmenu.Spaces) },
-                                    onOpenRecent = { openCard(it, null) },
-                                    onEverything = {
-                                        closeCard()
-                                        selectTab(Tab.Everything)
-                                    },
-                                    onPart = { part -> openSheet(open.card, open.spaceId, CardSheetRoot.Part(part), null) },
-                                    onReading = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(reading = on) ?: opened },
-                                    onEditingTags = { on -> opened = opened?.takeIf { it.card.id == open.card.id }?.copy(editingTags = on) ?: opened },
-                                ),
-                                sheet = readerSheet,
-                                onPulledAway = { gone(true) },
-                                details = ReaderDetails(
-                                    spaces = spaces.spaces.filter { it.id in open.card.spaces.orEmpty() }.mapNotNull { it.name },
-                                    recent = recent.toList(),
-                                    sameVibe = sameVibe?.takeIf { it.first == open.card.id }?.second.orEmpty(),
-                                ),
-                                onRemoveTag = { tag ->
-                                    scope.launch {
-                                        when (val answer = viewModel.removeTag(open.card, tag)) {
-                                            is ApiResult.Ok -> updateCard(answer.value)
-                                            is ApiResult.Failed -> failure = answer.failure
-                                        }
-                                    }
-                                },
-                            )
-                        }
-                    }
-                }
-            }
+            if (!unfolded) reader(false)
             UploadQueueStrip(
                 uploads,
                 onToggle = viewModel.uploads::toggleDetails,
                 onDismiss = viewModel.uploads::dismiss,
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.BottomCenter).widthIn(max = ReadableWidth),
             )
             pendingDelete?.let { card ->
                 key(card.id) {
@@ -420,7 +454,8 @@ fun MainShell(
                             viewModel.undoDelete()
                             undoReopens?.let(reopen)
                         },
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = UPLOAD_STRIP_BOTTOM),
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = UPLOAD_STRIP_BOTTOM)
+                            .widthIn(max = ReadableWidth - 32.dp),
                     )
                 }
             }
@@ -497,6 +532,9 @@ fun MainShell(
             }
             Unit
         }
+        // Unfolded, the card's sheet rises over the pane it was opened from: the reader's card over the reader.
+        val menuSpan = if (!unfolded) null else if (opened?.card?.id == target.card.id) panes.beside.value else panes.list.value
+        CompositionLocalProvider(LocalPaneSpan provides menuSpan) {
         CardMenuSheet(
             items = cardMenuItems(target.card, target.spaceId, features),
             accent = cardAccent(target.card),
@@ -655,7 +693,10 @@ fun MainShell(
                     }
             },
         )
+        }
     }
+    // Unfolded, the sheets opened from the gallery rise over the gallery's pane.
+    CompositionLocalProvider(LocalPaneSpan provides if (unfolded) panes.list.value else null) {
     adding?.let { target ->
         AddSheet(
             title = target.title,
@@ -705,6 +746,7 @@ fun MainShell(
             )
         }
     }
+    }
     extras()
     failure?.let { ApiErrorDialog(title = null, message = describe(it), onDismiss = { failure = null }) }
 }
@@ -729,6 +771,9 @@ private const val RECENT_KEPT = 8
  * @param recede How far an opened reader's sheet has risen over the page, from 0 to 1, read while drawing: the page and
  *   its bar step back into a smaller, dimmed card with round corners, on black.
  * @param overlay Drawn over the page and the tab bar, such as an opened card.
+ * @param beside On an unfolded window, the pane beside the gallery, such as an opened card or the line saying what goes
+ *   there (Pully's rule 206); null, or any other window, shows the page alone.
+ * @param panes Where the two panes sit once [beside] shows, for the sheets that rise over them.
  * @param page The selected tab's page.
  */
 @Composable
@@ -740,6 +785,8 @@ fun ShellFrame(
     footer: (@Composable () -> Unit)? = null,
     recede: () -> Float = { 0f },
     overlay: @Composable BoxScope.() -> Unit = {},
+    beside: (@Composable () -> Unit)? = null,
+    panes: ShellPanes = remember { ShellPanes() },
     page: @Composable () -> Unit,
 ) {
     val bars = remember { FootBars() }
@@ -749,25 +796,82 @@ fun ShellFrame(
         val scrim = MymindTheme.palette.sheet.scrim
         val top = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat()
         ImmersiveSystemBars(immersion)
-        Box(modifier.fillMaxSize().drawBehind { drawRect(lerp(lerp(paper, Color.Black, immersion.amount()), Color.Black, recede())) }) {
-            Box(Modifier.fillMaxSize().stepBack(recede, top, scrim).drawBehind { drawRect(lerp(paper, Color.Black, immersion.amount())) }) {
-                PageTheme(scheme) {
-                    Box(Modifier.fillMaxSize().statusBarsPadding().background(LibraryStyle.colors.background)) {
-                        page()
-                    }
-                    if (footer != null) footer() else MymindTabBar(tab, onSelectTab)
-                    // A full-screen page slides the bar down out of sight, and out of reach.
-                    FootBarLayer(bars, Modifier.align(Alignment.BottomCenter).graphicsLayer {
-                        val away = immersion.amount()
-                        alpha = 1f - away
-                        translationY = away * size.height
-                    })
+        val shape = rememberWindowShape()
+        val library: @Composable BoxScope.() -> Unit = {
+            PageTheme(scheme) {
+                Box(Modifier.fillMaxSize().statusBarsPadding().background(LibraryStyle.colors.background)) {
+                    // Sideways, the page sits in a readable column with the page colour either side (Pully's rule 207).
+                    Box(if (shape == WindowShape.Sideways) Modifier.fillMaxHeight().readableWidth() else Modifier.fillMaxSize()) { page() }
                 }
+                if (footer != null) footer() else MymindTabBar(tab, onSelectTab)
+                // A full-screen page slides the bar down out of sight, and out of reach.
+                FootBarLayer(bars, Modifier.align(Alignment.BottomCenter).graphicsLayer {
+                    val away = immersion.amount()
+                    alpha = 1f - away
+                    translationY = away * size.height
+                })
             }
+        }
+        if (shape == WindowShape.Unfolded && beside != null) {
+            // Unfolded, the gallery and the card it opened sit side by side, each with its own foot (Pully's rule 206).
+            BoxWithConstraints(modifier.fillMaxSize().drawBehind { drawRect(lerp(paper, Color.Black, immersion.amount())) }) {
+                val listWidth = listPaneWidth(maxWidth)
+                Row(Modifier.fillMaxSize().windowInsetsPadding(SideInsets)) {
+                    Box(Modifier.width(listWidth).fillMaxHeight().spanInto(panes.list)) {
+                        CompositionLocalProvider(LocalPaneSpan provides panes.list.value) { library() }
+                    }
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(LibraryStyle.colors.muted.copy(alpha = HAIRLINE_ALPHA)))
+                    Box(Modifier.weight(1f).fillMaxHeight().background(LibraryStyle.colors.background).spanInto(panes.beside)) {
+                        PageTheme(scheme) { beside() }
+                    }
+                }
+                overlay()
+            }
+            return@CompositionLocalProvider
+        }
+        Box(modifier.fillMaxSize().drawBehind { drawRect(lerp(lerp(paper, Color.Black, immersion.amount()), Color.Black, recede())) }) {
+            Box(Modifier.fillMaxSize().stepBack(recede, top, scrim).drawBehind { drawRect(lerp(paper, Color.Black, immersion.amount())) }
+                .windowInsetsPadding(SideInsets), content = library)
             overlay()
         }
     }
 }
+
+/** How strong the hairline between the gallery and the card beside it is, over the muted ink. */
+private const val HAIRLINE_ALPHA = 0.25f
+
+/**
+ * Where the two panes of an unfolded window sit, so a sheet rises over the pane whose page opened it (Pully's rule 208).
+ *
+ * @property list The gallery's pane, or null until laid out or on any other window.
+ * @property beside The pane beside it.
+ */
+@Stable
+class ShellPanes {
+    val list = mutableStateOf<PaneSpan?>(null)
+    val beside = mutableStateOf<PaneSpan?>(null)
+}
+
+/** Keeps [span] on where this pane sits in the window. */
+private fun Modifier.spanInto(span: MutableState<PaneSpan?>): Modifier = onGloballyPositioned {
+    val next = PaneSpan(it.positionInWindow().x, it.size.width.toFloat())
+    val now = span.value
+    if (now == null || now.left != next.left || now.width != next.width) span.value = next
+}
+
+/**
+ * The pane beside the gallery while no card is open in it: one quiet line saying what goes there.
+ *
+ * @param modifier Modifier for the pane.
+ */
+@Composable
+internal fun NothingOpen(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize().padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
+        Text(NOTHING_OPEN, style = LibraryStyle.body, color = LibraryStyle.colors.muted, textAlign = TextAlign.Center)
+    }
+}
+
+private const val NOTHING_OPEN = "A card you open shows here."
 
 /**
  * Steps the page back behind a reader's sheet as far as [recede] says: smaller, its top [top] px plus a little below the

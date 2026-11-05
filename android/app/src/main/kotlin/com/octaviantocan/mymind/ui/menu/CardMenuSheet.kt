@@ -49,7 +49,14 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import com.octaviantocan.mymind.ui.card.*
+import com.octaviantocan.mymind.ui.theme.LocalPaneSpan
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import com.octaviantocan.mymind.ui.theme.PaneSpan
+import com.octaviantocan.mymind.ui.theme.ReadableWidth
+import com.octaviantocan.mymind.ui.theme.WindowShape
+import com.octaviantocan.mymind.ui.theme.rememberWindowShape
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import com.octaviantocan.mymind.ui.theme.themeWipe
 
 /** A new sheet instance owns its drag position, reveal and native landing feedback. */
@@ -174,7 +181,9 @@ internal fun CardMenuPanel(
     val tall = (screen - maxOf(top, 16.dp) - 44.dp).coerceAtLeast(1.dp)
     val window = LocalWindowInfo.current.containerSize.height
     position.window = if (window > 0) window.toFloat() else with(density) { screen.toPx() }
-    position.updateHalf(position.window / 2f)
+    // Sideways, half the window is too little to read, so a sheet rests at its tall height (Pully's rule 208).
+    val sideways = rememberWindowShape() == WindowShape.Sideways
+    position.updateHalf(if (sideways) position.window else position.window / 2f)
     LaunchedEffect(position.half) { position.follow(scope, motion) }
     val keyboard = WindowInsets.ime.getBottom(density) > 0
     val latestKeyboard by rememberUpdatedState(keyboard)
@@ -192,7 +201,8 @@ internal fun CardMenuPanel(
                 .clickable(remember { MutableInteractionSource() }, indication = null, role = Role.Button,
                     onClickLabel = closeLabel, onClick = { haptic.tick(); dismiss() }))
             Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(tall)
+                // No wider than a readable column, centred at the foot of the window or of the pane that opened it.
+                panelPlace(LocalPaneSpan.current).height(tall)
                     .onSizeChanged { position.measured(it.height, scope, motion) }
                     .graphicsLayer {
                         translationY = position.shift(size.height)
@@ -234,6 +244,17 @@ internal fun CardMenuPanel(
             }
         }
     }
+}
+
+/** Where a sheet's panel sits along the foot of the window: centred under [span], the pane that opened it, or the window. */
+@Composable
+private fun BoxScope.panelPlace(span: PaneSpan?): Modifier {
+    if (span == null) return Modifier.align(Alignment.BottomCenter).widthIn(max = ReadableWidth).fillMaxWidth()
+    val density = LocalDensity.current
+    val width = minOf(span.width, with(density) { ReadableWidth.toPx() })
+    return Modifier.align(Alignment.BottomStart)
+        .offset { IntOffset((span.left + (span.width - width) / 2f).roundToInt(), 0) }
+        .width(with(density) { width.toDp() })
 }
 
 /** A child page of a paged sheet: its header title and how many pages deep it sits under the root. */

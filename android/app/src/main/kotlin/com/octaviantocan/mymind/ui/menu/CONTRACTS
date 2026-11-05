@@ -115,3 +115,12 @@ never mymind's "Top of Mind": the sheet's tile and the reader's switch read Pin,
 pinned card's tile is spoken as Pinned.
 Source: Tavi, 5 November 2026 ("Rename 'Top of mind' everywhere for 'Pinned'. Same for
 the actions to 'Pin'").
+
+@cc [owner:OctavianTocan,label:design] sheets-stay-column-wide
+Every sheet drawn by CardMenuPanel MUST be no wider than ReadableWidth, centred along the
+foot of the window. On an unfolded window it MUST rise over the pane it was opened from (a
+card's sheet from the reader over the reader, anything opened from the gallery over the
+gallery) while its scrim still dims the whole window. On a phone held sideways a sheet MUST
+rest at its tall height, since half the window is too little to read.
+Source: Tavi, 5 November 2026 (follow Pully's foldable and rotated layouts); pulls.review
+sheets-and-foot-bars-stay-column-wide, DESIGN rule 208 (PR #137).

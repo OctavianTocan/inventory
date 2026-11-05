@@ -32,8 +32,8 @@
         android:theme="@style/Theme.Mymind">
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true"
-            android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -42,11 +42,11 @@
         </activity>
         <activity
             android:name=".share.ShareActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleInstance"
             android:noHistory="true"
-            android:screenOrientation="portrait"
             android:taskAffinity="Share.Activity"
             android:theme="@style/Theme.Mymind.Share"
             android:windowSoftInputMode="adjustResize">
