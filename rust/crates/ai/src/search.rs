@@ -330,7 +330,7 @@ where
     };
     match understand_query(login, &engine, &query, today(args), library).await {
         Ok(understood) => Reply::ok(json!({ "understood": understood.to_json() })),
-        Err(error) => Reply::problem(502, ai_kit::redact::safe_error(&error)),
+        Err(error) => Reply::failed(&error),
     }
 }
 
@@ -494,7 +494,7 @@ where
     let understood = args.get("understood").and_then(Understood::from_json).unwrap_or_default();
     let cards = match gather(library, &query, &understood).await {
         Ok(cards) => cards,
-        Err(error) => return Reply::problem(502, ai_kit::redact::safe_error(&error)),
+        Err(error) => return Reply::failed(&error),
     };
     if cards.is_empty() {
         return Reply::ok(json!({ "cards": [], "next": null, "ranked": 0, "understood": understood.to_json(), "answer": null }));
@@ -508,7 +508,7 @@ where
     prompt.push_str(&format!("\nItems, one JSON object a line:\n{}", items.join("\n")));
     let answer = match ask(login, &engine, RANK_SYSTEM, prompt, ranking_schema()).await {
         Ok(answer) => answer,
-        Err(error) => return Reply::problem(502, ai_kit::redact::safe_error(&error)),
+        Err(error) => return Reply::failed(&error),
     };
     let ids: Vec<String> = answer.get("ids").and_then(Value::as_array).into_iter().flatten().filter_map(|id| id.as_str().map(str::to_owned)).collect();
     let said = answer_json(&answer, understood.question, &cards);

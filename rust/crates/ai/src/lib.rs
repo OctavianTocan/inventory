@@ -82,9 +82,22 @@ impl Reply {
     fn from(result: anyhow::Result<Value>) -> Self {
         match result {
             Ok(body) => Self::ok(body),
-            Err(error) => Self::problem(502, ai_kit::redact::safe_error(&error)),
+            Err(error) => Self::failed(&error),
         }
     }
+
+    /// A failed AI call: 403 busy while a feedback round has the sign-in, otherwise 502 with the redacted error.
+    pub(crate) fn failed(error: &anyhow::Error) -> Self {
+        if busy(error) { Self::problem(403, BUSY) } else { Self::problem(502, ai_kit::redact::safe_error(error)) }
+    }
+}
+
+/// What AI search and status answer while a feedback round has the login's sign-in (docs/feedback.md).
+pub const BUSY: &str = "Your AI is busy with your feedback.";
+
+/// Whether an error is the login's `AgentHome` answering 403 busy: its sign-in is checked out to a feedback round.
+fn busy(error: &anyhow::Error) -> bool {
+    error.to_string().contains(r#"answered 403: {"error":"busy"}"#)
 }
 
 /// Whether `path` is one of the routes [`answer`] serves.
@@ -205,6 +218,13 @@ mod tests {
                 "understood": { "label": "", "parts": [], "searches": [], "tags": [], "spaces": [], "question": false }
             }))
         );
+    }
+
+    #[test]
+    fn a_checked_out_login_answers_busy() {
+        let error = anyhow::anyhow!(r#"The AI container answered 403: {{"error":"busy"}}"#);
+        assert_eq!(Reply::from(Err(error)), Reply::problem(403, BUSY));
+        assert_eq!(Reply::from(Err(anyhow::anyhow!("The AI container answered 500: boom"))).status, 502);
     }
 
     fn futures_lite_block<T>(future: impl Future<Output = T>) -> T {

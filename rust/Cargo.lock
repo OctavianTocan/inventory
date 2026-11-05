@@ -1130,6 +1130,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mm-feedback"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "mm-js"
 version = "0.1.0"
 dependencies = [
@@ -1182,6 +1191,7 @@ dependencies = [
  "js-sys",
  "mm-ai",
  "mm-core",
+ "mm-feedback",
  "mm-js",
  "serde_json",
  "sha2",

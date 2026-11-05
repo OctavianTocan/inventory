@@ -20,6 +20,7 @@ const KNOWN: &[&str] = &[
     "AI_CHAT_BASE_URL",
     "TYPESAFE_BASE_URL",
     "OWNER_EMAIL",
+    "FEEDBACK_OPEN",
     "ALLOWED_GOOGLE_DOMAIN",
     "AUTH",
     "PUBLIC_URL",

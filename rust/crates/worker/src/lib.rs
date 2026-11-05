@@ -1,6 +1,7 @@
 //! The Cloudflare Worker that hosts the libraries (`worker/index.mjs`): every request is checked by the `Auth` object,
 //! a signed-in one goes to its account's `Library` object, and `/_admin/` exists only while `ADMIN_TOKEN` is set.
-//! Claude Code and Codex (`/app/v1/ai/`) run in each account's own `AgentHome` container.
+//! Claude Code and Codex (`/app/v1/ai/`) run in each account's own `AgentHome` container. Feedback (`/app/v1/feedback`)
+//! is checked here and passed to the feedback runner Worker (docs/feedback.md).
 
 mod auth_object;
 mod bucket_r2;
@@ -244,6 +245,55 @@ async fn ai(request: &web_sys::Request, env: &Env, url: &url::Url, headers: &Hea
     Ok(Response::new(reply.status, Headers::from([("content-type", "application/json"), ("cache-control", "no-store")]), reply.body.to_string()))
 }
 
+/// The feedback routes (`mm_feedback`): checked here with the caller's AI sign-in and models, then passed to the
+/// feedback runner through the `FEEDBACK_RUNNER` service binding with the verified email and the caller's AI login.
+async fn feedback(request: &web_sys::Request, env: &Env, url: &url::Url, headers: &Headers) -> Result<Response> {
+    ai_kit::home::install(env, "AGENT_HOME").map_err(worker_error)?;
+    let vars = runtime::bindings(env);
+    ai_kit::rt::env::set(vars.clone());
+    let email = headers.get("x-mymind-email").unwrap_or_default().trim().to_lowercase();
+    let login = mm_ai::login_for(Some(&email));
+    let body = http::request_from(request)?.body.bytes_within(32 * 1024).await?;
+    let caller = mm_feedback::Caller {
+        email: &email,
+        owner: vars.get("OWNER_EMAIL").map(String::as_str),
+        open: mm_feedback::Open::from_var(vars.get("FEEDBACK_OPEN").map(String::as_str)),
+    };
+    let runner = env.service("FEEDBACK_RUNNER").map_err(worker_error)?;
+    let (login, email_ref) = (&login, &email);
+    let signed_in = |binary: &'static str| async move {
+        let status = ai_kit::login::status(login).await?;
+        Ok(status[binary]["signedIn"].as_bool() == Some(true))
+    };
+    let models = |binary: &'static str| async move {
+        let catalog = ai_kit::process::catalog(binary, login).await?;
+        let ids = catalog["models"].as_array().into_iter().flatten().filter_map(|model| model["id"].as_str().map(str::to_owned)).collect();
+        Ok(ids)
+    };
+    let forward_to_runner = |plan: mm_feedback::Forward| async move {
+        let failed = |error: worker::Error| anyhow::anyhow!(error.to_string());
+        let out = worker::Headers::new();
+        out.set("content-type", "application/json").map_err(failed)?;
+        out.set("x-feedback-email", email_ref).map_err(failed)?;
+        out.set("x-feedback-login", &login.volume()).map_err(failed)?;
+        out.set("x-feedback-name", email_ref.split('@').next().unwrap_or_default()).map_err(failed)?;
+        let mut init = worker::RequestInit::new();
+        init.with_method(worker::Method::from(plan.method.to_owned())).with_headers(out);
+        if let Some(body) = &plan.body {
+            init.with_body(Some(JsValue::from_str(&body.to_string())));
+        }
+        let request = worker::Request::new_with_init(&format!("https://feedback-runner{}", plan.path), &init).map_err(failed)?;
+        let mut response = runner.fetch_request(request).await.map_err(failed)?;
+        let status = response.status_code();
+        let text = response.text().await.map_err(failed)?;
+        Ok(mm_feedback::Reply { status, body: serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({ "error": "Feedback isn't reachable right now." })) })
+    };
+    let reply = mm_feedback::answer(&caller, &request.method(), url.path(), &body, signed_in, models, forward_to_runner)
+        .await
+        .unwrap_or_else(|| unreachable!("feedback runs only for the paths mm_feedback serves"));
+    Ok(Response::new(reply.status, Headers::from([("content-type", "application/json"), ("cache-control", "no-store")]), reply.body.to_string()))
+}
+
 /// An answer built here, or a Durable Object's own response, kept whole because a WebSocket upgrade cannot be copied.
 enum Reply {
     Built(Response),
@@ -297,6 +347,9 @@ async fn route(request: web_sys::Request, env: Env) -> Result<Reply> {
     let stub = env.durable_object("LIBRARY").map_err(worker_error)?.get_by_name(&library).map_err(worker_error)?;
     if mm_ai::serves(url.path()) {
         return ai(&request, &env, &url, &headers, stub).await.map(Reply::Built);
+    }
+    if mm_feedback::serves(url.path()) {
+        return feedback(&request, &env, &url, &headers).await.map(Reply::Built);
     }
     let forwarded = forward(url.as_str(), &method, &headers, request.body())?;
     Ok(Reply::Passed(stub.fetch_with_request(worker::Request::from(forwarded)).await.map_err(worker_error)?))

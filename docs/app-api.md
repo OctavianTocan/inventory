@@ -199,3 +199,24 @@ Fields are omitted when the stored card has no value; the app treats every field
 - `GET /download/<name>.apk`: the package, sent as `application/vnd.android.package-archive`.
 
 The manifest entry behind both is described in `docs/plans/2026-10-17-1935-feat-android-updates-plan.md`.
+
+## Feedback
+
+Feedback from the app becomes a pull request that an agent writes on the sender's own Claude Code or Codex plan and
+the runner merges on green CI (`docs/feedback.md`). Every refusal is 403 (never 401) with `{"error": "<sentence>"}`.
+
+- `POST /app/v1/feedback` with `{text, engine, model, effort, client_id}`: `engine` is `claude` (or `claude-code`) or
+  `codex`, `model` an id from `GET /app/v1/ai/models`, `effort` one of `none`, `minimal`, `low`, `medium`, `high`,
+  `xhigh`, `max`, and `client_id` 8 to 64 letters, digits, `-` or `_`, made once per send so a retry returns the
+  same job. Answers `202 {id, state}`. 400 for a malformed body or text outside 1 to 4000 characters; 403 "Only Tavi
+  can send feedback for now." (while `FEEDBACK_OPEN` is `owner`), "Sign in to Claude Code first." (or Codex), "That
+  model isn't available any more.", "You already have feedback in progress.", "You've sent 5 today. Try again
+  tomorrow." (UTC day), "Feedback is paused for now."
+- `GET /app/v1/feedback/{id}`: `{state, title, detail, version}` for the caller's own job, 404 otherwise. `title` is
+  the notification's line and `detail` its second line; `version` is set once the change shipped.
+- `GET /app/v1/feedback` (owner only): `{jobs: [...]}`, the last 100 jobs with engine, model, effort, PR, rounds,
+  state, reason and the last failed check's link.
+- `POST /app/v1/feedback/pause` (owner only) with `{paused: true|false}`: the kill switch. Answers `{paused}`.
+
+While a feedback round has a person's sign-in, their AI search and sign-in status answer 403 "Your AI is busy with
+your feedback."

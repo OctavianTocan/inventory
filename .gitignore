@@ -55,3 +55,4 @@ rust/test-fixtures/
 
 # mymind extension assets copied at setup
 extension/mymind/
+deploy/.last-worker-deploy

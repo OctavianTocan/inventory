@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 mm-js.workspace = true
 mm-core.workspace = true
 mm-ai.workspace = true
+mm-feedback.workspace = true
 ai-kit = { workspace = true, features = ["agents", "worker"] }
 anyhow.workspace = true
 serde_json.workspace = true

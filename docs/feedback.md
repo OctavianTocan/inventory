@@ -3,9 +3,16 @@
 A signed-in ThyMind user writes feedback in the Android app, picks Claude Code or Codex with a model and an effort,
 and an agent on their own subscription turns it into a merged pull request inside a Cloudflare sandbox. The design
 (Tavi's decisions of 5 November 2026, the parts, job states and build order) is `feedback-agent/design_draft.md` in
-the ThyMind project files. This page holds what the repository needs to know: the runner, the GitHub sign-in and
-the spike's answers; the phone-facing routes, the kill switch and the runbook for a bad release come with the next
-step.
+the ThyMind project files. This page holds what the repository needs to know: the routes, the runner, the GitHub
+sign-in, deploying, the kill switch, the runbook for a bad release and the spike's answers.
+
+## Routes
+
+The app's routes are in `docs/app-api.md` (Feedback). ThyMind's Rust Worker (`rust/crates/feedback`, `mm-feedback`)
+checks each send: the phase (`FEEDBACK_OPEN`: `owner` lets only `OWNER_EMAIL` send, `everyone` lets everyone signed
+in), the text, that the sender is signed in to the engine and that the model is on its current list. It then passes
+the send to the runner with the verified email and the sender's AI login. The runner answers for the job limits
+(one active job per person, 5 a day, the pause switch).
 
 ## The runner
 
@@ -46,6 +53,41 @@ GitHub CLI sign-in: GitHub's device flow with the GitHub CLI's public client, wh
 so the consent page says "GitHub CLI". It is made once and reused for every job. It asks for `repo` only; without
 `workflow`, GitHub itself refuses any push that changes `.github/workflows`. The token is the runner's `GITHUB_TOKEN`
 secret and never enters a sandbox. Pushes, pull requests and merges appear as the account that signed in.
+
+## Deploying
+
+Before the first deploy, once:
+
+1. Make the GitHub sign-in: GitHub's device flow with the GitHub CLI's client and scope `repo`, as Pully's
+   `backend/src/personal_auth/` and the spike's `run.mjs` did (the spike kept it in
+   `~/.config/thymind/feedback-github.json` on the machine that ran it). Set it with
+   `cd feedback-runner && npx wrangler secret put GITHUB_TOKEN`.
+2. Make `rust` a required check next to `android` in `main`'s branch protection.
+
+Then `deploy/deploy-workers.sh` (or `npm run deploy` in `rust/crates/worker`) deploys `feedback-runner` first and
+`mymind` second, since each binds to the other. Before deploying it lists every commit with a `Feedback-Id:` trailer
+since the last deploy and flags changes to the sign-in files (`rust/crates/core/src/auth.rs`,
+`rust/crates/server/src/serve.rs`, `rust/crates/server/src/download.rs`), any `wrangler.jsonc` (which carries
+Durable Object migrations), `feedback-runner/` and the ai-kit pin, so they are read before saying yes.
+
+## Kill switch
+
+`POST /app/v1/feedback/pause` with `{"paused": true}`, as the owner, stops new rounds and merges at once without a
+deploy; rounds already running finish and their jobs wait. `{"paused": false}` starts them again. To stop sends from
+everyone but the owner, set `FEEDBACK_OPEN` back to `owner` and deploy `mymind`. `GET /app/v1/feedback` shows the
+last 100 jobs.
+
+## A bad release
+
+A merged feedback change publishes an Android release to every phone on green CI.
+
+- If the app still starts and updates: pause feedback, then revert the feedback's commit (its `Feedback-Id:` trailer
+  names the job) in a pull request that also adds a newer `android/CHANGELOG.md` entry, and merge it. Phones update
+  to the revert as usual.
+- If the change broke the updater or start-up, phones cannot fetch a fix: publish the revert as above, then install
+  it by hand on each phone from `/download` (signed in) or with `adb install`.
+- A bad Worker change is undone with Cloudflare's version rollback (`npx wrangler rollback` in `rust/crates/worker`
+  or `feedback-runner`), then a revert on `main`. Durable Object storage changes do not roll back.
 
 The spike (PR 1, removed in PR 3) answered the questions below on a real sandbox on 5 November 2026; its code is in
 the history of `feedback-runner/spike/`.

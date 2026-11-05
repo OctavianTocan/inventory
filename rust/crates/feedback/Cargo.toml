@@ -1,0 +1,13 @@
+[package]
+name = "mm-feedback"
+description = "ThyMind's phone-facing feedback routes: the checks before a send reaches the feedback runner"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }

@@ -93,8 +93,15 @@ output format and a length cap.
   `docs/pully-ui-reference.md`. Keep the implementation, tests and contracts consistent in the same change.
 - The backend is Rust; public rustdoc states the caller contract. Retained Node tooling uses plain ES modules,
   no framework or build step. Match the surrounding code.
+- `feedback-runner/` is the one TypeScript Worker, because the Cloudflare Sandbox SDK is TypeScript
+  (`docs/feedback.md`). Its `npm run check` runs in the `rust` check.
 - JSDoc on exported functions states the caller contract (summary, every `@param`, `@returns`); private helpers get
   a one-line summary; inline comments only for a non-obvious why. No section-divider comments.
+
+## Feedback agents
+
+Feedback sent from the app is implemented by an agent in a sandbox and merged on green CI (`docs/feedback.md`). In
+that work, do not change version numbers or `android/CHANGELOG.md`; the feedback runner does that.
 
 ## External services
 

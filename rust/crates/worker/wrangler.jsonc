@@ -13,8 +13,12 @@
   "vars": {
     "AUTH": "google",
     "PUBLIC_URL": "https://mymind.octaviantocan.com",
-    "ALLOWED_GOOGLE_DOMAIN": "octaviantocan.com"
+    "ALLOWED_GOOGLE_DOMAIN": "octaviantocan.com",
+    // Who may send feedback (docs/feedback.md): "owner" (OWNER_EMAIL only) or "everyone" signed in.
+    "FEEDBACK_OPEN": "owner"
   },
+  // The feedback runner Worker (feedback-runner/), which has no public route of its own.
+  "services": [{ "binding": "FEEDBACK_RUNNER", "service": "feedback-runner" }],
   "durable_objects": {
     "bindings": [
       { "name": "AUTH_OBJECT", "class_name": "Auth" },
