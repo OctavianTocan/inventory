@@ -56,6 +56,7 @@ bearer token.
 | `GET /app/v1/search?q=<query>&semantic=1&limit&cursor` | Same list shape, mymind's query syntax (`docs/search.md`). With `semantic=1` the order also weighs each card's similarity to the query's words, and up to 20 cards close in meaning join without a matching word (`Search::hybrid`); without it, words only. |
 | `GET /app/v1/top-of-mind?limit&cursor` | Same list shape, the pinned cards in pin order (`pinPosition`, then newest bumped first for pins without a position). Trashed and grid-hidden cards are left out. Paged by offset, like a space. |
 | `GET /app/v1/changes?since=<token>&limit=100` | `{"cards": [Card], "removed": ["<id>"], "next": "<token>", "more": bool, "reset": bool, "spaces": [Space]}`: the cards changed since `since`, each once, oldest change first (see below). `limit` 1–200, default 100. |
+| `GET /app/v1/sky?day=YYYY-MM-DD` | Back today and the sky (see below). `day` is the phone's date, default today in UTC; `400 {"error": "bad-day"}` for anything else, `503 {"error": "read-only"}` on a read-only library. |
 
 ### Syncing a copy of the library
 
@@ -67,6 +68,34 @@ bearer token.
 - Any write to a card counts as a change: its row, tags, text, spaces or pin. `app_sync.rs` keeps the log with triggers, and it starts on the first request.
 - `reset: true` means the log started again, for example after the library was replaced by an import, so the token's position no longer applies. Drop the copy, keep the cards in this answer, and carry on paging.
 - Tokens also name the card shape (`CHANGES_FORMAT` in `app_api.rs`). When cards gain a field the phone's copy needs, as `spaceRanks` did, the format changes and older tokens answer `reset: true`, so a copy kept before fills again once.
+
+### Back today and the sky
+
+`/app/v1/sky` (`sky.rs`) brings old finds back, a few a day, and keeps the sky they light.
+
+```json
+{"day": "2026-11-05", "back": ["<id>", "<id>", "<id>"],
+ "active": {"id": 3, "figure": "ship", "name": "The Voyager", "seed": "<id>", "cards": ["<seed>", "<id>", "..."],
+            "lit": ["<seed>", "<id>"], "created": "<iso>", "completed": null},
+ "done": [Constellation], "stars": [{"id": "<id>", "visited": "<iso>"}]}
+```
+
+- `back` holds up to three ids, the same all day: the day's first request picks and keeps them. They are old finds
+  (saved, and last saved again, over three months ago; not opened in six months; visible in the grid): up to two
+  dark stars of the active constellation, least recently offered first, then the finds nearest in meaning to the
+  saves of the last two weeks (the 20 newest saves when none are that recent). A find offered and left alone waits a
+  month before it is offered again, unless its constellation still needs it. Without embeddings the picks are old
+  finds in an order that changes each day. A pick that goes to the trash leaves the list.
+- A constellation is one recent save (the `seed`, lit from the start) and the five old finds nearest to it, `cards`
+  in that order. One is active at a time; when none is, the request forms one around the save from the last two weeks
+  whose five nearest old finds are nearest of all. OpenAI Decisions picks its `figure` from a fixed set not used yet
+  (`FIGURES` in `sky.rs`: ship, cup, book, mountain, lantern, camera, harp, tree, house, compass, anvil, bird, wave,
+  coin), and `name` comes with the figure ("The Voyager"). Without an OpenAI key the figure is picked by the seed's
+  id. The app draws each figure.
+- `lit` is the seed and every find opened since the constellation formed. It is finished (`completed`, then in
+  `done`, oldest first) once every find still out of the trash is lit; the next request forms the next one.
+- `stars` is every find opened from Back today or the sky, with its last visit, for the loose stars.
+- The phone records an opened find with the push's `visit` change (below). Card bodies come from the phone's copy.
 
 ### Uploads from the app
 
@@ -170,8 +199,9 @@ Fields are omitted when the stored card has no value; the app treats every field
   retry) is skipped rather than applied twice.
 - Names and `args`: `pin` (`cardId`, `pinned`), `trash` (`cardId`), `note` (`cardId`, `text`, one paragraph per
   line), `add-tag` (`cardId`, `name`), `remove-tag` (`tagId`), `add-to-space` and `remove-from-space` (`cardId`,
-  `spaceId`), `create-space` (`spaceId`, `name`, `color`), `delete-space` (`spaceId`) and `create-card` (`cardId`,
-  `content`, `source`, `note`). Other fields are ignored.
+  `spaceId`), `create-space` (`spaceId`, `name`, `color`), `delete-space` (`spaceId`), `create-card` (`cardId`,
+  `content`, `source`, `note`) and `visit` (`cardId`: a find opened from Back today or the sky, which lights its star
+  and can finish the constellation). Other fields are ignored.
 - `create-space` and `create-card` keep the id the phone made, so the phone can show the space or card and change it
   before the server answers. The id must be 32 lowercase hex digits (a UUID without its dashes): letters and digits
   like the library's own ids, and its letters stop at `f`, so it never holds the kind code those ids carry and count

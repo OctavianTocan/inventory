@@ -38,7 +38,7 @@ jobs:
             download_extension early_tags extension_auth google_domain hosted_media library_claim note_names search_hybrid
             thumb_hash semantics check_capture_http check_hosted_media check_media check_search check_writes
             enrich_library library media migrate_media screenshot tool_import_hosted tool_search_eval tool_seed_db
-            tool_try_ai transcribe media_audio worker worker_credentials decisions
+            tool_try_ai transcribe media_audio worker worker_credentials decisions sky
           )
           cargo test --workspace --exclude mm-worker --locked -j 2 --lib --bins "${targets[@]/#/--test=}" -- --test-threads=2
       - name: Check the Worker builds for wasm

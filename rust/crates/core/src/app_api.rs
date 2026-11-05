@@ -8,7 +8,9 @@ use url::Url;
 use crate::app_sync::{changed_after, install_app_sync};
 use crate::http::{Headers, Response, search_param};
 use crate::render::media::image_cover;
+use crate::host::Fetch;
 use crate::search::{Hybrid, Search};
+use crate::sky;
 use crate::sql::{SqlExt, SqlValue};
 use crate::store::{CardRow, Cursor, GRID_HIDDEN_FLAGS, Store, iso_from_ns};
 use crate::{Error, Result};
@@ -25,6 +27,8 @@ pub struct AppApi {
     store: Rc<Store>,
     search: Rc<Search>,
     localize: fn(&str) -> String,
+    decisions: Option<Rc<dyn Fetch>>,
+    readonly: bool,
 }
 
 enum After {
@@ -148,7 +152,29 @@ impl AppApi {
     /// * `search` - Search service whose `search(q, {})` orders the matches, or `hybrid` for `/search?semantic=1`.
     /// * `localize` - Rewrites recorded origins to local paths in every JSON body.
     pub fn new(store: Rc<Store>, search: Rc<Search>, localize: fn(&str) -> String) -> Self {
-        Self { store, search, localize }
+        Self { store, search, localize, decisions: None, readonly: false }
+    }
+
+    /// Let `/sky` ask OpenAI Decisions for a new constellation's figure, and say whether the library takes writes.
+    ///
+    /// # Arguments
+    /// * `decisions` - Outbound HTTP for the Decisions call; `None` picks figures without it.
+    /// * `readonly` - A read-only library answers `/sky` with 503, since its first call each day keeps the day's picks.
+    #[must_use]
+    pub fn with_sky(self, decisions: Option<Rc<dyn Fetch>>, readonly: bool) -> Self {
+        Self { decisions, readonly, ..self }
+    }
+
+    async fn sky_page(&self, url: &Url) -> Result<Response> {
+        if self.readonly {
+            return self.problem(503, "read-only");
+        }
+        let now = crate::runtime::now_ms();
+        let day = search_param(url, "day").unwrap_or_else(|| sky::utc_day(now));
+        if !sky::valid_day(&day) {
+            return self.problem(400, "bad-day");
+        }
+        self.json(200, &sky::today(&self.store, self.decisions.as_deref(), &day, now).await?)
     }
 
     fn json(&self, status: u16, body: &Value) -> Result<Response> {
@@ -349,9 +375,10 @@ impl AppApi {
     ///
     /// # Returns
     /// `Some(response)` for `GET /app/v1/cards`, `/cards/<id>`, `/trash`, `/spaces`, `/spaces/<id>/cards`, `/tags`,
-    /// `/search`, `/top-of-mind` (pinned cards in pin order, paged like a space) and `/changes` (the cards changed
-    /// since a `since` token, starting the change log on first use), a 405 for other methods on those, and `None`
-    /// for any other request.
+    /// `/search`, `/top-of-mind` (pinned cards in pin order, paged like a space), `/changes` (the cards changed
+    /// since a `since` token, starting the change log on first use) and `/sky?day=YYYY-MM-DD` (Back today and the sky,
+    /// as [`sky::today`] answers; the day defaults to today in UTC), a 405 for other methods on those, and `None` for
+    /// any other request.
     ///
     /// # Errors
     /// Any failure other than a 400, which is answered as a problem body.
@@ -369,7 +396,7 @@ impl AppApi {
 
     async fn route(&self, method: &str, url: &Url, path: &str) -> Result<Option<Response>> {
         let head = path[1..].split('/').next().unwrap_or("");
-        if !["cards", "trash", "spaces", "tags", "search", "top-of-mind", "changes"].contains(&head) {
+        if !["cards", "trash", "spaces", "tags", "search", "top-of-mind", "changes", "sky"].contains(&head) {
             return Ok(None);
         }
         if method != "GET" {
@@ -381,6 +408,7 @@ impl AppApi {
             ["trash"] => self.keyset_page(url, true)?,
             ["top-of-mind"] => self.offset_page(url, &self.store.pinned_cards(None)?)?,
             ["changes"] => self.changes_page(url)?,
+            ["sky"] => self.sky_page(url).await?,
             ["cards", id] if !id.is_empty() => match self.store.card(&uri::decode_uri_component(id)?, None)? {
                 Some(row) => self.json(200, &self.card_json(&row)?)?,
                 None => self.problem(404, "not-found")?,

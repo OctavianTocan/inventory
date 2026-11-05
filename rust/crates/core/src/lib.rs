@@ -37,6 +37,7 @@ pub mod search_index;
 pub mod search_query;
 pub mod search_semantic;
 pub mod site;
+pub mod sky;
 pub mod sql;
 pub mod store;
 pub mod store_enrich;

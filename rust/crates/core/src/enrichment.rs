@@ -81,7 +81,8 @@ fn env_set(name: &str) -> bool {
     runtime::env(name).is_some_and(|value| !value.is_empty())
 }
 
-fn loopback(name: &str) -> bool {
+/// Whether the base URL in the environment variable `name` points at this machine.
+pub(crate) fn loopback(name: &str) -> bool {
     let Some(address) = runtime::env(name) else { return false };
     mm_js::url::parse(&address, None).is_some_and(|parsed| ["127.0.0.1", "localhost", "[::1]"].contains(&parsed.host_str().unwrap_or("")))
 }

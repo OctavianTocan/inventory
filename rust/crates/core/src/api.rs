@@ -384,7 +384,8 @@ impl Api {
         let store = options.store;
         let writer = Rc::new(Writer::new(Rc::clone(&store), options.push)?.with_random(options.random));
         let search = Rc::new(Search::new(Rc::clone(&store), Some(Rc::clone(&options.fetch)), offline)?);
-        let app = AppApi::new(Rc::clone(&store), Rc::clone(&search), options.localize);
+        let decisions = (!offline || enrichment::loopback("OPENAI_BASE_URL")).then(|| Rc::clone(&options.fetch));
+        let app = AppApi::new(Rc::clone(&store), Rc::clone(&search), options.localize).with_sky(decisions, options.readonly);
         let uploads = Rc::new(Uploads::new(
             Rc::clone(&store),
             options.upload_storage,

@@ -6,6 +6,8 @@ use std::borrow::Cow;
 use mm_js::{Object, Value, json, number, obj, text as js_text};
 
 use crate::app_api::prose_text;
+use crate::runtime;
+use crate::sky;
 use crate::sql::{Sql, SqlExt};
 use crate::store::Store;
 use crate::store_write::{Writer, text_document};
@@ -133,6 +135,7 @@ fn apply(store: &Store, writer: &Writer, name: &str, args: &Value) -> Result<Opt
             writer.delete_space(text(args, "spaceId")?)?;
         }
         "create-card" => return create_card(store, writer, args).map(Some),
+        "visit" => sky::visit(store, &card(&**db, args)?, runtime::now_ms())?,
         _ => return Err(bad("unknown-change")),
     }
     Ok(None)
@@ -155,8 +158,9 @@ fn refused(error: &Error) -> bool {
 /// and listed in `refused`; the phone takes the server's version. Names: `pin` (`cardId`, `pinned`), `trash`
 /// (`cardId`), `note` (`cardId`, `text`, one paragraph per line), `add-tag` (`cardId`, `name`), `remove-tag`
 /// (`tagId`), `add-to-space` and `remove-from-space` (`cardId`, `spaceId`), `create-space` (`spaceId`, 32 lowercase
-/// hex digits the phone made, `name`, `color`), `delete-space` (`spaceId`) and `create-card` (`cardId` made the same
-/// way, `content`, `source`, `note`).
+/// hex digits the phone made, `name`, `color`), `delete-space` (`spaceId`), `create-card` (`cardId` made the same
+/// way, `content`, `source`, `note`) and `visit` (`cardId`, a find opened from Back today or the sky, as
+/// [`sky::visit`] records it).
 ///
 /// # Arguments
 /// * `store` - The library the writer writes to.
