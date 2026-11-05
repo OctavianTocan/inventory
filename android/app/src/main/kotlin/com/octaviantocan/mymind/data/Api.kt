@@ -163,6 +163,12 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
         send(get("app/v1/changes", "since" to since, "limit" to limit.toString()), ChangesPage.serializer())
 
     /**
+     * @param day The phone's date, `YYYY-MM-DD`.
+     * @return Back today and the sky for that day, or the failure; a server without them answers 404.
+     */
+    suspend fun sky(day: String): ApiResult<Sky> = send(get("app/v1/sky", "day" to day), Sky.serializer())
+
+    /**
      * Sends changes made on the phone through the server's push, which applies each change id once.
      *
      * @param request The phone's id and its changes, oldest first.

@@ -113,6 +113,12 @@ class LocalFirstLibrary(
 
     override suspend fun setNote(cardId: String, text: String): ApiResult<Unit> = change(Edit.Note(cardId, text), Unit) { server.setNote(cardId, text) }
 
+    // Only the push takes a visit, so it always waits in the outbox, even while the server has no changes feed.
+    override suspend fun visit(cardId: String): ApiResult<Unit> {
+        if (outbox.queue(Edit.Visit(cardId))) sync.start(afterCurrent = true)
+        return ApiResult.Ok(Unit)
+    }
+
     // A copy kept up to date: whole, and the server still has the changes feed that feeds it.
     private suspend fun wholeCopy() = sync.available && copy.complete()
 

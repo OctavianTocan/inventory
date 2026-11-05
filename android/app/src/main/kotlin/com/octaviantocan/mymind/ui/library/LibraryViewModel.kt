@@ -26,6 +26,7 @@ import com.octaviantocan.mymind.ui.menu.CardMenuItem
 import com.octaviantocan.mymind.ui.menu.CardMenuOutcome
 import com.octaviantocan.mymind.ui.menu.CardSubmenu
 import com.octaviantocan.mymind.ui.menu.FileSaver
+import com.octaviantocan.mymind.ui.sky.BackTodayModel
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CancellationException
@@ -132,6 +133,9 @@ class LibraryViewModel(
     /** Cards pinned, in pin order. */
     val pinned = CardFeed(viewModelScope, memory?.feed("top-of-mind")) { shown(library.pinned(it)) }
 
+    /** Back today: the day's old finds under Pinned. */
+    val backToday = BackTodayModel(viewModelScope, library, memory)
+
     /** The card waiting out its Undo before it goes to the trash, or null. */
     val deleting: StateFlow<Card?> = mutableDeleting
 
@@ -165,6 +169,7 @@ class LibraryViewModel(
     init {
         everything.loadMore()
         pinned.loadMore()
+        backToday.load()
         changes?.let { copyChanges ->
             viewModelScope.launch {
                 copyChanges.collect {
@@ -215,6 +220,7 @@ class LibraryViewModel(
      * shown when the sync brought changes, the first page otherwise.
      */
     fun refreshEverything() {
+        backToday.load()
         val sync = sync ?: return run {
             everything.refresh()
             pinned.refresh()
@@ -226,6 +232,7 @@ class LibraryViewModel(
 
     /** Syncs the phone's copy, as when the app comes back or the network returns, and shows what changed. */
     fun syncNow() {
+        backToday.loadIfNewDay()
         val sync = sync ?: return
         viewModelScope.launch {
             if (sync.sync().changedAnything() && changes == null) showCopy()
@@ -263,6 +270,7 @@ class LibraryViewModel(
     private suspend fun showCopy() {
         everything.reread()
         pinned.reread()
+        backToday.reread()
         spaceFeeds.values.forEach { it.reread() }
         if (mutableSpaces.value.loaded && !mutableSpaces.value.loading) readSpaces()
         mutableRedrawn.tryEmit(Unit)

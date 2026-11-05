@@ -78,6 +78,8 @@ class Repository(private val api: MymindApi, private val session: Session, priva
 
     override suspend fun pageConfig(): ApiResult<PageConfig> = api.pageConfig()
 
+    override suspend fun sky(day: String): ApiResult<Sky> = api.sky(day)
+
     /**
      * @param since `next` of the previous answer, or null to read the whole library.
      * @return One answer of the changes feed.

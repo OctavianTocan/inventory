@@ -1,0 +1,29 @@
+@cc [owner:OctavianTocan,label:product;design] back-today-three-a-day
+All MUST show at most three old finds a day in a band under Pinned, above the mosaic,
+under a small "Back today" label, in the order the server's sky gives them
+(`GET /app/v1/sky`, `rust/crates/core/src/sky.rs`): old finds the person has not
+opened lately, nearest in meaning to what they saved in the last two weeks. The band
+MUST show the same finds all day, show nothing when the server has none, and show the
+day's kept band at once and without internet (`LibraryMemory.sky`), but never a band
+kept from an earlier day. A find sent to the trash leaves it. Nothing else in the
+gallery wears, ages or changes its look with time. The band MUST NOT become a deck of
+cards to keep or forget (library-has-no-serendipity).
+Source: Tavi, 5 November 2026, 23:02, on worn finds ("your library will just become
+this huge 4000+ cards of moss or stone. You'd never actually click on them anymore, and
+also not understand what the heck is up"), then his pick of "Three a day, at the top"
+at 23:05 and "implement all this other stuff into the actual app" at 23:06. The "Back
+today" label is Claude's choice, not yet confirmed by Tavi.
+
+@cc [owner:OctavianTocan,label:product;design;motion] back-today-finds-are-under-leaves
+A find in Back today that has not been opened MUST lie under fallen leaves that hide it
+whole, its words hidden from accessibility too, laid out the same each time for the same
+card. A tap MUST blow the leaves away from where the finger landed, the nearest first,
+lifting, turning and fading past the tile's edges, and MUST open the find while they
+are still flying. The find then counts as visited: its star lights (`visit`, sent
+through the outbox so it waits offline like any change, gallery-keeps-offline-changes)
+and it shows uncovered for the rest of the day. An opened find MUST NOT be covered again
+that day. The leaves MUST NOT move while untouched, so the band costs nothing while the
+gallery scrolls.
+Source: Tavi, 5 November 2026, 23:06 ("do the new stuff you mentioned for the Worn
+stuff"); the leaves are Claude's pick, 11 Leaves of the 30 worn directions on the
+"Your sky" canvas, not yet confirmed by Tavi.

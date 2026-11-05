@@ -188,4 +188,18 @@ interface Library {
      * @return Success, or the failure.
      */
     suspend fun setNote(cardId: String, text: String): ApiResult<Unit>
+
+    /**
+     * @param day The phone's date, `YYYY-MM-DD`.
+     * @return Back today and the sky for that day; a library without them fails with a server 404.
+     */
+    suspend fun sky(day: String): ApiResult<Sky> = ApiResult.Failed(ApiFailure.Server(404))
+
+    /**
+     * Records that a find was opened from Back today or the sky, which lights its star.
+     *
+     * @param cardId The find.
+     * @return Success once recorded or queued; a library that keeps no sky does nothing.
+     */
+    suspend fun visit(cardId: String): ApiResult<Unit> = ApiResult.Ok(Unit)
 }

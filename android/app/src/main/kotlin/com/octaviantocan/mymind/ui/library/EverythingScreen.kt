@@ -28,6 +28,8 @@ import com.octaviantocan.mymind.ui.shell.FootPressTheme
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.settings.glassSource
 import com.octaviantocan.mymind.ui.settings.rememberGlassBackdrop
+import com.octaviantocan.mymind.ui.sky.BackTodayBand
+import com.octaviantocan.mymind.ui.sky.BackTodayState
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
 /**
@@ -84,6 +86,7 @@ fun EverythingScreen(
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
     val pinned by viewModel.pinned.state.collectAsStateWithLifecycle()
+    val backToday by viewModel.backToday.state.collectAsStateWithLifecycle()
     val query by viewModel.search.query.collectAsStateWithLifecycle()
     val filter by viewModel.search.filter.collectAsStateWithLifecycle()
     val types by viewModel.search.types.collectAsStateWithLifecycle()
@@ -113,6 +116,7 @@ fun EverythingScreen(
         onRetry = viewModel.everything::reload, onOpenCard = onOpenCard,
         onOpenSettings = onOpenSettings, onAdd = onAdd, modifier = modifier,
         pinned = pinned.cards, onLoadMorePinned = viewModel.pinned::loadMore,
+        backToday = backToday, onUncover = viewModel.backToday::uncover,
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
         onLongPressCard = onLongPressCard,
         photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, ai = rank,
@@ -162,6 +166,8 @@ fun EverythingContent(
     gridState: LazyListState = rememberLazyListState(),
     pinned: List<Card> = emptyList(),
     onLoadMorePinned: () -> Unit = {},
+    backToday: BackTodayState = BackTodayState(),
+    onUncover: (Card) -> Unit = {},
     onRefresh: () -> Unit = {},
     onRefreshResults: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
@@ -203,6 +209,7 @@ fun EverythingContent(
                         onLongPressCard = onLongPressCard, header = {
                             GalleryTitle("Your mind")
                             GalleryHighlights(pinned, onOpenCard, onLoadMore = onLoadMorePinned, onLongPressCard = onLongPressCard)
+                            BackTodayBand(backToday, onUncover, onOpenCard, onLongPressCard = onLongPressCard)
                             if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
                         })
                 }

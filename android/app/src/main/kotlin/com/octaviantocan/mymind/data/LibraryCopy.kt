@@ -56,6 +56,12 @@ interface LibraryMemory {
 
     /** @param name The page scheme's name, kept for the next launch. */
     suspend fun saveScheme(name: String)
+
+    /** @return The last Back today and sky answer as JSON, or null when none is kept. */
+    suspend fun sky(): String? = null
+
+    /** @param json The latest Back today and sky answer, kept so the band shows at once and offline. */
+    suspend fun saveSky(json: String) {}
 }
 
 /**
@@ -104,6 +110,10 @@ class LibraryCopy(context: Context, private val session: Session, private val io
     override suspend fun scheme(): String? = owned(null) { db -> meta(db, SCHEME) }
 
     override suspend fun saveScheme(name: String) = owned(Unit) { db -> setMeta(db, SCHEME, name) }
+
+    override suspend fun sky(): String? = owned(null) { db -> meta(db, SKY) }
+
+    override suspend fun saveSky(json: String) = owned(Unit) { db -> setMeta(db, SKY, json) }
 
     /** @return True once the copy holds the whole library, so the gallery can be read from it. */
     suspend fun complete(): Boolean = owned(false) { db -> meta(db, COMPLETE) == "1" }
@@ -373,6 +383,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
                 }.forEach { card -> card.edited(edit)?.let { keep(db, it) } }
             }
             is Edit.CreateCard -> if (cardIn(db, edit.cardId) == null) keep(db, edit.placeholder())
+            is Edit.Visit -> {}
             else -> showOnCard(db, edit)
         }
     }
@@ -470,6 +481,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
     private companion object {
         const val OWNER = "owner"
         const val SCHEME = "scheme"
+        const val SKY = "sky"
         const val TOKEN = "sync_token"
         const val COMPLETE = "sync_complete"
         const val SPACES = "spaces"

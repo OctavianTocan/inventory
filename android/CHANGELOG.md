@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.74 (85), 2026-11-05
+Old finds come back, three a day, under fallen leaves.
+
+### Added
+- Under Pinned, Back today brings back up to three things you saved months ago and haven't opened since. They're picked by how close they are to what you've saved in the last two weeks. They stay the same all day and change the next morning.
+- Each one waits under fallen leaves. Tap it and the leaves blow away from your finger as the card opens. It stays uncovered for the rest of the day.
+
 ## 0.6.72 (83), 2026-11-05
 ThyMind is now called Inventory.
 

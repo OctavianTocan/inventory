@@ -366,3 +366,51 @@ data class MediaBody(val type: String, val uploadId: String, val spaceId: String
  */
 @Serializable
 data class ContentBody(val content: String, val source: String, val spaceId: String? = null)
+
+/**
+ * Back today and the sky, as `GET /app/v1/sky` answers for one day.
+ *
+ * @property day The phone's date the answer is for, `YYYY-MM-DD`.
+ * @property back Today's old finds by id, at most three, the same all day.
+ * @property active The constellation the finds light now, or null.
+ * @property done Finished constellations, oldest first.
+ * @property stars Every find opened from Back today or the sky.
+ */
+@Serializable
+data class Sky(
+    val day: String = "",
+    val back: List<String> = emptyList(),
+    val active: Constellation? = null,
+    val done: List<Constellation> = emptyList(),
+    val stars: List<SkyStar> = emptyList(),
+)
+
+/**
+ * A constellation: a recent save and the old finds nearest to it.
+ *
+ * @property id The server's id.
+ * @property figure Which figure it is drawn as, such as `ship`.
+ * @property name Its name, such as "The Voyager".
+ * @property seed The recent save it formed around, lit from the start.
+ * @property cards The seed, then its finds.
+ * @property lit The seed and the finds opened since it formed.
+ * @property completed When its last star lit, or null while it is active.
+ */
+@Serializable
+data class Constellation(
+    val id: Long = 0,
+    val figure: String = "",
+    val name: String = "",
+    val seed: String = "",
+    val cards: List<String> = emptyList(),
+    val lit: List<String> = emptyList(),
+    val created: String? = null,
+    val completed: String? = null,
+)
+
+/**
+ * @property id A find opened from Back today or the sky.
+ * @property visited When it was last opened.
+ */
+@Serializable
+data class SkyStar(val id: String, val visited: String? = null)

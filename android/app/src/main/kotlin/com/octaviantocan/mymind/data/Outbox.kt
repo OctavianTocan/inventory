@@ -72,6 +72,10 @@ sealed interface Edit {
         override val cardId: String? get() = null
     }
 
+    /** Opened from Back today or the sky, which lights the find's star; nothing on the card changes. */
+    @Serializable @SerialName("visit")
+    data class Visit(override val cardId: String) : Edit
+
     /**
      * Saves a link or text as a new card.
      *
@@ -127,7 +131,7 @@ fun Card.edited(edit: Edit): Card? = when (edit) {
     is Edit.RemoveTag -> copy(tags = tags.orEmpty().filterNot { it.id == edit.tagId })
     is Edit.AddToSpace -> if (edit.spaceId in spaces.orEmpty()) this else copy(spaces = spaces.orEmpty() + edit.spaceId)
     is Edit.RemoveFromSpace -> copy(spaces = spaces.orEmpty() - edit.spaceId, spaceRanks = spaceRanks?.minus(edit.spaceId))
-    is Edit.CreateSpace, is Edit.CreateCard -> this
+    is Edit.CreateSpace, is Edit.CreateCard, is Edit.Visit -> this
     is Edit.DeleteSpace -> copy(spaces = spaces.orEmpty() - edit.spaceId, spaceRanks = spaceRanks?.minus(edit.spaceId))
 }
 
@@ -256,8 +260,10 @@ class Outbox(
         }
     }
 
-    // Puts the server's version of a refused change's card in the copy and tells [onRefused].
+    // Puts the server's version of a refused change's card in the copy and tells [onRefused]. A visit to a card that is
+    // gone needs neither.
     private suspend fun refuse(edit: Edit) {
+        if (edit is Edit.Visit) return
         val card = edit.cardId?.let { copy.card(it) }
         edit.cardId?.let { reread(it) }
         onRefused(edit, card)
@@ -284,6 +290,8 @@ class Outbox(
         is Edit.RemoveFromSpace -> server.removeFromSpace(edit.spaceId, edit.cardId)
         // Only the push keeps the id the phone made, so a server without it cannot take the space or card.
         is Edit.CreateSpace, is Edit.CreateCard -> ApiResult.Failed(ApiFailure.Invalid)
+        // A server without the push keeps no sky.
+        is Edit.Visit -> ApiResult.Ok(Unit)
         is Edit.DeleteSpace -> server.deleteSpace(edit.spaceId)
     }
 }
