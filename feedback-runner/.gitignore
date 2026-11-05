@@ -1,7 +1,6 @@
 node_modules/
 .dev.vars
 .wrangler/
-spike-report*.json
-spike-refreshed-logins.json
 .local/
 wrangler.local.jsonc
+__pycache__/

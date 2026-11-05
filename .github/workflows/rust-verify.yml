@@ -43,8 +43,6 @@ jobs:
         run: cargo check -p mm-worker --target wasm32-unknown-unknown --locked
       - name: Test the feedback runner and the MCP server
         run: |
-          for dir in feedback-runner feedback-runner/spike mcp; do
-            if [[ -f "$dir/package.json" ]]; then
-              (cd "$dir" && npm ci && npm run check)
-            fi
+          for dir in feedback-runner mcp; do
+            (cd "$dir" && npm ci && npm run check)
           done

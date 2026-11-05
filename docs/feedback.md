@@ -3,56 +3,52 @@
 A signed-in ThyMind user writes feedback in the Android app, picks Claude Code or Codex with a model and an effort,
 and an agent on their own subscription turns it into a merged pull request inside a Cloudflare sandbox. The design
 (Tavi's decisions of 5 November 2026, the parts, job states and build order) is `feedback-agent/design_draft.md` in
-the ThyMind project files. This page holds what the repository needs to know: the spike's answers so far, and later
-the routes, the GitHub sign-in, the kill switch and the runbook for a bad release.
+the ThyMind project files. This page holds what the repository needs to know: the runner, the GitHub sign-in and
+the spike's answers; the phone-facing routes, the kill switch and the runbook for a bad release come with the next
+step.
 
-## The spike (PR 1)
+## The runner
 
-`feedback-runner/spike/` is a throwaway Worker that answers the design's open questions on a real sandbox. PR 3
-deletes it. It deploys one sandbox (`standard-1`, no direct internet), sends every HTTP and HTTPS request through an
-outbound handler that logs host names only, and:
+`feedback-runner/` is a TypeScript Worker (the Sandbox SDK is TypeScript) with no public route: ThyMind's Rust Worker
+reaches it through the `FEEDBACK_RUNNER` service binding after its sign-in gate, with the sender's verified email in
+`x-feedback-email` and their AI login in `x-feedback-login`.
 
-1. writes the sign-in files the way ai-kit keeps them (`.claude/.credentials.json`, `.claude.json`,
-   `.codex/auth.json`, only the fields ai-kit keeps) into the agent user's home;
-2. clones the repository shallowly (`--depth 1`) with no credentials inside the sandbox; the handler adds the stored
-   GitHub sign-in to git requests for this one repository and refuses every other GitHub path;
-3. asks each CLI to write and commit one file with every host allowed and logged, then asks it for a one-word reply
-   with only the design's host list allowed;
-4. pushes to its own branch `feedback/<id>` (allowed), to another branch and as a delete (both refused by the
-   handler, which reads the ref lines of the push), and a commit that changes `.github/workflows` (refused by GitHub,
-   because the sign-in has no `workflow` scope), and checks the token appears nowhere in the sandbox;
-5. for Q4, branches from just before `main`'s latest workflow change, opens a draft pull request, calls update-branch
-   and the merges API with the same sign-in, then closes the pull request and deletes the branches.
+- `FeedbackDesk` (`src/desk.ts`, one object): the `client_id` map, one active job per person, 5 sends per person per
+  UTC day, 3 round slots for everyone, the merge queue (first in, first out), the pause switch and Tavi's record of
+  the last 100 jobs.
+- `FeedbackJob` (`src/job.ts`, one per feedback id): the job's record and state machine (`src/states.ts`, a pure
+  function tested as a table per journey), driven by an alarm: every minute while a round runs, every 2 minutes while
+  it waits on GitHub.
+- `FeedbackSandbox` (`src/sandbox.ts`, one per round, `standard-1`): starts the container, trusts the outbound
+  handler's certificate, writes the sign-in files into the agent's home, and runs `src/round.py` in the background.
+  The round clones shallowly, runs the CLI for at most 45 minutes, adds the CHANGELOG entry the release gate asks for,
+  refuses to push a commit holding a sign-in file's text, and pushes `feedback/<id>`.
+- The outbound handler (`src/outbound.ts`) adds the GitHub sign-in to git traffic for this repository only, lets a push
+  update only the round's own branch and never delete it, passes the engine's hosts (Claude Code: `api.anthropic.com`
+  plus its sign-in hosts; Codex: `chatgpt.com`, `auth.openai.com`, `api.openai.com`) and GET downloads from
+  `index.crates.io`, `static.crates.io` and `registry.npmjs.org`, and refuses everything else.
+- Each round borrows the sender's sign-in from their `AgentHome` (`POST /feedback/checkout`, ai-kit) and gives it back
+  with any refreshed tokens (`POST /feedback/checkin`). While it is out, the sender's AI search answers busy; a lost
+  checkin ends after 60 minutes.
+- Merging: the job at the head of the queue takes its CHANGELOG entry out of the branch (two branches that each add a
+  top entry always conflict), merges `main` in with update-branch, puts the entry back numbered one above `main`'s,
+  waits for the `android` and `rust` checks, and squash-merges with a `Feedback-Id:` trailer. A conflict sends the job
+  back for a round that resolves it; `main` moving during CI retries at most 3 times.
+
+`npm run check` in `feedback-runner/` type-checks and runs the tests (state tables, desk limits and queue, outbound
+decisions, CHANGELOG renumbering checked with the release script's own reader, recorded GitHub answers); the `rust`
+check runs it on every PR.
 
 ### GitHub sign-in
 
 There is no GitHub App (Tavi, 5 November 2026). Like Pully (`backend/src/personal_auth/`), the runner uses one normal
 GitHub CLI sign-in: GitHub's device flow with the GitHub CLI's public client, which GitHub lists as a privileged app,
 so the consent page says "GitHub CLI". It is made once and reused for every job. It asks for `repo` only; without
-`workflow`, GitHub itself refuses any push that changes `.github/workflows`. The token stays in the Worker (a secret)
-and never enters a sandbox. Pushes and pull requests appear as the account that signed in.
+`workflow`, GitHub itself refuses any push that changes `.github/workflows`. The token is the runner's `GITHUB_TOKEN`
+secret and never enters a sandbox. Pushes, pull requests and merges appear as the account that signed in.
 
-### Running it
-
-It needs Docker running, `npx wrangler login` once, and Claude Code and Codex signed in on the computer that runs it.
-
-```sh
-cd feedback-runner/spike && npm ci
-npm run spike
-```
-
-The first run asks you to approve a GitHub CLI sign-in at github.com/login/device and keeps it in
-`~/.config/thymind/feedback-github.json` (mode 600) for later runs. It then deploys `feedback-spike` to your account, sets its secrets, runs once (5-15 minutes), writes
-`spike-report.json` and deletes the Worker. The report holds host names, timings and outcomes, never sign-ins or
-keys. Options: `--engines claude` or `codex`, `--claude-model`, `--codex-model`, `--effort`, `--no-q4`, `--keep`.
-
-Sign-ins leave the computer only for the sandbox the run just deployed and are never stored. The run refuses a Claude
-sign-in that would refresh within the hour (run `claude -p hi` first), so the sandbox does not rotate the token your
-computer holds; if a CLI refreshes anyway, the report says so and the sandbox's copies are written to
-`spike-refreshed-logins.json` (git-ignored; delete it after).
-
-`npm run dev` runs it under `wrangler dev` with a `.dev.vars` of `GITHUB_TOKEN=local` and a public `REPO`: the git
-steps then run without a token, which checks the sandbox, certificate and handler plumbing but not GitHub.
+The spike (PR 1, removed in PR 3) answered the questions below on a real sandbox on 5 November 2026; its code is in
+the history of `feedback-runner/spike/`.
 
 ## Open questions and answers
 

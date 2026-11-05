@@ -1,0 +1,36 @@
+// The feedback runner (docs/feedback.md). No public route: ThyMind's Rust Worker reaches it through a service binding.
+{
+  "name": "feedback-runner",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-15",
+  // Files resolves Linux errno names through node:os.
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "vars": {
+    "REPO": "OctavianTocan/mymind-reconstruction",
+    "REQUIRED_CHECKS": "android,rust",
+    "SANDBOX_INSTANCE": "standard-1"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "FEEDBACK_DESK", "class_name": "FeedbackDesk" },
+      { "name": "FEEDBACK_JOB", "class_name": "FeedbackJob" },
+      { "name": "FEEDBACK_SANDBOX", "class_name": "FeedbackSandbox" },
+      // ai-kit's AgentHome in ThyMind's Worker, for the per-round sign-in checkout.
+      { "name": "AGENT_HOME", "class_name": "AgentHome", "script_name": "mymind" }
+    ]
+  },
+  "exports": {
+    "FeedbackDesk": { "type": "durable-object", "storage": "sqlite" },
+    "FeedbackJob": { "type": "durable-object", "storage": "sqlite" },
+    "FeedbackSandbox": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "containers": [
+    {
+      "class_name": "FeedbackSandbox",
+      "scheduling_policy": "durable_object",
+      "images": { "sandbox": { "dockerfile": "./Dockerfile", "build_context": ".." } }
+    }
+  ],
+  "observability": { "enabled": true }
+}

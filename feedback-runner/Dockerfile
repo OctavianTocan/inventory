@@ -1,12 +1,16 @@
-# Throwaway image for the feedback spike (docs/feedback.md). Built from the repository root (wrangler.jsonc sets the
-# context) so it reads the pinned CLI versions in rust/agent/cli-versions.env.
+# The feedback sandbox image (docs/feedback.md). Built from the repository root (wrangler.jsonc sets the context) so it
+# reads the pinned CLI versions in rust/agent/cli-versions.env, like rust/agent/Dockerfile.
 # The donor image ships sandbox-shim, which @cloudflare/sandbox's Files runs; keep its tag equal to the package version.
 FROM docker.io/cloudflare/sandbox:1.0.3 AS sandbox-tools
 
 FROM node:22-bookworm-slim
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates git ripgrep python3 \
+  && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep python3 build-essential pkg-config \
   && rm -rf /var/lib/apt/lists/*
+# Rust stable with the wasm target, so the agent can check the server crates.
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target wasm32-unknown-unknown \
+  && chmod -R a+rX /usr/local/rustup /usr/local/cargo
 COPY rust/agent/cli-versions.env /etc/cli-versions.env
 # Claude Code's postinstall copies its native binary into place, so scripts must run.
 RUN . /etc/cli-versions.env \
@@ -15,5 +19,6 @@ RUN . /etc/cli-versions.env \
 RUN userdel -r node 2>/dev/null || true \
   && useradd -m -d /home/agent -u 1001 -s /bin/sh agent
 COPY --from=sandbox-tools /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
+COPY feedback-runner/src/round.py /opt/feedback/round.py
 WORKDIR /workspace
 CMD ["sleep", "infinity"]
