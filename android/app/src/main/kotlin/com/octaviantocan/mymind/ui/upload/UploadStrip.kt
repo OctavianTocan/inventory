@@ -208,6 +208,7 @@ private fun queueTextStyle(color: Color) = TextStyle(
 private fun kindLabel(mime: String) = when {
     mime.startsWith("image/") -> "Image"
     mime.startsWith("video/") -> "Video"
+    mime.startsWith("audio/") -> "Audio"
     "pdf" in mime -> "PDF"
     else -> "Text"
 }
@@ -217,6 +218,7 @@ private fun kindLabel(mime: String) = when {
 private fun kindIcon(mime: String) = when {
     mime.startsWith("image/") -> R.drawable.ic_image
     mime.startsWith("video/") -> R.drawable.ic_video
+    mime.startsWith("audio/") -> R.drawable.ic_speaker_high
     "pdf" in mime -> R.drawable.ic_pdf
     else -> R.drawable.ic_text
 }

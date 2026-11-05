@@ -113,6 +113,9 @@ fn picture(data: &Value, extras: &Value) -> Result<Option<Picture>> {
         }
         return Ok(Some(Picture { source: src.to_owned(), rendition: webp(relative, None)? }));
     }
+    if data.get("type").as_str() == Some("Audio") {
+        return Ok(None);
+    }
     let blob = data.get("blob");
     let Some(path) = blob.get("path").as_str().filter(|path| !path.is_empty() && !path.contains("://")) else { return Ok(None) };
     if blob.get("thumbHash").is_string() {
@@ -174,7 +177,7 @@ pub fn missing(store: &Store, limit: usize) -> Result<Vec<String>> {
             "SELECT id FROM cards WHERE user_id = ? AND deleted_ns IS NULL AND (flags & {GRID_HIDDEN_FLAGS}) = 0 AND (
                (json_extract(extras, '$.cover.src') LIKE '/media/%' AND json_extract(extras, '$.cover.thumbHash') IS NULL)
                OR (json_extract(extras, '$.cover') IS NULL AND json_extract(data, '$.blob.path') IS NOT NULL
-                   AND json_extract(data, '$.blob.thumbHash') IS NULL))
+                   AND json_extract(data, '$.blob.thumbHash') IS NULL AND json_extract(data, '$.type') IS NOT 'Audio'))
              ORDER BY bumped_ns DESC LIMIT ?"
         ),
         &[store.default_user_id()?.into(), (limit as i64).into()],

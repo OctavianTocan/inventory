@@ -56,7 +56,7 @@ data class ReaderText(val part: ReaderPart, val text: String)
 /**
  * @param card A card.
  * @return The reader's text sections, in order: an X thread's summary, the post or note itself (every post of a thread),
- *   the saved summary, a video's transcript, the user's own note and the
+ *   the saved summary, a video's or audio file's transcript, the user's own note and the
  *   text from the page, without blanks or repeats. The reader shows the tags between the summary and the note.
  */
 fun readerSections(card: Card): List<ReaderText> {

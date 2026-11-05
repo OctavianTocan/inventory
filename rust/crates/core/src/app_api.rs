@@ -187,7 +187,7 @@ impl AppApi {
         };
         let blob = data.get("blob");
         let blob = if blob.truthy() {
-            Value::Object(present(["path", "type", "width", "height", "dominantColor", "thumbHash"].map(|key| (key, blob.get(key).clone())).to_vec()))
+            Value::Object(present(["path", "type", "width", "height", "duration", "dominantColor", "thumbHash"].map(|key| (key, blob.get(key).clone())).to_vec()))
         } else {
             blob.clone()
         };

@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -13,6 +14,8 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
+import androidx.test.core.app.ApplicationProvider
+import com.octaviantocan.mymind.data.Blob
 import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
@@ -31,12 +34,15 @@ import com.octaviantocan.mymind.ui.card.readerSections
 import com.octaviantocan.mymind.ui.card.readingMinutes
 import com.octaviantocan.mymind.ui.card.readingTime
 import com.octaviantocan.mymind.ui.card.savedLabel
+import com.octaviantocan.mymind.ui.library.LocalVideoPreviews
+import com.octaviantocan.mymind.ui.library.VideoPreviews
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import com.octaviantocan.mymind.ui.theme.PageTheme
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -95,6 +101,27 @@ class ReaderContentTest {
             bylineOf(testCard("a1", url = "https://www.theatlantic.com/x").copy(author = " Henry David Thoreau ", siteName = "The Atlantic")))
         assertEquals("example.com", bylineOf(testCard("a2", url = "https://www.example.com/a")))
         assertNull(bylineOf(testCard("n2", type = "Note")))
+    }
+
+    @Test
+    fun anAudioCardShowsAPlayerAboveItsTitleAndItsTranscript() {
+        val memo = testCard("a1", type = "Audio", title = "Voice memo.m4a", blob = Blob(path = "a1/memo.m4a", type = "audio/mp4", duration = 83.4))
+            .copy(description = "A reminder to call the dentist.", transcript = "Call the dentist tomorrow.")
+        assertEquals(listOf(ReaderText(ReaderPart.Summary, "A reminder to call the dentist."), ReaderText(ReaderPart.Transcript, "Call the dentist tomorrow.")),
+            readerSections(memo))
+        val previews = VideoPreviews(ApplicationProvider.getApplicationContext(), OkHttpClient())
+        compose.setPhoneContent(false) {
+            CompositionLocalProvider(LocalVideoPreviews provides previews) {
+                PageTheme(PageScheme.Dark) {
+                    CardDetail(memo, onClose = {}, onMenu = {}, headerIcons = flatSizedCardHeaderIcons(), onOpenSource = {})
+                }
+            }
+        }
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithContentDescription("Play").assertExists()
+        compose.onNodeWithContentDescription("Audio position").assertExists()
+        compose.onAllNodesWithText("Voice memo.m4a").assertCountEquals(2)
+        compose.onNodeWithText("Call the dentist tomorrow.").performScrollTo().assertExists()
     }
 
     @Test

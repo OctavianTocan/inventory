@@ -525,7 +525,7 @@ private fun ReaderModeBody(card: Card, paragraphs: List<String>, onBack: () -> U
 }
 
 /**
- * The picture, or the video the server keeps, over the title, who made the card and when it was saved. A tap on the
+ * The picture, or the video the server keeps, or for audio its player, over the title, who made the card and when it was saved. A tap on the
  * picture opens the source and holding it calls [onHold], which says [holdLabel]. A card with neither picture nor
  * title has none.
  */
@@ -534,13 +534,14 @@ private fun HeadSection(card: Card, onOpenSource: (() -> Unit)?, onHold: () -> U
     val colors = LocalCardSheetColors.current
     val previews = LocalVideoPreviews.current
     val video = remember(card) { readerVideo(card) }?.takeIf { previews != null }
+    val audio = remember(card) { readerAudio(card) }?.takeIf { previews != null }
     val picture = galleryPicture(card) != null
     val title = card.title?.trim()?.takeIf { it.isNotEmpty() }
     val price = if (card.type == "Product") productPrice(card) else null
     val by = if (card.type == "Product") listOfNotNull(productShop(card), siteOf(card)).distinct().joinToString(" · ").ifEmpty { null } else bylineOf(card)
     val lines = listOfNotNull(by, listOfNotNull(savedLabel(card.created), readingTime(card)).joinToString(" · ").ifEmpty { null })
     val media = video != null || picture
-    if (!media && title == null) return
+    if (!media && audio == null && title == null) return
     ReaderSection(PaddingValues(8.dp)) {
         val frame = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
         if (video != null && previews != null) CardVideo(card, video, previews, frame)
@@ -557,6 +558,7 @@ private fun HeadSection(card: Card, onOpenSource: (() -> Unit)?, onHold: () -> U
                 style = TextStyle(color = Color(0xFF262520), fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium,
                     fontFamily = MymindTheme.fonts.body))
         }
+        if (audio != null && previews != null) CardAudio(audio, card.blob?.duration, previews, Modifier.padding(start = 4.dp, end = 8.dp, top = 4.dp))
         if (title != null || lines.isNotEmpty()) {
             Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = if (media) 12.dp else 8.dp, bottom = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)) {

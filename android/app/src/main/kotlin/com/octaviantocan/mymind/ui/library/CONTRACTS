@@ -505,3 +505,14 @@ leave the phone, MUST be forgotten with Clear on the search page, and MUST be wi
 whenever the app signs out, with the rest of the account's phone data.
 Source: Tavi, 5 November 2026 ("Let's build 10"), version 10's Recent list; the sign-out
 wipe follows gallery-keeps-offline-changes.
+
+@cc [owner:OctavianTocan,label:product;design] gallery-audio-tiles-are-words
+An audio card (type "Audio") MUST be drawn as a card of words on the page surface, never as
+a picture tile: a small round play mark with the file's length beside it (m:ss, or h:mm:ss
+from an hour, left out when the server sent no length), then the title, then up to four
+lines of what is said in it, or its summary when nothing has been transcribed yet. It MUST
+use the gallery's one text size and regular weight, the note tile's colours and the
+tile corners (gallery-text-is-one-size, gallery-tiles-look-like-the-showcase), invent no
+colour of its own, and MUST NOT show a kind label above its words or request any media.
+Source: Tavi, 5 Nov 2026: "If we're not already using this for audio too, then we
+definitely should be".

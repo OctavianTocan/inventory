@@ -10,6 +10,7 @@ use crate::{Error, Result};
 fn redundant(kind: &str) -> Option<&'static [&'static str]> {
     Some(match kind {
         "YouTubeVideo" | "Video" => &["video"],
+        "Audio" => &["audio", "audio file", "recording"],
         "Document" => &["pdf", "document", "file"],
         "WebPage" => &["web page", "webpage"],
         "SoftwareApplication" => &["app", "application", "mobile app", "mobile application"],

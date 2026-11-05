@@ -116,7 +116,7 @@ that work, do not change version numbers or `android/CHANGELOG.md`; the feedback
   `POST https://api.openai.com/v1/decisions` with `Authorization: Bearer $OPENAI_API_KEY`; read the live guide at
   https://developers.openai.com/api/docs/guides/decisions before changing a call. It picks final tags (`Ai::pick_tags`,
   replacing TypeSafe Jev on 5 Nov 2026). The same key runs video transcription.
-- **OpenAI speech to text** (`OPENAI_API_KEY`, the user's choice on 2026-11-05 over xAI): transcribes saved videos,
+- **OpenAI speech to text** (`OPENAI_API_KEY`, the user's choice on 2026-11-05 over xAI): transcribes saved videos and audio files,
   `POST https://api.openai.com/v1/audio/transcriptions` (multipart `model`, `file`), model `gpt-transcribe`
   (OpenAI's recommended one; `gpt-4o-*-transcribe` and `whisper-1` shut down 2027-02-26), 25 MB per file,
   $0.0045 a minute; docs at https://developers.openai.com/api/docs/guides/speech-to-text.

@@ -83,7 +83,7 @@ impl Media for Quiet {
         Ok(None)
     }
     async fn audio(&self, blob: &Value) -> Result<Option<Vec<u8>>> {
-        Ok((blob.get("path").as_str() == Some("media/talk.mp4")).then(|| b"OggS-sound".to_vec()))
+        Ok(matches!(blob.get("path").as_str(), Some("media/talk.mp4" | "media/memo.m4a")).then(|| b"OggS-sound".to_vec()))
     }
 }
 
@@ -234,13 +234,14 @@ fn new_save_enriches_on_the_worker_path() {
 }
 
 #[test]
-fn saved_video_is_transcribed_once_and_its_words_reach_the_analysis() {
+fn saved_video_and_audio_are_transcribed_once_and_their_words_reach_the_analysis() {
     let _guard = LOCK.lock().unwrap();
     mymind::runtime::run(async {
         let h = open(200, true).await;
         insert_card(&h.db, "talk", r#"{"type":"Video","flags":0,"blob":{"path":"media/talk.mp4","type":"video/mp4"}}"#, "{}");
         insert_card(&h.db, "mute", r#"{"type":"Video","flags":0,"blob":{"path":"media/mute.mp4","type":"video/mp4"}}"#, "{}");
-        for id in ["talk", "mute", "talk"] {
+        insert_card(&h.db, "memo", r#"{"type":"Audio","flags":0,"blob":{"path":"media/memo.m4a","type":"audio/mp4"}}"#, "{}");
+        for id in ["talk", "mute", "memo", "talk", "memo"] {
             h.api.jobs().schedule(id, false);
             h.api.jobs().drain().await;
         }
@@ -252,9 +253,10 @@ fn saved_video_is_transcribed_once_and_its_words_reach_the_analysis() {
         assert_eq!(talk.get("text").as_str(), Some("Spoken words about sourdough starters."));
         assert_eq!(talk.get("language").as_str(), Some("en"));
         assert_eq!(transcript("mute").get("text").as_str(), Some(""), "a silent video keeps an empty transcript");
+        assert_eq!(transcript("memo").get("text").as_str(), Some("Spoken words about sourdough starters."), "an audio file is transcribed too");
         let calls = h.calls.0.borrow();
         let stt: Vec<_> = calls.iter().filter(|(_, url, _)| url.ends_with("/v1/audio/transcriptions")).collect();
-        assert_eq!(stt.len(), 1, "only the video with sound is sent, and only once");
+        assert_eq!(stt.len(), 2, "the video with sound and the audio file are each sent once");
         assert!(stt[0].2.contains("OggS-sound"));
         assert!(calls.iter().any(|(_, url, body)| url.contains("/chat/completions") && body.contains("sourdough starters")));
     });

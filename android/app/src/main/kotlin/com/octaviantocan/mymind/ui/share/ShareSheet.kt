@@ -357,6 +357,7 @@ private fun OnePicture(item: ShareItem, card: Card?, file: SharedFile?, colors: 
             val icon = when {
                 item is ShareItem.Text -> if (LINK.matches(item.text)) R.drawable.ic_link else R.drawable.ic_quote
                 file?.mime?.startsWith("video/") == true -> R.drawable.ic_video
+                file?.mime?.startsWith("audio/") == true -> R.drawable.ic_speaker_high
                 file?.mime == PDF -> R.drawable.ic_pdf
                 else -> R.drawable.ic_file
             }
@@ -549,6 +550,7 @@ private fun kindOf(mime: String?): String? = when {
     mime == null -> null
     mime.startsWith("image/") -> "Photo"
     mime.startsWith("video/") -> "Video"
+    mime.startsWith("audio/") -> "Audio"
     mime == PDF -> "PDF"
     else -> "File"
 }
@@ -557,6 +559,7 @@ private fun pluralNoun(mimes: List<String>, count: Int): String = when {
     mimes.size < count -> "things"
     mimes.all { it.startsWith("image/") } -> "photos"
     mimes.all { it.startsWith("video/") } -> "videos"
+    mimes.all { it.startsWith("audio/") } -> "audio files"
     mimes.all { it == PDF } -> "PDFs"
     else -> "files"
 }

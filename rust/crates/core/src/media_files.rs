@@ -15,9 +15,40 @@ pub const MIME: [(&str, &str); 11] = [
     ("mov", "video/quicktime"), ("pdf", "application/pdf"),
 ];
 
+/// Content types of the stored audio formats, keyed by extension. Kept apart from [`MIME`], which matches the
+/// mymind front-end's table.
+pub const AUDIO_MIME: [(&str, &str); 8] = [
+    ("mp3", "audio/mpeg"), ("m4a", "audio/mp4"), ("aac", "audio/aac"), ("ogg", "audio/ogg"), ("weba", "audio/webm"),
+    ("wav", "audio/wav"), ("flac", "audio/flac"), ("amr", "audio/amr"),
+];
+
 /// The content type of a file extension, or `None` for an unknown one.
 pub fn mime(extension: &str) -> Option<&'static str> {
-    MIME.iter().find(|(key, _)| *key == extension).map(|(_, value)| *value)
+    MIME.iter().chain(AUDIO_MIME.iter()).find(|(key, _)| *key == extension).map(|(_, value)| *value)
+}
+
+/// The audio format of a file from its first bytes: the extension of an MP3, AAC, Ogg, WAV, FLAC or AMR file, or
+/// `None` for anything else. MP4 and WebM audio start like their videos and are told apart by their streams.
+///
+/// # Arguments
+/// * `header` - The file's first 16 bytes, or all of them when it is shorter.
+pub fn audio_format(header: &[u8]) -> Option<&'static str> {
+    let byte = |index: usize| header.get(index).copied().unwrap_or(0);
+    if header.starts_with(b"ID3") || (byte(0) == 0xff && byte(1) & 0xe0 == 0xe0 && byte(1) & 0x06 != 0) {
+        Some("mp3")
+    } else if byte(0) == 0xff && byte(1) & 0xf6 == 0xf0 {
+        Some("aac")
+    } else if header.starts_with(b"OggS") {
+        Some("ogg")
+    } else if header.starts_with(b"RIFF") && header.get(8..12) == Some(b"WAVE") {
+        Some("wav")
+    } else if header.starts_with(b"fLaC") {
+        Some("flac")
+    } else if header.starts_with(b"#!AMR") {
+        Some("amr")
+    } else {
+        None
+    }
 }
 
 fn max(a: f64, b: f64) -> f64 {

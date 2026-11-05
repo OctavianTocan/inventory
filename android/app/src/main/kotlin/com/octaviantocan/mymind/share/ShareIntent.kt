@@ -143,7 +143,7 @@ private fun withoutClosingPunctuation(link: String): String {
     return link.substring(0, end)
 }
 
-private fun isFileMime(mime: String) = mime.startsWith("image/") || mime.startsWith("video/") || mime == PDF
+private fun isFileMime(mime: String) = mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/") || mime == PDF
 
 private fun checkFiles(uris: List<String>, mime: String, probe: ShareProbe): ShareState? {
     if (mime == PDF && uris.any { probe.isLockedPdf(it) }) return ShareState.PdfHasPassword

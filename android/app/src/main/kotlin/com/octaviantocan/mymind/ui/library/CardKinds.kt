@@ -59,6 +59,9 @@ enum class TileKind {
     /** A video: a picture with a play mark and the title underneath. */
     Video,
 
+    /** An audio file: a play mark with its length, the title and the start of what is said, on the page surface. */
+    Audio,
+
     /** Anything else: the title on a plain tile. */
     Plain,
 }
@@ -74,6 +77,7 @@ fun tileKind(card: Card): TileKind = when (card.type) {
     "Repository" -> TileKind.Repository
     "Article" -> TileKind.Article
     "Video", "YouTubeVideo", "InstagramReel" -> TileKind.Video
+    "Audio" -> TileKind.Audio
     else -> if (card.cover?.src != null || card.blob != null) TileKind.Media else TileKind.Plain
 }
 
@@ -86,6 +90,20 @@ val Card.readable: Boolean get() = type == "Article" && (flags and READABLE_FLAG
 /** Title shown for a card: its title, else the address of a link the server has not read yet, else its type. */
 fun cardHeading(card: Card): String =
     card.title?.takeIf { it.isNotBlank() } ?: card.url?.takeIf { card.type == "Placeholder" && it.isNotBlank() } ?: card.type
+
+/**
+ * @param seconds An audio file's length in seconds, fractions included.
+ * @return It as `m:ss`, or `h:mm:ss` from an hour; null when the length is missing or not above zero.
+ */
+fun audioLength(seconds: Double?): String? =
+    seconds?.takeIf { it.isFinite() && it > 0.0 }?.let { videoLength((it * 1000).toLong()) }
+
+/**
+ * @param card An audio card.
+ * @return The words its tile shows under the title: what is said in it, else its summary; empty when it has neither.
+ */
+fun audioWords(card: Card): String =
+    card.transcript?.trim()?.takeIf { it.isNotEmpty() } ?: card.description?.trim().orEmpty()
 
 /**
  * @param card A card.

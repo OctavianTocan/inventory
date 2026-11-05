@@ -14,7 +14,7 @@ use futures_util::FutureExt;
 use futures_util::future::{LocalBoxFuture, Shared};
 use mm_core::host::{AnalysisImage, Media, MediaInput, MediaResult, MediaUser, PreparedMedia};
 use mm_core::http::{Body, Headers, Response};
-use mm_core::media_files::{Rendition, byte_range, cover, mime, parse_rendition};
+use mm_core::media_files::{Rendition, audio_format, byte_range, cover, mime, parse_rendition};
 use mm_core::runtime::random_bytes;
 use mm_core::{Error, Result};
 use mm_js::{Object, Value, base64, json, text};
@@ -231,11 +231,14 @@ impl Inner {
             _ => unreachable!("one input is set"),
         };
         let unsupported = || Error::status(415, "Unsupported or invalid media");
-        let content_type: String;
+        let mut content_type: String;
         let ftyp = header.get(4..8) == Some(b"ftyp");
-        let (kind, extension) = if header.starts_with(b"%PDF-") {
+        let (mut kind, mut extension) = if header.starts_with(b"%PDF-") {
             content_type = "application/pdf".to_owned();
             ("Document", "pdf".to_owned())
+        } else if let Some(format) = audio_format(&header) {
+            content_type = mime(format).unwrap_or_default().to_owned();
+            ("Audio", format.to_owned())
         } else if ftyp || header.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
             let extension = if ftyp { "mp4" } else { "webm" };
             content_type = mime(extension).unwrap_or_default().to_owned();
@@ -256,8 +259,8 @@ impl Inner {
         };
         let blob_id = base64::hex(&random_bytes(11));
         let card = text::slice(id, text::len(&user.id_prefix) as i64, None);
-        let relative = format!("{}/{}/{blob_id}.{extension}", user.account_uid, card);
-        let file = self.inside(&relative).ok_or_else(|| Error::internal("media path outside the root"))?;
+        let mut relative = format!("{}/{}/{blob_id}.{extension}", user.account_uid, card);
+        let mut file = self.inside(&relative).ok_or_else(|| Error::internal("media path outside the root"))?;
         tokio::fs::create_dir_all(Path::new(&file).parent().unwrap_or(&self.root)).await.map_err(io)?;
         match (&bytes, &source) {
             (Some(bytes), _) => tokio::fs::write(&file, bytes).await.map_err(io)?,
@@ -265,6 +268,23 @@ impl Inner {
                 tokio::fs::copy(path, &file).await.map_err(io)?;
             }
             _ => unreachable!("one input is set"),
+        }
+        let probed = if matches!(kind, "Video" | "Audio") {
+            let entries = if kind == "Video" { "stream=width,height:format=duration" } else { "format=duration" };
+            let output = run("ffprobe", &args(&["-v", "error", "-select_streams", "v:0", "-show_entries", entries, "-of", "json", &file]), 15000).await?;
+            json::parse(&String::from_utf8_lossy(&output)).map_err(|error| Error::internal(error.message().to_owned()))?
+        } else {
+            Value::Undefined
+        };
+        // An MP4 or WebM file with no picture is a recording, such as a phone's .m4a voice memo.
+        if kind == "Video" && probed.get("streams").at(0).as_object().is_none() {
+            kind = "Audio";
+            extension = if ftyp { "m4a" } else { "weba" }.to_owned();
+            content_type = mime(&extension).unwrap_or_default().to_owned();
+            let renamed = format!("{}/{}/{blob_id}.{extension}", user.account_uid, card);
+            let target = self.inside(&renamed).ok_or_else(|| Error::internal("media path outside the root"))?;
+            tokio::fs::rename(&file, &target).await.map_err(io)?;
+            (relative, file) = (renamed, target);
         }
         let mut blob = Object::new();
         blob.insert("id", blob_id);
@@ -277,15 +297,11 @@ impl Inner {
             blob.insert("width", width);
             blob.insert("height", height);
             blob.insert("dominantColor", color);
+        } else if kind == "Audio" {
+            let duration = probed.get("format").get("duration").to_number();
+            blob.insert("duration", if duration.is_nan() { 0.0 } else { duration });
         } else {
             if kind == "Video" {
-                let output = run(
-                    "ffprobe",
-                    &args(&["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height:format=duration", "-of", "json", &file]),
-                    15000,
-                )
-                .await?;
-                let probed = json::parse(&String::from_utf8_lossy(&output)).map_err(|error| Error::internal(error.message().to_owned()))?;
                 if let Some(stream) = probed.get("streams").at(0).as_object() {
                     for (key, value) in stream.iter() {
                         blob.insert(key.into_owned(), value.clone());
@@ -303,7 +319,7 @@ impl Inner {
             blob.insert("dominantColor", color);
         }
         let usable = |key: &str| blob.get(key).is_some_and(|value| value.to_number() > 0.0);
-        if !(usable("width") && usable("height")) {
+        if kind != "Audio" && !(usable("width") && usable("height")) {
             return Err(Error::status(415, "Media has no usable dimensions"));
         }
         let blob: Value = blob.into();
@@ -315,7 +331,9 @@ impl Inner {
             data.insert("format", "PDF");
         }
         let mut extras = Object::new();
-        extras.insert("cover", cover(&blob, 800.0, 1000.0)?);
+        if kind != "Audio" {
+            extras.insert("cover", cover(&blob, 800.0, 1000.0)?);
+        }
         Ok(PreparedMedia { data: data.into(), extras: extras.into() })
     }
 

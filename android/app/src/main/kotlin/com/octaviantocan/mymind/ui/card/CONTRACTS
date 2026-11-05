@@ -162,3 +162,14 @@ Videos on other sites keep their still picture, which opens the source.
 Source: Tavi's recorded review, 23 October 2026 ("we should be showing things like kind
 of more similar to how Google Photos shows a video", "they open kind of a video player,
 which makes far more sense for a video").
+
+@cc [owner:OctavianTocan,label:product;design;motion] card-reader-plays-audio
+An audio file the library server keeps MUST open in the reader with a compact player above
+the title: a round play or pause button, a bar the person can drag to move through the
+file, and the time played of the whole. It MUST wait to be played rather than start by
+itself, pause when the app leaves the screen and release its player when the reader
+closes, and it MUST only request media from the library server. The card's Transcript
+MUST show as a part of the reader, held like the other parts (card-reader-parts-are-held),
+once the server has transcribed the file.
+Source: Tavi, 5 Nov 2026: "If we're not already using this for audio too, then we
+definitely should be".

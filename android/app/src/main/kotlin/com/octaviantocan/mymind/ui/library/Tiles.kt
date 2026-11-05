@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -107,6 +108,7 @@ fun CardTile(
             TileKind.Article -> ArticleTile(card)
             TileKind.Media -> CardPicture(card, play = false)
             TileKind.Video -> CardPicture(card, play = true)
+            TileKind.Audio -> AudioTile(card)
             TileKind.Plain -> PlainTile(card)
         }
         val title = card.title?.takeIf { it.isNotBlank() }
@@ -418,6 +420,46 @@ private fun PlainTile(card: Card) {
             .padding(16.dp),
     ) {
         Text(cardHeading(card), style = TextStyle(color = MymindTheme.page.text2, fontSize = 16.sp, fontFamily = MymindTheme.fonts.body))
+    }
+}
+
+/** An audio file: a play mark beside its length, the title, then the first lines of what is said or its summary. */
+@Composable
+private fun AudioTile(card: Card) {
+    val page = MymindTheme.page
+    val length = remember(card.blob?.duration) { audioLength(card.blob?.duration) }
+    val words = remember(card) { audioWords(card) }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(TILE_RADIUS)).background(page.surface).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            AudioPlayMark(20.dp, page.heading, page.surface)
+            if (length != null) Text(length, style = TextStyle(color = page.muted, fontSize = 14.sp, fontFamily = MymindTheme.fonts.body))
+        }
+        Text(cardHeading(card), style = TextStyle(color = page.text2, fontSize = 16.sp, fontFamily = MymindTheme.fonts.body))
+        if (words.isNotEmpty()) {
+            Text(words, style = TextStyle(color = page.text2, fontSize = NOTE_TEXT, lineHeight = 1.5.em, fontFamily = MymindTheme.fonts.body),
+                maxLines = AUDIO_WORDS_LINES, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** How many lines of what is said an audio tile shows. */
+internal const val AUDIO_WORDS_LINES = 4
+
+/**
+ * The small round play mark an audio tile carries before its length.
+ *
+ * @param size Diameter of the disc.
+ * @param fill Colour of the disc.
+ * @param glyph Colour of the triangle on it.
+ * @param modifier Modifier for the disc.
+ */
+@Composable
+internal fun AudioPlayMark(size: Dp, fill: Color, glyph: Color, modifier: Modifier = Modifier) {
+    Box(modifier.size(size).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+        Image(painterResource(R.drawable.ic_play_fill), null, Modifier.size(size * 0.5f), colorFilter = ColorFilter.tint(glyph))
     }
 }
 

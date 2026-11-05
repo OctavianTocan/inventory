@@ -54,4 +54,4 @@ internal fun ColumnScope.AddSheetContent(onPhotos: () -> Unit, onFiles: () -> Un
 }
 
 /** MIME types the Files tile offers: what the library stores as cards. */
-val PICKABLE_FILES = arrayOf("image/*", "video/*", "application/pdf")
+val PICKABLE_FILES = arrayOf("image/*", "video/*", "audio/*", "application/pdf")

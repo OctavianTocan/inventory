@@ -22,6 +22,7 @@ fn class_of(kind: &str) -> Option<&'static str> {
         "Image" => "image",
         "Screenshot" => "screenshot",
         "Video" => "video",
+        "Audio" => "audio",
         "YouTubeVideo" => "youtube-video video",
         "InstagramReel" => "instagram-reel",
         "Note" => "note content",
@@ -183,6 +184,13 @@ fn render_body(data: &Value, extras: &Value) -> Result<String> {
         }
         "Screenshot" | "YouTubeVideo" => format!("{}\n", render_media(cover)),
         "Video" => format!("{}\n", render_video(data.get("blob"))?),
+        "Audio" => {
+            let path = member(data.get("blob"), "path")?.to_js_string();
+            format!(
+                "<div class=\"inner\">\n  <h3>{}</h3>\n  <audio controls preload=\"none\" src=\"{}\"></audio>\n</div>\n",
+                e(&text(data.get("title"))), e(&format!("/media/{path}"))
+            )
+        }
         "WebPage" => {
             if cover.truthy() {
                 format!("\n\n\n{}\n\n\n\n\n\n\n\n", render_media(cover))
@@ -323,7 +331,7 @@ pub fn render_card(data: &Value, extras: &Value) -> Result<String> {
     let class_name = format!("{base}{}{}{}", if deleted { " deleted" } else { "" }, if highlighted { " highlighted" } else { "" }, if processing { " processing" } else { "" });
     let empty = Value::String(String::new());
     let url = extras.get("linkUrl").or(optional(data.get("source"), "url")).or(&empty);
-    let linked = url.truthy() && !matches!(kind, "Image" | "Screenshot" | "Video" | "Note" | "Content" | "Document");
+    let linked = url.truthy() && !matches!(kind, "Image" | "Screenshot" | "Video" | "Audio" | "Note" | "Content" | "Document");
     let bubble = if linked && !deleted {
         format!("<a class=\"link-bubble\" href=\"{}\" on-click=\"card:link\" target=\"_blank\"><span>{}</span></a>", e(&text(url)), e(&link_label(data, &key)))
     } else {

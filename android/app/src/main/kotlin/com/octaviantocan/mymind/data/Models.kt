@@ -32,6 +32,8 @@ data class Blob(
     val height: Int? = null,
     val dominantColor: String? = null,
     val thumbHash: String? = null,
+    /** An audio or video file's length in seconds, as the server read it; null when it did not. */
+    val duration: Double? = null,
 )
 
 @Serializable

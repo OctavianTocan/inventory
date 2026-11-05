@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/** Receives text, links, pictures, videos and PDFs shared from other apps and saves them to the library. */
+/** Receives text, links, pictures, videos, audio files and PDFs shared from other apps and saves them to the library. */
 class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

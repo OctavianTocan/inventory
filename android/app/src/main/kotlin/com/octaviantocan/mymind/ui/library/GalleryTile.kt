@@ -230,9 +230,33 @@ internal fun GalleryTile(
                     }
                     marks(this)
                 }
+            } else if (kind == TileKind.Audio) {
+                AudioTile(card, highlight)
             } else {
                 WordsTile(card, highlight)
             }
+        }
+    }
+}
+
+/**
+ * An audio file on the paper like a card of words: a small play mark beside its length, the title, then the first lines
+ * of what is said, or its summary, at the gallery's one text size.
+ */
+@Composable
+private fun AudioTile(card: Card, highlight: Boolean) {
+    val colors = LibraryStyle.colors
+    val length = remember(card.blob?.duration) { audioLength(card.blob?.duration) }
+    val words = remember(card) { audioWords(card) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val inset = if (highlight) 16.dp else if (maxWidth < 110.dp) 8.dp else 12.dp
+        Column(Modifier.fillMaxSize().padding(inset), verticalArrangement = Arrangement.spacedBy(inset * 0.5f)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                AudioPlayMark(if (highlight) 22.dp else 18.dp, colors.text, colors.raised)
+                if (length != null) Text(length, color = colors.muted, style = LibraryStyle.label.copy(fontSize = 12.sp, lineHeight = 16.sp), maxLines = 1)
+            }
+            TileText(cardHeading(card), highlight, Modifier, maxLines = 2)
+            if (words.isNotEmpty()) TileText(words, highlight, Modifier, color = colors.muted, maxLines = AUDIO_WORDS_LINES)
         }
     }
 }
@@ -682,6 +706,7 @@ internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_T
 
 internal fun galleryText(card: Card): String = when (tileKind(card)) {
     TileKind.Note -> noteText(card)
+    TileKind.Audio -> audioWords(card).ifBlank { card.title.orEmpty() }
     TileKind.Post -> if (card.type != "RedditPost") threadName(card).takeIf { postThread(card).isNotEmpty() } ?: postWords(card)
         else listOfNotNull(card.reddit?.title, postWords(card)).filter { it.isNotBlank() }.distinct().joinToString("\n")
     TileKind.Media, TileKind.Video -> card.prose?.let(::proseText)?.takeIf { it.isNotBlank() }
@@ -696,6 +721,7 @@ internal fun galleryKind(card: Card): String = when (tileKind(card)) {
     TileKind.Repository -> "Repository"
     TileKind.Article -> card.siteName?.takeIf { it.isNotBlank() } ?: "Article"
     TileKind.Video -> "Video"
+    TileKind.Audio -> "Audio"
     else -> card.domain?.takeIf { it.isNotBlank() } ?: when (card.type) {
         "Image" -> "Image"
         "WebPage" -> "Web page"

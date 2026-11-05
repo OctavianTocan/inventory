@@ -244,3 +244,14 @@ fn the_sweep_hashes_the_pictures_saved_before_newest_first_and_stops_at_its_limi
     block_on(jobs.drain());
     assert_eq!(media.asked.borrow().len(), 4, "a finished sweep does not start again");
 }
+
+#[test]
+fn an_audio_file_has_no_picture_to_hash() {
+    let library = Library::new();
+    let memo = library.card("Audio", "blob", obj! { "path" => "a/3/memo.m4a", "type" => "audio/mp4", "duration" => 12.5 }.into());
+    library.db.execute("UPDATE cards SET data = json_set(data, '$.type', 'Audio'), type = 'Audio' WHERE id = ?", &[memo.as_str().into()]).unwrap();
+    let media = Pictures::default();
+    assert!(!block_on(fill(&library.store, &library.writer, &media, &memo)).unwrap());
+    assert!(media.asked.borrow().is_empty(), "the sound file is never sent to be drawn");
+    assert!(!missing(&library.store, 10).unwrap().contains(&memo));
+}

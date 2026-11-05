@@ -64,7 +64,7 @@ original after commit; its row retains idempotency until expiry and attachment r
 
 AI runs after capture, after saved notes and on `POST /cards/:id/analyze`. The native environment loader reads `.env` when present. Set `GEMINI_API_KEY` for hosted summaries and 768-dimension embeddings;
 `OPENAI_API_KEY` optionally selects final tags with OpenAI's Decisions API (`gpt-6-luna`), and transcribes saved video
-files once with OpenAI's `gpt-transcribe` ($0.0045 a minute): ffmpeg (the media container on Cloudflare) pulls the
+and audio files (Audio cards: MP3, M4A, AAC, Ogg/Opus, WAV, FLAC, AMR) once with OpenAI's `gpt-transcribe` ($0.0045 a minute): ffmpeg (the media container on Cloudflare) pulls the
 sound out as mono Opus (up to OpenAI's 25 MB, about 2 hours), and the words land in `extras.transcript`, the analysis,
 search and the app's reader. Cover images are converted to PNG for analysis. The
 library's tag vocabulary is passed to `analyze`; generic labels are filtered, manual tags are preserved, AI tags

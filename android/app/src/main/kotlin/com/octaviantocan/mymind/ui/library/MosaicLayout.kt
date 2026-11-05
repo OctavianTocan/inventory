@@ -156,7 +156,7 @@ internal fun mosaicAspectRatio(card: Card): Float {
     if (galleryKeepsText(card) && galleryPicture(card) != null) return 0.9f
     storedRatio(card)?.let { return it.coerceIn(0.65f, 1.8f) }
     return when (tileKind(card)) {
-        TileKind.Note -> 0.95f
+        TileKind.Note, TileKind.Audio -> 0.95f
         TileKind.Post -> 1.05f
         TileKind.Repository -> 1.3f
         else -> 1.15f

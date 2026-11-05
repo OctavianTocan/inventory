@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.62 (73), 2026-11-05
+Save voice memos and other audio, and read what they say.
+
+### Added
+- You can now share or add audio files, such as voice memos, mp3, m4a, ogg, wav, flac and aac, to ThyMind like a photo or a video. Its tile shows how long it is, its name and the first words said in it, and the card plays it with a play button and a bar you can drag, and shows a Transcript under the summary. Hold the Transcript to copy or share the words. Transcription needs the Worker deployed.
+
 ## 0.6.61 (72), 2026-11-05
 Saving the same thing twice keeps one card.
 

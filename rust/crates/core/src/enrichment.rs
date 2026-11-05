@@ -526,7 +526,7 @@ impl Enrichment {
         Ok(())
     }
 
-    // Write what a saved video says into `extras.transcript` once, so tags, summary and search read it. A video with
+    // Write what a saved video or audio file says into `extras.transcript` once, so tags, summary and search read it. A video with
     // no sound keeps an empty text, so it is not sent again; a failed call leaves the card as it was.
     async fn transcribe(&self, id: &str) {
         let options = &self.0.options;
@@ -535,7 +535,7 @@ impl Enrichment {
         }
         let Ok(Some(row)) = options.store.card(id, None) else { return };
         let (Ok(data), Ok(extras)) = (parse(&row.data), parse(&row.extras)) else { return };
-        if deleted(&row) || data.get("type").as_str() != Some("Video") || !extras.get("transcript").is_nullish() {
+        if deleted(&row) || !matches!(data.get("type").as_str(), Some("Video" | "Audio")) || !extras.get("transcript").is_nullish() {
             return;
         }
         let transcript = match options.media.audio(data.get("blob")).await {
@@ -643,7 +643,9 @@ impl Enrichment {
     async fn ai_item(&self, row: &CardRow) -> Result<AiItem> {
         let options = &self.0.options;
         let (data, extras) = (parse(&row.data)?, parse(&row.extras)?);
-        let source = first_present(&[extras.get("cover"), extras.get("post").get("gallery").at(0), data.get("blob")]);
+        // An audio file has no picture, so its blob is never sent to be drawn.
+        let blob = if data.get("type").as_str() == Some("Audio") { &Value::Undefined } else { data.get("blob") };
+        let source = first_present(&[extras.get("cover"), extras.get("post").get("gallery").at(0), blob]);
         let image = options.media.image(source).await.ok().flatten();
         let item = analysis_item(&row.data, &row.extras, Some(&article_content(row, &options.store)?))?;
         Ok(AiItem {
