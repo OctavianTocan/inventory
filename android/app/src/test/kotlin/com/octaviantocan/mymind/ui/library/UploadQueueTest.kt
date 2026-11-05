@@ -81,7 +81,7 @@ class UploadQueueTest {
         advanceUntilIdle()
         assertTrue(library.calls.isEmpty())
         val items = queue.state.value.items
-        assertEquals(listOf("This file is empty.", "This file is larger than 500 MB."), items.map { it.error })
+        assertEquals(listOf("This file is empty.", "This file is larger than 5 GB."), items.map { it.error })
         assertFalse(items.any { it.running })
         queue.dismiss(items.first().id)
         assertEquals(listOf("big.mov"), queue.state.value.items.map { it.name })

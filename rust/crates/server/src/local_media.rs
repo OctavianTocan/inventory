@@ -265,7 +265,10 @@ impl Inner {
         match (&bytes, &source) {
             (Some(bytes), _) => tokio::fs::write(&file, bytes).await.map_err(io)?,
             (None, Some(path)) => {
-                tokio::fs::copy(path, &file).await.map_err(io)?;
+                // A link costs no disk, which a 5 GB video in the media container needs; copy across file systems.
+                if tokio::fs::hard_link(path, &file).await.is_err() {
+                    tokio::fs::copy(path, &file).await.map_err(io)?;
+                }
             }
             _ => unreachable!("one input is set"),
         }

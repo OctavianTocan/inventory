@@ -195,13 +195,15 @@ class MymindApiTest {
     }
 
     @Test
-    fun aPieceWaitsLongerForItsAnswerThanOtherCalls() = runBlocking {
+    fun aPieceAndANewMediaCardWaitLongerForTheirAnswersThanOtherCalls() = runBlocking {
         val impatient = MymindApi(OkHttpClient.Builder().readTimeout(Duration.ofSeconds(1)).build(), server.url("/").toString())
         server.enqueue(MockResponse().setBody("""{"id":"u1","done":true}""").setHeadersDelay(2, TimeUnit.SECONDS))
         server.enqueue(MockResponse().setBody("""{"id":"c1"}""").setHeadersDelay(2, TimeUnit.SECONDS))
+        server.enqueue(MockResponse().setBody("""{"id":"c2"}""").setHeadersDelay(2, TimeUnit.SECONDS))
         val authorization = UploadAuthorization("/uploads/u1", "up-1")
         val piece = impatient.uploadChunk(authorization, null, "a.png", "image/png", 3, 0, 3, "abc".byteInputStream())
         assertEquals("u1", (piece as ApiResult.Ok).value.id)
-        assertEquals(ApiResult.Failed(ApiFailure.Network), impatient.createMedia("u1", null))
+        assertEquals(ApiResult.Ok("c1"), impatient.createMedia("u1", null))
+        assertEquals(ApiResult.Failed(ApiFailure.Network), impatient.createFromContent("https://example.com", "share", null))
     }
 }

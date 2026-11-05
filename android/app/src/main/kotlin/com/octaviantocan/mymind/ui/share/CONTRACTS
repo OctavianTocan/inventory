@@ -39,14 +39,15 @@ with every version; AGENTS.md: the replica is its own product.
 @cc [owner:OctavianTocan,label:product] share-takes-gallery-videos
 Photos and videos shared from the Gallery, one or several, mixed or not, MUST save
 as cards. The share target MUST take files as big as an upload from inside the app
-(500 MB), not mymind's 25 MB, since a phone's videos are mostly bigger than that.
+(5 GB), not mymind's 25 MB, since a phone's videos are mostly bigger than that.
 A saved video's speech is transcribed on the server and shown in the reader as its
 Transcript (`card-reader-shows-the-whole-card`).
 Source: Tavi, 5 November 2026: "You should be able to save videos and images
 directly into the app ... share from my Gallery ... And when videos are shared, we
 transcribe them." The same day he moved transcription from xAI to OpenAI's latest
-model ("Let's use OpenAI's API for this"). The 500 MB limit and the reader section
-are Claude's choices.
+model ("Let's use OpenAI's API for this"), and raised the limit from 500 MB to
+5 GB ("Let's raise it to 5GB, actually. That makes it very useful."). The reader
+section is Claude's choice.
 
 @cc [owner:OctavianTocan,label:product] share-sheet-shows-thymind-tags
 When one thing is shared, the sheet MUST show the tags ThyMind gave it as soon

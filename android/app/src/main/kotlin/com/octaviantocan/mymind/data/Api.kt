@@ -80,6 +80,9 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
     // server answers only after the last byte, so the default 10 s wait for the answer drops slow uploads.
     private val uploadClient = client.newBuilder().readTimeout(UPLOAD_ANSWER_TIMEOUT).build()
 
+    // The server copies a finished upload into storage and reads it for a preview before it answers: minutes for 5 GB.
+    private val mediaClient = client.newBuilder().readTimeout(MEDIA_ANSWER_TIMEOUT).build()
+
     suspend fun nonce(): ApiResult<NonceAnswer> =
         send(post("/app/v1/auth/nonce", null), NonceAnswer.serializer())
 
@@ -227,6 +230,7 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
             Request.Builder().url(url("objects"))
                 .post(AppJson.encodeToString(MediaBody("Media", uploadId, spaceId)).toRequestBody(JSON_TYPE)).build(),
             IdAnswer.serializer(),
+            mediaClient,
         ).map { it.id }
 
     /**
@@ -441,6 +445,7 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
         val JSON_TYPE = "application/json".toMediaType()
         val OCTET_STREAM = "application/octet-stream".toMediaType()
         val UPLOAD_ANSWER_TIMEOUT: Duration = Duration.ofMinutes(5)
+        val MEDIA_ANSWER_TIMEOUT: Duration = Duration.ofMinutes(20)
     }
 }
 

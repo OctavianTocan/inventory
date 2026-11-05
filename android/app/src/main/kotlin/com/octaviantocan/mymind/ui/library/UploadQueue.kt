@@ -177,8 +177,8 @@ class UploadQueue(
         /** Largest piece of a file the server takes in one request: 32 MiB. */
         const val CHUNK_SIZE = 32L * 1024 * 1024
 
-        /** Largest file the server takes (`maxUploadSize`). */
-        const val MAX_UPLOAD_SIZE = 500_000_000L
+        /** Largest file the server takes: 5 GB (Tavi, 5 November 2026; mymind's own `maxUploadSize` was 500 MB). */
+        const val MAX_UPLOAD_SIZE = 5_000_000_000L
 
         /** Most authorizations one `POST /uploads/authorize` hands out. */
         const val AUTHORIZE_LIMIT = 100
@@ -186,5 +186,5 @@ class UploadQueue(
 }
 
 private const val EMPTY_FILE = "This file is empty."
-private const val TOO_LARGE = "This file is larger than 500 MB."
+private const val TOO_LARGE = "This file is larger than 5 GB."
 private const val UNKNOWN_ERROR = "Unknown error"

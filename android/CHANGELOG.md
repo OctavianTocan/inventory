@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.64 (75), 2026-11-05
+Save videos up to 5 GB.
+
+### Changed
+- Sharing from the Gallery and uploading from inside the app now take files up to 5 GB instead of 500 MB, so long phone videos save too. A big video takes a few minutes to finish saving after it uploads, while the server stores it and makes its preview.
+
 ## 0.6.63 (74), 2026-11-05
 Draw ThyMind in any of Pully's colour themes, in light, dark or the phone's look.
 

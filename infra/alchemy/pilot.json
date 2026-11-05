@@ -24,7 +24,7 @@
   "containers": [{
     "class_name": "Media",
     "image": "rust/container/Dockerfile",
-    "instance_type": "standard-1",
+    "instance_type": "standard-3",
     "max_instances": 1
   }],
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "mymind-alchemy-staging-fixtures" }]

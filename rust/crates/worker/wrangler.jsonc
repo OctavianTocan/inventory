@@ -36,7 +36,8 @@
       "class_name": "Media",
       "image": "../../container/Dockerfile",
       "image_build_context": "../../..",
-      "instance_type": "standard-1",
+      // 16 GB of disk: uploads go up to 5 GB, and each operation on a video keeps its own copy while it runs.
+      "instance_type": "standard-3",
       "max_instances": 1
     },
     // One container per account for its own Claude Code and Codex, started by its AgentHome object (the AI kit's

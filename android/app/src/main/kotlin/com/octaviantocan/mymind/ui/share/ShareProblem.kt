@@ -56,7 +56,7 @@ fun problemText(problem: ShareState): ProblemText? = when (problem) {
     ShareState.TooManyItems -> ProblemText(R.drawable.ic_stack, "That’s more than $MAX_SHARE_ITEMS",
         "You can save up to $MAX_SHARE_ITEMS things at once. Share them in two goes.", OKAY)
     ShareState.FileTooBig -> ProblemText(R.drawable.ic_file, "That file is too big",
-        "ThyMind keeps files up to 500 MB. Share a smaller copy or a shorter clip.", OKAY)
+        "ThyMind keeps files up to 5 GB. Share a smaller copy or a shorter clip.", OKAY)
     ShareState.PdfHasPassword -> ProblemText(R.drawable.ic_lock, "This PDF has a password",
         "ThyMind can’t open a PDF that needs a password. Save a copy without it and share that one.", OKAY)
     ShareState.NoLogin -> ProblemText(R.drawable.ic_library_profile, "Sign in first",

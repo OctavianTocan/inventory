@@ -20,7 +20,10 @@ use crate::sql::{Row, Sql, SqlExt};
 use crate::store::{IdKind, Store, User};
 use crate::{Error, Result, obj, params, runtime};
 
-const DEFAULT_MAX_BYTES: u64 = 1024 * 1024 * 1024;
+/// Largest file one upload may carry: 5 GB, just under R2's 5 GiB limit for the single object the original becomes.
+pub const MAX_UPLOAD_BYTES: u64 = 5_000_000_000;
+// Room for two of the largest uploads in flight at once.
+const DEFAULT_MAX_BYTES: u64 = 2 * MAX_UPLOAD_BYTES + 2_000_000_000;
 const DAY_MS: f64 = 24.0 * 60.0 * 60.0 * 1000.0;
 const SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
@@ -306,7 +309,7 @@ impl Uploads {
             return fail(409, "Upload range mismatch");
         }
         let length = end - start + 1.0;
-        if total > 500_000_000.0 || length > 32.0 * 1024.0 * 1024.0 {
+        if total > MAX_UPLOAD_BYTES as f64 || length > 32.0 * 1024.0 * 1024.0 {
             return fail(413, "Upload exceeds size limit");
         }
         let mime = header("content-type").unwrap_or_default().split(';').next().unwrap_or("").to_owned();
