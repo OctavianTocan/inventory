@@ -50,8 +50,8 @@ const HELP_VIDEO = 'https://mymind.helpscoutdocs.com/article/42-video-types-supp
 const HELP_TROUBLE = 'https://mymind.helpscoutdocs.com/article/41-trouble-shooting-with-the-browser-extension';
 
 const MENUS = [
-  { title: 'Add to my mind', id: 'mymind-add', contexts: ['selection', 'image', 'audio', 'video', 'link'] },
-  { title: 'Open my mind', id: 'mymind-open', contexts: ['action'] },
+  { title: 'Add to Inventory', id: 'mymind-add', contexts: ['selection', 'image', 'audio', 'video', 'link'] },
+  { title: 'Open Inventory', id: 'mymind-open', contexts: ['action'] },
 ];
 
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -72,7 +72,7 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   if (command === 'save-page') await savePage(tab ?? (await getActiveTab()));
 });
 
-chrome.omnibox.setDefaultSuggestion({ description: 'Search my mind for: %s' });
+chrome.omnibox.setDefaultSuggestion({ description: 'Search Inventory for: %s' });
 chrome.omnibox.onInputEntered.addListener(async (text, disposition) => {
   const query = text.trim();
   const host = await getHost();
@@ -217,7 +217,7 @@ async function createObject(request, tab) {
       return { error: { status: 401 } };
     }
     await notification.update({
-      message: 'Could not save to mymind. Please try again or check your internet connection.',
+      message: 'Could not save to Inventory. Please try again or check your internet connection.',
       status: 'error',
       redirect: HELP_TROUBLE,
     });

@@ -1,4 +1,4 @@
-// The feedback runner (docs/feedback.md). No public route: ThyMind's Rust Worker reaches it through a service binding.
+// The feedback runner (docs/feedback.md). No public route: Inventory's Rust Worker reaches it through a service binding.
 {
   "name": "feedback-runner",
   "main": "src/index.ts",
@@ -18,7 +18,7 @@
       { "name": "FEEDBACK_DESK", "class_name": "FeedbackDesk" },
       { "name": "FEEDBACK_JOB", "class_name": "FeedbackJob" },
       { "name": "FEEDBACK_SANDBOX", "class_name": "FeedbackSandbox" },
-      // ai-kit's AgentHome in ThyMind's Worker, for the per-round sign-in checkout.
+      // ai-kit's AgentHome in Inventory's Worker, for the per-round sign-in checkout.
       { "name": "AGENT_HOME", "class_name": "AgentHome", "script_name": "mymind" }
     ]
   },

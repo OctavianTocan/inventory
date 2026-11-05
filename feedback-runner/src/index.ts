@@ -1,4 +1,4 @@
-// The feedback runner (docs/feedback.md). It has no public route: only ThyMind's Rust Worker reaches it, through the
+// The feedback runner (docs/feedback.md). It has no public route: only Inventory's Rust Worker reaches it, through the
 // FEEDBACK_RUNNER service binding, after its sign-in gate and checks, with the sender's verified email in
 // `x-feedback-email` and their AI login in `x-feedback-login`. The owner check for the record and the pause switch is the
 // Rust Worker's too.
@@ -61,7 +61,7 @@ export function parseSend(body: unknown, headers: Headers): Send | string {
   return {
     email: headers.get("x-feedback-email") ?? "",
     login,
-    name: (headers.get("x-feedback-name") ?? "").slice(0, 100) || "a ThyMind user",
+    name: (headers.get("x-feedback-name") ?? "").slice(0, 100) || "an Inventory user",
     text,
     engine: b.engine,
     model: b.model,

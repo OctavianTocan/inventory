@@ -28,7 +28,7 @@ const CHANGED = z.object({ changed: z.array(z.string()), not_changed: z.array(z.
 const needsWrite: ScopeChallengeHandler = ({ authInfo }) =>
   authInfo?.scopes.includes(WRITE_SCOPE)
     ? undefined
-    : { scopes: [READ_SCOPE, WRITE_SCOPE], errorDescription: "Changing ThyMind needs the person to allow changes when connecting" };
+    : { scopes: [READ_SCOPE, WRITE_SCOPE], errorDescription: "Changing Inventory needs the person to allow changes when connecting" };
 
 /** Lists which cards changed and which the library turned down. */
 function report(verb: string, ids: string[], refused: Set<string>) {
@@ -69,9 +69,9 @@ export function registerWrites(
   server.registerTool(
     "thymind_save",
     {
-      title: "Save to ThyMind",
+      title: "Save to Inventory",
       description:
-        "Save a web link or a piece of text as a new card, with an optional note, tags and spaces. ThyMind reads a link's page itself. A link already saved is brought to the top and keeps its own note.",
+        "Save a web link or a piece of text as a new card, with an optional note, tags and spaces. Inventory reads a link's page itself. A link already saved is brought to the top and keeps its own note.",
       inputSchema: z.object({
         content: z.string().trim().min(1).max(100_000).describe("A web address (https://...) to save as a link, or text to save as a note"),
         note: z.string().max(10_000).optional().describe("The person's note on the card"),
@@ -89,7 +89,7 @@ export function registerWrites(
         for (const name of tags) changes.push({ name: "add-tag", args: { cardId: made, name } });
         for (const spaceId of space_ids) changes.push({ name: "add-to-space", args: { cardId: made, spaceId } });
         const pushed = await library.push(changes);
-        if (pushed.refused.includes(0)) return { isError: true, content: [{ type: "text" as const, text: "ThyMind could not save that." }] };
+        if (pushed.refused.includes(0)) return { isError: true, content: [{ type: "text" as const, text: "Inventory could not save that." }] };
         const id = pushed.cardIds.get(0) ?? made;
         const alreadySaved = id !== made;
         const notApplied = pushed.refused.map((place) => (place <= tags.length ? `tag ${tags[place - 1]}` : `space ${space_ids[place - 1 - tags.length]}`));
@@ -102,7 +102,7 @@ export function registerWrites(
   server.registerTool(
     "thymind_set_note",
     {
-      title: "Write a ThyMind card's note",
+      title: "Write an Inventory card's note",
       description: "Replace the person's note on one card (empty text clears it). Returns the note it replaced, so it can be put back.",
       inputSchema: z.object({ id: ID.describe("The card's id"), note: z.string().max(10_000).describe("The new note; one paragraph per line") }),
       outputSchema: z.object({ id: z.string(), previous_note: z.string() }),
@@ -114,7 +114,7 @@ export function registerWrites(
         const card = await library.json<Card>(`/app/v1/cards/${id}`);
         const previous = card.note ?? "";
         const pushed = await library.push([{ name: "note", args: { cardId: id, text: note } }]);
-        if (pushed.refused.length) return { isError: true, content: [{ type: "text" as const, text: "ThyMind did not change that note." }] };
+        if (pushed.refused.length) return { isError: true, content: [{ type: "text" as const, text: "Inventory did not change that note." }] };
         const said = previous ? `The note it replaced:\n${fenced(previous)}` : "The card had no note before.";
         return { structuredContent: { id, previous_note: previous }, content: [{ type: "text" as const, text: `Note saved on ${id}. ${said}` }] };
       }),
@@ -123,7 +123,7 @@ export function registerWrites(
   server.registerTool(
     "thymind_tag",
     {
-      title: "Tag ThyMind cards",
+      title: "Tag Inventory cards",
       description: "Add and remove tags on up to 25 cards. Tag names are matched without regard to case when removing.",
       inputSchema: z.object({
         ids: IDS,
@@ -171,7 +171,7 @@ export function registerWrites(
   server.registerTool(
     "thymind_sort",
     {
-      title: "Sort ThyMind cards into a space",
+      title: "Sort Inventory cards into a space",
       description:
         "Put up to 25 cards into a space, or take them out (remove: true). Name a new space with new_space_name to make it first. Cards stay in their other spaces.",
       inputSchema: z.object({
@@ -205,7 +205,7 @@ export function registerWrites(
         const first = changes.length;
         for (const cardId of ids) changes.push({ name: remove ? "remove-from-space" : "add-to-space", args: { cardId, spaceId } });
         const pushed = await library.push(changes);
-        if (first && pushed.refused.includes(0)) return { isError: true, content: [{ type: "text" as const, text: "ThyMind could not make that space." }] };
+        if (first && pushed.refused.includes(0)) return { isError: true, content: [{ type: "text" as const, text: "Inventory could not make that space." }] };
         const refused = refusedCards(pushed.refused, [...Array<string>(first).fill(""), ...ids]);
         refused.delete("");
         const answer = report(remove ? `Taken out of the space` : `Put in the space`, ids, refused);
@@ -216,7 +216,7 @@ export function registerWrites(
   server.registerTool(
     "thymind_pin",
     {
-      title: "Pin ThyMind cards",
+      title: "Pin Inventory cards",
       description: "Pin up to 25 cards to Top of Mind, or unpin them (pinned: false).",
       inputSchema: z.object({ ids: IDS, pinned: z.boolean().default(true).describe("true to pin, false to unpin") }),
       outputSchema: CHANGED,
@@ -233,7 +233,7 @@ export function registerWrites(
   server.registerTool(
     "thymind_trash",
     {
-      title: "Move ThyMind cards to the trash",
+      title: "Move Inventory cards to the trash",
       description:
         "Move up to 25 cards to the trash. The person can still see them in the trash, and thymind_restore takes them out again. Confirm with the person before trashing cards they did not name.",
       inputSchema: z.object({ ids: IDS }),
@@ -251,7 +251,7 @@ export function registerWrites(
   server.registerTool(
     "thymind_restore",
     {
-      title: "Restore ThyMind cards from the trash",
+      title: "Restore Inventory cards from the trash",
       description: "Take up to 25 cards out of the trash.",
       inputSchema: z.object({ ids: IDS }),
       outputSchema: CHANGED,

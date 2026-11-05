@@ -197,7 +197,7 @@ object ColorThemes {
     const val DEFAULT = "thymind"
 
     /** ThyMind's own colours, exactly as the app drew before themes. */
-    val ThyMind = ColorTheme(DEFAULT, "ThyMind", ThyMindLight, ThyMindDark)
+    val ThyMind = ColorTheme(DEFAULT, "Inventory", ThyMindLight, ThyMindDark)
 
     /** Pully's own palette. */
     val Pully = ColorTheme("pully", "Pully", PullyLight, PullyDark)

@@ -1,0 +1,8 @@
+@cc [owner:OctavianTocan,label:product] app-is-named-inventory
+Everything a person reads MUST call the app Inventory: the launcher label ("Inventory", or
+"Inventory dev" for the debug build), screens, sheets, the share sheet, notifications and
+messages. Internal names MUST stay as they are, because changing them breaks phones that
+already have the app or their saved settings: the applicationId com.octaviantocan.mymind,
+the signing key, the update channel, preference keys such as the "thymind" theme id, and
+WorkManager job names. Source: Tavi, 5 November 2026 ("let's fully rename it to Inventory
+everywhere").

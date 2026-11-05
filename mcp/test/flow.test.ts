@@ -68,7 +68,7 @@ async function connect(call: ReturnType<typeof setup>["call"], write = true, cim
   expect(consent.status).toBe(200);
   expect(consent.headers.get("x-frame-options")).toBe("DENY");
   const page = await consent.text();
-  expect(page).toContain(cimd ? "Connect ChatGPT to ThyMind?" : "Connect Test &#60;Agent&#62; to ThyMind?");
+  expect(page).toContain(cimd ? "Connect ChatGPT to Inventory?" : "Connect Test &#60;Agent&#62; to Inventory?");
   expect(page).toContain(cimd ? "Published by <strong>client.example</strong>" : "This app named itself");
   const handle = /name="handle" value="([^"]+)"/.exec(page)![1]!;
 
@@ -293,7 +293,7 @@ describe("connecting an AI app", () => {
     const { back } = await connect(call);
     expect(back.status).toBe(403);
     const page = await back.text();
-    expect(page).toContain("This Google account can't use ThyMind");
+    expect(page).toContain("This Google account can't use Inventory");
     expect(page).toContain("error=access_denied");
     expect(page).not.toContain("octaviantocan");
   });
@@ -306,7 +306,7 @@ describe("connecting an AI app", () => {
     library.state.dead = true;
     const result = await client.callTool({ name: "thymind_list_tags", arguments: {} });
     expect(result.isError).toBe(true);
-    expect((result.content as Array<{ text: string }>)[0]!.text).toContain("connect ThyMind again");
+    expect((result.content as Array<{ text: string }>)[0]!.text).toContain("connect Inventory again");
     await Promise.all(waits);
     const after = await call("/mcp", { method: "POST", headers: { authorization: `Bearer ${access_token}`, "content-type": "application/json" }, body: "{}" });
     expect(after.status).toBe(401);

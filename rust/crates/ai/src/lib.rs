@@ -162,7 +162,7 @@ where
 async fn sign_in(login: &AgentLogin, cli: &str, action: &str, args: &Value) -> Reply {
     // 403, not 401: the app signs its session out on a 401.
     if login == &AgentLogin::Server {
-        return Reply::problem(403, "Sign in to ThyMind first, so the AI sign-in is yours.");
+        return Reply::problem(403, "Sign in to Inventory first, so the AI sign-in is yours.");
     }
     let Some(binary) = engine_binary(cli) else { return Reply::problem(404, "not-found") };
     Reply::from(match action {

@@ -90,10 +90,10 @@ class ShareSheetFadeTest {
         var acted = 0
         compose.setPhoneContent(false) { ShareProblem(ShareState.NoLogin, onAction = { acted++ }, onClose = { gone++ }) }
         pass(SETTLE_MS)
-        compose.onNodeWithText("ThyMind keeps things once you’re signed in. Open ThyMind, sign in, then share this again.").performClick()
+        compose.onNodeWithText("Inventory keeps things once you’re signed in. Open Inventory, sign in, then share this again.").performClick()
         pass(30_000)
         assertEquals(0, gone + acted)
-        compose.onNodeWithText("Open ThyMind").performClick()
+        compose.onNodeWithText("Open Inventory").performClick()
         pass(1_000)
         assertEquals(1, acted)
         assertEquals(0, gone)

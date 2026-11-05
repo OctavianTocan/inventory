@@ -52,7 +52,7 @@ import com.octaviantocan.mymind.ui.theme.MymindTheme
  */
 internal fun updateStepLine(step: UpdateStep): String? = when (step) {
     UpdateStep.Idle -> null
-    UpdateStep.NeedsAllow -> "Allow ThyMind to install updates first."
+    UpdateStep.NeedsAllow -> "Allow Inventory to install updates first."
     UpdateStep.Preparing -> "Getting the update…"
     is UpdateStep.Downloading -> "Downloading ${(step.progress * 100).toInt()}%"
     UpdateStep.WaitingForUpload -> "Waiting for an upload to finish…"
@@ -79,12 +79,12 @@ fun UpdateGateContent(model: UpdateGateModel, onUpdate: () -> Unit, onContinue: 
     ) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(top = 32.dp, bottom = 16.dp)) {
             Text(
-                "ThyMind ${model.release.versionName} is ready",
+                "Inventory ${model.release.versionName} is ready",
                 Modifier.semantics { heading() },
                 style = TextStyle(color = c.text, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold, fontFamily = MymindTheme.fonts.body),
             )
             Text(
-                "Update to keep using ThyMind. This is what it brings.",
+                "Update to keep using Inventory. This is what it brings.",
                 Modifier.padding(top = 8.dp),
                 style = TextStyle(color = muted, fontSize = 16.sp, lineHeight = 24.sp, fontFamily = MymindTheme.fonts.body),
             )

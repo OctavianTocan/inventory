@@ -36,8 +36,8 @@ class UpdateNotifier(private val context: Context) {
         post(
             NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification_download)
-                .setContentTitle("ThyMind ${release.versionName} is ready")
-                .setContentText("Open ThyMind to update.")
+                .setContentTitle("Inventory ${release.versionName} is ready")
+                .setContentText("Open Inventory to update.")
                 .setContentIntent(open)
                 .setAutoCancel(true),
         )
@@ -59,7 +59,7 @@ class UpdateNotifier(private val context: Context) {
         post(
             NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification_download)
-                .setContentTitle("Finish installing ThyMind ${release?.versionName.orEmpty()}".trim())
+                .setContentTitle("Finish installing Inventory ${release?.versionName.orEmpty()}".trim())
                 .setContentText("Tap to confirm with Android.")
                 .setContentIntent(open)
                 .setAutoCancel(true),

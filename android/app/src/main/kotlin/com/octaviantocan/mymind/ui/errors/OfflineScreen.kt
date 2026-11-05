@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
-private const val MESSAGE = "Please reconnect to the internet\nto use the mymind app."
+private const val MESSAGE = "Please reconnect to the internet\nto use Inventory."
 
 /**
  * The two pictures of the offline screen.

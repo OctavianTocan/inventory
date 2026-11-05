@@ -206,14 +206,14 @@ class AiClient(client: OkHttpClient, private val server: String) {
         val (code, text) = try {
             http.newCall(request).execute().use { it.code to it.body.string() }
         } catch (_: IOException) {
-            throw AiProblem("No connection to ThyMind. Try again when you are online.")
+            throw AiProblem("No connection to Inventory. Try again when you are online.")
         }
         val json = runCatching { AppJson.parseToJsonElement(text).jsonObject }.getOrNull()
         if (code !in 200..299) {
             val said = (json?.get("error") as? JsonPrimitive)?.contentOrNull
-            throw AiProblem(said?.takeIf { it.isNotBlank() && it != "not-found" } ?: "ThyMind could not answer ($code). Try again.")
+            throw AiProblem(said?.takeIf { it.isNotBlank() && it != "not-found" } ?: "Inventory could not answer ($code). Try again.")
         }
-        json ?: throw AiProblem("ThyMind sent an answer the app cannot read.")
+        json ?: throw AiProblem("Inventory sent an answer the app cannot read.")
     }
 
     private companion object {

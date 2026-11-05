@@ -182,7 +182,7 @@ def main():
     try:
         phase("clone")
         git("clone", "--depth", "1", f"https://github.com/{job['repo']}", REPO_DIR, timeout=900)
-        git("config", "user.name", "ThyMind feedback")
+        git("config", "user.name", "Inventory feedback")
         git("config", "user.email", "feedback@thymind.invalid")
         if job["round"] > 1 or job.get("conflict"):
             git("fetch", "--depth", "200", "origin", f"+refs/heads/{branch}:refs/remotes/origin/{branch}", "+refs/heads/main:refs/remotes/origin/main", timeout=900)

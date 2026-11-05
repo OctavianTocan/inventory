@@ -346,7 +346,7 @@ fun AllSpacesPage(
                 slot(suggested, when {
                     alike == 1 -> "1 card like this one is here"
                     alike > 1 -> "$alike cards like this one are here"
-                    else -> "ThyMind thinks it fits here"
+                    else -> "Inventory thinks it fits here"
                 })
             }
         }

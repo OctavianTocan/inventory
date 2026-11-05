@@ -235,7 +235,7 @@ internal fun ColumnScope.ProfileSheetContent(
             if (updates.showAllow) {
                 SheetRowDivider()
                 SheetRow(painterResource(R.drawable.ic_allow_installs), "Allow installs", updates.onAllow,
-                    detail = "Let mymind install its own updates")
+                    detail = "Let Inventory install its own updates")
             }
         }
     }

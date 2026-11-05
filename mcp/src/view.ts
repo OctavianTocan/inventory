@@ -17,7 +17,7 @@ export const VIEW_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ThyMind cards</title>
+<title>Inventory cards</title>
 <style>
 :root {
   --bg: #F8F7F3; --raised: #FFFFFF; --text: #262520; --muted: #716E64; --accent: #745B28; --shadow: rgba(38, 37, 32, .16);
@@ -160,7 +160,7 @@ button.tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
   theme(null);
   if (openai && openai.toolOutput) show(openai.toolOutput);
   window.addEventListener("openai:set_globals", () => { if (window.openai) show(window.openai.toolOutput); });
-  request("ui/initialize", { appCapabilities: {}, appInfo: { name: "ThyMind cards", version: "1.0.0" }, protocolVersion: "2026-01-26" })
+  request("ui/initialize", { appCapabilities: {}, appInfo: { name: "Inventory cards", version: "1.0.0" }, protocolVersion: "2026-01-26" })
     .then((result) => {
       theme(result && result.hostContext);
       send({ method: "ui/notifications/initialized" });

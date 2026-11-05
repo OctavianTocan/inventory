@@ -277,7 +277,7 @@ internal fun ColumnScope.AiSignInPage(services: AiSignInServices, cli: AiCli, no
             LoadingSpinner(color = colors.rowText)
         }
         AiSignInStep.Unavailable -> Unit
-        AiSignInStep.NeedsAccount -> Explain("Sign in to ThyMind first, so ${cli.title} runs on your own subscription and nobody else's.")
+        AiSignInStep.NeedsAccount -> Explain("Sign in to Inventory first, so ${cli.title} runs on your own subscription and nobody else's.")
         AiSignInStep.PasteCode -> {
             started!!
             Explain("Sign in on the page that opened. When it shows a code, copy it and paste it here.")
@@ -295,7 +295,7 @@ internal fun ColumnScope.AiSignInPage(services: AiSignInServices, cli: AiCli, no
         }
         AiSignInStep.EnterCode -> {
             started!!
-            Explain("Enter this code on the page that opened. ThyMind finishes by itself once you approve.")
+            Explain("Enter this code on the page that opened. Inventory finishes by itself once you approve.")
             CardMenuGroup(Modifier.padding(top = 12.dp)) {
                 SheetRow(null, started.code.orEmpty(), { started.code?.let { services.copy(it); notify("Code copied") } }) {
                     Text("Copy", style = rowValue(colors.rowText))
@@ -322,8 +322,8 @@ internal fun ColumnScope.AiSignInPage(services: AiSignInServices, cli: AiCli, no
             }
         }
         AiSignInStep.SignedOut -> {
-            Explain(if (cli == AiCli.Claude) "ThyMind runs Claude Code with your own Claude subscription. Sign in once with your Claude account."
-                else "ThyMind runs Codex with your own ChatGPT subscription. Sign in once with your ChatGPT account.")
+            Explain(if (cli == AiCli.Claude) "Inventory runs Claude Code with your own Claude subscription. Sign in once with your Claude account."
+                else "Inventory runs Codex with your own ChatGPT subscription. Sign in once with your ChatGPT account.")
             PrimaryButton(if (state.busy) "Starting…" else "Sign in to ${cli.title}", enabled = !state.busy) {
                 run {
                     val start = services.start(cli)

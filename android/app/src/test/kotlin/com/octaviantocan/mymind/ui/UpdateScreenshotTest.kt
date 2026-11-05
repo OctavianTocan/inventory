@@ -118,7 +118,7 @@ class UpdateScreenshotTest {
     @Test
     fun updateGateStartsTheUpdate() {
         val (updates, _) = showStep(UpdateStep.Idle)
-        compose.onNodeWithText("ThyMind 0.3.0 is ready").assertIsDisplayed()
+        compose.onNodeWithText("Inventory 0.3.0 is ready").assertIsDisplayed()
         compose.onNodeWithText("Update to 0.3.0").performClick()
         assertEquals(1, updates[0])
     }
@@ -126,7 +126,7 @@ class UpdateScreenshotTest {
     @Test
     fun updateGateAsksToAllowInstallsAndOffersUpdateAgain() {
         showStep(UpdateStep.NeedsAllow)
-        compose.onNodeWithText("Allow ThyMind to install updates first.").assertIsDisplayed()
+        compose.onNodeWithText("Allow Inventory to install updates first.").assertIsDisplayed()
         compose.onNodeWithText("Update to 0.3.0").assertIsDisplayed()
     }
 

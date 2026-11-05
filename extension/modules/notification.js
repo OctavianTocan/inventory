@@ -78,7 +78,7 @@ export async function showUpgradeNotification(tab) {
  */
 export async function displaySignInNotice(tab) {
   await new Notification(tab).update({
-    message: ['Could not save to mymind. ', { br: true }, ' Please make sure to ', { link: 'sign in.' }],
+    message: ['Could not save to Inventory. ', { br: true }, ' Please make sure to ', { link: 'sign in.' }],
     status: 'error',
     redirect: `${await getHost()}/signin`,
   });

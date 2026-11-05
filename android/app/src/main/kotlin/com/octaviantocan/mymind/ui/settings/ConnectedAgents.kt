@@ -50,9 +50,9 @@ internal fun ColumnScope.ConnectedAgentsPage(
     var confirming by remember { mutableStateOf<String?>(null) }
     val agents = state.agents
     when {
-        agents == null && state.failed -> Note("ThyMind did not answer. Try again in a moment.", error = true)
+        agents == null && state.failed -> Note("Inventory did not answer. Try again in a moment.", error = true)
         agents == null -> Note("Loading…")
-        agents.isEmpty() -> Note("No AI apps are connected. Add ThyMind to Claude, ChatGPT or another AI app, and it shows here.")
+        agents.isEmpty() -> Note("No AI apps are connected. Add Inventory to Claude, ChatGPT or another AI app, and it shows here.")
         else -> {
             CardMenuGroup(Modifier.padding(top = 20.dp)) {
                 agents.forEachIndexed { index, agent ->
@@ -71,7 +71,7 @@ internal fun ColumnScope.ConnectedAgentsPage(
                     })
                 }
             }
-            if (state.failed) Note("ThyMind did not remove that app. Try again in a moment.", error = true)
+            if (state.failed) Note("Inventory did not remove that app. Try again in a moment.", error = true)
         }
     }
 }

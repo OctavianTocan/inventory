@@ -63,7 +63,7 @@ remove your own MCP tokens, Rust routes plus a Profile row in the app).
 @cc [owner:OctavianTocan,label:product;security] profile-feedback-sends-with-the-senders-ai
 The Profile sheet MUST list a Send feedback row under Providers that opens a page with a text field,
 Send, and under Send the line "Uses your Claude or Codex plan. Your change ships to
-everyone using ThyMind." The page MUST offer only engines the account has signed in; with
+everyone using Inventory." (the app's name since Tavi's rename, 5 Nov 2026) The page MUST offer only engines the account has signed in; with
 none it MUST say "Sign in to Claude Code or Codex first" and take the person back to Providers. It MUST keep
 its own engine, model and effort apart from AI search (the model and effort pages are
 titled Feedback model and Feedback effort, search's Search model and Search effort), so a

@@ -154,6 +154,6 @@ class ShareController(
     private companion object {
         const val AI_TAG = 2
         const val SOURCE = "clipboard"
-        const val UNREADABLE = "The app you shared from did not let ThyMind read the file."
+        const val UNREADABLE = "The app you shared from did not let Inventory read the file."
     }
 }

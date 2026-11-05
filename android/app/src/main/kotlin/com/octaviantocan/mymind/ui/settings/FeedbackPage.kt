@@ -58,7 +58,7 @@ const val FEEDBACK_MAX_CHARS = 4_000
 private const val FEEDBACK_EFFORT = "medium"
 
 /** The line under Send, saying whose plan runs the change and who gets it. */
-const val FEEDBACK_CONSENT = "Uses your Claude or Codex plan. Your change ships to everyone using ThyMind."
+const val FEEDBACK_CONSENT = "Uses your Claude or Codex plan. Your change ships to everyone using Inventory."
 
 /** The engine line when neither Claude Code nor Codex is signed in. */
 const val FEEDBACK_NO_ENGINE = "Sign in to Claude Code or Codex first"
@@ -211,7 +211,7 @@ private fun FeedbackField(text: String, onChange: (String) -> Unit, enabled: Boo
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Feedback" },
         decorationBox = { field ->
             Box(Modifier.heightIn(min = 132.dp).padding(horizontal = 16.dp, vertical = 14.dp), contentAlignment = Alignment.TopStart) {
-                if (text.isEmpty()) Text("What should ThyMind change?",
+                if (text.isEmpty()) Text("What should Inventory change?",
                     style = TextStyle(color = colors.rowText.copy(alpha = 0.5f), fontSize = 17.sp, lineHeight = 24.sp, fontFamily = CardMenuFont))
                 field()
             }

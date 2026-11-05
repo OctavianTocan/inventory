@@ -119,7 +119,7 @@ class ShareControllerTest {
         assertEquals(true, progress.done)
         assertEquals(2, progress.saved.size)
         assertEquals(1, progress.failed)
-        assertEquals("The app you shared from did not let ThyMind read the file.", progress.problem)
+        assertEquals("The app you shared from did not let Inventory read the file.", progress.problem)
     }
 
     @Test

@@ -127,12 +127,12 @@ export class Library {
    */
   async push(changes: readonly Change[]): Promise<Pushed> {
     if (changes.length === 0 || changes.length > PUSH_LIMIT || changes.some((change) => !CHANGES.includes(change.name))) {
-      throw new LibraryError(0, "This request is not one ThyMind's MCP server makes.");
+      throw new LibraryError(0, "This request is not one Inventory's MCP server makes.");
     }
     const body = { clientId: `mcp-${newId()}`, changes: changes.map((change, place) => ({ id: place + 1, name: change.name, args: change.args })) };
     const response = await this.send("POST", "/app/v1/push", {}, body);
     const answer = (await response.json()) as { lastChangeId?: number; refused?: number[]; tagIds?: Record<string, string>; cardIds?: Record<string, string> };
-    if (answer.lastChangeId === undefined) throw new LibraryError(501, "This ThyMind server is too old to take changes from agents.");
+    if (answer.lastChangeId === undefined) throw new LibraryError(501, "This Inventory server is too old to take changes from agents.");
     const byPlace = (ids: Record<string, string> = {}) => new Map(Object.entries(ids).map(([id, value]) => [Number(id) - 1, value]));
     return { refused: (answer.refused ?? []).map((id) => id - 1), tagIds: byPlace(answer.tagIds), cardIds: byPlace(answer.cardIds) };
   }
@@ -149,12 +149,12 @@ export class Library {
 
   private async send(method: string, path: string, query: Record<string, string | number | undefined>, body?: unknown): Promise<Response> {
     if (!allowed(method, path)) {
-      throw new LibraryError(0, "This request is not one ThyMind's MCP server makes.");
+      throw new LibraryError(0, "This request is not one Inventory's MCP server makes.");
     }
     const url = new URL(path, this.origin);
     // URL parsing resolves `%2e%2e` segments, so the path is checked again as it will actually be sent.
     if (url.origin !== new URL(this.origin).origin || !allowed(method, url.pathname)) {
-      throw new LibraryError(0, "This request is not one ThyMind's MCP server makes.");
+      throw new LibraryError(0, "This request is not one Inventory's MCP server makes.");
     }
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined && value !== "") url.searchParams.set(key, String(value));
@@ -167,13 +167,13 @@ export class Library {
     });
     if (response.ok) return response;
     if (response.status === 401) {
-      throw new LibraryError(401, "ThyMind signed this connection out. Ask the person to connect ThyMind again.", true);
+      throw new LibraryError(401, "Inventory signed this connection out. Ask the person to connect Inventory again.", true);
     }
     if (response.status === 404) throw new LibraryError(404, "Not found: the card or space does not exist.");
     if (response.status === 400) {
       const problem = (await response.json().catch(() => ({}))) as { error?: string };
-      throw new LibraryError(400, `ThyMind could not read that request (${problem.error ?? "bad-request"}).`);
+      throw new LibraryError(400, `Inventory could not read that request (${problem.error ?? "bad-request"}).`);
     }
-    throw new LibraryError(response.status, `ThyMind did not answer (${response.status}). Try again in a moment.`);
+    throw new LibraryError(response.status, `Inventory did not answer (${response.status}). Try again in a moment.`);
   }
 }

@@ -69,7 +69,7 @@ class FeedbackClientTest {
         assertTrue(missing.notFound)
 
         answer("oops", code = 500)
-        assertEquals("ThyMind could not answer (500). Try again.",
+        assertEquals("Inventory could not answer (500). Try again.",
             assertThrows(FeedbackProblem::class.java) { runBlocking { feedback.status("f1") } }.message)
     }
 }

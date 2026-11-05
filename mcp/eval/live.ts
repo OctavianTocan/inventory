@@ -1,5 +1,5 @@
 /**
- * Runs ThyMind's MCP tools against a live library, signed in as the `TEST_USER_*` password account, through the real
+ * Runs Inventory's MCP tools against a live library, signed in as the `TEST_USER_*` password account, through the real
  * MCP client and server (no OAuth: the tools get the app token directly). Read tools only unless `--write` is given.
  *
  *   TEST_USER_NAME=… TEST_USER_PASSWORD=… npx tsx eval/live.ts <tool> '<json args>' [<tool> '<json args>' …]

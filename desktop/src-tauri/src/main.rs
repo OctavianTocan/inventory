@@ -256,7 +256,7 @@ fn main() {
             let handle = app.handle().clone();
             #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
             let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
-                .title("mymind")
+                .title("Inventory")
                 .inner_size(1440.0, 900.0)
                 .min_inner_size(400.0, 500.0)
                 // Let the page's own drop handler receive dragged files, as in a browser.

@@ -52,15 +52,15 @@ class ProblemText(@DrawableRes val icon: Int, val title: String, val body: Strin
  */
 fun problemText(problem: ShareState): ProblemText? = when (problem) {
     ShareState.Malformed -> ProblemText(R.drawable.ic_file, "There was nothing to keep",
-        "ThyMind found no link, words or file in what was shared. Try sharing it again from the other app.", OKAY)
+        "Inventory found no link, words or file in what was shared. Try sharing it again from the other app.", OKAY)
     ShareState.TooManyItems -> ProblemText(R.drawable.ic_stack, "That’s more than $MAX_SHARE_ITEMS",
         "You can save up to $MAX_SHARE_ITEMS things at once. Share them in two goes.", OKAY)
     ShareState.FileTooBig -> ProblemText(R.drawable.ic_file, "That file is too big",
-        "ThyMind keeps files up to 5 GB. Share a smaller copy or a shorter clip.", OKAY)
+        "Inventory keeps files up to 5 GB. Share a smaller copy or a shorter clip.", OKAY)
     ShareState.PdfHasPassword -> ProblemText(R.drawable.ic_lock, "This PDF has a password",
-        "ThyMind can’t open a PDF that needs a password. Save a copy without it and share that one.", OKAY)
+        "Inventory can’t open a PDF that needs a password. Save a copy without it and share that one.", OKAY)
     ShareState.NoLogin -> ProblemText(R.drawable.ic_library_profile, "Sign in first",
-        "ThyMind keeps things once you’re signed in. Open ThyMind, sign in, then share this again.", "Open ThyMind")
+        "Inventory keeps things once you’re signed in. Open Inventory, sign in, then share this again.", "Open Inventory")
     is ShareState.Ready -> null
 }
 

@@ -28,7 +28,7 @@ mkdir -p "$HOME/.local/share/applications"
 cat > "$HOME/.local/share/applications/mymind.desktop" <<ENTRY
 [Desktop Entry]
 Type=Application
-Name=mymind
+Name=Inventory
 Exec=$HOME/.local/bin/mymind
 Icon=mymind
 StartupWMClass=mymind

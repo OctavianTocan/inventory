@@ -402,7 +402,7 @@ export class FeedbackJob extends DurableObject<Env> {
 
   #pullBody(job: JobRecord): string {
     const quoted = job.text.split("\n").map((line) => `> ${line}`).join("\n");
-    return `Feedback from ${job.name}, sent from ThyMind:\n\n${quoted}\n\n${job.description ?? ""}\n\nMade by ${job.engine === "claude" ? "Claude Code" : "Codex"} (${job.model}, ${job.effort}) on the sender's own plan. The runner merges it when CI is green (docs/feedback.md).\n\nFeedback-Id: ${job.id}`;
+    return `Feedback from ${job.name}, sent from Inventory:\n\n${quoted}\n\n${job.description ?? ""}\n\nMade by ${job.engine === "claude" ? "Claude Code" : "Codex"} (${job.model}, ${job.effort}) on the sender's own plan. The runner merges it when CI is green (docs/feedback.md).\n\nFeedback-Id: ${job.id}`;
   }
 
   #required(): string[] {

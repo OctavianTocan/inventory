@@ -198,7 +198,7 @@ pub fn download_page(manifest: &Value, user: &str) -> Result<String> {
     };
     Ok(format!(
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
-<title>mymind app</title><style>
+<title>Inventory app</title><style>
 :root{{color-scheme:light dark;--bg:#f7f8fa;--fg:#1d2433;--muted:#6b7280;--accent:#ff5924;--card:#fff}}
 @media (prefers-color-scheme:dark){{:root{{--bg:#14161b;--fg:#e8eaf0;--muted:#9aa1ad;--card:#1d2027}}}}
 body{{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}}
@@ -206,7 +206,7 @@ main{{max-width:640px;margin:0 auto;padding:48px 16px}}h1{{font:600 2rem Georgia
 p,span{{color:var(--muted)}}ul{{list-style:none;padding:0}}li{{background:var(--card);border-radius:14px;padding:16px;margin:12px 0}}
 a{{color:var(--accent);font-weight:600}}li span,li code{{display:block;font-size:.85rem;overflow-wrap:anywhere}}
 pre{{background:var(--card);border-radius:14px;padding:16px;overflow-x:auto;font-size:.85rem}}
-</style></head><body><main><h1>mymind app</h1>
+</style></head><body><main><h1>Inventory app</h1>
 <p>Opens your library at {}; sign in with Google the first time.</p>
 {}<ul>{rows}</ul>
 <pre>tar -xzf mymind-linux-x86_64.tar.gz

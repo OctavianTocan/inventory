@@ -1,7 +1,7 @@
-# ThyMind MCP server
+# Inventory MCP server
 
 A Cloudflare Worker that lets a person's AI agents (Claude, ChatGPT, Codex, Cursor, …) search and read their
-ThyMind library over the Model Context Protocol (spec 2026-07-28). The design and its decisions are in the project
+Inventory library over the Model Context Protocol (spec 2026-07-28). The design and its decisions are in the project
 brief (`thymind-mcp/concepts_brief.md` in the project files).
 
 - **Endpoint:** `https://mymind.octaviantocan.com/mcp` (Streamable HTTP, stateless).
@@ -38,7 +38,7 @@ The person sees and removes connected AI apps in the app under Profile, Connecte
 /app/v1/agents` on the `mymind` Worker, which list the app tokens named `MCP: <client>`). Removing one signs its app
 token out; the next call from that agent gets a 401 from the library, and this Worker then revokes its grant.
 
-In Claude and ChatGPT, which support MCP Apps, `thymind_search` results show as a grid of card tiles in ThyMind's
+In Claude and ChatGPT, which support MCP Apps, `thymind_search` results show as a grid of card tiles in Inventory's
 colours (`src/view.ts`, resource `ui://thymind/cards.html`). The grid gets its cards from the tool result and each
 picture by calling `thymind_get_picture` through the host, so it needs no network of its own (empty CSP) and never
 holds a token. Tapping a tile with a link opens it.

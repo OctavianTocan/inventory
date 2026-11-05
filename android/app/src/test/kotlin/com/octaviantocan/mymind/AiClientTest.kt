@@ -103,7 +103,7 @@ class AiClientTest {
         assertEquals("/app/v1/ai/models?engine=codex", server.takeRequest().path)
 
         answer("""{"error":"not-found"}""", code = 404)
-        assertEquals("ThyMind could not answer (404). Try again.",
+        assertEquals("Inventory could not answer (404). Try again.",
             assertThrows(AiProblem::class.java) { runBlocking { ai.cancel(AiCli.Claude) } }.message)
     }
 

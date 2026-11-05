@@ -15,14 +15,15 @@ ChangelogEntries, ChangelogItem and NewTag at
 
 @cc [owner:OctavianTocan,label:product] update-screen-is-required
 When the server offers a newer release, ThyMind MUST show only the update screen, over
-everything, from the first frame of a start: "ThyMind 0.6.67 is ready", "Update to keep
-using ThyMind.", every newer version with its notes, and "Update to 0.6.67" as the main
+everything, from the first frame of a start: "Inventory 0.6.72 is ready", "Update to keep
+using Inventory.", every newer version with its notes, and "Update to 0.6.72" as the main
 action. Nothing MUST close it but the update, and Back MUST leave the app. The phone
 remembers the last offer, so a start shows the screen before the server answers again;
 a failed check keeps the offer and a server with nothing newer takes it away. Updates
 MUST NOT install by themselves when the user leaves the app. Source: Tavi, 5 Nov 2026
 ("updating when you open and not letting you use until updated. Like Pully"); pulls.review
-update-screen-is-required and updater-remembers-the-offer.
+update-screen-is-required and updater-remembers-the-offer. The app's name changed from
+ThyMind to Inventory on Tavi's word, 5 Nov 2026 ("fully rename it to Inventory everywhere").
 
 @cc [owner:OctavianTocan,label:product] update-shows-its-progress
 Update MUST download (when the package is not on the phone yet), wait for any upload in

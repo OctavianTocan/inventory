@@ -101,14 +101,14 @@ class FeedbackClient(private val client: OkHttpClient, private val server: Strin
         val (code, text) = try {
             client.newCall(request).execute().use { it.code to it.body.string() }
         } catch (_: IOException) {
-            throw FeedbackProblem("No connection to ThyMind. Try again when you are online.")
+            throw FeedbackProblem("No connection to Inventory. Try again when you are online.")
         }
         val json = runCatching { AppJson.parseToJsonElement(text).jsonObject }.getOrNull()
         if (code !in 200..299) {
             val said = (json?.get("error") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
-            throw FeedbackProblem(said ?: "ThyMind could not answer ($code). Try again.", notFound = code == 404)
+            throw FeedbackProblem(said ?: "Inventory could not answer ($code). Try again.", notFound = code == 404)
         }
-        json ?: throw FeedbackProblem("ThyMind sent an answer the app cannot read.")
+        json ?: throw FeedbackProblem("Inventory sent an answer the app cannot read.")
     }
 
     private companion object {

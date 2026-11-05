@@ -1,6 +1,11 @@
-# mymind reconstruction
+# Inventory
 
-A localhost replica of `https://access.mymind.com/everything`. It runs mymind's real front-end against a local
+Inventory (called ThyMind until 5 November 2026) is a private library of things you save: an Android app, a web
+library and an MCP server for AI agents. The app's name is Inventory everywhere a person reads it; internal names
+(`mymind` binary, `com.octaviantocan.mymind` package, `thymind_*` MCP tools, Cloudflare Worker and Docker names)
+stay as they are so installed phones, sign-ins and connected agents keep working.
+
+It began as a localhost replica of `https://access.mymind.com/everything`. It runs mymind's real front-end against a local
 SQLite library. Notes, pasted text, URL placeholders, edits, tags, spaces and settings persist locally. No write
 is forwarded to mymind.
 

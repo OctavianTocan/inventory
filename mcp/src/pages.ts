@@ -59,7 +59,7 @@ export function consentPage(details: ConsentDescription, handle: string): string
   const local = details.redirectIsLoopback
     ? `<p class="warn">This sends access to an app on your computer. Continue only if you just started connecting from it.</p>`
     : "";
-  return page(`<h1>Connect ${name} to ThyMind?</h1>
+  return page(`<h1>Connect ${name} to Inventory?</h1>
 ${origin}
 ${local}
 <p>It will be able to search your cards and read their links, notes, text and pictures.</p>
@@ -72,14 +72,14 @@ ${local}
 }
 
 /**
- * The page for a Google account ThyMind does not admit. It never says which accounts are allowed.
+ * The page for a Google account Inventory does not admit. It never says which accounts are allowed.
  *
  * @param back Where to send the person back to the app, with `access_denied`.
  * @returns The page's HTML.
  */
 export function refusedPage(back: string): string {
-  return page(`<h1>This Google account can't use ThyMind</h1>
-<p>ThyMind is private. Try again with the Google account you use for ThyMind.</p>
+  return page(`<h1>This Google account can't use Inventory</h1>
+<p>Inventory is private. Try again with the Google account you use for Inventory.</p>
 <a class="button" href="${escape(back)}">Back to the app</a>`);
 }
 

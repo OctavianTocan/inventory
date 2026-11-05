@@ -219,7 +219,7 @@ fun savedLines(state: ShareSheetState): SavedLines {
             val site = card?.siteName?.takeIf { it.isNotBlank() } ?: card?.domain ?: hostOf(item.text)
             SavedLines(read ?: shortLink(item.text), problem ?: when {
                 read != null -> listOfNotNull(site, card.author?.takeIf { it.isNotBlank() }).distinct().joinToString(" · ")
-                state.phase == SavePhase.Kept -> "ThyMind reads it once you’re online"
+                state.phase == SavePhase.Kept -> "Inventory reads it once you’re online"
                 state.phase == SavePhase.Saved -> "Getting the page…"
                 else -> site.orEmpty()
             })

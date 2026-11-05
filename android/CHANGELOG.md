@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.72 (83), 2026-11-05
+ThyMind is now called Inventory.
+
+### Changed
+- The app is called Inventory on your home screen, in every screen and sheet, when you share something into it, and in its notifications. Nothing else changes: you stay signed in, your library, themes and settings are as they were, and updates keep arriving as before.
+- The web library, the Chrome extension, the desktop app and the AI connection for Claude and ChatGPT say Inventory too.
+
 ## 0.6.71 (82), 2026-11-05
 ThyMind turns sideways and opens up on a foldable.
 

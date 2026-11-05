@@ -5,7 +5,7 @@
     {
       "name": "thymind",
       "source": "./mcp/plugin",
-      "description": "Search, read and organize your ThyMind library from Claude Code."
+      "description": "Search, read and organize your Inventory library from Claude Code."
     }
   ]
 }

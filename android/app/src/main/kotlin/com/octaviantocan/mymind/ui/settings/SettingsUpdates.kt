@@ -6,7 +6,7 @@ package com.octaviantocan.mymind.ui.settings
  * @property visible False to leave the update rows out.
  * @property versionLabel The installed version, such as `Version 0.2.0 (2)`.
  * @property status Second line of the "Check for updates" row.
- * @property showAllow True to show the "Allow mymind to install updates" row.
+ * @property showAllow True to show the "Allow Inventory to install updates" row.
  * @property onCheck Called when "Check for updates" is tapped.
  * @property onAllow Called when the allow row is tapped.
  * @property onChangelog Called when "What's new" is tapped.

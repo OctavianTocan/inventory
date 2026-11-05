@@ -1,14 +1,14 @@
 # Feedback agents
 
-A signed-in ThyMind user writes feedback in the Android app, picks Claude Code or Codex with a model and an effort,
+A signed-in Inventory user writes feedback in the Android app, picks Claude Code or Codex with a model and an effort,
 and an agent on their own subscription turns it into a merged pull request inside a Cloudflare sandbox. The design
 (Tavi's decisions of 5 November 2026, the parts, job states and build order) is `feedback-agent/design_draft.md` in
-the ThyMind project files. This page holds what the repository needs to know: the routes, the runner, the GitHub
+the Inventory project files. This page holds what the repository needs to know: the routes, the runner, the GitHub
 sign-in, deploying, the kill switch, the runbook for a bad release and the spike's answers.
 
 ## Routes
 
-The app's routes are in `docs/app-api.md` (Feedback). ThyMind's Rust Worker (`rust/crates/feedback`, `mm-feedback`)
+The app's routes are in `docs/app-api.md` (Feedback). Inventory's Rust Worker (`rust/crates/feedback`, `mm-feedback`)
 checks each send: the phase (`FEEDBACK_OPEN`: `owner` lets only `OWNER_EMAIL` send, `everyone` lets everyone signed
 in), the text, that the sender is signed in to the engine and that the model is on its current list. It then passes
 the send to the runner with the verified email and the sender's AI login. The runner answers for the job limits
@@ -16,7 +16,7 @@ the send to the runner with the verified email and the sender's AI login. The ru
 
 ## The runner
 
-`feedback-runner/` is a TypeScript Worker (the Sandbox SDK is TypeScript) with no public route: ThyMind's Rust Worker
+`feedback-runner/` is a TypeScript Worker (the Sandbox SDK is TypeScript) with no public route: Inventory's Rust Worker
 reaches it through the `FEEDBACK_RUNNER` service binding after its sign-in gate, with the sender's verified email in
 `x-feedback-email` and their AI login in `x-feedback-login`.
 

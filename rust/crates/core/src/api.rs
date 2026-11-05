@@ -1035,7 +1035,7 @@ impl Api {
         } else if get && path == "/manifest.webmanifest" {
             self.reply(
                 url,
-                r##"{"name":"mymind","short_name":"mymind","start_url":"/everything","background_color":"#fff","description":"The extension for your mind","display":"fullscreen","icons":[{"src":"/_static/134/0.109.0/images/favicon.png","sizes":"144x144","type":"image/png"}]}"##,
+                r##"{"name":"Inventory","short_name":"Inventory","start_url":"/everything","background_color":"#fff","description":"Everything you saved","display":"fullscreen","icons":[{"src":"/_static/134/0.109.0/images/favicon.png","sizes":"144x144","type":"image/png"}]}"##,
                 200,
                 type_header("application/manifest+json; charset=utf-8"),
             )?

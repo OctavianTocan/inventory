@@ -1,6 +1,6 @@
 [package]
 name = "mm-ai"
-description = "Claude Code and Codex for ThyMind through the shared AI kit: sign-in, model lists and AI search"
+description = "Claude Code and Codex for Inventory through the shared AI kit: sign-in, model lists and AI search"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true

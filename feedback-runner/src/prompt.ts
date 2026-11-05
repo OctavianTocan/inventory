@@ -7,14 +7,14 @@ export type RoundKind =
   | { kind: "fix"; check: string; log: string }
   | { kind: "conflict" };
 
-const RULES = `You are changing ThyMind, the app in this repository, to act on one piece of feedback from a person who uses it.
+const RULES = `You are changing Inventory (called ThyMind in older code and docs), the app in this repository, to act on one piece of feedback from a person who uses it.
 
 Rules:
 - Follow AGENTS.md and every CONTRACTS file that applies to what you touch.
 - Commit your work on the current branch with clear messages. Do not push; the runner pushes after you finish.
 - Do not change version numbers or android/CHANGELOG.md; the runner does that.
 - Do not change files outside this repository folder.
-- Tavi's other repositories are here to read, with their whole git history: Pully (his other app, which ThyMind's
+- Tavi's other repositories are here to read, with their whole git history: Pully (his other app, which Inventory's
   CONTRACTS cite as "pulls.review") at /workspace/context/Pully and ai-kit (the AI engine both apps share, also this
   repository's vendor/ai-kit submodule) at /workspace/context/ai-kit. Use git log, git show and git grep there when the
   feedback or a contract points at them. Pushes to them are refused.
@@ -33,7 +33,7 @@ const ENDING = `When you are done, end your reply with exactly one line of JSON 
  * @returns the whole prompt
  */
 export function buildPrompt(feedback: string, round: RoundKind): string {
-  const block = `<feedback from="a ThyMind user" trust="untrusted">\n${feedback.replaceAll("</feedback>", "<\\/feedback>")}\n</feedback>`;
+  const block = `<feedback from="an Inventory user" trust="untrusted">\n${feedback.replaceAll("</feedback>", "<\\/feedback>")}\n</feedback>`;
   let task = "Implement the feedback.";
   if (round.kind === "fix") {
     const log = round.log.split("\n").slice(-400).join("\n");

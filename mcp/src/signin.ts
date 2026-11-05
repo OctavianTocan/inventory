@@ -84,7 +84,7 @@ async function answerConsent(request: Request, env: Env): Promise<Response> {
   const approved = await oauth.approveConsent(request, handle, { scope });
   const client = (await oauth.lookupClient(approved.request.clientId))?.clientName || "an AI app";
   const nonceAnswer = await library(env, "/app/v1/auth/nonce", {});
-  if (!nonceAnswer.ok) return html(errorPage("ThyMind did not answer. Try connecting again in a minute."), 502);
+  if (!nonceAnswer.ok) return html(errorPage("Inventory did not answer. Try connecting again in a minute."), 502);
   const { nonce } = (await nonceAnswer.json()) as { nonce: string };
   const verifier = randomString(48);
   const { state, headers } = await oauth.beginUpstream(approved.request, {
@@ -134,7 +134,7 @@ async function finish(request: Request, env: Env): Promise<Response> {
   if (!idToken) return html(errorPage("Google sign-in could not be finished. Start connecting again from the app."), 502, headers);
   const answer = await library(env, "/app/v1/auth/google", { idToken, nonce: data.nonce, device: `MCP: ${data.client}`.slice(0, 100) });
   if (answer.status === 401) return html(refusedPage(authorizationErrorRedirect(original, "access_denied")), 403, headers);
-  if (!answer.ok) return html(errorPage("ThyMind could not check this Google sign-in. Start connecting again from the app."), 502, headers);
+  if (!answer.ok) return html(errorPage("Inventory could not check this Google sign-in. Start connecting again from the app."), 502, headers);
   const { token, user } = (await answer.json()) as { token: string; user: { email: string } };
   const { redirectTo } = await oauth.completeAuthorization({
     request: original,

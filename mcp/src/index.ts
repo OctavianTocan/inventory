@@ -1,5 +1,5 @@
 /**
- * ThyMind's remote MCP server (`docs/mcp.md`). Cloudflare's OAuth library makes this Worker the authorization server
+ * Inventory's remote MCP server (`docs/mcp.md`). Cloudflare's OAuth library makes this Worker the authorization server
  * MCP clients sign in to (metadata, CIMD and registration, PKCE, tokens in KV); the MCP SDK answers `/mcp`
  * statelessly, one fresh server per request, bound to the signed-in person's library.
  */
@@ -63,7 +63,7 @@ function oauth(env: Env): OAuthProvider<Env> {
         clientIdMetadataDocumentEnabled: true,
         scopesSupported: [READ_SCOPE, WRITE_SCOPE],
         requiredScopes: [READ_SCOPE],
-        resourceMetadata: { resource: `${origin}/mcp`, authorization_servers: [origin], resource_name: "ThyMind" },
+        resourceMetadata: { resource: `${origin}/mcp`, authorization_servers: [origin], resource_name: "Inventory" },
         // A connection lives while it is used, like the app's own sign-in (90 days, renewed on use).
         refreshTokenTTL: 90 * DAY,
         refreshTokenIdleTTL: 90 * DAY,

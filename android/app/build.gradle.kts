@@ -109,14 +109,14 @@ android {
 
     buildTypes {
         debug {
-            manifestPlaceholders["appLabel"] = "mymind dev"
+            manifestPlaceholders["appLabel"] = "Inventory dev"
             manifestPlaceholders["networkSecurityConfig"] = "@xml/network_loopback"
         }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
-            manifestPlaceholders["appLabel"] = "mymind"
+            manifestPlaceholders["appLabel"] = "Inventory"
             // Cleartext to the emulator's host only for a release pointed at a local server, as in the end-to-end run.
             val local = listOf(mymindServer, mymindDownloads).any { it.startsWith("http://") }
             manifestPlaceholders["networkSecurityConfig"] = if (local) "@xml/network_loopback" else "@xml/network_strict"
