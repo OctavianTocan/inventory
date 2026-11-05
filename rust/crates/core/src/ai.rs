@@ -577,6 +577,23 @@ fn decisions_image(item: &AiItem) -> Option<String> {
     (!info.animated && info.bytes <= DECISIONS_IMAGE_MAX_BYTES).then(|| format!("data:{};base64,{}", info.mime, base64::encode(data)))
 }
 
+// A card's words for a Decisions JSON part: title, source, URL and text, each clipped, empty ones left out.
+fn decision_fields(item: &AiItem, text_chars: usize) -> mm_js::Object {
+    let mut fields = mm_js::Object::new();
+    for (field, value) in [
+        ("kind", clip(item.kind.as_deref(), 40)),
+        ("title", clip(item.title.as_deref(), 500)),
+        ("source", clip(item.domain.as_deref(), 200)),
+        ("url", clip(item.url.as_deref(), 500)),
+        ("text", clip(item.text.as_deref(), text_chars)),
+    ] {
+        if !value.is_empty() {
+            fields.insert(field, value);
+        }
+    }
+    fields
+}
+
 /// The Decisions `input` describing a card: its words as JSON under `item`, and its picture when `with_picture`.
 ///
 /// # Arguments
@@ -587,17 +604,7 @@ fn decisions_image(item: &AiItem) -> Option<String> {
 /// One user message, or `None` when the card has no words and no usable picture.
 pub fn decision_input(item: &AiItem, with_picture: bool) -> Option<Value> {
     let image = if with_picture { decisions_image(item) } else { None };
-    let mut fields = mm_js::Object::new();
-    for (field, value) in [
-        ("title", clip(item.title.as_deref(), 500)),
-        ("source", clip(item.domain.as_deref(), 200)),
-        ("url", clip(item.url.as_deref(), 500)),
-        ("text", clip(item.text.as_deref(), DECISIONS_TEXT_CHARS)),
-    ] {
-        if !value.is_empty() {
-            fields.insert(field, value);
-        }
-    }
+    let fields = decision_fields(item, DECISIONS_TEXT_CHARS);
     if fields.is_empty() && image.is_none() {
         return None;
     }
@@ -1063,6 +1070,64 @@ impl<'a> Ai<'a> {
             (Some(space), Some(p)) if p >= SPACE_MIN_P => Some(SuggestedSpace { id: space.id.clone(), p }),
             _ => None,
         })
+    }
+
+    /// Judge whether a new card is the same thing as each of a few earlier cards: the same page, post, video, picture,
+    /// file or note saved twice, not merely about the same subject. One predicate per earlier card.
+    ///
+    /// # Arguments
+    /// * `item` - The new card; pictures of both are sent when it is understood from its picture ([`needs_picture`]).
+    /// * `earlier` - Earlier cards, most alike first; at most 10 are judged.
+    ///
+    /// # Returns
+    /// One probability per judged earlier card, in order; a refused or malformed answer is 0. Empty when there is
+    /// nothing to compare.
+    ///
+    /// # Errors
+    /// `OPENAI_API_KEY` is missing or the API fails after retries.
+    pub async fn same_as(&self, item: &AiItem, earlier: &[AiItem]) -> std::result::Result<Vec<f64>, AiError> {
+        require_key("OPENAI_API_KEY", "duplicate checks with OpenAI Decisions")?;
+        let earlier = &earlier[..earlier.len().min(10)];
+        let new_fields = decision_fields(item, 3000);
+        if earlier.is_empty() || new_fields.is_empty() {
+            return Ok(Vec::new());
+        }
+        let pictures = visual_analysis(item);
+        let mut others = mm_js::Object::new();
+        for (index, other) in earlier.iter().enumerate() {
+            others.insert(format!("e{index}"), Value::Object(decision_fields(other, 3000)));
+        }
+        let mut content = vec![
+            Value::from(obj! { "type" => "input_text", "text" => "A new item someone just saved, and earlier items from their library." }),
+            obj! { "type" => "input_json", "data" => obj! { "new" => new_fields, "earlier" => others } }.into(),
+        ];
+        if pictures {
+            for (label, other) in std::iter::once(("the new item".to_owned(), item)).chain(earlier.iter().enumerate().map(|(index, other)| (format!("earlier item e{index}"), other))) {
+                if let Some(url) = decisions_image(other) {
+                    content.push(obj! { "type" => "input_text", "text" => format!("Picture of {label}:") }.into());
+                    content.push(obj! { "type" => "input_image", "image_url" => url, "detail" => "low" }.into());
+                }
+            }
+        }
+        let input = Value::Array(vec![obj! { "role" => "user", "content" => Value::Array(content) }.into()]);
+        let questions = (0..earlier.len())
+            .map(|index| {
+                let instructions = format!(
+                    "Is the new item the same thing as earlier item e{index}, saved twice: the same page, post, video, picture, file or note, even at a different address? Answer no when they are only about the same subject."
+                );
+                obj! { "type" => "predicate", "name" => format!("e{index}"), "instructions" => instructions }.into()
+            })
+            .collect();
+        let answers = self.decide(input, questions).await?;
+        Ok((0..earlier.len())
+            .map(|index| {
+                answers
+                    .iter()
+                    .find(|answer| answer.get("name").as_str() == Some(&format!("e{index}")) && answer.get("type").as_str() == Some("predicate"))
+                    .and_then(|answer| answer.get("probability").as_f64())
+                    .unwrap_or(0.0)
+            })
+            .collect())
     }
 
     /// Judge candidate tags against an item with OpenAI's Decisions API, one predicate per candidate (`pickTags`).

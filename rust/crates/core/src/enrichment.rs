@@ -18,7 +18,8 @@ use crate::capture_link::{CaptureOptions, capture_link};
 use crate::capture_more::capture_more;
 use crate::host::{Fetch, Media, MediaUser, Resource, Screenshot};
 use crate::search_document::analysis_item;
-use crate::sql::SqlExt;
+use crate::search_semantic::{Eligible, Semantic};
+use crate::sql::{SqlExt, SqlValue};
 use crate::store::{CardRow, Store};
 use crate::store_enrich::{NAMED_NOTE_TYPES, note_needs_name};
 use crate::store_write::Writer;
@@ -61,11 +62,20 @@ struct Inner {
     naming: Cell<usize>,
     named: Cell<bool>,
     unnamed: RefCell<HashSet<String>>,
+    // New cards already checked for being a repeat save, so the early and the later analysis check once.
+    repeat_checked: RefCell<HashSet<String>>,
 }
 
 /// The post-save job queue: capture and hosted AI, serialized and coalesced per card (`createEnrichment`'s result).
 #[derive(Clone)]
 pub struct Enrichment(Rc<Inner>);
+
+// A repeat save is looked for only among cards this alike by embedding, at most this many, and merged only when the
+// Decisions API is this sure, for cards saved this recently.
+const REPEAT_MIN_SIMILARITY: f64 = 0.8;
+const REPEAT_CANDIDATES: usize = 5;
+const REPEAT_MIN_P: f64 = 0.9;
+const REPEAT_WINDOW_MS: f64 = 30.0 * 60.0 * 1000.0;
 
 fn env_set(name: &str) -> bool {
     runtime::env(name).is_some_and(|value| !value.is_empty())
@@ -220,6 +230,7 @@ impl Enrichment {
             naming: Cell::new(0),
             named: Cell::new(false),
             unnamed: RefCell::default(),
+            repeat_checked: RefCell::default(),
         }))
     }
 
@@ -500,6 +511,7 @@ impl Enrichment {
             if row.flags & PROCESSING != 0 {
                 self.processing(id, false, false)?;
             }
+            self.merge_repeat(id).await;
             return Ok(());
         }
         self.processing(id, true, false)?;
@@ -508,6 +520,8 @@ impl Enrichment {
         if self.analyze(&row, &before).await.is_err() && !inner.closed.get() {
             runtime::log("[ai] analysis failed; saved card retained");
             self.processing(id, false, false)?;
+        } else {
+            self.merge_repeat(id).await;
         }
         Ok(())
     }
@@ -625,6 +639,80 @@ impl Enrichment {
         options_write(options, &row.id, &value)
     }
 
+    // A card as the hosted models read it: its words and its picture.
+    async fn ai_item(&self, row: &CardRow) -> Result<AiItem> {
+        let options = &self.0.options;
+        let (data, extras) = (parse(&row.data)?, parse(&row.extras)?);
+        let source = first_present(&[extras.get("cover"), extras.get("post").get("gallery").at(0), data.get("blob")]);
+        let image = options.media.image(source).await.ok().flatten();
+        let item = analysis_item(&row.data, &row.extras, Some(&article_content(row, &options.store)?))?;
+        Ok(AiItem {
+            title: text_of(&item.title),
+            kind: text_of(&item.kind),
+            text: Some(item.text),
+            url: text_of(&item.url),
+            domain: text_of(&item.domain),
+            image: image.map(|image| AiImage { mime: image.mime, data: image.data }),
+        })
+    }
+
+    // Fold a card saved in the last 30 minutes into the earlier card it repeats, when OpenAI is at least 90% sure
+    // they are the same thing; each card is checked once. A failure leaves both cards as they are.
+    async fn merge_repeat(&self, id: &str) {
+        let inner = &self.0;
+        if !env_set("OPENAI_API_KEY") || !inner.repeat_checked.borrow_mut().insert(id.to_owned()) {
+            return;
+        }
+        if let Err(error) = self.try_merge_repeat(id).await {
+            runtime::log(&format!("[ai] repeat check for {id} failed: {error}"));
+        }
+    }
+
+    async fn try_merge_repeat(&self, id: &str) -> Result<()> {
+        let options = &self.0.options;
+        let store = &options.store;
+        let Some(row) = store.card(id, None)? else { return Ok(()) };
+        if deleted(&row) || row.flags & HIDDEN != 0 || runtime::now_ms() - row.created_ns as f64 / 1e6 > REPEAT_WINDOW_MS {
+            return Ok(());
+        }
+        let user = store.default_user_id()?;
+        let older: HashSet<String> = store
+            .db()
+            .query("SELECT id FROM cards WHERE user_id = ? AND deleted_ns IS NULL AND created_ns < ?", &[user.into(), SqlValue::big(row.created_ns)])?
+            .iter()
+            .filter_map(|found| found.text("id").map(str::to_owned))
+            .collect();
+        let eligible = || Ok(older.clone());
+        let semantic = Semantic::new(store.clone(), None, options.offline);
+        let near: Vec<String> = semantic
+            .related(id, &Value::Number(REPEAT_CANDIDATES as f64), Eligible::Set(&eligible))?
+            .into_iter()
+            .filter(|found| found.score >= REPEAT_MIN_SIMILARITY)
+            .map(|found| found.id)
+            .collect();
+        if near.is_empty() {
+            return Ok(());
+        }
+        let item = self.ai_item(&row).await?;
+        let mut earlier = Vec::new();
+        for other in &near {
+            if let Some(other) = store.card(other, None)? {
+                earlier.push(self.ai_item(&other).await?);
+            }
+        }
+        let same = Ai::new(&*options.fetch).same_as(&item, &earlier).await.map_err(|error| Error::internal(error.message))?;
+        let best = same.iter().enumerate().filter(|(_, p)| **p >= REPEAT_MIN_P).max_by(|a, b| a.1.total_cmp(b.1));
+        if let Some((index, p)) = best
+            && !self.0.closed.get()
+        {
+            let target = &near[index];
+            if options.writer.run(|writer| writer.merge_into(id, target))? {
+                runtime::log(&format!("[ai] merged repeat save {id} into {target} (p {p})"));
+            }
+        }
+        Ok(())
+    }
+
     // Ask the hosted models for the card's summary, tags and embedding, ready for the analysis write.
     async fn analysis_of(&self, row: &CardRow) -> Result<Value> {
         let options = &self.0.options;
@@ -641,17 +729,7 @@ impl Enrichment {
                 vocabulary.push(VocabularyEntry { name, embedding: None });
             }
         }
-        let source = first_present(&[extras.get("cover"), extras.get("post").get("gallery").at(0), data.get("blob")]);
-        let image = options.media.image(source).await.ok().flatten();
-        let item = analysis_item(&row.data, &row.extras, Some(&article_content(row, store)?))?;
-        let item = AiItem {
-            title: text_of(&item.title),
-            kind: text_of(&item.kind),
-            text: Some(item.text),
-            url: text_of(&item.url),
-            domain: text_of(&item.domain),
-            image: image.map(|image| AiImage { mime: image.mime, data: image.data }),
-        };
+        let item = self.ai_item(row).await?;
         let ai = Ai::new(&*options.fetch);
         let spaces = if env_set("OPENAI_API_KEY") { space_options(store, &row.id)? } else { Vec::new() };
         let (result, suggested) = join(ai.analyze(&item, &vocabulary), async {

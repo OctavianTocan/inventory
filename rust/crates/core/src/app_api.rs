@@ -232,6 +232,7 @@ impl AppApi {
             ("spaces", if spaces.is_empty() { Value::Undefined } else { Value::Array(spaces) }),
             ("spaceRanks", if space_ranks.is_empty() { Value::Undefined } else { Value::Object(space_ranks) }),
             ("suggestedSpace", extras.get("suggestedSpace").get("id").clone()),
+            ("mergedInto", extras.get("mergedInto").clone()),
             ("pinPosition", extras.get("pinPosition").clone()),
             ("cover", cover),
             ("blob", blob),

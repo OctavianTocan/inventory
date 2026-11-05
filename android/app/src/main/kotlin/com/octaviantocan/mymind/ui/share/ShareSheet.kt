@@ -150,6 +150,9 @@ class ShareSheetState(items: List<ShareItem> = emptyList(), phase: SavePhase = S
     /** Ids of the chosen spaces, in the order they were chosen. */
     var spaceIds by mutableStateOf<List<String>>(emptyList())
 
+    /** True once ThyMind folded what was saved into a card saved before (share-sheet-says-when-merged). */
+    var merged by mutableStateOf(false)
+
     /** True once the sheet has been touched, which keeps it open until it is closed. */
     var touched by mutableStateOf(false)
 
@@ -238,7 +241,7 @@ fun savedLines(state: ShareSheetState): SavedLines {
  */
 fun statusText(state: ShareSheetState): String = when (state.phase) {
     SavePhase.Saving -> if (state.items.size > 1) "Saving ${minOf(state.saved + state.failed + 1, state.items.size)} of ${state.items.size}" else "Saving to your mind"
-    SavePhase.Saved -> "Saved to your mind"
+    SavePhase.Saved -> if (state.merged) MERGED else "Saved to your mind"
     SavePhase.Kept -> "Kept on this phone"
     SavePhase.Failed -> NOT_SAVED
 }
@@ -572,6 +575,7 @@ private val LINK = Regex("""^https?://\S+$""")
 private const val PLACEHOLDER = "Placeholder"
 private const val PDF = "application/pdf"
 private const val NOT_SAVED = "Nothing was saved"
+private const val MERGED = "Merged with an earlier save"
 private const val FIELD_HINT = "Add a space, a tag or a note"
 private const val FINDING_TAGS = "Finding tags…"
 private const val FINDING_BREATH_MS = 700

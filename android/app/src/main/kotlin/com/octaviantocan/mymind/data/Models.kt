@@ -103,6 +103,8 @@ data class Card(
     val spaceRanks: Map<String, Double>? = null,
     /** The id of the space ThyMind's AI would file this card in, when it picked one. */
     val suggestedSpace: String? = null,
+    /** For a repeat save ThyMind folded into an earlier card and put in the trash, that earlier card's id. */
+    val mergedInto: String? = null,
     val pinPosition: Long? = null,
     val cover: Cover? = null,
     val blob: Blob? = null,

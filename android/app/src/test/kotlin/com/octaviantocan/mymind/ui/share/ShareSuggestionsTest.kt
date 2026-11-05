@@ -86,6 +86,8 @@ class ShareSuggestionsTest {
         state.phase = SavePhase.Saved
         assertEquals(SavedLines("3 photos", "2 saved, 1 could not be"), savedLines(state))
         assertEquals("Saved to your mind", statusText(state))
+        state.merged = true
+        assertEquals("Merged with an earlier save", statusText(state))
     }
 
     @Test

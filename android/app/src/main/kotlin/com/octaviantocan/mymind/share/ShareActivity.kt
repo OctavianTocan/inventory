@@ -86,7 +86,11 @@ class ShareActivity : ComponentActivity() {
         val reread: suspend () -> Unit = {
             val ids = state.cards.map { it.id }.ifEmpty { null }
             if (ids != null) {
-                state.cards = ids.mapIndexed { at, id -> (library.card(id) as? ApiResult.Ok)?.value ?: state.cards[at] }
+                state.cards = ids.mapIndexed { at, id ->
+                    val card = (library.card(id) as? ApiResult.Ok)?.value ?: state.cards[at]
+                    // A repeat save folded into an earlier card shows that card from now on.
+                    card.mergedInto?.let { earlier -> (library.card(earlier) as? ApiResult.Ok)?.value?.also { state.merged = true } } ?: card
+                }
                 suggest()
             }
         }

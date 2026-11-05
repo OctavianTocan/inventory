@@ -60,3 +60,15 @@ Source: Tavi, 5 November 2026: "the moment I share them and I see the little
 tag screen where I can add my own tags, I should already see tags that Jev
 generated". This replaces the share prototype's choice to leave ThyMind's tags
 off the sheet.
+
+@cc [owner:OctavianTocan,label:product] share-sheet-says-when-merged
+When ThyMind finds that one thing just shared is the same thing as a card saved
+before (the same page, post, video, picture, file or note, even at another
+address), the server MUST fold the new save into the earlier card: its own
+tags, note and spaces move over, the earlier card comes to the top, and the new
+copy goes to the trash where it can be restored. The share sheet MUST then show
+the earlier card, titled Merged with an earlier save, and spaces, tags and a note
+added on the sheet MUST reach the earlier card. Only a near-certain match is
+merged, and only for something saved in the last half hour.
+Source: Tavi's pick on 5 November 2026, "Merge into the earlier card", over
+keeping both or a review list.

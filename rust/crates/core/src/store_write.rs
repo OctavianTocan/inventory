@@ -854,12 +854,69 @@ impl Writer {
         let mut row = self.load(id)?;
         if restore {
             row.data.remove("deleted");
+            row.extras.remove("mergedInto");
         } else {
             row.data.set("deleted", iso_from_ns(self.tick()?, 0)?);
             clear_bit(&mut row.data, 1);
         }
         self.store_card(&mut row, Some(if restore { "object:updated" } else { "object:deleted" }), Some(if restore { 1 } else { 2 }))?;
         Ok(Value::Object(Object::new()))
+    }
+
+    /// Fold a repeat save into the earlier card it duplicates: the earlier card takes the repeat's own tags, its note
+    /// (after its own, when both have one) and its Spaces, and is bumped to the top as a fresh save of a link is; the
+    /// repeat goes to the trash, restorable, marked `extras.mergedInto` with the earlier card's id.
+    ///
+    /// # Arguments
+    /// * `id` - The repeat save.
+    /// * `earlier` - The earlier card it duplicates.
+    ///
+    /// # Returns
+    /// `false`, changing nothing, when either card is gone or trashed or they are the same card.
+    ///
+    /// # Errors
+    /// The database's error.
+    pub fn merge_into(&self, id: &str, earlier: &str) -> Result<bool> {
+        let alive = |card: &str| -> Result<bool> { Ok(self.store.card(card, None)?.is_some_and(|row| row.deleted_ns.is_none())) };
+        if id == earlier || !alive(id)? || !alive(earlier)? {
+            return Ok(false);
+        }
+        let repeat = self.load(id)?;
+        let mut target = self.load(earlier)?;
+        let note = repeat.data.get("note").get("prose");
+        if note.truthy() && has_content(note)? {
+            let kept = target.data.get("note").get("prose");
+            let prose = if kept.truthy() && has_content(kept)? {
+                let mut content = kept.get("content").as_array().cloned().unwrap_or_default();
+                content.extend(note.get("content").as_array().cloned().unwrap_or_default());
+                obj! { "type" => "doc", "content" => Value::Array(content) }.into()
+            } else {
+                note.clone()
+            };
+            let note_id = match target.data.get("note").get("id") {
+                Value::Undefined | Value::Null => Value::from(self.store.new_id(IdKind::Note, None)?),
+                other => other.clone(),
+            };
+            target.data.set("note", obj! { "id" => note_id, "prose" => prose, "modified" => iso_from_ns(self.tick()?, 6)? });
+        }
+        target.bumped_ns = self.tick()?;
+        target.data.set("bumped", iso_from_ns(target.bumped_ns, 0)?);
+        self.store_card(&mut target, Some("object:bumped"), None)?;
+        let db = self.store.db();
+        let own_tags = db.query("SELECT name FROM annotations WHERE card_id = ? AND (flags & 2) = 0 ORDER BY position", &[id.into()])?;
+        for tag in &own_tags {
+            self.add_tag(earlier, &Value::from(tag.text("name").unwrap_or("")))?;
+        }
+        let spaces = db.query("SELECT space_id FROM space_cards WHERE card_id = ? AND excluded = 0 ORDER BY rank", &[id.into()])?;
+        for space in &spaces {
+            self.add_to_space(space.text("space_id").unwrap_or(""), earlier)?;
+        }
+        let mut repeat = self.load(id)?;
+        repeat.extras.set("mergedInto", earlier);
+        repeat.data.set("deleted", iso_from_ns(self.tick()?, 0)?);
+        clear_bit(&mut repeat.data, 1);
+        self.store_card(&mut repeat, Some("object:deleted"), Some(2))?;
+        Ok(true)
     }
 
     /// Create a manual space or evaluate smart filters against the library (`createSpace`).

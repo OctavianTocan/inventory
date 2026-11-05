@@ -176,6 +176,13 @@ impl Library {
     fn share(&self, url: &str, words: &str) -> String {
         let made = self.writer.run(|writer| writer.create(&obj! { "content" => url }.into(), &Value::Undefined)).unwrap();
         let id = made.get("body").get("id").as_str().unwrap().to_owned();
+        self.capture(&id, words);
+        id
+    }
+
+    // Capture and analyse a saved link from a page whose body says `words`.
+    fn capture(&self, id: &str, words: &str) {
+        let id = id.to_owned();
         *self.shot.card.borrow_mut() = id.clone();
         let html = format!("<html><head><title>A page</title></head><body><main><p>{words}</p></main></body></html>");
         let jobs = Enrichment::new(EnrichmentOptions {
@@ -190,7 +197,6 @@ impl Library {
         });
         jobs.schedule(&id, true);
         block_on(jobs.drain());
-        id
     }
 
     fn tags(&self, id: &str) -> Vec<String> {
@@ -236,4 +242,58 @@ fn a_shared_link_gets_the_space_openai_picks() {
     assert_eq!(extras.get("suggestedSpace").get("id").as_str(), Some("garden-1"), "smart spaces are never offered");
     assert_eq!(extras.get("suggestedSpace").get("p").as_f64(), Some(0.8));
     runtime::set_env(HashMap::from([("GEMINI_API_KEY".to_owned(), "test-key".to_owned())]));
+}
+
+#[test]
+fn a_repeat_save_folds_into_the_earlier_card() {
+    let library = Library::new();
+    runtime::set_env(HashMap::from([
+        ("GEMINI_API_KEY".to_owned(), "test-key".to_owned()),
+        ("OPENAI_API_KEY".to_owned(), "test-openai".to_owned()),
+    ]));
+    let db = library.store.db();
+    db.execute("INSERT INTO spaces VALUES ('garden-1', 'tag-user', 'Garden', 'green', 1, '2026-01-01', NULL)", &[]).unwrap();
+    let words = "Long-form writing about gardens, soil and the slow work of growing vegetables through a cold spring. ".repeat(4);
+    let first = library.share("https://example.com/gardens", &words);
+    // The same article at another address; every embedding in this test is the same, and OpenAI says 0.9.
+    let made = library.writer.run(|writer| writer.create(&obj! { "content" => "https://example.com/gardens?ref=feed" }.into(), &Value::Undefined)).unwrap();
+    let second = made.get("body").get("id").as_str().unwrap().to_owned();
+    library.writer.run(|writer| writer.add_tag(&second, &Value::from("to-plant"))).unwrap();
+    library.writer.run(|writer| writer.membership("garden-1", &second, false)).unwrap();
+    library.capture(&second, &words);
+
+    let repeat = library.store.card(&second, None).unwrap().unwrap();
+    assert!(repeat.deleted_ns.is_some(), "the repeat save is in the trash");
+    assert_eq!(json::parse(&repeat.extras).unwrap().get("mergedInto").as_str(), Some(first.as_str()));
+    assert!(library.tags(&first).contains(&"to-plant".to_owned()), "the repeat's own tag moved over");
+    let spaces = db.query("SELECT space_id FROM space_cards WHERE card_id = ? AND excluded = 0", &[first.as_str().into()]).unwrap();
+    assert_eq!(spaces.len(), 1, "the repeat's space moved over");
+    let earlier = library.store.card(&first, None).unwrap().unwrap();
+    assert!(earlier.deleted_ns.is_none());
+    assert!(earlier.bumped_ns > repeat.created_ns, "the earlier card comes to the top");
+
+    library.writer.run(|writer| writer.trash(&second, true)).unwrap();
+    let restored = library.store.card(&second, None).unwrap().unwrap();
+    assert!(restored.deleted_ns.is_none());
+    assert!(json::parse(&restored.extras).unwrap().get("mergedInto").is_undefined(), "a restored repeat is its own card again");
+    runtime::set_env(HashMap::from([("GEMINI_API_KEY".to_owned(), "test-key".to_owned())]));
+}
+
+#[test]
+fn notes_join_when_both_cards_have_one() {
+    let library = Library::new();
+    let note = |text: &str| -> Value { obj! { "type" => "doc", "content" => vec![Value::from(obj! { "type" => "paragraph", "content" => vec![Value::from(obj! { "type" => "text", "text" => text })] })] }.into() };
+    let make = |url: &str, text: &str| -> String {
+        let made = library.writer.run(|writer| writer.create(&obj! { "content" => url }.into(), &Value::Undefined)).unwrap();
+        let id = made.get("body").get("id").as_str().unwrap().to_owned();
+        library.writer.run(|writer| writer.prose(&id, &note(text), "note")).unwrap();
+        id
+    };
+    let earlier = make("https://example.com/a", "first thought");
+    let repeat = make("https://example.com/b", "second thought");
+    assert!(library.writer.run(|writer| writer.merge_into(&repeat, &earlier)).unwrap());
+    let data = json::parse(&library.store.card(&earlier, None).unwrap().unwrap().data).unwrap();
+    let texts: Vec<String> = data.get("note").get("prose").get("content").as_array().unwrap().iter().map(|block| block.get("content").get("0").get("text").to_js_string()).collect();
+    assert_eq!(texts, ["first thought", "second thought"]);
+    assert!(!library.writer.run(|writer| writer.merge_into(&repeat, &earlier)).unwrap(), "a trashed repeat is not merged twice");
 }

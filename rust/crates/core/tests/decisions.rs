@@ -238,3 +238,20 @@ fn offers_at_most_254_spaces() {
     assert_eq!(suggested.map(|space| space.id), Some("sp253".to_owned()));
     assert_eq!(fake.requests.borrow()[0].2.get("questions").get("0").get("choices").as_array().unwrap().len(), 255);
 }
+
+#[test]
+fn asks_whether_a_new_card_repeats_each_earlier_one() {
+    let _guard = setup(&[("OPENAI_API_KEY", "test-openai")]);
+    let fake = Decisions::new(&[Some(0.97), None, Some(0.2)]);
+    let earlier = vec![article(), AiItem { title: Some("Other".into()), ..AiItem::default() }, AiItem { text: Some("Third".into()), ..AiItem::default() }];
+    let same = block_on(Ai::new(&fake).same_as(&article(), &earlier)).unwrap();
+    assert_eq!(same, [0.97, 0.0, 0.2], "a refusal counts as not the same");
+    let requests = fake.requests.borrow();
+    let body = &requests[0].2;
+    let names: Vec<String> = body.get("questions").as_array().unwrap().iter().map(|question| question.get("name").to_js_string()).collect();
+    assert_eq!(names, ["e0", "e1", "e2"]);
+    let data = body.get("input").get("0").get("content").get("1").get("data");
+    assert_eq!(data.get("new").get("title").as_str(), Some("Weeknight lemon spaghetti"));
+    assert_eq!(data.get("earlier").get("e1").get("title").as_str(), Some("Other"));
+    assert!(block_on(Ai::new(&fake).same_as(&article(), &[])).unwrap().is_empty());
+}

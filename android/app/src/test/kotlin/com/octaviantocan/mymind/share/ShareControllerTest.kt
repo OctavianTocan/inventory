@@ -32,9 +32,23 @@ class ShareControllerTest {
         val result = controller.finish(ShareDetails(listOf("read", "later"), " a note ", setOf("s1")))
         assertEquals(ApiResult.Ok(Unit), result)
         assertEquals(
-            listOf("content:https://example.com:clipboard:null", "tag:$id:read", "tag:$id:later", "note:$id:a note", "space:s1:$id"),
+            listOf("content:https://example.com:clipboard:null", "card:$id", "tag:$id:read", "tag:$id:later", "note:$id:a note", "space:s1:$id"),
             library.calls,
         )
+    }
+
+    @Test
+    fun detailsOfARepeatSaveGoOnTheEarlierCardItWasMergedInto() = runTest(dispatcher) {
+        val library = FakeLibrary()
+        val id = "card-${"https://example.com".hashCode()}"
+        library.cardsById = mapOf(id to testCard(id).copy(mergedInto = "earlier"))
+        val controller = ShareController(this, library, dispatcher) { null }
+        controller.start(listOf(ShareItem.Text("https://example.com")))
+        advanceUntilIdle()
+        assertEquals(ApiResult.Ok(Unit), controller.finish(ShareDetails(listOf("read"), "", setOf("s1"))))
+        assertTrue("tag:earlier:read" in library.calls)
+        assertTrue("space:s1:earlier" in library.calls)
+        assertTrue(library.calls.none { it.startsWith("tag:$id") || it.startsWith("space:s1:$id") })
     }
 
     @Test

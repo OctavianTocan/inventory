@@ -130,7 +130,9 @@ class ShareController(
     private suspend fun applyDetails(details: ShareDetails): ApiResult<Unit> {
         val ids = progress.first { it.done }.saved
         if (ids.isEmpty()) return ApiResult.Failed(ApiFailure.Network)
-        for (id in ids) {
+        for (saved in ids) {
+            // A repeat save ThyMind folded into an earlier card takes what was added on that earlier card.
+            val id = (library.card(saved) as? ApiResult.Ok)?.value?.mergedInto ?: saved
             if (details.untag.isNotEmpty()) (untag(id, details.untag) as? ApiResult.Failed)?.let { return it }
             for (tag in details.tags) (library.addTag(id, tag) as? ApiResult.Failed)?.let { return it }
             if (details.note.isNotBlank()) (library.setNote(id, details.note.trim()) as? ApiResult.Failed)?.let { return it }

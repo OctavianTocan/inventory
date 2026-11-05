@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.61 (72), 2026-11-05
+Saving the same thing twice keeps one card.
+
+### Added
+- When you save something you already saved, even from another address, ThyMind folds the new save into the earlier card: your tags, note and Spaces from the new save move over, and the earlier card comes to the top. The share sheet then shows that card and says Merged with an earlier save, and anything you add there goes to it. The extra copy goes to Trash, where you can restore it. ThyMind only merges when it is nearly sure, and only for things saved in the last half hour. This needs the Worker deployed.
+
 ## 0.6.60 (71), 2026-11-05
 ThyMind suggests the Space a new card belongs in.
 
