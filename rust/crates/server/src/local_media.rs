@@ -47,6 +47,33 @@ pub async fn analysis_image(data: Vec<u8>) -> Result<AnalysisImage> {
 }
 
 /// A library's media on disk below one root (`createMedia`).
+/// Pull the first sound track of a video file out as mono 16 kHz Ogg Opus at 24 kbit/s, small enough to send for
+/// transcription (about 11 MB an hour).
+///
+/// # Arguments
+/// * `file` - Path of the video.
+///
+/// # Returns
+/// The audio, or `None` when the video has no sound track.
+///
+/// # Errors
+/// An internal error when ffprobe or ffmpeg fails or runs out of time.
+pub async fn extract_audio(file: &str) -> Result<Option<Vec<u8>>> {
+    let streams = run("ffprobe", &args(&["-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", file]), 30000).await?;
+    if streams.iter().all(u8::is_ascii_whitespace) {
+        return Ok(None);
+    }
+    let target = format!("{file}.{}.ogg", token());
+    let arguments = args(&["-v", "error", "-y", "-i", file, "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "libopus", "-b:a", "24k", &target]);
+    let made = async {
+        run("ffmpeg", &arguments, 600_000).await?;
+        tokio::fs::read(&target).await.map_err(io)
+    }
+    .await;
+    let _ = tokio::fs::remove_file(&target).await;
+    made.map(Some)
+}
+
 pub struct LocalMedia {
     inner: Rc<Inner>,
 }
@@ -471,6 +498,25 @@ impl Media for LocalMedia {
     ///
     /// # Errors
     /// As [`Media::response`], or an internal error when the image cannot be decoded.
+    /// The sound of a stored video (`audio`).
+    ///
+    /// # Arguments
+    /// * `blob` - The card's stored `blob` (`path`); a falsy value has no audio.
+    ///
+    /// # Returns
+    /// `None` when there is no such original or it has no sound.
+    ///
+    /// # Errors
+    /// As [`extract_audio`].
+    async fn audio(&self, blob: &Value) -> Result<Option<Vec<u8>>> {
+        let path = blob.get("path");
+        if !blob.truthy() || !path.truthy() {
+            return Ok(None);
+        }
+        let Some(result) = self.response(&path.to_js_string()).await? else { return Ok(None) };
+        extract_audio(&result.key).await
+    }
+
     async fn image(&self, blob_or_cover: &Value) -> Result<Option<AnalysisImage>> {
         if !blob_or_cover.truthy() {
             return Ok(None);

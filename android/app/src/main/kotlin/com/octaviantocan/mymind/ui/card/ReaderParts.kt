@@ -32,6 +32,9 @@ enum class ReaderPart(val heading: String) {
     /** The description saved with a link. */
     Summary("Summary"),
 
+    /** What is said in a saved video, as the server transcribed it. */
+    Transcript("Transcript"),
+
     /** The note the user wrote on a card that is not itself a note. */
     YourNote("Your note"),
 
@@ -53,7 +56,7 @@ data class ReaderText(val part: ReaderPart, val text: String)
 /**
  * @param card A card.
  * @return The reader's text sections, in order: an X thread's summary, the post or note itself (every post of a thread),
- *   the saved summary, the user's own note and the
+ *   the saved summary, a video's transcript, the user's own note and the
  *   text from the page, without blanks or repeats. The reader shows the tags between the summary and the note.
  */
 fun readerSections(card: Card): List<ReaderText> {
@@ -64,7 +67,8 @@ fun readerSections(card: Card): List<ReaderText> {
             listOf(ReaderPart.Summary to card.summary, ReaderPart.Post to thread.map(::threadPostWords).filter { it.isNotEmpty() }.joinToString("\n\n"),
                 ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
         } ?: listOf(ReaderPart.Post to postWords(card), ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
-        else -> listOf(ReaderPart.Summary to card.description, ReaderPart.YourNote to card.note, ReaderPart.Page to prose)
+        else -> listOf(ReaderPart.Summary to card.description, ReaderPart.Transcript to card.transcript, ReaderPart.YourNote to card.note,
+            ReaderPart.Page to prose)
     }
     val seen = mutableSetOf<String>()
     return parts.mapNotNull { (part, text) -> text?.trim()?.takeIf { it.isNotEmpty() && seen.add(it) }?.let { ReaderText(part, it) } }
@@ -115,7 +119,7 @@ data class PartChoice(val action: PartAction, val label: String)
 fun partChoices(part: ReaderPart, card: Card): List<PartChoice> {
     val words = partText(part, card)
     return when (part) {
-        ReaderPart.Post, ReaderPart.Note, ReaderPart.Summary -> {
+        ReaderPart.Post, ReaderPart.Note, ReaderPart.Summary, ReaderPart.Transcript -> {
             if (words == null) return emptyList()
             val name = part.heading.lowercase()
             listOf(PartChoice(PartAction.Copy, "Copy $name"), PartChoice(PartAction.Share, "Share $name"))

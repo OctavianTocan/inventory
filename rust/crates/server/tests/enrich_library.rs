@@ -51,6 +51,8 @@ impl Fetch for Stub {
         } else if chat {
             let content = json::to_string(&obj! { "title" => "Generated title", "summary" => "A generated summary.", "tags" => mm_core::arr!["alpha", "design"] }.into());
             json::to_string(&obj! { "choices" => mm_core::arr![obj! { "message" => obj! { "content" => content } }] }.into())
+        } else if url.ends_with("/v1/audio/transcriptions") {
+            r#"{"text":" Spoken words about sourdough starters. ","languages":[{"code":"en"}]}"#.to_owned()
         } else if url.contains("/v1/decisions") {
             r#"{"answers":[{"type":"predicate","name":"t0","probability":0.9},{"type":"predicate","name":"t1","probability":0.8}]}"#.to_owned()
         } else {
@@ -79,6 +81,9 @@ impl Media for Quiet {
     }
     async fn image(&self, _: &Value) -> Result<Option<AnalysisImage>> {
         Ok(None)
+    }
+    async fn audio(&self, blob: &Value) -> Result<Option<Vec<u8>>> {
+        Ok((blob.get("path").as_str() == Some("media/talk.mp4")).then(|| b"OggS-sound".to_vec()))
     }
 }
 
@@ -225,6 +230,33 @@ fn new_save_enriches_on_the_worker_path() {
         assert!(tag_flags(&h.db, &id).iter().any(|(_, flags)| *flags == 2));
         assert_eq!(embedding_len(&h.db, &id), Some(3072));
         assert!(h.calls.0.borrow().iter().any(|(_, url, _)| url.contains("/v1/decisions")));
+    });
+}
+
+#[test]
+fn saved_video_is_transcribed_once_and_its_words_reach_the_analysis() {
+    let _guard = LOCK.lock().unwrap();
+    mymind::runtime::run(async {
+        let h = open(200, true).await;
+        insert_card(&h.db, "talk", r#"{"type":"Video","flags":0,"blob":{"path":"media/talk.mp4","type":"video/mp4"}}"#, "{}");
+        insert_card(&h.db, "mute", r#"{"type":"Video","flags":0,"blob":{"path":"media/mute.mp4","type":"video/mp4"}}"#, "{}");
+        for id in ["talk", "mute", "talk"] {
+            h.api.jobs().schedule(id, false);
+            h.api.jobs().drain().await;
+        }
+        let transcript = |id: &str| {
+            let row = h.db.one("SELECT extras FROM cards WHERE id = ?", &[id.into()]).unwrap().unwrap();
+            json::parse(row.text("extras").unwrap()).unwrap().get("transcript").clone()
+        };
+        let talk = transcript("talk");
+        assert_eq!(talk.get("text").as_str(), Some("Spoken words about sourdough starters."));
+        assert_eq!(talk.get("language").as_str(), Some("en"));
+        assert_eq!(transcript("mute").get("text").as_str(), Some(""), "a silent video keeps an empty transcript");
+        let calls = h.calls.0.borrow();
+        let stt: Vec<_> = calls.iter().filter(|(_, url, _)| url.ends_with("/v1/audio/transcriptions")).collect();
+        assert_eq!(stt.len(), 1, "only the video with sound is sent, and only once");
+        assert!(stt[0].2.contains("OggS-sound"));
+        assert!(calls.iter().any(|(_, url, body)| url.contains("/chat/completions") && body.contains("sourdough starters")));
     });
 }
 

@@ -11,7 +11,7 @@ use futures_util::future::join;
 use indexmap::IndexMap;
 use mm_js::{Value, json, obj};
 
-use crate::ai::{Ai, AiImage, AiItem, VocabularyEntry, needs_picture};
+use crate::ai::{Ai, AiImage, AiItem, TRANSCRIBE_MAX_BYTES, VocabularyEntry, needs_picture};
 use crate::ai_tags::relevant_tag;
 use crate::backfill::{self, Estimate, MediaImages, Report};
 use crate::capture_link::{CaptureOptions, capture_link};
@@ -473,6 +473,10 @@ impl Enrichment {
         if inner.closed.get() {
             return Ok(());
         }
+        self.transcribe(id).await;
+        if inner.closed.get() {
+            return Ok(());
+        }
         let Some(row) = store.card(id, None)? else { return Ok(()) };
         if deleted(&row) {
             return Ok(());
@@ -506,6 +510,46 @@ impl Enrichment {
             self.processing(id, false, false)?;
         }
         Ok(())
+    }
+
+    // Write what a saved video says into `extras.transcript` once, so tags, summary and search read it. A video with
+    // no sound keeps an empty text, so it is not sent again; a failed call leaves the card as it was.
+    async fn transcribe(&self, id: &str) {
+        let options = &self.0.options;
+        if options.readonly || !env_set("OPENAI_API_KEY") || (options.offline && !loopback("OPENAI_BASE_URL")) {
+            return;
+        }
+        let Ok(Some(row)) = options.store.card(id, None) else { return };
+        let (Ok(data), Ok(extras)) = (parse(&row.data), parse(&row.extras)) else { return };
+        if deleted(&row) || data.get("type").as_str() != Some("Video") || !extras.get("transcript").is_nullish() {
+            return;
+        }
+        let transcript = match options.media.audio(data.get("blob")).await {
+            Ok(None) => Value::from(obj! { "text" => "" }),
+            Ok(Some(audio)) if audio.len() > TRANSCRIBE_MAX_BYTES => {
+                runtime::log("[ai] transcription skipped: the sound is over 25 MB");
+                return;
+            }
+            Ok(Some(audio)) => match Ai::new(&*options.fetch).transcribe(&audio, "audio.ogg").await {
+                Ok(heard) => obj! { "text" => heard.text, "language" => heard.language }.into(),
+                Err(error) => {
+                    runtime::log(&format!("[ai] transcription failed: {}", error.message));
+                    return;
+                }
+            },
+            Err(error) => {
+                runtime::log(&format!("[ai] audio extraction failed: {error}"));
+                return;
+            }
+        };
+        if self.0.closed.get() {
+            return;
+        }
+        let mut baseline = Value::from(obj! { "data" => data, "extras" => extras });
+        let patch = Value::from(obj! { "data" => obj! {}, "extras" => obj! { "transcript" => transcript } });
+        if options.writer.run(|writer| writer.enrich(id, &patch, &mut baseline)).is_err() {
+            runtime::log("[ai] transcript could not be saved");
+        }
     }
 
     // Analyse a link once capture has written its words, unless the card needs its picture to be understood. Returns

@@ -75,7 +75,19 @@ class ShareIntentTest {
     }
 
     @Test
-    fun aFileOverTwentyFiveMegabytesIsTooBig() {
+    fun aGalleryVideoOverTwentyFiveMegabytesIsKept() {
+        val probe = Probe(sizes = mapOf("content://v" to 180_000_000L))
+        assertEquals(ShareState.Ready(listOf(ShareItem.Stream("content://v"))), parse(ShareRequest(send, "video/mp4", listOf("content://v"), null, null), probe = probe))
+    }
+
+    @Test
+    fun photosAndVideosSharedTogetherAreStreams() {
+        val state = parse(ShareRequest(multiple, "*/*", listOf("content://photo", "content://video"), null, null))
+        assertEquals(ShareState.Ready(listOf(ShareItem.Stream("content://photo"), ShareItem.Stream("content://video"))), state)
+    }
+
+    @Test
+    fun aFileOverTheUploadLimitIsTooBig() {
         val probe = Probe(sizes = mapOf("content://a" to MAX_SHARE_BYTES + 1))
         assertEquals(ShareState.FileTooBig, parse(ShareRequest(send, "image/png", listOf("content://a"), null, null), probe = probe))
         val exact = Probe(sizes = mapOf("content://a" to MAX_SHARE_BYTES))

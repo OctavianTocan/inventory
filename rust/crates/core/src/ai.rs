@@ -37,6 +37,11 @@ const CHAT_IMAGE_MAX_BYTES: usize = 10 * 1024 * 1024;
 const DECISIONS_IMAGE_MAX_BYTES: usize = 20 * 1024 * 1024;
 const MAX_RETRIES: u32 = 3;
 const TIMEOUT_MS: u64 = 60_000;
+const TRANSCRIBE_MODEL: &str = "gpt-transcribe";
+/// Largest file OpenAI's transcription endpoint takes: 25 MB.
+pub const TRANSCRIBE_MAX_BYTES: usize = 25 * 1024 * 1024;
+// A long video's audio takes OpenAI longer than a chat answer; one attempt may run this long.
+const TRANSCRIBE_TIMEOUT_MS: u64 = 300_000;
 
 const SUMMARY_PROMPT_LINES: [&str; 10] = [
     "You file items saved to a personal visual notebook, like mymind. Reply with one JSON object: {\"title\": string, \"summary\": string, \"tags\": string[]}.",
@@ -67,7 +72,7 @@ pub enum Service {
     Gemini,
     /// The chat model.
     Chat,
-    /// OpenAI's Decisions API.
+    /// OpenAI: the Decisions API and speech to text.
     OpenAi,
 }
 
@@ -159,6 +164,15 @@ pub struct AiItem {
     pub domain: Option<String>,
     /// Cover image; used only when the target API accepts its format and size.
     pub image: Option<AiImage>,
+}
+
+/// What was said in a recording, from [`Ai::transcribe`].
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Transcript {
+    /// The words, trimmed; empty when nobody speaks.
+    pub text: String,
+    /// Code of the first language OpenAI detected, such as `en`, when it names one.
+    pub language: Option<String>,
 }
 
 /// How an embedding is meant to be compared.
@@ -414,8 +428,8 @@ struct Deadline {
 }
 
 impl Deadline {
-    fn start() -> Self {
-        Self { timer: Box::pin(runtime::sleep(TIMEOUT_MS)), expired: false }
+    fn start(ms: u64) -> Self {
+        Self { timer: Box::pin(runtime::sleep(ms)), expired: false }
     }
 
     /// Runs `work` until the attempt's timer fires; `None` once it has.
@@ -686,15 +700,20 @@ impl<'a> Ai<'a> {
     }
 
     async fn post_json(&self, service: Service, url: &str, headers: &Headers, body: &Value) -> std::result::Result<Value, AiError> {
+        let headers = Headers::from([("content-type", "application/json")]).with(headers);
+        self.post(service, url, &headers, json::to_string(body).into_bytes(), TIMEOUT_MS).await
+    }
+
+    // POST `payload` with retries on network errors, 429 and 5xx, and parse the JSON answer.
+    async fn post(&self, service: Service, url: &str, headers: &Headers, payload: Vec<u8>, timeout_ms: u64) -> std::result::Result<Value, AiError> {
         let name = service.as_str();
-        let payload = json::to_string(body);
         let mut attempt = 0;
         loop {
-            let mut deadline = Deadline::start();
+            let mut deadline = Deadline::start(timeout_ms);
             let sent: std::result::Result<Response, String> = match Request::new("POST", url) {
                 Err(_) => Err("ERR_INVALID_URL".into()),
                 Ok(mut request) => {
-                    request.headers = Headers::from([("content-type", "application/json")]).with(headers);
+                    request.headers = headers.clone();
                     request.body = Body::from(payload.clone());
                     match deadline.run(self.fetch.fetch_unfollowed(request)).await {
                         Some(Ok(response)) => Ok(response),
@@ -1067,6 +1086,42 @@ impl<'a> Ai<'a> {
             .iter()
             .map(|(key, name)| VocabularyTag { name: name.clone(), embedding: cache.get(key).cloned().unwrap_or_default() })
             .collect())
+    }
+
+    /// Transcribe speech with OpenAI's `gpt-transcribe` (`POST /v1/audio/transcriptions`); the language is detected.
+    ///
+    /// # Arguments
+    /// * `audio` - The recording, at most [`TRANSCRIBE_MAX_BYTES`], in a format OpenAI reads (Ogg, MP3, MP4, WAV, WebM
+    ///   and others).
+    /// * `name` - File name sent with it; its extension tells OpenAI the format.
+    ///
+    /// # Returns
+    /// The transcript; its text is empty when nobody speaks.
+    ///
+    /// # Errors
+    /// `OPENAI_API_KEY` is missing, or the API fails after retries.
+    pub async fn transcribe(&self, audio: &[u8], name: &str) -> std::result::Result<Transcript, AiError> {
+        let key = require_key("OPENAI_API_KEY", "video transcription with OpenAI")?;
+        let boundary = format!("thymind-{}", base64::hex(&runtime::random_bytes(12)));
+        let mut payload = Vec::with_capacity(audio.len() + 512);
+        payload.extend_from_slice(format!("--{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n{TRANSCRIBE_MODEL}\r\n").as_bytes());
+        let safe = name.replace(['"', '\r', '\n'], "_");
+        payload.extend_from_slice(
+            format!("--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{safe}\"\r\nContent-Type: application/octet-stream\r\n\r\n").as_bytes(),
+        );
+        payload.extend_from_slice(audio);
+        payload.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+        let headers = Headers::from([("content-type", format!("multipart/form-data; boundary={boundary}")), ("authorization", format!("Bearer {key}"))]);
+        let url = format!("{}/audio/transcriptions", openai_base());
+        let data = self.post(Service::OpenAi, &url, &headers, payload, TRANSCRIBE_TIMEOUT_MS).await?;
+        let text = data.get("text");
+        if !matches!(text, Value::String(_)) {
+            return Err(AiError::service("openai returned no transcript text", Service::OpenAi));
+        }
+        Ok(Transcript {
+            text: trim(&text.to_js_string()).to_owned(),
+            language: data.get("languages").at(0).get("code").as_str().filter(|code| !code.is_empty()).map(str::to_owned),
+        })
     }
 
     /// Auto-label a card: summary, final tags and embedding (`analyze`). The chat model proposes tags, the

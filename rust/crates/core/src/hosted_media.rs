@@ -288,7 +288,27 @@ impl HostedMedia {
             .clone()
     }
 
-    /// The analysis image of a card's blob or cover (`image`).
+    /// The sound of a stored video as mono Ogg Opus, extracted by the processor (`audio`).
+    ///
+    /// # Arguments
+    /// * `blob` - The card's stored `blob` (`path`); a falsy value has no audio.
+    ///
+    /// # Returns
+    /// `None` when there is no such original or it has no sound.
+    ///
+    /// # Errors
+    /// As [`HostedMedia::response`], or the processor's error.
+    pub async fn audio(&self, blob: &Value) -> Result<Option<Vec<u8>>> {
+        let path = blob.get("path");
+        if !blob.truthy() || !path.truthy() {
+            return Ok(None);
+        }
+        let Some(result) = self.response(&path.to_js_string()).await? else { return Ok(None) };
+        let object = self.inner.bucket.read(&result.key, None).await?.ok_or_else(missing_body)?;
+        self.inner.processor.audio(Body::Stream(object.body)).await
+    }
+
+        /// The analysis image of a card's blob or cover (`image`).
     ///
     /// # Arguments
     /// * `blob_or_cover` - A stored `blob` (`path`) or a `cover` (`src`); a falsy value has no image.
@@ -333,6 +353,10 @@ impl Media for HostedMedia {
 
     async fn image(&self, blob_or_cover: &Value) -> Result<Option<AnalysisImage>> {
         HostedMedia::image(self, blob_or_cover).await
+    }
+
+    async fn audio(&self, blob: &Value) -> Result<Option<Vec<u8>>> {
+        HostedMedia::audio(self, blob).await
     }
 }
 

@@ -108,7 +108,7 @@ private val BODY_SIDE = 16.dp
 private val FOOT_ROOM = 112.dp
 
 /** The parts shown above the tags; the user's note and the page text follow them. */
-private val LEAD_PARTS = setOf(ReaderPart.Post, ReaderPart.Note, ReaderPart.Summary)
+private val LEAD_PARTS = setOf(ReaderPart.Post, ReaderPart.Note, ReaderPart.Summary, ReaderPart.Transcript)
 
 /**
  * What the reader's controls do besides closing, opening the source and opening the card's actions. A null action
@@ -860,7 +860,7 @@ private val SECTION_PADDING = PaddingValues(start = 18.dp, top = 16.dp, end = 18
 
 @DrawableRes
 private fun partIcon(part: ReaderPart): Int = when (part) {
-    ReaderPart.Post -> R.drawable.ic_quote
+    ReaderPart.Post, ReaderPart.Transcript -> R.drawable.ic_quote
     ReaderPart.Note, ReaderPart.YourNote -> R.drawable.notes
     ReaderPart.Summary -> R.drawable.ic_summary
     ReaderPart.Page -> R.drawable.ic_page

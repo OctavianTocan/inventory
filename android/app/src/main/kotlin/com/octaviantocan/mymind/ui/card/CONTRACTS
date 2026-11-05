@@ -42,7 +42,8 @@ curve from pulls.review DESIGN rule 73.
 The reader MUST show every part of a card it has, each once, in its own raised
 section: the picture (cover, post image or image file) with the title, who made it,
 where it is from, when it was saved and how long its page takes to read; the post or
-note body, or else the saved summary; the tags; the user's note; and the captured
+note body, or else the saved summary; a video file's Transcript, what the server heard
+said in it (`share-takes-gallery-videos`, Tavi, 5 November 2026); the tags; the user's note; and the captured
 page text with its reading time. Text sections MUST carry a small muted heading. A social
 post MUST instead show as one section on its network's colour
 (`gallery-posts-look-like-posts`): who posted it, with the handle, the posting day where

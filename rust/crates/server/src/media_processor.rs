@@ -12,7 +12,7 @@ use mm_core::{Error, Result};
 use mm_js::base64;
 use tokio::io::AsyncWriteExt;
 
-use crate::local_media::{LocalMedia, analysis_image};
+use crate::local_media::{LocalMedia, analysis_image, extract_audio};
 use crate::node_path::resolve;
 
 /// Processes media in a fresh directory per call (`createProcessor`).
@@ -119,5 +119,24 @@ impl MediaProcessor for LocalProcessor {
     /// An internal error when the image cannot be decoded.
     async fn image(&self, body: Body) -> Result<AnalysisImage> {
         analysis_image(body.bytes().await?).await
+    }
+
+    /// Pull the sound out of a video (`audio`).
+    ///
+    /// # Arguments
+    /// * `body` - The video's bytes.
+    ///
+    /// # Returns
+    /// The mono Ogg Opus audio, or `None` when the video has no sound.
+    ///
+    /// # Errors
+    /// As [`extract_audio`].
+    async fn audio(&self, body: Body) -> Result<Option<Vec<u8>>> {
+        self.within(async |folder| {
+            let input = folder.join("input");
+            save(&input, body).await?;
+            extract_audio(&input.to_string_lossy()).await
+        })
+        .await
     }
 }

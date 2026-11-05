@@ -26,6 +26,7 @@ import com.octaviantocan.mymind.ui.card.ReaderActions
 import com.octaviantocan.mymind.ui.card.ReaderPart
 import com.octaviantocan.mymind.ui.card.ReaderText
 import com.octaviantocan.mymind.ui.card.bylineOf
+import com.octaviantocan.mymind.ui.card.partChoices
 import com.octaviantocan.mymind.ui.card.readerSections
 import com.octaviantocan.mymind.ui.card.readingMinutes
 import com.octaviantocan.mymind.ui.card.readingTime
@@ -69,6 +70,16 @@ class ReaderContentTest {
         assertNull(readingTime(post))
         val note = testCard("n1", type = "Note", title = null, note = "Just a thought")
         assertEquals(listOf(ReaderText(ReaderPart.Note, "Just a thought")), readerSections(note))
+    }
+
+    @Test
+    fun aVideosTranscriptIsItsOwnPartAfterTheSummary() {
+        val video = testCard("v1", type = "Video", note = "Mum's recipe").copy(description = "Making bread at home.",
+            transcript = "First you feed the starter.")
+        assertEquals(listOf(ReaderText(ReaderPart.Summary, "Making bread at home."), ReaderText(ReaderPart.Transcript, "First you feed the starter."),
+            ReaderText(ReaderPart.YourNote, "Mum's recipe")), readerSections(video))
+        assertEquals(listOf("Copy transcript", "Share transcript"), partChoices(ReaderPart.Transcript, video).map { it.label })
+        assertEquals(emptyList<ReaderText>(), readerSections(testCard("v2", type = "Video", title = null)).filter { it.part == ReaderPart.Transcript })
     }
 
     @Test

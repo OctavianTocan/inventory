@@ -83,6 +83,10 @@ impl Container {
                 }
             }
             "image" => Ok(Answer::Bytes(self.processor.image(body).await?.data, octet(None))),
+            "audio" => match self.processor.audio(body).await? {
+                Some(audio) => Ok(Answer::Bytes(audio, octet(None))),
+                None => Ok(Answer::NoContent),
+            },
             "resource" => {
                 let limit = args.get("limit");
                 let options = ResourceOptions { offline: args.get("offline").truthy(), limit: (!limit.is_nullish()).then(|| limit.to_number() as u64) };
@@ -120,7 +124,7 @@ impl Handler for Container {
             return Response::new(200, Headers::new(), "ok");
         }
         let operation = pathname.strip_prefix('/').unwrap_or("");
-        if request.method != "POST" || !["prepare", "rendition", "image", "resource", "screenshot"].contains(&operation) {
+        if request.method != "POST" || !["prepare", "rendition", "image", "audio", "resource", "screenshot"].contains(&operation) {
             return Response::new(404, Headers::new(), Body::Empty);
         }
         match self.answer(operation, &mut request).await {

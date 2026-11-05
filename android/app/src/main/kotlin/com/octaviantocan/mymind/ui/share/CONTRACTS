@@ -30,11 +30,23 @@ Source: Tavi's pick of 10, One field for everything, in the share prototype,
 
 @cc [owner:OctavianTocan,label:product] share-problems-speak-for-thymind
 When nothing can be saved (nothing to keep, more than 20 things, a file over
-25 MB, a PDF with a password, signed out) the share target MUST say so in its own
+the share limit of `share-takes-gallery-videos`, a PDF with a password, signed out) the share target MUST say so in its own
 words on the same sheet, titled Nothing was saved: a mark, what went wrong and
 what to do, and one button. It MUST NOT name mymind, its address or its artwork.
 Source: the 29 October 2026 share prototype's problem sheets, which Tavi saw
 with every version; AGENTS.md: the replica is its own product.
+
+@cc [owner:OctavianTocan,label:product] share-takes-gallery-videos
+Photos and videos shared from the Gallery, one or several, mixed or not, MUST save
+as cards. The share target MUST take files as big as an upload from inside the app
+(500 MB), not mymind's 25 MB, since a phone's videos are mostly bigger than that.
+A saved video's speech is transcribed on the server and shown in the reader as its
+Transcript (`card-reader-shows-the-whole-card`).
+Source: Tavi, 5 November 2026: "You should be able to save videos and images
+directly into the app ... share from my Gallery ... And when videos are shared, we
+transcribe them." The same day he moved transcription from xAI to OpenAI's latest
+model ("Let's use OpenAI's API for this"). The 500 MB limit and the reader section
+are Claude's choices.
 
 @cc [owner:OctavianTocan,label:product] share-sheet-shows-thymind-tags
 When one thing is shared, the sheet MUST show the tags ThyMind gave it as soon

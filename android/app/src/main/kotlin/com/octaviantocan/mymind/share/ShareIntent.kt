@@ -1,5 +1,7 @@
 package com.octaviantocan.mymind.share
 
+import com.octaviantocan.mymind.ui.library.UploadQueue
+
 /** One thing a share brings. */
 sealed interface ShareItem {
     /**
@@ -34,8 +36,8 @@ sealed interface ShareState {
     data class Ready(val items: List<ShareItem>) : ShareState
 }
 
-/** Largest file the share target takes: 25 MB. */
-const val MAX_SHARE_BYTES = 26_214_400L
+/** Largest file the share target takes: as big as an upload from inside the app, 500 MB. */
+const val MAX_SHARE_BYTES = UploadQueue.MAX_UPLOAD_SIZE
 
 /** Most streams one share takes. */
 const val MAX_SHARE_ITEMS = 20

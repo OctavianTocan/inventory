@@ -111,6 +111,8 @@ data class Card(
     val reddit: RedditInfo? = null,
     /** A video's length in seconds, as its site gives it, for videos the server does not keep. */
     val videoLength: Int? = null,
+    /** What is said in a video saved as a file, as the server transcribed it; null until then or when nobody speaks. */
+    val transcript: String? = null,
     val article: PostArticle? = null,
     val state: String? = null,
 )

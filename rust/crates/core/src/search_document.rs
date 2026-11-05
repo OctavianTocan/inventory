@@ -116,6 +116,7 @@ pub fn analysis_item(data: &str, extras: &str, content: Option<&Value>) -> Resul
                 Value::String(prose_text(data.get("prose"))?),
                 extras.get("captureText").clone(),
                 Value::String(plain_text_value(post_html)),
+                extras.get("transcript").get("text").clone(),
             ],
             "\n",
         )
@@ -159,7 +160,12 @@ pub fn search_document(data_json: &str, extras_json: &str, content_json: Option<
         if matches!(extras, Value::Null) {
             return Err(Error::invalid("Cannot read properties of null"));
         }
-        [Value::String(prose_text(&prose)?), extras.get("captureText").clone(), Value::String(plain_text_value(extras.get("post").get("bodyHtml")))]
+        [
+            Value::String(prose_text(&prose)?),
+            extras.get("captureText").clone(),
+            Value::String(plain_text_value(extras.get("post").get("bodyHtml"))),
+            extras.get("transcript").get("text").clone(),
+        ]
             .iter()
             .filter(|part| part.truthy())
             .map(Value::to_js_string)

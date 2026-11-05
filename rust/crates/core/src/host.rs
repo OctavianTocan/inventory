@@ -234,6 +234,21 @@ pub trait MediaProcessor {
     /// # Errors
     /// The processor's error.
     async fn image(&self, body: Body) -> Result<AnalysisImage>;
+
+    /// Pull the sound out of a video as the small mono Ogg Opus file transcription reads.
+    ///
+    /// # Arguments
+    /// * `body` - The video's bytes.
+    ///
+    /// # Returns
+    /// The audio, or `None` when the video has no sound or this processor cannot extract it.
+    ///
+    /// # Errors
+    /// The processor's error.
+    async fn audio(&self, body: Body) -> Result<Option<Vec<u8>>> {
+        let _ = body;
+        Ok(None)
+    }
 }
 
 /// Where chunked uploads keep their chunks: a private directory (`directoryStorage` of `rust/crates/server/src/uploads_fs.rs`) or an object
@@ -383,6 +398,21 @@ pub trait Media {
     /// # Errors
     /// As [`Media::response`], or the processor's error.
     async fn image(&self, blob_or_cover: &Value) -> Result<Option<AnalysisImage>>;
+
+    /// The sound of a card's stored video as the mono Ogg Opus file transcription reads (`audio`).
+    ///
+    /// # Arguments
+    /// * `blob` - The card's stored `blob` (`path`); a falsy value has no audio.
+    ///
+    /// # Returns
+    /// `None` when there is no such original, it has no sound, or this host cannot extract it.
+    ///
+    /// # Errors
+    /// The storage's or the processor's error.
+    async fn audio(&self, blob: &Value) -> Result<Option<Vec<u8>>> {
+        let _ = blob;
+        Ok(None)
+    }
 }
 
 /// What [`Resource::fetch`] was asked for (`{ offline, limit }` of `fetchResource`).

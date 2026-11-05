@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.59 (70), 2026-11-05
+Save photos and videos from the Gallery, and read what a video says.
+
+### Added
+- A video you save now gets a Transcript: the server listens to it with OpenAI's speech-to-text and puts the words in the card's reader, under the summary. Hold it to copy or share the words. The words also feed the card's summary and tags and make the video findable by what is said in it. This part needs the Worker deployed.
+
+### Changed
+- Sharing from the Gallery takes files up to 500 MB, as uploading from inside the app does, instead of 25 MB, so most phone videos now save. Several photos and videos shared together still save as one card each.
+
 ## 0.6.58 (69), 2026-11-05
 You can send feedback from the app, and ThyMind tells you how it goes.
 

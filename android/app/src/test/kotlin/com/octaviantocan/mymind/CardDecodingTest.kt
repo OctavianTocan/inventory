@@ -30,6 +30,7 @@ class CardDecodingTest {
           "product": {"price": "${'$'}9", "brand": "Brand"},
           "reddit": {"title": "Thread", "subreddit": "sample", "comments": [{"author": "moss", "body": "Forty-one km."}]},
           "videoLength": 634,
+          "transcript": "Hello from the clip.",
           "article": {"title": "Walking cities", "preview": "A city that is good to walk in.", "url": "https://x.com/i/article/1"},
           "state": "ready",
           "somethingNew": {"nested": true}
@@ -67,6 +68,7 @@ class CardDecodingTest {
         assertEquals("sample", card.reddit?.subreddit)
         assertEquals("Forty-one km.", card.reddit?.comments?.single()?.body)
         assertEquals(634, card.videoLength)
+        assertEquals("Hello from the clip.", card.transcript)
         assertEquals("Walking cities", card.article?.title)
         assertEquals("https://x.com/i/article/1", card.article?.url)
         assertEquals("ready", card.state)

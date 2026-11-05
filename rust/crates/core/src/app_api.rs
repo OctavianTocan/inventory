@@ -240,6 +240,7 @@ impl AppApi {
             ("product", product),
             ("reddit", extras.get("reddit").clone()),
             ("videoLength", extras.get("videoLength").clone()),
+            ("transcript", if extras.get("transcript").get("text").truthy() { extras.get("transcript").get("text").clone() } else { Value::Undefined }),
             ("article", extras.get("article").clone()),
             ("state", state.into()),
         ]));

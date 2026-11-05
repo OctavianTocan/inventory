@@ -100,6 +100,14 @@ impl MediaProcessor for MediaClient {
         let mut response = self.call("image", obj! {}.into(), body).await?;
         Ok(AnalysisImage { mime: "image/png".into(), data: response.bytes().await.map_err(worker_error)? })
     }
+
+    async fn audio(&self, body: Body) -> Result<Option<Vec<u8>>> {
+        let mut response = self.call("audio", obj! {}.into(), body).await?;
+        if response.status_code() == 204 {
+            return Ok(None);
+        }
+        Ok(Some(response.bytes().await.map_err(worker_error)?))
+    }
 }
 
 #[async_trait(?Send)]
