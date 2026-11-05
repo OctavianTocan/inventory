@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -57,6 +58,9 @@ import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+
+/** What the empty search field says, and its name for accessibility services. */
+const val SEARCH_HINT = "Search your mind"
 
 private val NAVIGATION_INSET = 8.dp
 private val TAB_SIDE = 13.dp
@@ -94,6 +98,7 @@ fun MymindTabBar(
  *
  * @param onSubmit Called when the keyboard's search key is pressed, after the keyboard hides.
  * @param focusOnOpen True when opening search puts the cursor in its field; a swipe onto Ask leaves the keyboard down.
+ * @param hint What the empty field says, such as "Search in walking" while a filter is on.
  */
 @Composable
 fun LibraryFootBar(
@@ -107,6 +112,7 @@ fun LibraryFootBar(
     modifier: Modifier = Modifier,
     onSubmit: () -> Unit = {},
     focusOnOpen: Boolean = true,
+    hint: String = SEARCH_HINT,
 ) {
     if (!searching) {
         MymindTabBar(selected, onSelect, modifier, onSearch)
@@ -132,7 +138,7 @@ fun LibraryFootBar(
             onValueChange = onQueryChange,
             modifier = Modifier.weight(1f).fillMaxHeight()
                 .then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
-                .semantics { contentDescription = "Search your mind" },
+                .semantics { contentDescription = SEARCH_HINT },
             singleLine = true,
             textStyle = LibraryStyle.body.copy(color = colors.text),
             cursorBrush = SolidColor(colors.accent),
@@ -140,7 +146,7 @@ fun LibraryFootBar(
             keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); onSubmit() }),
             decorationBox = { field ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) Text("Search your mind", style = LibraryStyle.body, color = colors.muted, maxLines = 1)
+                    if (query.isEmpty()) Text(hint, style = LibraryStyle.body, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     field()
                 }
             },

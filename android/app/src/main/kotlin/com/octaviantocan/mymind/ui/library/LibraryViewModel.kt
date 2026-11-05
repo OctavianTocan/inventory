@@ -11,6 +11,7 @@ import com.octaviantocan.mymind.data.CardPage
 import com.octaviantocan.mymind.data.Library
 import com.octaviantocan.mymind.data.LibraryMemory
 import com.octaviantocan.mymind.data.LibrarySync
+import com.octaviantocan.mymind.data.RecentSearches
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.SyncOutcome
@@ -98,6 +99,8 @@ data class CardSpaceCreationState(
  *   there is no copy.
  * @param changes Signals each change to the phone's copy while the screens read from it, which they then show without
  *   a sync of their own asking for it; null rereads the lists after each sync [syncNow] runs instead.
+ * @param ai Ranks a pressed search, or null for none.
+ * @param recentSearches Where pressed searches are kept on the phone, or null to keep none.
  */
 class LibraryViewModel(
     private val library: Library,
@@ -108,6 +111,7 @@ class LibraryViewModel(
     private val sync: LibrarySync? = null,
     private val changes: Flow<Unit>? = null,
     ai: AiRanking? = null,
+    recentSearches: RecentSearches? = null,
 ) : ViewModel() {
     private val mutableRedrawn = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private val mutableScheme = MutableStateFlow(PageScheme.System)
@@ -153,7 +157,7 @@ class LibraryViewModel(
     val cardSpaceCreation: StateFlow<CardSpaceCreationState> = mutableCardSpaceCreation
 
     /** Search text, filter, suggestions and results. */
-    val search = SearchModel(viewModelScope, library, ai)
+    val search = SearchModel(viewModelScope, library, ai, recentSearches)
 
     /** One signal each time the lists redraw from the phone's copy, for screens holding a card of their own to read it again. */
     val redrawn: SharedFlow<Unit> = mutableRedrawn
@@ -639,14 +643,23 @@ val AiRank.understood: AiUnderstood?
  * @param scope Scope the searches run in.
  * @param library Source of the results and suggestions.
  * @param ai Ranks a pressed search, or null for none.
+ * @param recent Keeps the pressed searches on the phone, or null to keep none.
  */
-class SearchModel(private val scope: CoroutineScope, private val library: Library, private val ai: AiRanking? = null) {
+class SearchModel(
+    private val scope: CoroutineScope,
+    private val library: Library,
+    private val ai: AiRanking? = null,
+    private val recent: RecentSearches? = null,
+) {
     private val mutableQuery = MutableStateFlow("")
     private val mutableFilter = MutableStateFlow<SearchFilter?>(null)
     private val mutableTypes = MutableStateFlow<List<Suggestion>>(emptyList())
     private val mutableSuggestions = MutableStateFlow<List<Suggestion>>(emptyList())
     private val mutableResults = MutableStateFlow(CardFeed(scope) { ApiResult.Ok(CardPage()) })
     private val mutableRank = MutableStateFlow<AiRank?>(null)
+    private val mutableEngine = MutableStateFlow<String?>(null)
+    private val mutableOnlyRanked = MutableStateFlow(false)
+    private var answered: List<Card> = emptyList()
     private var pending: Job? = null
     private var suggesting: Job? = null
     private var ranking: Job? = null
@@ -669,6 +682,15 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
     /** What the AI is doing with a pressed search, or null when it is not at work on these results. */
     val rank: StateFlow<AiRank?> = mutableRank
 
+    /** The signed-in engine's name, such as "Claude Code", once [loadEngine] or a pressed search found one; else null. */
+    val engine: StateFlow<String?> = mutableEngine
+
+    /** True while the results show only the cards the engine ranked first. */
+    val onlyRanked: StateFlow<Boolean> = mutableOnlyRanked
+
+    /** The searches last pressed on this phone, newest first. */
+    val recentSearches: StateFlow<List<String>> = recent?.searches ?: MutableStateFlow(emptyList())
+
     /** True when there is something to search for. */
     val active: Boolean get() = mutableQuery.value.isNotBlank() || mutableFilter.value != null
 
@@ -679,12 +701,16 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
      */
     fun submit() {
         val text = searchText()
+        val similar = mutableFilter.value?.similar == true
+        if (!similar) recent?.add(mutableQuery.value)
         restart(0)
         val ai = ai ?: return
-        if (text.isEmpty() || mutableFilter.value?.similar == true) return
+        if (text.isEmpty() || similar) return
         val shown = pending
         ranking = scope.launch {
-            val engine = ai.engine() ?: return@launch
+            val engine = ai.engine()
+            mutableEngine.value = engine
+            if (engine == null) return@launch
             mutableRank.value = AiRank.Understanding(engine)
             mutableRank.value = try {
                 val understood = try {
@@ -701,6 +727,7 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
                 val feed = CardFeed(scope) { cursor -> ApiResult.Ok(if (cursor == null) CardPage(answer.cards) else CardPage()) }
                 mutableResults.value = feed
                 feed.loadMore()
+                answered = answer.cards
                 val byId = answer.cards.associateBy { it.id }
                 AiRank.Ranked(engine, answer.ranked, answer.understood ?: understood, answer.answer?.text,
                     answer.answer?.ids.orEmpty().mapNotNull(byId::get))
@@ -710,6 +737,50 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
                 AiRank.Failed(e.message ?: "$engine could not rank these. Try again.")
             }
         }
+    }
+
+    /**
+     * Puts [text] in the field and presses search, as for a recent search tapped again.
+     *
+     * @param text The search.
+     */
+    fun searchFor(text: String) {
+        mutableQuery.value = text
+        suggest("")
+        submit()
+    }
+
+    /** Asks which engine is signed in, so the page can offer it before a search is pressed. */
+    fun loadEngine() {
+        val ai = ai ?: return
+        scope.launch {
+            mutableEngine.value = try {
+                ai.engine()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    /**
+     * Shows only the cards the engine ranked first, or every match again. Does nothing until the engine has ranked.
+     *
+     * @param only True for the ranked cards alone.
+     */
+    fun showOnlyRanked(only: Boolean) {
+        val rank = mutableRank.value as? AiRank.Ranked ?: return
+        mutableOnlyRanked.value = only
+        val cards = if (only) answered.take(rank.count) else answered
+        val feed = CardFeed(scope) { cursor -> ApiResult.Ok(if (cursor == null) CardPage(cards) else CardPage()) }
+        mutableResults.value = feed
+        feed.loadMore()
+    }
+
+    /** Forgets the searches kept on the phone. */
+    fun forgetSearches() {
+        recent?.clear()
     }
 
     /** Reads the type suggestions once; later calls keep the first answer. */
@@ -804,6 +875,8 @@ class SearchModel(private val scope: CoroutineScope, private val library: Librar
         pending?.cancel()
         ranking?.cancel()
         mutableRank.value = null
+        mutableOnlyRanked.value = false
+        answered = emptyList()
         val text = searchText()
         pending = scope.launch {
             if (wait > 0) delay(wait)

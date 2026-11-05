@@ -6,9 +6,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -64,7 +62,12 @@ enum class SearchType(val type: String, val label: String, val slug: String) {
     val suggestion: Suggestion get() = Suggestion("type", label, "type:$slug")
 }
 
-/** The library gallery; its search field lives in the shell's single floating bar. */
+/**
+ * The library gallery; its search field lives in the shell's single floating bar.
+ *
+ * @param openedLately Cards opened lately, latest first, which the opened search page offers again.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EverythingScreen(
     viewModel: LibraryViewModel,
@@ -77,6 +80,7 @@ fun EverythingScreen(
     photoUrl: String? = null,
     onOpenSpace: (AiSpace) -> Unit = {},
     photoLoader: ImageLoader? = null,
+    openedLately: List<Card> = emptyList(),
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
     val pinned by viewModel.topOfMind.state.collectAsStateWithLifecycle()
@@ -87,9 +91,18 @@ fun EverythingScreen(
     val results by viewModel.search.results.collectAsStateWithLifecycle()
     val resultState by results.state.collectAsStateWithLifecycle()
     val rank by viewModel.search.rank.collectAsStateWithLifecycle()
+    val engine by viewModel.search.engine.collectAsStateWithLifecycle()
+    val onlyRanked by viewModel.search.onlyRanked.collectAsStateWithLifecycle()
+    val recentSearches by viewModel.search.recentSearches.collectAsStateWithLifecycle()
+    val tagChoices by viewModel.tagChoices.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val resultsScroll = rememberLazyListState()
-    LaunchedEffect(searching) { if (searching) viewModel.search.loadTypes() }
+    LaunchedEffect(searching) {
+        if (!searching) return@LaunchedEffect
+        viewModel.search.loadTypes()
+        viewModel.search.loadEngine()
+        viewModel.loadTagChoices()
+    }
     LaunchedEffect(query, filter) { resultsScroll.scrollToItem(0) }
     EverythingContent(
         feed, searching, if (query.isNotBlank() || filter != null) resultState else null,
@@ -105,8 +118,21 @@ fun EverythingScreen(
         photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, ai = rank,
         onAiTag = { tag -> viewModel.search.choose(Suggestion("tag", tag, "tag:$tag")); focusManager.clearFocus() },
         onOpenSpace = { focusManager.clearFocus(); onOpenSpace(it) },
+        dock = SearchDockState(query, WindowInsets.isImeVisible, engine, recentSearches,
+            tagChoices.recent.ifEmpty { tagChoices.all }.take(DOCKED_TAGS), openedLately, onlyRanked),
+        dockActions = remember(viewModel, focusManager) {
+            SearchDockActions(
+                onAsk = { focusManager.clearFocus(); viewModel.search.submit() },
+                onSearchFor = { focusManager.clearFocus(); viewModel.search.searchFor(it) },
+                onForgetSearches = viewModel.search::forgetSearches,
+                onOnlyRanked = viewModel.search::showOnlyRanked,
+            )
+        },
     )
 }
+
+/** How many of the person's tags the opened search page offers. */
+private const val DOCKED_TAGS = 12
 
 /** Height of the fixed controls' row over the top of a library page. */
 val GALLERY_CONTROLS_HEIGHT = 72.dp
@@ -146,26 +172,28 @@ fun EverythingContent(
     onAiTag: (String) -> Unit = {},
     onOpenSpace: (AiSpace) -> Unit = {},
     photoLoader: ImageLoader? = null,
+    dock: SearchDockState = SearchDockState(),
+    dockActions: SearchDockActions = SearchDockActions(),
 ) {
     val colors = LibraryStyle.colors
     val accountPhotoLoader = photoLoader ?: if (photoUrl != null) rememberPublicAccountPhotoLoader() else null
     val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
     Box(modifier.fillMaxSize().background(colors.background)) {
         when {
-            searching && searchResults != null -> PullRefresh(searchResults.refreshing, onRefreshResults) {
-                LibraryMosaic(searchResults, onLoadMoreResults, onOpenCard, state = resultsState, mosaic = mosaic,
-                    onLongPressCard = onLongPressCard, header = {
-                        Text("Search", Modifier.padding(20.dp).semantics { heading() }, style = LibraryStyle.title, color = colors.text)
-                        if (ai != null) AiSearchNote(ai, onAiTag, onOpenSpace, onOpenCard)
-                        ResultChips(filter, suggestions, onChoose, onRemoveFilter)
-                        if (searchResults.cards.isEmpty()) GalleryFeedNotice(searchResults, onLoadMoreResults, search = true)
-                    })
+            searching && searchResults != null -> {
+                PullRefresh(searchResults.refreshing, onRefreshResults) {
+                    LibraryMosaic(searchResults, onLoadMoreResults, onOpenCard, state = resultsState, mosaic = mosaic,
+                        onLongPressCard = onLongPressCard, header = {
+                            ResultsTitle(filter.takeIf { dock.query.isBlank() }, searchResults)
+                            // With words typed and nothing found, the dock above the bar says what to try instead.
+                            val docked = dock.query.isNotBlank() && searchResults.endReached && searchResults.error == null
+                            if (searchResults.cards.isEmpty() && !docked) GalleryFeedNotice(searchResults, onLoadMoreResults, search = true)
+                        })
+                }
+                SearchResultsDock(searchResults, filter, suggestions, ai, dock, dockActions, resultsState,
+                    onChoose, onRemoveFilter, onAiTag, onOpenSpace, onOpenCard)
             }
-            searching -> Column(Modifier.fillMaxSize().padding(top = 20.dp)) {
-                Text("Find something", Modifier.padding(horizontal = 20.dp, vertical = 12.dp).semantics { heading() },
-                    style = LibraryStyle.title, color = colors.text)
-                SearchChips(typeChips, onChoose, Modifier.padding(bottom = 150.dp))
-            }
+            searching -> SearchStart(typeChips, dock, dockActions, onChoose, onOpenCard, onLongPressCard)
             else -> Box(Modifier.fillMaxSize()) {
                 PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop), top = GALLERY_CONTROLS_HEIGHT) {
                     LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
@@ -201,21 +229,14 @@ private fun GalleryFeedNotice(feed: FeedState, onRetry: () -> Unit, search: Bool
     }
 }
 
-/** Search suggestions use the same neutral capsule treatment as the gallery navigation. */
+/** The results' title: the filter's name and how many cards it holds once all are read, or Search for typed words. */
 @Composable
-fun SearchChips(chips: List<Suggestion>, onSelect: (Suggestion) -> Unit, modifier: Modifier = Modifier) {
-    ChipFlow(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
-        chips.forEach { chip -> SearchChip(chip.text, false) { onSelect(chip) } }
-    }
-}
-
-@Composable
-private fun ResultChips(filter: SearchFilter?, suggestions: List<Suggestion>, onChoose: (Suggestion) -> Unit, onRemoveFilter: () -> Unit) {
-    if (filter == null && suggestions.isEmpty()) return
-    ChipFlow(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 20.dp)) {
-        filter?.let { SearchChip(it.label, true, onClick = onRemoveFilter) }
-        suggestions.filter { it.queryText != filter?.queryText }.forEach { chip ->
-            SearchChip(if (chip.type == "type") chip.text else chip.text.lowercase(), false) { onChoose(chip) }
+private fun ResultsTitle(filter: SearchFilter?, results: FeedState) {
+    val colors = LibraryStyle.colors
+    Column(Modifier.fillMaxWidth().padding(20.dp)) {
+        Text(filter?.label ?: "Search", Modifier.semantics { heading() }, style = LibraryStyle.title, color = colors.text)
+        if (filter != null && results.endReached && results.error == null && results.cards.isNotEmpty()) {
+            Text(cardCount(results.cards.size), style = LibraryStyle.body, color = colors.muted)
         }
     }
 }

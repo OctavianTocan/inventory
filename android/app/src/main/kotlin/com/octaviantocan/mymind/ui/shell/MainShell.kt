@@ -206,6 +206,7 @@ fun MainShell(
     val cardSpaceCreation by viewModel.cardSpaceCreation.collectAsStateWithLifecycle()
     val uploads by viewModel.uploads.state.collectAsStateWithLifecycle()
     val query by viewModel.search.query.collectAsStateWithLifecycle()
+    val searchFilter by viewModel.search.filter.collectAsStateWithLifecycle()
     val account by settingsViewModel.state.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val searching = searchActive
@@ -356,7 +357,8 @@ fun MainShell(
         footer = {
             LibraryFootBar(tab, selectTab, searching, query, viewModel.search::setQuery,
                 onSearch = { askFocus = true; searchActive = true }, onCloseSearch = closeSearch,
-                onSubmit = viewModel.search::submit, focusOnOpen = askFocus)
+                onSubmit = viewModel.search::submit, focusOnOpen = askFocus,
+                hint = searchFilter?.takeUnless { it.similar }?.let { "Search in ${it.label}" } ?: SEARCH_HINT)
         },
         overlay = {
             opened?.let { open ->
@@ -436,6 +438,7 @@ fun MainShell(
                     onLongPressCard = { openMenu(it, null) },
                     searching = true,
                     photoUrl = account.photoUrl,
+                    openedLately = recent.toList(),
                     onOpenSpace = { found ->
                         openSpace = viewModel.spaces.value.spaces.firstOrNull { it.id == found.id } ?: Space(found.id, found.name)
                         selectTab(Tab.Spaces)

@@ -67,7 +67,7 @@ class AiSearchTest {
         assertEquals(listOf("calm places"), ranker.asked)
         assertEquals(listOf("lake", "hit"), search.results.value.state.value.cards.map { it.id })
         assertEquals(AiRank.Ranked("Claude Code", 1, AiUnderstood()), search.rank.value)
-        assertEquals("Ranked by Claude Code", aiNote(search.rank.value!!))
+        assertEquals("Claude Code ranked 1 first", aiNote(search.rank.value!!))
     }
 
     @Test
@@ -81,7 +81,7 @@ class AiSearchTest {
         search.submit()
         advanceUntilIdle()
         assertEquals(AiRank.Understanding("Claude Code"), search.rank.value)
-        assertEquals("Claude Code is reading what you mean…", aiNote(search.rank.value!!))
+        assertEquals("Claude Code is reading what you wrote", aiNote(search.rank.value!!))
         ranker.reads!!.complete(Unit)
         advanceUntilIdle()
         assertEquals(listOf<AiUnderstood?>(reading), ranker.readings)

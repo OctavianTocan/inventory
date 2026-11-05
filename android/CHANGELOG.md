@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.53 (64), 2026-11-05
+Search sits near your thumb.
+
+### Added
+- Opening search shows your last searches and your tags just above the bar, and the cards you opened lately at the top. Tap a search to run it again; Clear forgets them. They stay on this phone and go when you sign out.
+- While you type, a card above the bar offers a matching tag or kind, the first two cards found, and "Ask Claude Code about …" (or Codex), so the engine can read what you mean without pressing search.
+- When nothing matches, the card says so and offers to search for your longest word alone, or to ask Claude Code or Codex.
+
+### Changed
+- Claude Code's or Codex's work and answer now show in a card just above the bar instead of at the top of the results: its step with its mark, then its answer in three lines, with Read more for the rest, the matching tags and spaces and the cards it drew from. "Only these" shows just the cards it ranked first. Scrolling the results folds the card to one line; tap it to open it again.
+- A chosen tag or kind rides above the bar as a pill with its card count, and the field reads "Search in …". The results' title is the tag's or kind's name.
+
 ## 0.6.52 (63), 2026-11-05
 Swipe between Everything, Spaces and Ask.
 

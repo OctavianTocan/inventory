@@ -20,6 +20,7 @@ import com.octaviantocan.mymind.data.Outbox
 import com.octaviantocan.mymind.data.OutboxWorker
 import com.octaviantocan.mymind.data.PictureWorker
 import com.octaviantocan.mymind.data.PrivateAccountProfileStore
+import com.octaviantocan.mymind.data.RecentSearches
 import com.octaviantocan.mymind.data.Repository
 import com.octaviantocan.mymind.data.Session
 import com.octaviantocan.mymind.data.SessionState
@@ -51,8 +52,11 @@ class AppContainer(context: Context) {
     /** The account's own Claude Code and Codex, for the Profile sheet and AI search. */
     val ai = AiAccount(AiClient(httpClient, BuildConfig.SERVER_URL), AiPrefs(context), session)
 
-    // The phone's copy of the library, its waiting changes and its pictures belong to one session and are wiped
-    // whenever the app is signed out.
+    /** The searches last pressed on this phone, for the opened search page. */
+    val recentSearches = RecentSearches(context)
+
+    // The phone's copy of the library, its waiting changes, its pictures and its recent searches belong to one
+    // session and are wiped whenever the app is signed out.
     val libraryCopy = LibraryCopy(context, session).also { copy ->
         val app = context.applicationContext
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
@@ -61,6 +65,7 @@ class AppContainer(context: Context) {
                 OutboxWorker.cancel(app)
                 PictureWorker.cancel(app)
                 copy.clear()
+                recentSearches.clear()
                 withContext(Dispatchers.IO) { SingletonImageLoader.get(app).run { memoryCache?.clear(); diskCache?.clear() } }
             }
         }

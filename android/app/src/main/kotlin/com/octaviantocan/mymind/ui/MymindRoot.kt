@@ -86,6 +86,7 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
             sync = container.librarySync,
             changes = container.library.changes,
             ai = container.ai,
+            recentSearches = container.recentSearches,
         )
     }
     LaunchedEffect(online) {

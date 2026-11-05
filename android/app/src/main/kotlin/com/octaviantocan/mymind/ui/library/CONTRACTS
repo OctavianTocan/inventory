@@ -449,16 +449,49 @@ Pressing search on the keyboard with the chosen engine signed in MUST keep those
 on screen while the engine first reads what the search means: its words, card types,
 dates against the phone's today, and the person's own tags and spaces. The library then
 runs the searches the engine wrote and the matching spaces, and the engine ranks what
-they found. Under the Search title the page MUST say which step the engine is on, then
-what it is looking for in plain words, with chips for the matching tags (a tap filters by
-the tag) and spaces (a tap opens the space). The results MUST then show the cards it
-ranked first, then the rest of the matches, with a note naming the engine. When the
-search asks a question, the engine MUST answer it from the found cards alone, above the
-results, naming the cards it drew from. A failed reading MUST still rank the search's own
+they found. The card docked above the bar (search-docks-near-the-thumb) MUST say which
+step the engine is on, then what it is looking for in plain words, with chips for the
+matching tags (a tap filters by the tag) and spaces (a tap opens the space). The results
+MUST then show the cards it ranked first, then the rest of the matches, with the card
+naming the engine and how many it ranked. When the search asks a question, the engine
+MUST answer it from the found cards alone, in that card, naming the cards it drew from.
+A failed reading MUST still rank the search's own
 matches, and a failed ranking MUST keep the matches and say why. Typing again or changing
 the filter MUST drop the engine's work. Same vibe is never ranked, and without a
 signed-in engine pressing search changes nothing.
 Source: Tavi, 28 October 2026 ("we will modify how the search works so that we use
 Claude or Codex", combined with the embedding search of the plan "ThyMind: instant app
 and better search"); Tavi, 28 October 2026 ("lets make sure that the search your mind
-search is actually super useful and uses llms as needed").
+search is actually super useful and uses llms as needed"); the step, reading
+and answer moved from under the Search title into the docked card when Tavi picked
+version 10 of the search pages on 5 November 2026 ("Let's build 10").
+
+@cc [owner:OctavianTocan,label:product;design;motion] search-docks-near-the-thumb
+What the search page offers MUST sit just above the foot bar, within its side insets and
+raised with it by the keyboard, never at the top of the page. Opened with nothing typed,
+the page MUST show "Find something", the cards opened lately and the card kinds at the
+top, and the recent searches (a tap runs one again) and the person's tags (a tap filters
+by the tag) docked above the bar. While the keyboard is up with words typed, a raised
+card above the bar MUST offer at most two matching tags or kinds, the first two cards
+found and, with an engine signed in, "Ask <engine> about" the words, which presses
+search. Once search is pressed the same card MUST show the engine's step with its mark,
+its answer or reading in three lines with Read more for the rest, and "Only these N" to
+show just the cards it ranked first; scrolling the results MUST fold the card to its first
+line, and a tap on that line MUST open it again. When typed words match nothing, the card
+MUST say so and offer the longest word alone for a search of two words or more, and the
+engine when one is signed in. A chosen tag or kind MUST ride above the bar as a pill with
+its card count once every match is read, a tap taking it off; the results take its name
+as their title and the field says "Search in" it. The card's changes MUST use the shared
+fast smooth-out fade, the engine's working mark and skeleton lines MUST breathe, and
+reduced motion MUST show every change at once with nothing breathing.
+Source: Tavi, 5 November 2026 ("Let's build 10"), version 10 "Near your thumb" of the
+search pages canvas (28 October 2026); Pully DESIGN rules on 44dp targets, skeletons over
+spinners and AI work that looks alive.
+
+@cc [owner:OctavianTocan,label:product;privacy] search-keeps-recent-searches-on-the-phone
+The words of each pressed search MUST be kept on the phone alone, at most the last five,
+newest first, with no repeat and never a filter or Same Vibe on its own. The list MUST NOT
+leave the phone, MUST be forgotten with Clear on the search page, and MUST be wiped
+whenever the app signs out, with the rest of the account's phone data.
+Source: Tavi, 5 November 2026 ("Let's build 10"), version 10's Recent list; the sign-out
+wipe follows gallery-keeps-offline-changes.

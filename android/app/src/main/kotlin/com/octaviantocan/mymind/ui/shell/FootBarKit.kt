@@ -70,6 +70,7 @@ internal fun Modifier.footBlur(radius: Dp): Modifier =
 internal enum class FootShadow(val dy: Dp, val blur: Dp, val alpha: Float) {
     Button(2.dp, 10.dp, 0.08f),
     Search(2.dp, 16.dp, 0.12f),
+    Menu(4.dp, 20.dp, 0.14f),
 }
 
 /** The two-layer Paint shadow from Pully Kit.floatShadow, with the gallery's own palette. */

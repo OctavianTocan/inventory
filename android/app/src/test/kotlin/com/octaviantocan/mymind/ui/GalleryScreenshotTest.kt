@@ -14,6 +14,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
@@ -35,16 +36,21 @@ import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.GalleryImage
 import com.octaviantocan.mymind.data.Post
 import com.octaviantocan.mymind.data.Product
+import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.library.AiRank
 import com.octaviantocan.mymind.ui.library.EverythingContent
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.MosaicState
 import com.octaviantocan.mymind.ui.library.steppedPosition
+import com.octaviantocan.mymind.ui.library.SearchDockActions
+import com.octaviantocan.mymind.ui.library.SearchDockState
+import com.octaviantocan.mymind.ui.library.SearchFilter
 import com.octaviantocan.mymind.ui.library.SearchType
 import com.octaviantocan.mymind.ui.library.sourceLabel
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.shell.LibraryFootBar
+import com.octaviantocan.mymind.ui.shell.SEARCH_HINT
 import com.octaviantocan.mymind.ui.shell.ShellFrame
 import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.PageScheme
@@ -255,30 +261,109 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         }
     }
 
-    @Test fun searchAnsweredByTheEngine() {
+    private fun showSearch(
+        query: String,
+        results: FeedState?,
+        filter: SearchFilter? = null,
+        suggestions: List<Suggestion> = emptyList(),
+        ai: AiRank? = null,
+        dock: SearchDockState = SearchDockState(query = query),
+        actions: SearchDockActions = SearchDockActions(),
+        onRemoveFilter: () -> Unit = {},
+    ) {
         mosaicState = MosaicState(2)
-        val reading = AiUnderstood("Walking essays saved in spring", tags = listOf("walks"), spaces = listOf(AiSpace("s1", "Reading")),
-            question = true)
-        val rank = AiRank.Ranked("Claude Code", 2, reading, "You saved the walking essay in April, with two photos of the same trail.",
-            cards.take(1))
         compose.setPhoneContent(dark) {
             ShellFrame(Tab.Everything, {}, PageScheme.System, footer = {
-                LibraryFootBar(Tab.Everything, {}, true, "when did I save the walking essay", {}, {}, {})
+                LibraryFootBar(Tab.Everything, {}, true, query, {}, {}, {}, hint = filter?.let { "Search in ${it.label}" } ?: SEARCH_HINT)
             }) {
-                EverythingContent(FeedState(cards, endReached = true), true, FeedState(cards, endReached = true),
-                    SearchType.entries.map { it.suggestion }, null, emptyList(), {}, {}, {}, {}, {}, {}, {}, {},
-                    mosaic = remember { mosaicState }, ai = rank)
+                EverythingContent(FeedState(cards, endReached = true), true, results,
+                    SearchType.entries.map { it.suggestion }, filter, suggestions, {}, onRemoveFilter, {}, {}, {}, {}, {}, {},
+                    mosaic = remember { mosaicState }, ai = ai, dock = dock, dockActions = actions)
             }
         }
         compose.mainClock.autoAdvance = true
         compose.mainClock.advanceTimeBy(1200)
         compose.waitForIdle()
-        compose.onNodeWithText("Walking essays saved in spring").assertExists()
-        compose.onNodeWithText("Ranked by Claude Code").assertExists()
+    }
+
+    private fun snap(name: String) = compose.onRoot().captureRoboImage("screenshots/${name}_${if (dark) "dark" else "light"}.png")
+
+    // Version 10 of the search pages, "Near your thumb" (Tavi, 5 November 2026: "Let's build 10").
+    @Test fun searchOpensWithRecentSearchesAndTagsNearTheThumb() {
+        val searched = mutableListOf<String>()
+        var forgot = false
+        showSearch("", null, dock = SearchDockState(recentSearches = listOf("foggy paintings", "reading list", "thoreau"),
+            tags = listOf("walking", "design", "slow living", "recipes"), openedLately = cards.take(4)),
+            actions = SearchDockActions(onSearchFor = { searched += it }, onForgetSearches = { forgot = true }))
+        compose.onNodeWithText("Find something").assertExists()
+        compose.onNodeWithContentDescription("Opened lately").assertExists()
+        compose.onNodeWithText("Your tags").assertExists()
+        snap("gallery_search_start")
+        compose.onNodeWithText("thoreau").performClick()
+        assertEquals(listOf("thoreau"), searched)
+        compose.onNodeWithContentDescription("Clear recent searches").performClick()
+        assertTrue(forgot)
+    }
+
+    @Test fun typingOffersATagACardAndTheEngine() {
+        var asked = 0
+        showSearch("walk", FeedState(cards, endReached = true), suggestions = listOf(Suggestion("tag", "walking", "#walking")),
+            dock = SearchDockState(query = "walk", typing = true, engine = "Claude Code"), actions = SearchDockActions(onAsk = { asked++ }))
+        compose.onNodeWithText("walking").assertExists()
+        compose.onNodeWithText("Tag").assertExists()
+        snap("gallery_search_typing")
+        compose.onNodeWithText("Ask Claude Code about “walk”").performClick()
+        assertEquals(1, asked)
+    }
+
+    @Test fun aTagFilterRidesAboveTheBar() {
+        var removed = false
+        showSearch("", FeedState(cards, endReached = true), filter = SearchFilter("walking", "tag:walking"), onRemoveFilter = { removed = true })
+        compose.onNodeWithText("11 cards").assertExists()
+        compose.onNodeWithText("Search in walking").assertExists()
+        snap("gallery_search_tag")
+        compose.onNodeWithContentDescription("Remove the walking filter").performClick()
+        assertTrue(removed)
+    }
+
+    @Test fun theEngineAtWorkSaysItsStepAboveTheBar() {
+        showSearch("walks by the sea", FeedState(cards, endReached = true), ai = AiRank.Understanding("Claude Code"),
+            dock = SearchDockState(query = "walks by the sea", engine = "Claude Code"))
+        compose.onNodeWithText("Claude Code is reading what you wrote").assertExists()
+        snap("gallery_search_working")
+    }
+
+    @Test fun nothingFoundOffersOneWordOrTheEngine() {
+        val searched = mutableListOf<String>()
+        showSearch("kayaking trips", FeedState(emptyList(), endReached = true),
+            dock = SearchDockState(query = "kayaking trips", engine = "Claude Code"), actions = SearchDockActions(onSearchFor = { searched += it }))
+        compose.onNodeWithText("Nothing matches “kayaking trips” yet").assertExists()
+        compose.onNodeWithText("Ask Claude Code").assertExists()
+        compose.onNodeWithText("No cards found").assertDoesNotExist()
+        snap("gallery_search_nothing")
+        compose.onNodeWithText("Search “kayaking”").performClick()
+        assertEquals(listOf("kayaking"), searched)
+    }
+
+    @Test fun searchAnsweredByTheEngine() {
+        val reading = AiUnderstood("Walking essays saved in spring", tags = listOf("walks"), spaces = listOf(AiSpace("s1", "Reading")),
+            question = true)
+        val rank = AiRank.Ranked("Claude Code", 2, reading, "You saved the walking essay in April, with two photos of the same trail.",
+            cards.take(1))
+        var only: Boolean? = null
+        val query = "when did I save the walking essay"
+        showSearch(query, FeedState(cards, endReached = true), ai = rank, dock = SearchDockState(query = query, engine = "Claude Code"),
+            actions = SearchDockActions(onOnlyRanked = { only = it }))
+        compose.onNodeWithText("Claude Code ranked 2 first").assertExists()
+        compose.onNodeWithText("You saved the walking essay in April, with two photos of the same trail.").assertExists()
+        snap("gallery_search_answered")
+        compose.onNodeWithText("Read more").performClick()
         compose.onNodeWithText("#walks").assertExists()
         compose.onNodeWithText("Space: Reading").assertExists()
         compose.onNodeWithText(sourceLabel(cards.first())).assertExists()
-        compose.onRoot().captureRoboImage("screenshots/gallery_search_answered_${if (dark) "dark" else "light"}.png")
+        snap("gallery_search_answered_more")
+        compose.onNodeWithText("Only these 2").performClick()
+        assertEquals(true, only)
     }
     @Test fun differentNoteTypes() = capture(2, "gallery_notes", sample = mixedNotes, highlights = emptyList())
     @Test fun compactNoteTypes() = capture(4, "gallery_notes_compact", sample = mixedNotes, highlights = emptyList())
