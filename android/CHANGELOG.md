@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.54 (65), 2026-11-05
+ThyMind's tags show up while you share.
+
+### Added
+- After you share something, the sheet shows the tags ThyMind gave it, with a spark, as soon as they are found. Until then a "Finding tags…" chip holds their place. Tap a tag to take it off; it comes off the card when the sheet goes, and typing it again brings it back.
+
+### Changed
+- The sheet waits for ThyMind's tags (up to about 7 seconds) before it starts fading by itself, and asks for them every ¾ second instead of every 2.
+- The server tags a shared link as soon as it has read the page's words, while it is still fetching pictures and taking the screenshot, instead of after all of that. A link known mostly by its picture (a photo, a video, a page with few words) still waits for the picture. This part needs the Worker deployed.
+
 ## 0.6.53 (64), 2026-11-05
 Search sits near your thumb.
 

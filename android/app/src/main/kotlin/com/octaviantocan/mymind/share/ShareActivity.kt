@@ -26,6 +26,7 @@ import com.octaviantocan.mymind.ui.share.ShareProblem
 import com.octaviantocan.mymind.ui.share.ShareSheet
 import com.octaviantocan.mymind.ui.share.ShareSheetState
 import com.octaviantocan.mymind.ui.share.SharedFile
+import com.octaviantocan.mymind.ui.share.thymindTags
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -120,13 +121,17 @@ class ShareActivity : ComponentActivity() {
             }
         }
         // While the sheet is open, the server reads what was saved; each sync brings its title, picture and tags.
+        // ThyMind's tags are looked for every READ_GAP_MS, and the sheet waits for them up to TAG_READS reads.
         LaunchedEffect(Unit) {
             if (!online) return@LaunchedEffect
-            repeat(READS) {
+            state.findingTags = ready.items.size == 1
+            for (read in 1..READS) {
                 delay(READ_GAP_MS)
                 container.librarySync.sync()
                 reread()
+                if (state.findingTags && (thymindTags(state.cards.firstOrNull()).isNotEmpty() || read >= TAG_READS)) state.findingTags = false
             }
+            state.findingTags = false
         }
         ShareSheet(state, onClose = {
             val details = state.details()
@@ -151,8 +156,9 @@ class ShareActivity : ComponentActivity() {
     private companion object {
         const val SHARED_DIRECTORY = "shared"
         const val STALE_COPY_MS = 24L * 60 * 60 * 1000
-        const val READS = 4
-        const val READ_GAP_MS = 2_000L
+        const val READS = 16
+        const val TAG_READS = 10
+        const val READ_GAP_MS = 750L
     }
 }
 

@@ -2,6 +2,7 @@ package com.octaviantocan.mymind.share
 
 import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
+import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.data.UploadFile
 import com.octaviantocan.mymind.ui.library.FakeLibrary
 import com.octaviantocan.mymind.ui.library.testCard
@@ -60,6 +61,19 @@ class ShareControllerTest {
             assertTrue("space:s1:$id" in library.calls)
         }
         assertTrue(library.calls.none { it.startsWith("note:") })
+    }
+
+    @Test
+    fun thymindTagsTakenOffInTheSheetComeOffTheCardButTheUsersStay() = runTest(dispatcher) {
+        val library = FakeLibrary()
+        val id = "card-${"https://example.com".hashCode()}"
+        val tags = listOf(Tag("t1", "Gardens", flags = 2), Tag("t2", "soil", flags = 2), Tag("t3", "gardens", flags = 0))
+        library.cardsById = mapOf(id to testCard(id, tags = tags))
+        val controller = ShareController(this, library, dispatcher) { null }
+        controller.start(listOf(ShareItem.Text("https://example.com")))
+        advanceUntilIdle()
+        assertEquals(ApiResult.Ok(Unit), controller.finish(ShareDetails(untag = setOf("gardens"))))
+        assertEquals(listOf("untag:t1"), library.calls.filter { it.startsWith("untag:") })
     }
 
     @Test

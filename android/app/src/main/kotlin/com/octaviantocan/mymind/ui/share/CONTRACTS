@@ -2,7 +2,8 @@
 What shows after something is shared into ThyMind MUST go away by itself: once
 everything is saved, or kept on the phone while offline, it waits 5 seconds and
 fades out, and a sheet saying nothing was saved waits 8 seconds. The wait MUST
-NOT start while saving is still going. Any touch on the sheet or its scrim, or
+NOT start while saving is still going, nor while ThyMind is still finding tags
+for one thing shared (share-sheet-shows-thymind-tags), for at most 10 reads. Any touch on the sheet or its scrim, or
 typing in it, MUST stop the wait and keep it open until Done, its cross, the
 scrim, Back or a drag closes it; tapping outside closes it at once. While it
 waits, the Done button shows the time left as a lighter part that shrinks. It
@@ -24,8 +25,8 @@ nothing typed, the field offers the suggested space and recent tags; typed words
 offer the spaces and tags that hold them, a new tag for one word no tag matches,
 and Use as your note for words with a space. Enter adds the first row.
 Source: Tavi's pick of 10, One field for everything, in the share prototype,
-29 October 2026 ("Let's do 10"). ThyMind's own tags already land on the card by
-themselves, so the empty field offers recent tags instead of them.
+29 October 2026 ("Let's do 10"). ThyMind's own tags show above the field
+(share-sheet-shows-thymind-tags), so the empty field offers recent tags.
 
 @cc [owner:OctavianTocan,label:product] share-problems-speak-for-thymind
 When nothing can be saved (nothing to keep, more than 20 things, a file over
@@ -34,3 +35,16 @@ words on the same sheet, titled Nothing was saved: a mark, what went wrong and
 what to do, and one button. It MUST NOT name mymind, its address or its artwork.
 Source: the 29 October 2026 share prototype's problem sheets, which Tavi saw
 with every version; AGENTS.md: the replica is its own product.
+
+@cc [owner:OctavianTocan,label:product] share-sheet-shows-thymind-tags
+When one thing is shared, the sheet MUST show the tags ThyMind gave it as soon
+as they reach the phone, before the tags the user added, each marked with the
+spark and taken off by a tap. Until they arrive it MUST show a Finding tags chip
+in their place. A tag taken off MUST come off the card when the sheet goes, and
+choosing that tag again in the field MUST put it back. The phone MUST look for
+them at least every second while it waits, and the server MUST start tagging a
+link as soon as its words are read, not after its pictures and screenshot.
+Source: Tavi, 5 November 2026: "the moment I share them and I see the little
+tag screen where I can add my own tags, I should already see tags that Jev
+generated". This replaces the share prototype's choice to leave ThyMind's tags
+off the sheet.

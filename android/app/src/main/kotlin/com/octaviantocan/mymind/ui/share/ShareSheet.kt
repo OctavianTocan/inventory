@@ -1,5 +1,10 @@
 package com.octaviantocan.mymind.ui.share
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -131,6 +137,16 @@ class ShareSheetState(items: List<ShareItem> = emptyList(), phase: SavePhase = S
     var tags by mutableStateOf<List<String>>(emptyList())
     var note by mutableStateOf("")
 
+    /** ThyMind's own tags the user took off what was saved. */
+    var untagged by mutableStateOf<Set<String>>(emptySet())
+
+    /** True while ThyMind is still finding tags for what was saved, which holds the sheet up a little longer. */
+    var findingTags by mutableStateOf(false)
+
+    /** ThyMind's own tags on what was saved, once it has found them, without the ones taken off; none for several things. */
+    val foundTags: List<String>
+        get() = if (items.size != 1) emptyList() else thymindTags(cards.firstOrNull()).filterNot { name -> untagged.any { it.equals(name, ignoreCase = true) } }
+
     /** Ids of the chosen spaces, in the order they were chosen. */
     var spaceIds by mutableStateOf<List<String>>(emptyList())
 
@@ -138,11 +154,11 @@ class ShareSheetState(items: List<ShareItem> = emptyList(), phase: SavePhase = S
     var touched by mutableStateOf(false)
 
     /** The details to put on the saved cards. */
-    fun details() = ShareDetails(tags, note.trim(), spaceIds.toSet())
+    fun details() = ShareDetails(tags, note.trim(), spaceIds.toSet(), untagged)
 
     /** The rows under the field, for what is typed now. */
     fun suggestions(): List<ShareSuggestion> {
-        val onCards = cards.flatMap { card -> card.tags.orEmpty().mapNotNull { it.name } }
+        val onCards = cards.flatMap { card -> card.tags.orEmpty().mapNotNull { it.name } }.filterNot { name -> untagged.any { it.equals(name, ignoreCase = true) } }
         return shareSuggestions(typed, spaces, spaceIds.toSet(), allTags, recentTags, tags + onCards, suggestion)
     }
 
@@ -154,12 +170,22 @@ class ShareSheetState(items: List<ShareItem> = emptyList(), phase: SavePhase = S
     fun add(row: ShareSuggestion) {
         when (row) {
             is ShareSuggestion.AddToSpace -> if (row.space.id !in spaceIds) spaceIds = spaceIds + row.space.id
-            is ShareSuggestion.AddTag -> tags = addTag(tags, row.tag)
+            is ShareSuggestion.AddTag -> {
+                val back = untagged.filterTo(HashSet()) { it.equals(row.tag, ignoreCase = true) }
+                if (back.isNotEmpty()) untagged = untagged - back else tags = addTag(tags, row.tag)
+            }
             is ShareSuggestion.UseAsNote -> note = row.text
         }
         typed = ""
     }
 }
+
+/**
+ * @param card A saved card, or null.
+ * @return The names of the tags ThyMind put on [card] itself, in their order.
+ */
+fun thymindTags(card: Card?): List<String> =
+    card?.tags.orEmpty().filter { (it.flags ?: 0) and AI_TAG != 0 }.mapNotNull { it.name?.takeIf(String::isNotBlank) }.distinctBy { it.lowercase(Locale.ROOT) }
 
 /**
  * The two lines of the saved row.
@@ -231,7 +257,7 @@ fun ShareSheet(state: ShareSheetState, onClose: () -> Unit) {
     val failed = state.phase == SavePhase.Failed
     ShareFrame(
         statusText(state),
-        counting = state.phase != SavePhase.Saving && !state.touched,
+        counting = state.phase != SavePhase.Saving && !state.touched && (failed || !state.findingTags),
         waitMs = if (failed) PROBLEM_FADE_MS else SAVED_FADE_MS,
         onTouch = { state.touched = true },
         onClosed = onClose,
@@ -336,18 +362,29 @@ private fun OnePicture(item: ShareItem, card: Card?, file: SharedFile?, colors: 
     }
 }
 
-/** The spaces, tags and note added so far; each comes off with its cross. */
+/**
+ * The spaces and tags on what was saved, ThyMind's own tags first, and the note; each comes off with its cross. While
+ * ThyMind is still finding tags a quiet Finding tags chip holds their place.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Added(state: ShareSheetState, colors: MenuColors) {
     val spaces = state.spaceIds.mapNotNull { id -> state.spaces.firstOrNull { it.id == id } }
-    if (spaces.isNotEmpty() || state.tags.isNotEmpty()) {
+    val found = state.foundTags
+    val finding = state.findingTags && found.isEmpty()
+    if (spaces.isNotEmpty() || state.tags.isNotEmpty() || found.isNotEmpty() || finding) {
         FlowRow(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             spaces.forEach { space ->
                 AddedChip(space.name.orEmpty(), "Take out of ${space.name.orEmpty()}", colors, lead = {
                     Box(Modifier.size(12.dp).clip(CircleShape).background(parseHexColor(space.color) ?: colors.rowText))
                 }) { state.spaceIds = state.spaceIds - space.id }
             }
+            found.forEach { tag ->
+                AddedChip(tag, "Take off $tag", colors, lead = {
+                    Image(painterResource(R.drawable.ic_library_search_spark), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(colors.rowText))
+                }) { state.untagged = state.untagged + tag }
+            }
+            if (finding) FindingChip(colors)
             state.tags.forEach { tag ->
                 AddedChip(tag, "Take off $tag", colors, lead = {
                     Image(painterResource(R.drawable.tags), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(colors.rowText))
@@ -382,6 +419,26 @@ private fun AddedChip(label: String, removeLabel: String, colors: MenuColors, le
         lead()
         Text(label, style = mutedStyle(colors).copy(color = colors.rowText), maxLines = 1, overflow = TextOverflow.Ellipsis)
         Image(painterResource(R.drawable.ic_sheet_close), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(colors.rowText.copy(alpha = 0.7f)))
+    }
+}
+
+/** A chip that breathes while ThyMind finds the tags for what was saved. */
+@Composable
+private fun FindingChip(colors: MenuColors) {
+    val breath by rememberInfiniteTransition(label = "finding tags").animateFloat(
+        initialValue = 0.45f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(tween(FINDING_BREATH_MS), RepeatMode.Reverse),
+        label = "finding tags alpha",
+    )
+    Row(
+        Modifier.height(36.dp).clip(CircleShape).background(colors.row.copy(alpha = 0.6f)).graphicsLayer { alpha = breath }
+            .semantics { contentDescription = FINDING_TAGS }.padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(painterResource(R.drawable.ic_library_search_spark), null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(colors.rowText))
+        Text(FINDING_TAGS, style = mutedStyle(colors).copy(color = colors.rowText), maxLines = 1)
     }
 }
 
@@ -516,3 +573,8 @@ private const val PLACEHOLDER = "Placeholder"
 private const val PDF = "application/pdf"
 private const val NOT_SAVED = "Nothing was saved"
 private const val FIELD_HINT = "Add a space, a tag or a note"
+private const val FINDING_TAGS = "Finding tags…"
+private const val FINDING_BREATH_MS = 700
+
+/** A tag's flag for one ThyMind added by itself. */
+private const val AI_TAG = 2

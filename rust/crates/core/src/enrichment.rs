@@ -3,12 +3,15 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
+use std::future::poll_fn;
 use std::rc::Rc;
+use std::task::{Poll, Waker};
 
+use futures_util::future::join;
 use indexmap::IndexMap;
 use mm_js::{Value, json, obj};
 
-use crate::ai::{Ai, AiImage, AiItem, VocabularyEntry};
+use crate::ai::{Ai, AiImage, AiItem, VocabularyEntry, needs_picture};
 use crate::ai_tags::relevant_tag;
 use crate::backfill::{self, Estimate, MediaImages, Report};
 use crate::capture_link::{CaptureOptions, capture_link};
@@ -112,13 +115,52 @@ fn article_content(row: &CardRow, store: &Store) -> Result<Value> {
 
 // Detect intervening edits before applying an AI result generated from older content.
 fn signature(row: &CardRow, store: &Store) -> Result<String> {
+    signature_of(row, store, true)
+}
+
+// The card's words without its picture: an analysis started before the picture arrived still holds when only the
+// picture changed since.
+fn words_signature(row: &CardRow, store: &Store) -> Result<String> {
+    signature_of(row, store, false)
+}
+
+fn signature_of(row: &CardRow, store: &Store, with_cover: bool) -> Result<String> {
     let (data, extras) = (parse(&row.data)?, parse(&row.extras)?);
-    let parts = [data.get("title"), data.get("description"), data.get("prose"), data.get("source"), extras.get("captureText"), extras.get("cover")]
+    let cover = if with_cover { extras.get("cover").clone() } else { Value::Undefined };
+    let parts = [data.get("title"), data.get("description"), data.get("prose"), data.get("source"), extras.get("captureText")]
         .into_iter()
         .cloned()
-        .chain([article_content(row, store)?])
+        .chain([cover, article_content(row, store)?])
         .collect();
     Ok(json::stringify(&Value::Array(parts))?.unwrap_or_default())
+}
+
+// Set once by a capture, awaited by the analysis that starts as soon as a link's words are read.
+#[derive(Default)]
+struct Signal {
+    set: Cell<bool>,
+    waker: RefCell<Option<Waker>>,
+}
+
+impl Signal {
+    fn fire(&self) {
+        self.set.set(true);
+        if let Some(waker) = self.waker.borrow_mut().take() {
+            waker.wake();
+        }
+    }
+
+    async fn wait(&self) {
+        poll_fn(|context| {
+            if self.set.get() {
+                Poll::Ready(())
+            } else {
+                *self.waker.borrow_mut() = Some(context.waker().clone());
+                Poll::Pending
+            }
+        })
+        .await;
+    }
 }
 
 fn text_of(value: &Value) -> Option<String> {
@@ -400,8 +442,21 @@ impl Enrichment {
         if deleted(&row) || row.flags & HIDDEN != 0 || parse(&row.extras)?.get("screenshotFailed").truthy() {
             return Ok(());
         }
+        // A link's analysis starts as soon as its words are read, beside the rest of the capture (pictures,
+        // screenshot, comments), so its tags reach the share sheet while that is still open.
+        let mut early = None;
         if capture {
-            self.capture(&row).await?;
+            let words = Signal::default();
+            let over = Cell::new(false);
+            let captured = async {
+                let result = self.capture(&row, &words).await;
+                over.set(true);
+                words.fire();
+                result
+            };
+            let (result, judged) = join(captured, self.analyze_early(id, &words, &over)).await;
+            result?;
+            early = judged;
             if inner.closed.get() {
                 return Ok(());
             }
@@ -437,6 +492,12 @@ impl Enrichment {
             }
             return Ok(());
         }
+        if early.is_some() && early == Some(words_signature(&row, store)?) {
+            if row.flags & PROCESSING != 0 {
+                self.processing(id, false, false)?;
+            }
+            return Ok(());
+        }
         self.processing(id, true, false)?;
         let row = store.card(id, None)?.ok_or_else(|| Error::invalid("Cannot read properties of undefined (reading 'data')"))?;
         let before = signature(&row, store)?;
@@ -447,7 +508,39 @@ impl Enrichment {
         Ok(())
     }
 
-    async fn capture(&self, row: &CardRow) -> Result<()> {
+    // Analyse a link once capture has written its words, unless the card needs its picture to be understood. Returns
+    // the words' signature when the result was stored, so the analysis after capture can be skipped while the words
+    // stay the same; None when nothing was stored and that analysis must run.
+    async fn analyze_early(&self, id: &str, words: &Signal, over: &Cell<bool>) -> Option<String> {
+        words.wait().await;
+        let inner = &self.0;
+        if over.get() || inner.closed.get() || !self.enabled() {
+            return None;
+        }
+        let store = &inner.options.store;
+        let row = store.card(id, None).ok()??;
+        if deleted(&row) || row.flags & HIDDEN != 0 {
+            return None;
+        }
+        let item = analysis_item(&row.data, &row.extras, Some(&article_content(&row, store).ok()?)).ok()?;
+        let peek = AiItem { kind: text_of(&item.kind), text: Some(item.text), ..AiItem::default() };
+        if needs_picture(&peek) {
+            return None;
+        }
+        let before = words_signature(&row, store).ok()?;
+        let value = self.analysis_of(&row).await.ok()?;
+        if inner.closed.get() {
+            return None;
+        }
+        let current = store.card(id, None).ok()??;
+        if deleted(&current) || words_signature(&current, store).ok()? != before {
+            return None;
+        }
+        options_write(&inner.options, id, &value).ok()?;
+        Some(before)
+    }
+
+    async fn capture(&self, row: &CardRow, words: &Signal) -> Result<()> {
         let options = &self.0.options;
         let baseline = RefCell::new(Value::from(obj! { "data" => parse(&row.data)?, "extras" => parse(&row.extras)? }));
         let user = options.store.user(None)?.ok_or_else(|| Error::invalid("Cannot read properties of undefined (reading 'accountUid')"))?;
@@ -455,6 +548,9 @@ impl Enrichment {
         let update = |patch: Value| -> Result<()> {
             if !self.0.closed.get() {
                 options.writer.run(|writer| writer.enrich(&row.id, &patch, &mut baseline.borrow_mut()))?;
+                if patch.get("data").get("type").truthy() && !patch.get("extras").get("captureFailed").truthy() {
+                    words.fire();
+                }
             }
             Ok(())
         };
@@ -468,6 +564,25 @@ impl Enrichment {
     }
 
     async fn analyze(&self, row: &CardRow, before: &str) -> Result<()> {
+        let options = &self.0.options;
+        let store = &options.store;
+        let value = self.analysis_of(row).await?;
+        if self.0.closed.get() {
+            return Ok(());
+        }
+        let Some(current) = store.card(&row.id, None)? else { return Ok(()) };
+        if deleted(&current) {
+            return Ok(());
+        }
+        if signature(&current, store)? != before {
+            self.schedule(&row.id, false);
+            return Ok(());
+        }
+        options_write(options, &row.id, &value)
+    }
+
+    // Ask the hosted models for the card's summary, tags and embedding, ready for the analysis write.
+    async fn analysis_of(&self, row: &CardRow) -> Result<Value> {
         let options = &self.0.options;
         let store = &options.store;
         let (data, extras) = (parse(&row.data)?, parse(&row.extras)?);
@@ -494,23 +609,16 @@ impl Enrichment {
             image: image.map(|image| AiImage { mime: image.mime, data: image.data }),
         };
         let result = Ai::new(&*options.fetch).analyze(&item, &vocabulary).await?;
-        if self.0.closed.get() {
-            return Ok(());
-        }
-        let Some(current) = store.card(&row.id, None)? else { return Ok(()) };
-        if deleted(&current) {
-            return Ok(());
-        }
-        if signature(&current, store)? != before {
-            self.schedule(&row.id, false);
-            return Ok(());
-        }
         let mut value = result.to_value();
         // A summary already stored, and not one this backfill marked as its own, is left in place. The result
         // otherwise matches the historical analysis write, including cards that receive their first summary.
         if summary_owned(&data, &extras) {
             value.set("preserveSummary", true);
         }
-        options.writer.run(|writer| writer.analysis(&row.id, &value))
+        Ok(value)
     }
+}
+
+fn options_write(options: &EnrichmentOptions, id: &str, value: &Value) -> Result<()> {
+    options.writer.run(|writer| writer.analysis(id, value))
 }

@@ -587,6 +587,18 @@ fn has_embeddable_content(item: &AiItem) -> bool {
     !clip(item.title.as_deref(), 1).is_empty() || !clip(item.text.as_deref(), 1).is_empty() || embed_image(item).is_some()
 }
 
+/// Whether a card is understood from its picture rather than its words: an image, screenshot or video, or fewer than
+/// 200 characters of text. Such a card's analysis waits for the picture, and Jev is shown it.
+///
+/// # Arguments
+/// * `item` - The card's kind and text.
+///
+/// # Returns
+/// True when the picture carries the card.
+pub fn needs_picture(item: &AiItem) -> bool {
+    visual_analysis(item)
+}
+
 fn visual_analysis(item: &AiItem) -> bool {
     ["Image", "Screenshot", "Video", "YouTubeVideo", "InstagramReel"].contains(&item.kind.as_deref().unwrap_or(""))
         || len(&clip(item.text.as_deref(), 300)) < 200

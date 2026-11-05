@@ -24,10 +24,16 @@ import kotlinx.coroutines.launch
  * @property tags Tags for every saved card.
  * @property note Note for every saved card, or blank for none.
  * @property spaceIds Spaces every saved card joins.
+ * @property untag Names of tags ThyMind put on the cards that the user took off.
  */
-data class ShareDetails(val tags: List<String> = emptyList(), val note: String = "", val spaceIds: Set<String> = emptySet()) {
-    /** True when there is nothing to put on the cards. */
-    fun isEmpty() = tags.isEmpty() && note.isBlank() && spaceIds.isEmpty()
+data class ShareDetails(
+    val tags: List<String> = emptyList(),
+    val note: String = "",
+    val spaceIds: Set<String> = emptySet(),
+    val untag: Set<String> = emptySet(),
+) {
+    /** True when there is nothing to change on the cards. */
+    fun isEmpty() = tags.isEmpty() && note.isBlank() && spaceIds.isEmpty() && untag.isEmpty()
 }
 
 /**
@@ -125,6 +131,7 @@ class ShareController(
         val ids = progress.first { it.done }.saved
         if (ids.isEmpty()) return ApiResult.Failed(ApiFailure.Network)
         for (id in ids) {
+            if (details.untag.isNotEmpty()) (untag(id, details.untag) as? ApiResult.Failed)?.let { return it }
             for (tag in details.tags) (library.addTag(id, tag) as? ApiResult.Failed)?.let { return it }
             if (details.note.isNotBlank()) (library.setNote(id, details.note.trim()) as? ApiResult.Failed)?.let { return it }
             for (space in details.spaceIds) (library.addToSpace(space, id) as? ApiResult.Failed)?.let { return it }
@@ -132,7 +139,18 @@ class ShareController(
         return ApiResult.Ok(Unit)
     }
 
+    private suspend fun untag(id: String, names: Set<String>): ApiResult<Unit> {
+        val card = when (val read = library.card(id)) {
+            is ApiResult.Ok -> read.value
+            is ApiResult.Failed -> return read
+        }
+        val wrong = card.tags.orEmpty().filter { tag -> (tag.flags ?: 0) and AI_TAG != 0 && names.any { it.equals(tag.name, ignoreCase = true) } }
+        for (tag in wrong) (tag.id?.let { library.removeTag(it) } as? ApiResult.Failed)?.let { return it }
+        return ApiResult.Ok(Unit)
+    }
+
     private companion object {
+        const val AI_TAG = 2
         const val SOURCE = "clipboard"
         const val UNREADABLE = "The app you shared from did not let ThyMind read the file."
     }
