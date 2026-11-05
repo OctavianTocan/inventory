@@ -101,6 +101,8 @@ data class Card(
     val spaces: List<String>? = null,
     /** The card's place in each of its [spaces], by space id: a space lists its cards from the smallest. */
     val spaceRanks: Map<String, Double>? = null,
+    /** The id of the space ThyMind's AI would file this card in, when it picked one. */
+    val suggestedSpace: String? = null,
     val pinPosition: Long? = null,
     val cover: Cover? = null,
     val blob: Blob? = null,

@@ -94,8 +94,9 @@ import java.net.URI
  *
  * @property space The space.
  * @property alike How many cards like this one are in it.
+ * @property byThyMind True when ThyMind's AI picked the space for the card.
  */
-data class SpaceSuggestion(val space: Space, val alike: Int)
+data class SpaceSuggestion(val space: Space, val alike: Int, val byThyMind: Boolean = false)
 
 /**
  * What the space choices show for one card.
@@ -116,23 +117,25 @@ data class SpaceChoices(
  * @param card The card being placed.
  * @param library Cards on hand, such as the gallery's loaded pages.
  * @param spaces Spaces in the user's order.
- * @return The space holding the most other cards that share a tag or a site with [card], leaving out the spaces it is in
- *   and smart spaces; a tie goes to the earlier space. Null when no other card is alike.
+ * @return The space ThyMind's AI picked for [card] ([Card.suggestedSpace]) when it is one of [spaces], not smart and not
+ *   one the card is in; otherwise the space holding the most other cards that share a tag or a site with [card], leaving
+ *   out the spaces it is in and smart spaces, a tie going to the earlier space. Null when neither finds one.
  */
 fun suggestSpace(card: Card, library: List<Card>, spaces: List<Space>): SpaceSuggestion? {
     val tags = tagKeys(card)
     val site = siteKey(card)
-    if (tags.isEmpty() && site == null) return null
     val counts = HashMap<String, Int>()
-    library.forEach { other ->
-        if (other.id == card.id) return@forEach
-        val alike = (site != null && siteKey(other) == site) || tagKeys(other).any { it in tags }
-        if (alike) other.spaces.orEmpty().toSet().forEach { counts[it] = (counts[it] ?: 0) + 1 }
+    if (tags.isNotEmpty() || site != null) {
+        library.forEach { other ->
+            if (other.id == card.id) return@forEach
+            val alike = (site != null && siteKey(other) == site) || tagKeys(other).any { it in tags }
+            if (alike) other.spaces.orEmpty().toSet().forEach { counts[it] = (counts[it] ?: 0) + 1 }
+        }
     }
     val own = card.spaces.orEmpty().toSet()
-    return spaces.filter { it.id !in own && it.smart != true }
-        .mapNotNull { space -> counts[space.id]?.let { SpaceSuggestion(space, it) } }
-        .maxByOrNull { it.alike }
+    val open = spaces.filter { it.id !in own && it.smart != true }
+    open.firstOrNull { it.id == card.suggestedSpace }?.let { return SpaceSuggestion(it, counts[it.id] ?: 0, byThyMind = true) }
+    return open.mapNotNull { space -> counts[space.id]?.let { SpaceSuggestion(space, it) } }.maxByOrNull { it.alike }
 }
 
 /**
@@ -340,7 +343,11 @@ fun AllSpacesPage(
             CardMenuHeading("Suggested", first = true)
             Column(Modifier.padding(top = 12.dp)) {
                 val alike = choices.suggestion?.alike ?: 0
-                slot(suggested, if (alike == 1) "1 card like this one is here" else "$alike cards like this one are here")
+                slot(suggested, when {
+                    alike == 1 -> "1 card like this one is here"
+                    alike > 1 -> "$alike cards like this one are here"
+                    else -> "ThyMind thinks it fits here"
+                })
             }
         }
         val rest = choices.spaces.filter { it.id != suggested?.id }

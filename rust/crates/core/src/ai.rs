@@ -32,6 +32,10 @@ const DECISIONS_MODEL: &str = "gpt-6-luna";
 const TAG_MIN_P: f64 = 0.6;
 const DECISIONS_QUESTIONS_PER_REQUEST: usize = 400;
 const MAX_TAGS: usize = 10;
+const SPACE_MIN_P: f64 = 0.5;
+// A choice question takes 255 choices; one of them says no space fits.
+const MAX_SPACE_CHOICES: usize = 254;
+const NO_SPACE: &str = "none";
 const NEAREST_TAGS: usize = 20;
 const CHAT_IMAGE_MAX_BYTES: usize = 10 * 1024 * 1024;
 const DECISIONS_IMAGE_MAX_BYTES: usize = 20 * 1024 * 1024;
@@ -232,6 +236,26 @@ pub struct Description {
     pub summary: String,
     /// At most ten normalized labels.
     pub tags: Vec<String>,
+}
+
+/// A Space a card could be filed in, as [`Ai::suggest_space`] describes it to the Decisions API.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SpaceOption {
+    /// The Space's id.
+    pub id: String,
+    /// The Space's name.
+    pub name: String,
+    /// Titles of a few cards already in it, newest first.
+    pub examples: Vec<String>,
+}
+
+/// The Space the Decisions API would file a card in.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SuggestedSpace {
+    /// The Space's id.
+    pub id: String,
+    /// Probability of that choice.
+    pub p: f64,
 }
 
 /// A tag the Decisions API judged.
@@ -982,6 +1006,63 @@ impl<'a> Ai<'a> {
             Value::Array(answers) => Ok(answers.clone()),
             _ => Err(AiError::service("openai decisions returned no answers", Service::OpenAi)),
         }
+    }
+
+    /// Pick the Space a card belongs in with one Decisions `choice` question over the Spaces and "none".
+    ///
+    /// # Arguments
+    /// * `item` - The card; its picture is sent when it is understood from its picture ([`needs_picture`]).
+    /// * `spaces` - The Spaces to choose from, best known first; only the first 254 are offered.
+    ///
+    /// # Returns
+    /// The chosen Space when its probability is at least 0.5; `None` when there are no Spaces, the card has no words
+    /// and no usable picture, "none" wins, or the answer is a refusal.
+    ///
+    /// # Errors
+    /// `OPENAI_API_KEY` is missing or the API fails after retries.
+    pub async fn suggest_space(&self, item: &AiItem, spaces: &[SpaceOption]) -> std::result::Result<Option<SuggestedSpace>, AiError> {
+        require_key("OPENAI_API_KEY", "Space suggestions with OpenAI Decisions")?;
+        let spaces = &spaces[..spaces.len().min(MAX_SPACE_CHOICES)];
+        if spaces.is_empty() {
+            return Ok(None);
+        }
+        let Some(input) = decision_input(item, visual_analysis(item)) else {
+            return Ok(None);
+        };
+        let mut choices: Vec<Value> = spaces
+            .iter()
+            .enumerate()
+            .map(|(index, space)| {
+                let mut description = format!("The space {}", json::quote(&clip(Some(&space.name), 100)));
+                let examples: Vec<String> = space.examples.iter().take(3).map(|title| json::quote(&clip(Some(title), 100))).collect();
+                if !examples.is_empty() {
+                    description.push_str(&format!(", which holds cards like {}", examples.join(", ")));
+                }
+                obj! { "value" => format!("s{index}"), "description" => description }.into()
+            })
+            .collect();
+        choices.push(obj! { "value" => NO_SPACE, "description" => "None of these spaces clearly fits the item" }.into());
+        let question = obj! {
+            "type" => "choice",
+            "name" => "space",
+            "instructions" => "Someone saved this item to their personal library, which they sort into spaces (folders). Which space would they put it in?",
+            "choices" => Value::Array(choices),
+        };
+        let answers = self.decide(input, vec![question.into()]).await?;
+        let Some(answer) = answers.iter().find(|answer| answer.get("name").as_str() == Some("space") && answer.get("type").as_str() == Some("choice")) else {
+            return Ok(None);
+        };
+        let choice = answer.get("choice").to_js_string();
+        let p = answer
+            .get("probabilities")
+            .as_array()
+            .and_then(|all| all.iter().find(|entry| entry.get("value").to_js_string() == choice))
+            .and_then(|entry| entry.get("probability").as_f64());
+        let index = choice.strip_prefix('s').and_then(|index| index.parse::<usize>().ok());
+        Ok(match (index.and_then(|index| spaces.get(index)), p) {
+            (Some(space), Some(p)) if p >= SPACE_MIN_P => Some(SuggestedSpace { id: space.id.clone(), p }),
+            _ => None,
+        })
     }
 
     /// Judge candidate tags against an item with OpenAI's Decisions API, one predicate per candidate (`pickTags`).

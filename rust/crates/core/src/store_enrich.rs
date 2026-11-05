@@ -256,6 +256,12 @@ impl<'a> Enricher<'a> {
             set_note_name(&mut row, &result.get("title").to_js_string());
         }
         update_flags(&mut row.data, |flags| flags & !PROCESSING);
+        match result.get("suggestedSpace") {
+            Value::Object(_) => row.extras.set("suggestedSpace", result.get("suggestedSpace").clone()),
+            _ => {
+                row.extras.remove("suggestedSpace");
+            }
+        }
         let vocabulary: Vec<String> = db
             .query("SELECT name FROM annotations WHERE user_id = ? GROUP BY name ORDER BY COUNT(*) DESC, name", &[self.user.id.as_str().into()])?
             .iter()

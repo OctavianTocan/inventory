@@ -11,7 +11,7 @@ use futures_util::future::join;
 use indexmap::IndexMap;
 use mm_js::{Value, json, obj};
 
-use crate::ai::{Ai, AiImage, AiItem, TRANSCRIBE_MAX_BYTES, VocabularyEntry, needs_picture};
+use crate::ai::{Ai, AiImage, AiItem, SpaceOption, TRANSCRIBE_MAX_BYTES, VocabularyEntry, needs_picture};
 use crate::ai_tags::relevant_tag;
 use crate::backfill::{self, Estimate, MediaImages, Report};
 use crate::capture_link::{CaptureOptions, capture_link};
@@ -652,8 +652,19 @@ impl Enrichment {
             domain: text_of(&item.domain),
             image: image.map(|image| AiImage { mime: image.mime, data: image.data }),
         };
-        let result = Ai::new(&*options.fetch).analyze(&item, &vocabulary).await?;
-        let mut value = result.to_value();
+        let ai = Ai::new(&*options.fetch);
+        let spaces = if env_set("OPENAI_API_KEY") { space_options(store, &row.id)? } else { Vec::new() };
+        let (result, suggested) = join(ai.analyze(&item, &vocabulary), async {
+            if spaces.is_empty() { Ok(None) } else { ai.suggest_space(&item, &spaces).await }
+        })
+        .await;
+        let mut value = result?.to_value();
+        // A failed suggestion only leaves the card without one; the phone falls back to its own guess.
+        match suggested {
+            Ok(Some(space)) => value.set("suggestedSpace", obj! { "id" => space.id, "p" => space.p }),
+            Ok(None) => {}
+            Err(error) => runtime::log(&format!("space suggestion for {} failed: {}", row.id, error.message)),
+        }
         // A summary already stored, and not one this backfill marked as its own, is left in place. The result
         // otherwise matches the historical analysis write, including cards that receive their first summary.
         if summary_owned(&data, &extras) {
@@ -661,6 +672,34 @@ impl Enrichment {
         }
         Ok(value)
     }
+}
+
+// The user's own Spaces the card is not in yet, in their order, each with up to three titles of its newest cards.
+fn space_options(store: &Store, card_id: &str) -> Result<Vec<SpaceOption>> {
+    let db = store.db();
+    let rows = db.query(
+        "SELECT id, name FROM spaces WHERE user_id = ? AND query IS NULL
+           AND id NOT IN (SELECT space_id FROM space_cards WHERE card_id = ? AND excluded = 0)
+         ORDER BY position, id",
+        &[store.default_user_id()?.into(), card_id.into()],
+    )?;
+    let mut spaces = Vec::new();
+    for row in &rows {
+        let id = row.text("id").unwrap_or("").to_owned();
+        let examples = db
+            .query(
+                "SELECT json_extract(c.data, '$.title') AS title FROM space_cards s JOIN cards c ON c.id = s.card_id
+                 WHERE s.space_id = ? AND s.excluded = 0 AND c.deleted_ns IS NULL AND c.id != ?
+                   AND trim(COALESCE(json_extract(c.data, '$.title'), '')) != ''
+                 ORDER BY c.created_ns DESC LIMIT 3",
+                &[id.as_str().into(), card_id.into()],
+            )?
+            .iter()
+            .filter_map(|found| found.text("title").map(str::to_owned))
+            .collect();
+        spaces.push(SpaceOption { id, name: row.text("name").unwrap_or("").to_owned(), examples });
+    }
+    Ok(spaces)
 }
 
 fn options_write(options: &EnrichmentOptions, id: &str, value: &Value) -> Result<()> {

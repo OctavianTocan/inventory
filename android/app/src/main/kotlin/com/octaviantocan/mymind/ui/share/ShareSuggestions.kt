@@ -51,7 +51,7 @@ fun shareSuggestions(
     val chosen = { tag: String -> chosenTags.any { it.equals(tag, ignoreCase = true) } }
     val query = typed.trim()
     if (query.isEmpty()) {
-        val space = suggestion?.takeIf { it.space.id !in chosenSpaces }?.let { ShareSuggestion.AddToSpace(it.space, "Suggested · ${alike(it.alike)}") }
+        val space = suggestion?.takeIf { it.space.id !in chosenSpaces }?.let { ShareSuggestion.AddToSpace(it.space, if (it.alike > 0) "Suggested · ${alike(it.alike)}" else "Suggested by ThyMind") }
         val tags = recentTags.filterNot(chosen).distinctBy { it.lowercase(Locale.ROOT) }.take(RECENT_ROWS).map { ShareSuggestion.AddTag(it, recent = true) }
         return listOfNotNull(space) + tags
     }

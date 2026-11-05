@@ -27,6 +27,15 @@ class CardSpacesTest {
     }
 
     @Test
+    fun thymindsPickWinsWhenItIsAnOpenSpace() {
+        assertEquals(SpaceSuggestion(spaces[2], 0, byThyMind = true), suggestSpace(card.copy(suggestedSpace = "s3"), library.take(3), spaces))
+        assertEquals(SpaceSuggestion(spaces[0], 0, byThyMind = true), suggestSpace(testCard("n", type = "Note").copy(suggestedSpace = "s1"), library, spaces))
+        assertEquals(SpaceSuggestion(spaces[1], 2), suggestSpace(card.copy(suggestedSpace = "own"), library, spaces))
+        assertEquals(SpaceSuggestion(spaces[1], 2), suggestSpace(card.copy(suggestedSpace = "smart"), library, spaces))
+        assertEquals(SpaceSuggestion(spaces[1], 2), suggestSpace(card.copy(suggestedSpace = "gone"), library, spaces))
+    }
+
+    @Test
     fun chooseOneShowsTheSuggestedSpaceThenTheCardsOwnThenTheRestUpToThree() {
         assertEquals(listOf("s2", "own", "s1"), inlineSpaces(card, spaces, SpaceSuggestion(spaces[1], 2)).map { it.id })
         assertEquals(listOf("own", "s1", "s2"), inlineSpaces(card, spaces, null).map { it.id })

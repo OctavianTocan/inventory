@@ -61,6 +61,22 @@ impl Fetch for Model {
             let count = json::parse(&body).unwrap().get("requests").as_array().map_or(0, Vec::len);
             return answer(&obj! { "embeddings" => (0..count).map(|_| vector()).collect::<Vec<_>>() }.into());
         }
+        if request.url.as_str().ends_with("/v1/decisions") {
+            // Every tag fits; a Space question picks the first Space offered.
+            let questions = json::parse(&body).unwrap().get("questions").as_array().cloned().unwrap_or_default();
+            let answers: Vec<Value> = questions
+                .iter()
+                .map(|question| {
+                    let name = question.get("name").clone();
+                    if question.get("type").as_str() == Some("choice") {
+                        obj! { "type" => "choice", "name" => name, "choice" => "s0", "probabilities" => vec![Value::from(obj! { "value" => "s0", "probability" => 0.8 })] }.into()
+                    } else {
+                        obj! { "type" => "predicate", "name" => name, "probability" => 0.9 }.into()
+                    }
+                })
+                .collect();
+            return answer(&obj! { "answers" => answers }.into());
+        }
         assert!(request.url.as_str().ends_with("/chat/completions"), "{}", request.url);
         self.chats.set(self.chats.get() + 1);
         let card = obj! { "title" => "A page", "summary" => "About a page.", "tags" => vec![Value::from("reading")] };
@@ -131,7 +147,11 @@ impl Media for NoMedia {
     }
 }
 
+// Tests set the process environment, so they run one at a time.
+static ENV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 struct Library {
+    _env: std::sync::MutexGuard<'static, ()>,
     store: Rc<Store>,
     writer: Rc<Writer>,
     shot: Rc<SlowShot>,
@@ -140,6 +160,7 @@ struct Library {
 
 impl Library {
     fn new() -> Self {
+        let env = ENV.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         static ONCE: Once = Once::new();
         ONCE.call_once(|| runtime::install(&TestRuntime));
         runtime::set_env(HashMap::from([("GEMINI_API_KEY".to_owned(), "test-key".to_owned())]));
@@ -148,7 +169,7 @@ impl Library {
         db.execute("INSERT INTO users VALUES ('tag-user', 'tag-account', 'fixture0000', 0, '{\"objectLimit\":10000}')", &[]).unwrap();
         let writer = Rc::new(Writer::new(store.clone(), |_, _| {}).unwrap());
         let shot = Rc::new(SlowShot { store: store.clone(), card: RefCell::default(), saw_tags: Cell::new(false) });
-        Self { store, writer, shot, model: Rc::default() }
+        Self { _env: env, store, writer, shot, model: Rc::default() }
     }
 
     // Save `url` as a shared link and capture it from a page whose body says `words`.
@@ -196,4 +217,23 @@ fn a_link_understood_from_its_picture_waits_for_it() {
     assert!(!library.shot.saw_tags.get(), "a card with few words is analysed after its picture");
     assert_eq!(library.tags(&id), ["reading"]);
     assert_eq!(library.model.chats.get(), 1);
+}
+
+#[test]
+fn a_shared_link_gets_the_space_openai_picks() {
+    let library = Library::new();
+    runtime::set_env(HashMap::from([
+        ("GEMINI_API_KEY".to_owned(), "test-key".to_owned()),
+        ("OPENAI_API_KEY".to_owned(), "test-openai".to_owned()),
+    ]));
+    let db = library.store.db();
+    db.execute("INSERT INTO spaces VALUES ('smart-1', 'tag-user', 'Smart', 'blue', 0, '2026-01-01', '{\"q\":\"x\"}')", &[]).unwrap();
+    db.execute("INSERT INTO spaces VALUES ('garden-1', 'tag-user', 'Garden', 'green', 1, '2026-01-01', NULL)", &[]).unwrap();
+    let words = "Long-form writing about gardens, soil and the slow work of growing vegetables through a cold spring. ".repeat(4);
+    let id = library.share("https://example.com/gardens", &words);
+    let row = library.store.card(&id, None).unwrap().unwrap();
+    let extras = json::parse(&row.extras).unwrap();
+    assert_eq!(extras.get("suggestedSpace").get("id").as_str(), Some("garden-1"), "smart spaces are never offered");
+    assert_eq!(extras.get("suggestedSpace").get("p").as_f64(), Some(0.8));
+    runtime::set_env(HashMap::from([("GEMINI_API_KEY".to_owned(), "test-key".to_owned())]));
 }

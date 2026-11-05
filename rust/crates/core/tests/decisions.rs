@@ -7,7 +7,7 @@ use std::sync::{Mutex, Once};
 
 use async_trait::async_trait;
 use futures_executor::block_on;
-use mm_core::ai::{Ai, AiImage, AiItem};
+use mm_core::ai::{Ai, AiImage, AiItem, SpaceOption, SuggestedSpace};
 use mm_core::host::Fetch;
 use mm_core::http::{Body, Headers, Request, Response};
 use mm_core::runtime::{self, Runtime, Task};
@@ -38,15 +38,21 @@ fn setup(vars: &[(&str, &str)]) -> std::sync::MutexGuard<'static, ()> {
     guard
 }
 
-// Answers each predicate with the next scripted probability (or a refusal for `None`) and keeps every request.
+// Answers each predicate with the next scripted probability (or a refusal for `None`), a choice question with
+// `choice`, and keeps every request.
 struct Decisions {
     probabilities: Vec<Option<f64>>,
+    choice: Option<(String, f64)>,
     requests: RefCell<Vec<(String, String, Value)>>,
 }
 
 impl Decisions {
     fn new(probabilities: &[Option<f64>]) -> Self {
-        Self { probabilities: probabilities.to_vec(), requests: RefCell::default() }
+        Self { probabilities: probabilities.to_vec(), choice: None, requests: RefCell::default() }
+    }
+
+    fn choosing(value: &str, p: f64) -> Self {
+        Self { choice: Some((value.to_owned(), p)), ..Self::new(&[]) }
     }
 }
 
@@ -63,6 +69,10 @@ impl Fetch for Decisions {
             .enumerate()
             .map(|(index, question)| {
                 let name = question.get("name").to_js_string();
+                if question.get("type").as_str() == Some("choice") {
+                    let (value, p) = self.choice.clone().unwrap();
+                    return format!(r#"{{"type":"choice","name":"{name}","choice":"{value}","probabilities":[{{"value":"{value}","probability":{p}}}],"confidence":{p}}}"#);
+                }
                 match self.probabilities.get(index).copied().flatten() {
                     Some(p) => format!(r#"{{"type":"predicate","name":"{name}","probability":{p}}}"#),
                     None => format!(r#"{{"type":"refusal","name":"{name}"}}"#),
@@ -172,4 +182,59 @@ fn splits_more_than_400_candidates() {
     assert_eq!(picked.len(), 10);
     let sizes: Vec<usize> = fake.requests.borrow().iter().map(|(_, _, body)| body.get("questions").as_array().unwrap().len()).collect();
     assert_eq!(sizes, [400, 1]);
+}
+
+fn spaces() -> Vec<SpaceOption> {
+    vec![
+        SpaceOption { id: "sp-food".into(), name: "Food".into(), examples: vec!["Miso soup".into(), "Bread".into(), "Tacos".into(), "Extra".into()] },
+        SpaceOption { id: "sp-work".into(), name: "Work".into(), examples: Vec::new() },
+    ]
+}
+
+#[test]
+fn suggests_the_space_chosen_from_every_space_and_none() {
+    let _guard = setup(&[("OPENAI_API_KEY", "test-openai")]);
+    let fake = Decisions::choosing("s0", 0.82);
+    let suggested = block_on(Ai::new(&fake).suggest_space(&article(), &spaces())).unwrap();
+    assert_eq!(suggested, Some(SuggestedSpace { id: "sp-food".into(), p: 0.82 }));
+    let requests = fake.requests.borrow();
+    let question = requests[0].2.get("questions").get("0").clone();
+    assert_eq!(question.get("type").as_str(), Some("choice"));
+    let choices: Vec<(String, String)> = question
+        .get("choices")
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|choice| (choice.get("value").to_js_string(), choice.get("description").to_js_string()))
+        .collect();
+    assert_eq!(
+        choices,
+        [
+            ("s0".to_owned(), "The space \"Food\", which holds cards like \"Miso soup\", \"Bread\", \"Tacos\"".to_owned()),
+            ("s1".to_owned(), "The space \"Work\"".to_owned()),
+            ("none".to_owned(), "None of these spaces clearly fits the item".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn suggests_nothing_when_unsure_or_none_fits() {
+    let _guard = setup(&[("OPENAI_API_KEY", "test-openai")]);
+    for (value, p) in [("none", 0.9), ("s1", 0.49), ("s9", 0.9)] {
+        let fake = Decisions::choosing(value, p);
+        assert_eq!(block_on(Ai::new(&fake).suggest_space(&article(), &spaces())).unwrap(), None, "{value} {p}");
+    }
+    let fake = Decisions::choosing("s0", 0.9);
+    assert_eq!(block_on(Ai::new(&fake).suggest_space(&article(), &[])).unwrap(), None);
+    assert!(fake.requests.borrow().is_empty(), "no spaces asks nothing");
+}
+
+#[test]
+fn offers_at_most_254_spaces() {
+    let _guard = setup(&[("OPENAI_API_KEY", "test-openai")]);
+    let many: Vec<SpaceOption> = (0..300).map(|index| SpaceOption { id: format!("sp{index}"), name: format!("Space {index}"), examples: Vec::new() }).collect();
+    let fake = Decisions::choosing("s253", 0.7);
+    let suggested = block_on(Ai::new(&fake).suggest_space(&article(), &many)).unwrap();
+    assert_eq!(suggested.map(|space| space.id), Some("sp253".to_owned()));
+    assert_eq!(fake.requests.borrow()[0].2.get("questions").get("0").get("choices").as_array().unwrap().len(), 255);
 }

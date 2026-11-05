@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.60 (71), 2026-11-05
+ThyMind suggests the Space a new card belongs in.
+
+### Added
+- When you share something, ThyMind's AI reads it and picks the Space it fits, and the share sheet offers that Space first (Suggested by ThyMind). Choose one on a card shows it first too. If no Space clearly fits, it falls back to the Space holding the most cards like it, as before. This needs the Worker deployed.
+
+### Changed
+- Tags are now picked by OpenAI instead of TypeSafe, and pictures of any size count when ThyMind picks a card's tags. This needs the Worker deployed.
+
 ## 0.6.59 (70), 2026-11-05
 Save photos and videos from the Gallery, and read what a video says.
 
