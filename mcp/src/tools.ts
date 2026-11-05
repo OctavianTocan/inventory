@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { type Card, type CardDetail, type CardResult, type Space, cardDetail, cardResult, detailMarkdown, picturePath, resultsMarkdown } from "./cards";
 import { Library, LibraryError } from "./library";
+import { VIEW_HTML, VIEW_MIME, VIEW_URI } from "./view";
 import { registerWrites } from "./writes";
 
 /** Plain words every client gets on connect, for agents that never load the ThyMind skill. */
@@ -91,6 +92,16 @@ export function createServer(library: Library, onSignedOut: () => void): McpServ
     return names;
   };
 
+  server.registerResource(
+    "ThyMind cards",
+    VIEW_URI,
+    { title: "ThyMind cards", description: "Search results as a grid of card tiles.", mimeType: VIEW_MIME },
+    async (uri) => ({
+      // No network: pictures come through thymind_get_picture calls made via the host.
+      contents: [{ uri: uri.href, mimeType: VIEW_MIME, text: VIEW_HTML, _meta: { ui: { csp: {}, prefersBorder: false } } }],
+    }),
+  );
+
   server.registerTool(
     "thymind_search",
     {
@@ -108,6 +119,8 @@ export function createServer(library: Library, onSignedOut: () => void): McpServ
       }),
       outputSchema: LIST,
       annotations: READ,
+      // MCP Apps hosts show the results as a card grid; ChatGPT also reads its own key.
+      _meta: { ui: { resourceUri: VIEW_URI }, "openai/outputTemplate": VIEW_URI },
     },
     async ({ query, by_meaning, space_id, pinned, limit, cursor, response_format }) => {
       try {

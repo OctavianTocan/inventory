@@ -174,6 +174,16 @@ describe("connecting an AI app", () => {
     expect(tools.filter((tool) => tool.annotations?.readOnlyHint).map((tool) => tool.name)).toEqual(reading);
     expect(tools.filter((tool) => tool.annotations?.destructiveHint).map((tool) => tool.name)).toEqual(["thymind_set_note", "thymind_trash"]);
 
+    // MCP Apps hosts show search results in the card grid, which needs no network of its own.
+    const searchTool = tools.find((tool) => tool.name === "thymind_search")!;
+    expect(searchTool._meta).toMatchObject({ ui: { resourceUri: "ui://thymind/cards.html" } });
+    const view = await client.readResource({ uri: "ui://thymind/cards.html" });
+    const page = view.contents[0] as unknown as { mimeType: string; text: string; _meta: { ui: { csp: Record<string, unknown> } } };
+    expect(page.mimeType).toBe("text/html;profile=mcp-app");
+    expect(page.text).toContain("thymind_get_picture");
+    expect(page.text).not.toContain("innerHTML");
+    expect(page._meta.ui.csp).toEqual({});
+
     const search = await client.callTool({ name: "thymind_search", arguments: { query: "pasta" } });
     expect(search.isError).toBeFalsy();
     expect(search.structuredContent).toMatchObject({ count: 2, has_more: true, next_cursor: "cursor-2" });

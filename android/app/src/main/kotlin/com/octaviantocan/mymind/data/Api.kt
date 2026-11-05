@@ -102,6 +102,16 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
     suspend fun me(): ApiResult<User> =
         send(Request.Builder().url(server.trimEnd('/') + "/app/v1/me").get().build(), User.serializer())
 
+    /** @return The AI apps connected to the account through the MCP server. */
+    suspend fun agents(): ApiResult<AgentList> = send(get("app/v1/agents"), AgentList.serializer())
+
+    /**
+     * Signs one connected AI app out; it must be connected again to reach the library.
+     *
+     * @param id The agent's [ConnectedAgent.id].
+     */
+    suspend fun removeAgent(id: String): ApiResult<Unit> = write(Request.Builder().url(url("app/v1/agents/$id")).delete())
+
     /**
      * @param limit page size, 1 to 200.
      * @param cursor `next` of the previous page, or null for the first page.

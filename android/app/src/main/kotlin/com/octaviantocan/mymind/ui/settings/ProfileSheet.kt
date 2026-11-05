@@ -78,9 +78,11 @@ fun ProfileSheetHost(
     photoLoader: ImageLoader? = null,
 ) {
     val state by settings.state.collectAsStateWithLifecycle()
+    val agents by settings.agents.collectAsStateWithLifecycle()
     LaunchedEffect(settings) { settings.refresh() }
     ProfileSheet(state, appVersion(LocalContext.current), updates, onSignOut = settings::signOut, onClose = onClose,
-        photoLoader = photoLoader ?: rememberPublicAccountPhotoLoader(), ai = ai)
+        photoLoader = photoLoader ?: rememberPublicAccountPhotoLoader(), ai = ai,
+        agents = AgentsActions(agents, settings::loadAgents, settings::removeAgent))
 }
 
 /**
@@ -94,6 +96,7 @@ fun ProfileSheetHost(
  * @param onClose Called once the sheet has closed.
  * @param photoLoader Loader for the account photo that never carries the library session, or null for the glyph.
  * @param ai The account's Claude Code and Codex, or null for a sheet without the AI rows.
+ * @param agents The Connected agents page's state and actions, or null for a sheet without that row.
  */
 @Composable
 fun ProfileSheet(
@@ -104,23 +107,37 @@ fun ProfileSheet(
     onClose: () -> Unit,
     photoLoader: ImageLoader? = null,
     ai: AiAccount? = null,
+    agents: AgentsActions? = null,
 ) {
     var page by remember { mutableStateOf<ProfilePage?>(null) }
     val services = ai?.let { rememberAiSignInServices(it) }
     val context = LocalContext.current
     val notify = { text: String -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
     PullyPagedSheet("Profile", page, onBack = { page = null }, onClose = onClose) { shown ->
-        if (shown == null || ai == null || services == null) {
+        if (shown == ProfilePage.Agents && agents != null) {
+            ConnectedAgentsPage(agents.state, agents.onLoad, agents.onRemove)
+        } else if (shown == null || shown == ProfilePage.Agents || ai == null || services == null) {
             ProfileSheetContent(account, version, updates, onSignOut, onClose, photoLoader,
-                aiRows = ai?.let { mine -> { AiRows(mine) { page = it } } })
+                aiRows = ai?.let { mine -> { AiRows(mine) { page = it } } },
+                onAgents = agents?.let { { page = ProfilePage.Agents } })
         } else when (shown) {
             ProfilePage.Model -> ModelPage(ai, open = { page = it }, onDone = { page = null })
             ProfilePage.Effort -> EffortPage(ai, onDone = { page = null })
             ProfilePage.ClaudeSignIn -> AiSignInPage(services, AiCli.Claude, notify)
             ProfilePage.CodexSignIn -> AiSignInPage(services, AiCli.Codex, notify)
+            ProfilePage.Agents -> Unit
         }
     }
 }
+
+/**
+ * What the Connected agents page needs from the sheet's owner.
+ *
+ * @property state The connected AI apps.
+ * @property onLoad Asks the server for them again.
+ * @property onRemove Signs one app out by its id.
+ */
+class AgentsActions(val state: AgentsUiState, val onLoad: () -> Unit, val onRemove: (String) -> Unit)
 
 /** The sign-in pages' services for [ai], reading the clipboard only while the app is in front. */
 @Composable
@@ -150,6 +167,7 @@ internal fun ColumnScope.ProfileSheetContent(
     onClose: () -> Unit,
     photoLoader: ImageLoader?,
     aiRows: (@Composable () -> Unit)? = null,
+    onAgents: (() -> Unit)? = null,
 ) {
     AccountCard(account, photoLoader)
     aiRows?.invoke()
@@ -170,6 +188,10 @@ internal fun ColumnScope.ProfileSheetContent(
     }
     CardMenuHeading("Account")
     CardMenuGroup(Modifier.padding(top = 12.dp)) {
+        if (onAgents != null) {
+            SheetRow(painterResource(R.drawable.ic_library_search_spark), CONNECTED_AGENTS, onAgents, trailing = { SheetRowChevron() })
+            SheetRowDivider()
+        }
         SheetRow(painterResource(R.drawable.sign_out), SIGN_OUT, onSignOut, detail = account.email?.let { "Leave $it on this phone" })
     }
 }

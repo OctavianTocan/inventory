@@ -12,6 +12,10 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.octaviantocan.mymind.data.ConnectedAgent
+import com.octaviantocan.mymind.ui.settings.AgentsUiState
+import com.octaviantocan.mymind.ui.settings.CONNECTED_AGENTS
+import com.octaviantocan.mymind.ui.settings.ConnectedAgentsPage
 import com.octaviantocan.mymind.ui.settings.ProfileSheetContent
 import com.octaviantocan.mymind.ui.settings.SIGN_OUT
 import com.octaviantocan.mymind.ui.settings.SettingsUiState
@@ -20,6 +24,7 @@ import com.octaviantocan.mymind.ui.shell.ShellFrame
 import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.PageScheme
 import org.junit.Assert.assertEquals
+import java.time.LocalDate
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -84,6 +89,53 @@ class SettingsScreenshotTest {
         allow = true
         compose.mainClock.advanceTimeByFrame()
         compose.onNodeWithText("Allow installs").assertExists()
+    }
+
+    private val agents = listOf(
+        ConnectedAgent("aa11", "Claude", "2026-11-01T12:00:00Z", "2026-11-05T12:00:00Z"),
+        ConnectedAgent("bb22", "ChatGPT", "2026-11-04T12:00:00Z", "2026-11-04T12:00:00Z"),
+    )
+
+    @Test
+    fun connectedAgentsSitAboveSignOut() {
+        var opened = 0
+        compose.setPhoneContent(false) {
+            SheetFixture("Profile") {
+                ProfileSheetContent(account, "0.6.0 (11)", SettingsUpdates(), onSignOut = {}, onClose = {}, photoLoader = null,
+                    onAgents = { opened++ })
+            }
+        }
+        compose.onNodeWithText(CONNECTED_AGENTS).performClick()
+        compose.runOnIdle { assertEquals(1, opened) }
+    }
+
+    @Test
+    fun removingAConnectedAgentAsksOnceMore() {
+        val removed = mutableListOf<String>()
+        var loads = 0
+        var state by mutableStateOf(AgentsUiState(agents))
+        compose.setPhoneContent(false) {
+            SheetFixture(CONNECTED_AGENTS) {
+                ConnectedAgentsPage(state, onLoad = { loads++ }, today = LocalDate.of(2026, 11, 5), onRemove = { id ->
+                    removed += id
+                    state = AgentsUiState(state.agents!!.filterNot { it.id == id })
+                })
+            }
+        }
+        compose.mainClock.advanceTimeBy(SETTLE_MS)
+        compose.onNodeWithText("Connected 1 Nov · used today").assertExists()
+        compose.onNodeWithText("Connected yesterday").assertExists()
+        compose.onNodeWithText("Claude").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText("Tap to remove").assertExists()
+        compose.onRoot().captureRoboImage("screenshots/settings_agents.png")
+        compose.runOnIdle { assertEquals(emptyList<String>(), removed) }
+        compose.onNodeWithText("Claude").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { assertEquals(listOf("aa11"), removed) }
+        compose.onNodeWithText("Claude").assertDoesNotExist()
+        compose.onNodeWithText("ChatGPT").assertExists()
+        compose.runOnIdle { assertEquals(1, loads) }
     }
 
     private companion object {

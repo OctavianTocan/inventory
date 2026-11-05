@@ -24,6 +24,8 @@ const STATE_COOKIE: &str = "mm_oauth";
 const SESSION_MS: f64 = 30.0 * 24.0 * 3600.0 * 1000.0;
 const LOGIN_MS: f64 = 10.0 * 60.0 * 1000.0;
 const APP_TOKEN_MS: f64 = 90.0 * 24.0 * 3600.0 * 1000.0;
+/// How the MCP server names the app tokens it holds (`mcp/src/signin.ts`): `MCP: <client name>`.
+const AGENT_DEVICE: &str = "MCP: ";
 const SKEW_S: f64 = 60.0;
 const FAILURE_WINDOW_MS: f64 = 15.0 * 60.0 * 1000.0;
 const FAILURES_PER_USER: f64 = 10.0;
@@ -489,6 +491,40 @@ impl Inner {
         (host == domain && !local.is_empty()).then_some(email)
     }
 
+    // Connected agents (`docs/mcp.md`): the app tokens the MCP server holds for this account, which it names
+    // `MCP: <client>`. `GET /app/v1/agents` lists them and `DELETE /app/v1/agents/<id>` signs one out; the MCP server
+    // then drops its grant on that agent's next call.
+    fn agents(&self, req: &Request, pathname: &str, row: &SessionRow) -> Result<Option<Response>> {
+        let agent_like = format!("{AGENT_DEVICE}%");
+        if pathname == "/app/v1/agents" && req.method == "GET" {
+            let rows = self.db.query(
+                "SELECT hash, device, created_ms, used_ms FROM app_tokens WHERE sub = ? AND device LIKE ? AND expires_ms > ? ORDER BY used_ms DESC",
+                params![row.sub.as_str(), agent_like.as_str(), self.now()],
+            )?;
+            let mut agents = Vec::with_capacity(rows.len());
+            for agent in rows {
+                let name = agent.text("device").unwrap_or("").strip_prefix(AGENT_DEVICE).unwrap_or("").trim().to_owned();
+                agents.push(Value::from(obj! {
+                    "id" => agent.text("hash").unwrap_or(""),
+                    "name" => if name.is_empty() { "An AI app".to_owned() } else { name },
+                    "connected" => iso(agent.number("created_ms").unwrap_or(0.0))?,
+                    "used" => iso(agent.number("used_ms").unwrap_or(0.0))?,
+                }));
+            }
+            return Ok(Some(json_reply(200, obj! { "agents" => agents })));
+        }
+        if req.method == "DELETE"
+            && let Some(id) = pathname.strip_prefix("/app/v1/agents/")
+        {
+            let removed = self.db.execute(
+                "DELETE FROM app_tokens WHERE hash = ? AND sub = ? AND device LIKE ?",
+                params![id, row.sub.as_str(), agent_like.as_str()],
+            )?;
+            return Ok(Some(if removed == 0 { json_reply(404, obj! { "error" => "not-found" }) } else { bare(204) }));
+        }
+        Ok(None)
+    }
+
     fn start_app_token(&self, sub: &Value, email: &str, kind: &str, device: &Value) -> Result<Object> {
         let token = self.token_id(32);
         let now = self.now();
@@ -938,6 +974,11 @@ impl Auth {
         {
             let kind = if row.sub.starts_with("password:") { "password" } else { "google" };
             return Ok(Some(json_reply(200, obj! { "email" => row.email.as_str(), "kind" => kind })));
+        }
+        if let Some(row) = &signed_in
+            && let Some(response) = me.agents(req, &pathname, row)?
+        {
+            return Ok(Some(response));
         }
         if signed_in.is_some() && pathname != "/app/v1/auth/signout" {
             return Ok(None);

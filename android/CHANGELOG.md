@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.57 (68), 2026-11-05
+See and remove the AI apps connected to your ThyMind.
+
+### Added
+- Profile has a Connected agents page. It lists every AI app you connected to ThyMind (Claude, ChatGPT and others), with when it connected and when it last used your library. Tap Remove, then tap again, and that app is signed out of your library; connect it again from the app's own settings to bring it back. This needs the Worker deployed.
+
 ## 0.6.56 (67), 2026-11-05
 The AI kit moves to its own home.
 

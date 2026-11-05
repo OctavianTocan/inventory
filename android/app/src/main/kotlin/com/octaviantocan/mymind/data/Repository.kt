@@ -51,6 +51,12 @@ class Repository(private val api: MymindApi, private val session: Session, priva
         }
     }
 
+    /** @return The AI apps connected to the account. */
+    suspend fun agents(): ApiResult<AgentList> = api.agents()
+
+    /** Signs the connected AI app [id] out. */
+    suspend fun removeAgent(id: String): ApiResult<Unit> = api.removeAgent(id)
+
     /**
      * Reads no network, so the account shows at once and offline.
      *

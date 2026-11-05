@@ -1,0 +1,8 @@
+{
+  "name": "thymind",
+  "version": "1.0.0",
+  "description": "Search, read and organize your ThyMind library from Claude Code: the ThyMind MCP server and a skill that explains how to use it.",
+  "author": { "name": "Octavian Tocan" },
+  "homepage": "https://mymind.octaviantocan.com",
+  "keywords": ["notes", "bookmarks", "library", "search"]
+}

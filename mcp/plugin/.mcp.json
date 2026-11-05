@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "thymind": {
+      "type": "http",
+      "url": "https://mymind.octaviantocan.com/mcp"
+    }
+  }
+}

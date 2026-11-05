@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "thymind": {
+      "type": "streamable-http",
+      "url": "https://mymind.octaviantocan.com/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": { "mode": "cimd" },
+            "authorizationUrl": "https://mymind.octaviantocan.com/mcp-auth/authorize",
+            "tokenUrl": "https://mymind.octaviantocan.com/mcp-auth/token",
+            "resource": "https://mymind.octaviantocan.com/mcp",
+            "baseScopes": ["thymind.read"],
+            "defaultScopes": ["thymind.read", "thymind.write"]
+          }
+        }
+      }
+    }
+  }
+}

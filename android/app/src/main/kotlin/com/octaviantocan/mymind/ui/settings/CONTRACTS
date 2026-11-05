@@ -49,3 +49,13 @@ MUST NOT show another session's photo, and the photo MUST be fetched by a loader
 never carries the library session.
 Source: Tavi, 28 October 2026 ("we also aren't loading the user's profile picture
 properly, which we should").
+
+@cc [owner:OctavianTocan,label:product;security] profile-connected-agents
+For a signed-in account the Profile sheet's Account group MUST offer Connected agents above
+Sign out, opening a page inside the same sheet that lists each AI app signed in through
+ThyMind's MCP server by the name it gave itself, with when it connected and was last
+used. Remove MUST ask once more on the same row before it signs the app out, and the app
+MUST leave the list at once. The page MUST list only this account's AI apps, never a
+phone or browser session, and removing one MUST NOT sign out the phone.
+Source: Tavi, 5 November 2026 ("Nice. Build it." on the MCP brief, step 3: list and
+remove your own MCP tokens, Rust routes plus a Profile row in the app).

@@ -1,0 +1,11 @@
+{
+  "name": "thymind",
+  "owner": { "name": "Octavian Tocan" },
+  "plugins": [
+    {
+      "name": "thymind",
+      "source": "./mcp/plugin",
+      "description": "Search, read and organize your ThyMind library from Claude Code."
+    }
+  ]
+}

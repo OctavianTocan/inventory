@@ -103,6 +103,11 @@ describe("card text", () => {
   it("makes short results with space names and flags", () => {
     expect(cardResult(CARDS.link, SPACES)).toMatchObject({ title: "How to make bread", site: "example.org", pinned: true, trashed: false, snippet: "try this weekend" });
     expect(cardResult(CARDS.note, SPACES)).toMatchObject({ title: "Pasta with lemon", spaces: ["Kitchen"], tags: ["recipes"] });
+    // Pins imported from mymind carry only the flag, with no position.
+    expect(cardResult({ ...CARDS.note, flags: 512 }, SPACES).pinned).toBe(true);
+    expect(cardResult({ ...CARDS.note, flags: 0 }, SPACES).pinned).toBe(false);
+    expect(cardResult({ ...CARDS.note, note: undefined, description: "a plugin named &lsquo;smolpilot&rsquo; &amp; more&#33;" }, SPACES).snippet).toBe("a plugin named \u2018smolpilot\u2019 & more!");
+    expect(cardDetail({ ...CARDS.note, author: "by Breeje Anadkat" }, SPACES).author).toBe("Breeje Anadkat");
   });
 
   it("cuts long text and says how much", () => {

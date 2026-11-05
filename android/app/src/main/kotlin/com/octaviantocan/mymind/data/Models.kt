@@ -214,6 +214,21 @@ data class User(
 )
 
 /**
+ * An AI app connected to the account through ThyMind's MCP server (`GET /app/v1/agents`).
+ *
+ * @property id The server's id for its sign-in, used to remove it.
+ * @property name The name the AI app gave itself, such as `Claude`.
+ * @property connected When it connected, as an ISO time.
+ * @property used When it last reached the library, as an ISO time.
+ */
+@Serializable
+data class ConnectedAgent(val id: String, val name: String, val connected: String, val used: String)
+
+/** @property agents The account's connected AI apps, most recently used first. */
+@Serializable
+data class AgentList(val agents: List<ConnectedAgent> = emptyList())
+
+/**
  * Account settings and feature switches from the config script of a web page.
  *
  * @property colorScheme Appearance the account picked: `light`, `dark` or `system`, or null when the page has none.

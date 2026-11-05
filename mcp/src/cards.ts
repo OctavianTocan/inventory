@@ -76,6 +76,8 @@ export interface CardDetail extends Omit<CardResult, "snippet"> {
 /** Longest saved text one card returns before it is cut. */
 export const TEXT_LIMIT = 20_000;
 const SNIPPET = 200;
+/** The card flag the app sets on pinned cards; imported pins carry it without a `pinPosition`. */
+const PINNED_FLAG = 512;
 
 const BLOCKS = new Set(["paragraph", "heading", "blockquote", "listItem", "list_item", "codeBlock", "code_block", "horizontalRule"]);
 
@@ -104,7 +106,24 @@ export function proseText(node: unknown): string {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+const ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  lsquo: "\u2018", rsquo: "\u2019", ldquo: "\u201C", rdquo: "\u201D", ndash: "\u2013", mdash: "\u2014", hellip: "\u2026",
+};
+
+/** One HTML character reference as its character, or itself when unknown. */
+function entity(whole: string, name: string): string {
+  if (name[0] === "#") {
+    const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
+    return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+  }
+  return ENTITIES[name.toLowerCase()] ?? whole;
+}
+
+/** Text with HTML character references written out, as some sites leave them in their descriptions. */
+function unescaped(text: string | undefined): string | undefined {
+  return text?.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, entity);
+}
 
 /**
  * Plain text of the sanitized post HTML the app API gives (`post.bodyHtml`).
@@ -117,13 +136,7 @@ export function htmlText(html: string): string {
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|li|blockquote|h[1-6])>/gi, "\n")
     .replace(/<[^>]*>/g, "")
-    .replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (whole, name: string) => {
-      if (name[0] === "#") {
-        const code = name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
-        return Number.isFinite(code) ? String.fromCodePoint(code) : whole;
-      }
-      return ENTITIES[name.toLowerCase()] ?? whole;
-    })
+    .replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, entity)
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -144,7 +157,7 @@ function oneLine(text: string, limit: number): string {
 function titleOf(card: Card, text: string): string {
   const title = card.title?.trim() || card.article?.title?.trim() || card.reddit?.title?.trim();
   if (title) return oneLine(title, 200);
-  const first = (text || card.description || "").split("\n").find((line) => line.trim());
+  const first = (text || unescaped(card.description) || "").split("\n").find((line) => line.trim());
   if (first) return oneLine(first, 120);
   return card.url ?? `Untitled ${card.type}`;
 }
@@ -162,7 +175,7 @@ function base(card: Card, spaceNames: Map<string, string>) {
       saved: card.created,
       tags: (card.tags ?? []).map((tag) => tag.name),
       spaces: (card.spaces ?? []).map((id) => spaceNames.get(id) ?? id),
-      pinned: card.pinPosition !== undefined && card.pinPosition !== null,
+      pinned: ((card.flags ?? 0) & PINNED_FLAG) !== 0 || (card.pinPosition !== undefined && card.pinPosition !== null),
       trashed: Boolean(card.deleted),
     },
   };
@@ -177,7 +190,7 @@ function base(card: Card, spaceNames: Map<string, string>) {
  */
 export function cardResult(card: Card, spaceNames: Map<string, string>): CardResult {
   const { text, result } = base(card, spaceNames);
-  return { ...result, snippet: oneLine(card.note || card.description || card.summary || text, SNIPPET) };
+  return { ...result, snippet: oneLine(card.note || unescaped(card.description) || card.summary || text, SNIPPET) };
 }
 
 /**
@@ -197,8 +210,8 @@ export function cardDetail(card: Card, spaceNames: Map<string, string>): CardDet
     .map((comment) => `${comment.author ?? "someone"}: ${oneLine(comment.body ?? "", 1000)}`);
   return {
     ...result,
-    ...(card.author || card.post?.author ? { author: card.author ?? card.post?.author } : {}),
-    ...(card.description ? { description: card.description } : {}),
+    ...(card.author || card.post?.author ? { author: (card.author ?? card.post?.author ?? "").replace(/^by\s+/i, "") } : {}),
+    ...(card.description ? { description: unescaped(card.description) } : {}),
     ...(card.note ? { note: card.note } : {}),
     ...(full ? { text: cut ? full.slice(0, TEXT_LIMIT) : full } : {}),
     ...(cut ? { textCut: cut } : {}),
@@ -286,7 +299,7 @@ export function detailMarkdown(card: CardDetail): string {
   if (card.price) parts.push(`Price: ${card.price}`);
   if (card.videoSeconds) parts.push(`Length: ${Math.round(card.videoSeconds / 60)} min`);
   if (card.note) parts.push(`## The person's note\n${fenced(card.note)}`);
-  if (card.description) parts.push(`## Description\n${fenced(card.description)}`);
+  if (card.description) parts.push(`## Description\n${fenced(unescaped(card.description) ?? "")}`);
   if (card.text) parts.push(`## Saved text\n${fenced(card.text)}${card.textCut ? `\n(cut: ${card.textCut} more characters)` : ""}`);
   if (card.comments?.length) parts.push(`## Top comments\n${fenced(card.comments.join("\n"))}`);
   if (card.hasPicture) parts.push("Has a picture: `thymind_get_picture` shows it.");

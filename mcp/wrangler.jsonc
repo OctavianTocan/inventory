@@ -19,7 +19,7 @@
   // Secrets (wrangler secret put): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, the `mymind` Worker's own web client.
   "services": [{ "binding": "LIBRARY_API", "service": "mymind" }],
   // Create with `npx wrangler kv namespace create OAUTH_KV` and paste its id here before the first deploy.
-  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_WITH_OAUTH_KV_ID" }],
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "5da66adf66e34d5daa4e08c2cad6c2c9" }],
   // One person's agents together: 120 tool calls a minute.
   "ratelimits": [{ "name": "LIMITER", "namespace_id": "4417", "simple": { "limit": 120, "period": 60 } }],
   "observability": { "enabled": true }

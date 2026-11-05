@@ -1,0 +1,22 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "thymind",
+  "version": "1.0.0",
+  "description": "Search, read and organize your ThyMind library: the links, notes, posts, pictures, videos, PDFs and products you saved.",
+  "author": { "name": "Octavian Tocan", "url": "https://mymind.octaviantocan.com" },
+  "keywords": ["notes", "bookmarks", "library", "search"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "ThyMind",
+        "shortDescription": "Your saved library",
+        "longDescription": "Ask about anything you saved to ThyMind. Search by words or meaning, open cards with their notes and saved text, see their pictures, and, if you allow it when connecting, save new things, tag, sort into spaces, pin and trash.",
+        "developerName": "Octavian Tocan",
+        "category": "Productivity",
+        "defaultPrompt": "What did I save about ",
+        "composerIcon": "./assets/icon.svg",
+        "logo": "./assets/icon.svg"
+      }
+    }
+  }
+}

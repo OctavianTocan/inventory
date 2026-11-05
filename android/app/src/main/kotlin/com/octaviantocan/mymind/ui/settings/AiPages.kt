@@ -95,6 +95,7 @@ enum class ProfilePage(override val title: String) : SheetPage {
     CodexSignIn(AiCli.Codex.title),
     Model("Search model"),
     Effort("Effort"),
+    Agents(CONNECTED_AGENTS),
     ;
 
     override val depth: Int get() = 1

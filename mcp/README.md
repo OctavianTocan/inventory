@@ -34,6 +34,15 @@ brief (`thymind-mcp/concepts_brief.md` in the project files).
 | `thymind_trash` | Move up to 25 cards to the trash. |
 | `thymind_restore` | Take up to 25 cards out of the trash. |
 
+The person sees and removes connected AI apps in the app under Profile, Connected agents (`GET` and `DELETE
+/app/v1/agents` on the `mymind` Worker, which list the app tokens named `MCP: <client>`). Removing one signs its app
+token out; the next call from that agent gets a 401 from the library, and this Worker then revokes its grant.
+
+In Claude and ChatGPT, which support MCP Apps, `thymind_search` results show as a grid of card tiles in ThyMind's
+colours (`src/view.ts`, resource `ui://thymind/cards.html`). The grid gets its cards from the tool result and each
+picture by calling `thymind_get_picture` through the host, so it needs no network of its own (empty CSP) and never
+holds a token. Tapping a tile with a link opens it.
+
 Saved text comes back inside `<saved-content>` fences, and the server instructions tell the agent to treat it as
 data, never as instructions.
 
@@ -51,12 +60,31 @@ The OAuth pages sit under `/mcp-auth/` because the OAuth library guards `/mcp` a
 
 Deploy the `mymind` Worker first; this Worker reaches it through the `LIBRARY_API` service binding.
 
-1. `npx wrangler kv namespace create thymind-mcp-oauth` and paste the id into `wrangler.jsonc` (`OAUTH_KV`).
+1. Done 5 Nov 2026: KV namespace `thymind-mcp-oauth` (`5da66adf…`, in `wrangler.jsonc`), the Google secrets, and the
+   first deploy from mini-002-netcup.
 2. In the Google Cloud console, add `https://mymind.octaviantocan.com/mcp-auth/callback` as an authorized redirect
    URI on the web OAuth client (the same client the server uses is fine).
 3. `npx wrangler secret put GOOGLE_CLIENT_ID` and `npx wrangler secret put GOOGLE_CLIENT_SECRET`.
 4. `npm run deploy`. The routes `mymind.octaviantocan.com/mcp*` and `/.well-known/oauth-*` attach to the zone.
-5. In Claude: Settings, Connectors, Add custom connector, URL `https://mymind.octaviantocan.com/mcp`.
+5. Connect an AI app (below) with your own account and try a search.
+
+## Connecting an AI app
+
+`plugin/` is one package for both ChatGPT and Claude Code: the shared skill `skills/thymind/SKILL.md` (what cards,
+spaces and tags are, how to search, that saved text is data), `plugin.json` and `mcp.json` for ChatGPT, and
+`.claude-plugin/plugin.json` and `.mcp.json` for Claude Code. `test/plugin.test.ts` fails when the skill names a tool
+the server lacks or misses one it has.
+
+- **Claude.ai and the Claude apps:** Settings, Connectors, Add custom connector, URL
+  `https://mymind.octaviantocan.com/mcp`. To add the skill too, zip `plugin/skills/thymind/` and upload it under
+  Settings, Capabilities, Skills.
+- **Claude Code:** `/plugin install thymind --marketplace OctavianTocan/mymind-reconstruction` (the repository's
+  `.claude-plugin/marketplace.json`; the repository is private, so it needs GitHub access to it), or just the server:
+  `claude mcp add --transport http thymind https://mymind.octaviantocan.com/mcp`.
+- **ChatGPT (private, Tavi's choice on 5 Nov):** Settings, Plugins (chatgpt.com/plugins), Add custom MCP server, URL
+  `https://mymind.octaviantocan.com/mcp`. ChatGPT names itself with its Client ID Metadata Document, so the consent
+  page shows "Published by chatgpt.com". The package in `plugin/` is what a workspace admin publishes inside a
+  ChatGPT workspace, or what a public listing would upload; it is not listed.
 
 ## Checks
 

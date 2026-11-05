@@ -1,0 +1,44 @@
+<!-- Ten read-only questions about the TEST_USER library on mymind.octaviantocan.com (checked 5 Nov 2026).
+     Each needs more than one tool call; the answers are about saved cards that do not change by themselves. -->
+<evaluation>
+  <qa_pair>
+    <question>One space holds a single card, a post on X. Who wrote that post? Give the author's full name.</question>
+    <answer>Breeje Anadkat</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In the space "The Company Co", one card is a GitHub repository. Which programming language is that tool written in?</question>
+    <answer>Zig</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>A saved YouTube video builds a local AI code completion plugin for Neovim. What is the plugin called?</question>
+    <answer>smolpilot</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which model family does that Neovim completion plugin run through Ollama? Give the model name without its size.</question>
+    <answer>Qwen 2.5 Coder</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>One of the pinned cards is an article from Lenny's Newsletter about making AI a better designer. Who is the person it is about?</question>
+    <answer>Anshu Chimala</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>A pinned card is an essay on the Laws of UX from userinterface.wiki. Who wrote it?</question>
+    <answer>Raphael Salaja</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>The only saved page from cloudflare.com is in which space?</question>
+    <answer>The Company Co</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In the space "Social Media Refs" there is a LinkedIn post about an essay by Linear's CEO. What is the CEO's name?</question>
+    <answer>Karri Saarinen</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>An X post in "Social Media Refs" is about open source bots that run on Cloudflare. What is the name of the browser each bot gets?</question>
+    <answer>Kitesurf</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>The space "Stuff I've Built" has one web page that is a SKILL.md file. What is the name of the consent management tool it is for?</question>
+    <answer>c15t</answer>
+  </qa_pair>
+</evaluation>
