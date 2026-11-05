@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.63 (74), 2026-11-05
+Draw ThyMind in any of Pully's colour themes, in light, dark or the phone's look.
+
+### Added
+- Profile has a new Theme row under Appearance. It opens every theme Pully has: Pully's own colours and the 32 themes Pully takes from OpenCode (Tokyo Night, Catppuccin, Dracula, Gruvbox, Nord, Rosé Pine and the rest), after ThyMind's own colours. Search them by name, see each one as four dots, and tap one to try it: the whole app, gallery, pages and sheets, changes at once with Pully's sweep from the corner. The theme stays on this phone.
+- Appearance also has Pully's System, Light and Dark choice. It sets the whole app at once, gallery, pages and sheets alike, with the same sweep: from the right for Dark, from the left otherwise. Until you pick one, ThyMind looks as it does today.
+
 ## 0.6.62 (73), 2026-11-05
 Save voice memos and other audio, and read what they say.
 

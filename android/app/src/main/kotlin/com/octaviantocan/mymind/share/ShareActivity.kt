@@ -51,7 +51,7 @@ class ShareActivity : ComponentActivity() {
             val signedIn = container.session.state.value is SessionState.SignedIn
             val state = parseShare(requestOf(intent), signedIn, ContentProbe(contentResolver))
             setContent {
-                MymindTheme(dark = isSystemInDarkTheme()) {
+                MymindTheme(dark = container.themePrefs.chromeDark(isSystemInDarkTheme()), theme = container.themePrefs.theme) {
                     when (state) {
                         is ShareState.Ready -> SavingSheet(state, container)
                         else -> ShareProblem(

@@ -60,9 +60,7 @@ import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.uploadFileOf
 import com.octaviantocan.mymind.ui.card.CardDetailDialog
 import com.octaviantocan.mymind.ui.card.CardSheetMotion
-import com.octaviantocan.mymind.ui.card.DarkCardSheetColors
 import com.octaviantocan.mymind.ui.card.FetchedPdfs
-import com.octaviantocan.mymind.ui.card.LightCardSheetColors
 import com.octaviantocan.mymind.ui.card.ReaderSheetLayout
 import com.octaviantocan.mymind.ui.card.ReaderSheetState
 import com.octaviantocan.mymind.ui.card.LocalPdfSource
@@ -685,7 +683,8 @@ fun MainShell(
             onClose = { adding = null },
         )
     }
-    if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false }, ai = ai, feedback = feedback, photoLoader = photoLoader)
+    if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false }, ai = ai, feedback = feedback, photoLoader = photoLoader,
+        pageScheme = scheme)
     if (newSpaceOpen) {
         PageTheme(scheme) {
             NewSpaceSheet(
@@ -747,7 +746,7 @@ fun ShellFrame(
     val immersion = remember { ShellImmersion() }
     CompositionLocalProvider(LocalFootBars provides bars, LocalShellImmersion provides immersion) {
         val paper = MymindTheme.colors.page
-        val scrim = if (paper.luminance() < 0.5f) DarkCardSheetColors.scrim else LightCardSheetColors.scrim
+        val scrim = MymindTheme.palette.sheet.scrim
         val top = WindowInsets.statusBars.getTop(LocalDensity.current).toFloat()
         ImmersiveSystemBars(immersion)
         Box(modifier.fillMaxSize().drawBehind { drawRect(lerp(lerp(paper, Color.Black, immersion.amount()), Color.Black, recede())) }) {

@@ -50,6 +50,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import com.octaviantocan.mymind.ui.card.*
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import com.octaviantocan.mymind.ui.theme.themeWipe
 
 /** A new sheet instance owns its drag position, reveal and native landing feedback. */
 @Composable
@@ -126,7 +127,8 @@ private fun PullySheetHost(onDismissRequest: () -> Unit, accent: androidx.compos
             window.isNavigationBarContrastEnforced = false
             WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = colors.paper.luminance() > 0.5f
         }
-        content()
+        // The sheet is a window of its own, so it takes part in a theme change's wipe as the page under it does.
+        Box(Modifier.themeWipe()) { content() }
     }
 }
 

@@ -24,8 +24,6 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.octaviantocan.mymind.changelog.ChangelogEntry
 import com.octaviantocan.mymind.changelog.ChangelogPicture
-import com.octaviantocan.mymind.ui.card.DarkCardSheetColors
-import com.octaviantocan.mymind.ui.card.LightCardSheetColors
 import com.octaviantocan.mymind.ui.menu.PullySheet
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
@@ -38,11 +36,11 @@ fun ChangelogScreen(entries: List<ChangelogEntry>, onClose: () -> Unit) {
 /** Pully's version blocks, badges, summaries, group labels, bullet spacing and separators. */
 @Composable
 internal fun ChangelogEntries(entries: List<ChangelogEntry>, modifier: Modifier = Modifier) {
-    val dark = MymindTheme.colors.dark
-    val c = if (dark) DarkCardSheetColors else LightCardSheetColors
-    val muted = if (dark) Color(0xFF9D9D9D) else Color(0xFF6E8285)
-    val border = if (dark) Color(0xFF242424) else Color(0xFFECEBE7)
-    val accent = if (dark) Color(0xFF4FB7C1) else Color(0xFF24929C)
+    val c = MymindTheme.palette.sheet
+    val ink = MymindTheme.palette.sheetInk
+    val muted = ink.muted
+    val border = ink.border
+    val accent = ink.accent
     val read = TextStyle(fontFamily = MymindTheme.fonts.body, fontSize = 16.sp, lineHeight = 24.sp, color = c.text)
     val small = read.copy(fontSize = 15.sp, lineHeight = 21.sp, color = muted)
     val line = with(LocalDensity.current) { read.lineHeight.toDp() }
@@ -55,8 +53,8 @@ internal fun ChangelogEntries(entries: List<ChangelogEntry>, modifier: Modifier 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(entry.versionName, Modifier.semantics { heading() }, style = small.copy(lineHeight = 22.sp, fontWeight = FontWeight.SemiBold))
                     if (index == 0) Text("New", Modifier.clip(CircleShape)
-                        .background(if (dark) Color(0xFF14363B) else Color(0xFFE6F1F2)).padding(horizontal = 8.dp, vertical = 1.dp),
-                        style = small.copy(fontWeight = FontWeight.Medium, color = if (dark) Color(0xFF9AD3D6) else Color(0xFF165E66)))
+                        .background(ink.wash).padding(horizontal = 8.dp, vertical = 1.dp),
+                        style = small.copy(fontWeight = FontWeight.Medium, color = ink.washInk))
                 }
                 if (entry.summary.isNotBlank()) Text(entry.summary, Modifier.padding(top = 6.dp),
                     style = read.copy(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold))

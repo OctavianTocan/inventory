@@ -100,6 +100,7 @@ enum class ProfilePage(override val title: String) : SheetPage {
     FeedbackModel("Feedback model"),
     FeedbackEffort("Feedback effort"),
     Agents(CONNECTED_AGENTS),
+    Theme("Theme"),
     ;
 
     override val depth: Int get() = 1
@@ -489,7 +490,7 @@ private fun RecommendedPill() {
 
 /** The ✓ of a chosen row, in a slot of its own so a row never shifts when it appears. */
 @Composable
-private fun Tick(shown: Boolean) {
+internal fun Tick(shown: Boolean) {
     Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
         if (shown) Image(painterResource(R.drawable.checkmark), "Chosen", Modifier.size(22.dp), colorFilter = ColorFilter.tint(menuColors().rowText))
     }

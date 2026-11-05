@@ -36,6 +36,9 @@ import com.octaviantocan.mymind.ui.shell.MainShell
 import com.octaviantocan.mymind.ui.signin.SignInScreen
 import com.octaviantocan.mymind.ui.splash.LaunchState
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.octaviantocan.mymind.ui.theme.themeWipe
+import com.octaviantocan.mymind.ui.theme.LocalThemePrefs
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -50,22 +53,24 @@ private const val HUB_SYNC_GAP_MS = 1_000L
  */
 @Composable
 fun MymindRoot(container: AppContainer) {
-    MymindTheme {
-        Surface(Modifier.fillMaxSize(), color = MymindTheme.colors.page) {
-            val session by container.session.state.collectAsStateWithLifecycle()
-            val online by container.connectivity.online.collectAsStateWithLifecycle(container.connectivity.isOnline())
-            val signIn = viewModel { SignInViewModel(container.repository) }
-            val signInState by signIn.state.collectAsStateWithLifecycle()
-            val launchState = when (session) {
-                SessionState.Loading -> LaunchState.Splash
-                SessionState.SignedOut -> if (signInState.busy) LaunchState.LoggingIn else LaunchState.Login
-                SessionState.SignedIn -> LaunchState.Main
-            }
-            Box(Modifier.fillMaxSize()) {
-                if (session == SessionState.SignedIn) {
-                    CompositionLocalProvider(LocalOffline provides !online) { SignedIn(container, online) }
+    MymindTheme(dark = container.themePrefs.chromeDark(isSystemInDarkTheme()), theme = container.themePrefs.theme) {
+        CompositionLocalProvider(LocalThemePrefs provides container.themePrefs) {
+            Surface(Modifier.fillMaxSize().themeWipe(), color = MymindTheme.colors.page) {
+                val session by container.session.state.collectAsStateWithLifecycle()
+                val online by container.connectivity.online.collectAsStateWithLifecycle(container.connectivity.isOnline())
+                val signIn = viewModel { SignInViewModel(container.repository) }
+                val signInState by signIn.state.collectAsStateWithLifecycle()
+                val launchState = when (session) {
+                    SessionState.Loading -> LaunchState.Splash
+                    SessionState.SignedOut -> if (signInState.busy) LaunchState.LoggingIn else LaunchState.Login
+                    SessionState.SignedIn -> LaunchState.Main
                 }
-                SignInScreen(signIn, launchState)
+                Box(Modifier.fillMaxSize()) {
+                    if (session == SessionState.SignedIn) {
+                        CompositionLocalProvider(LocalOffline provides !online) { SignedIn(container, online) }
+                    }
+                    SignInScreen(signIn, launchState)
+                }
             }
         }
     }

@@ -35,8 +35,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.card.CardSheetMotion
-import com.octaviantocan.mymind.ui.card.DarkCardSheetColors
-import com.octaviantocan.mymind.ui.card.LightCardSheetColors
 import com.octaviantocan.mymind.ui.card.LocalCardSheetColors
 import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
@@ -104,7 +102,7 @@ internal fun FootIcon(@DrawableRes id: Int, modifier: Modifier = Modifier, tint:
 /** Reuses the native Pully press-tint port with the active gallery appearance. */
 @Composable
 internal fun FootPressTheme(content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalCardSheetColors provides if (MymindTheme.colors.dark) DarkCardSheetColors else LightCardSheetColors, content = content)
+    CompositionLocalProvider(LocalCardSheetColors provides MymindTheme.palette.sheet, content = content)
 }
 
 @Composable

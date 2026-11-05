@@ -61,6 +61,9 @@ import com.octaviantocan.mymind.ui.menu.SheetRow
 import com.octaviantocan.mymind.ui.menu.SheetRowChevron
 import com.octaviantocan.mymind.ui.menu.SheetRowDivider
 import com.octaviantocan.mymind.ui.menu.menuColors
+import com.octaviantocan.mymind.ui.theme.LocalThemePrefs
+import com.octaviantocan.mymind.ui.theme.PageScheme
+import com.octaviantocan.mymind.ui.theme.ThemePrefs
 
 /** Label of the row that signs the account out. */
 const val SIGN_OUT = "Sign out"
@@ -74,6 +77,7 @@ const val SIGN_OUT = "Sign out"
  * @param ai The account's Claude Code and Codex, or null for a sheet without the AI rows.
  * @param feedback Sends feedback, or null for a sheet without the Send feedback row.
  * @param photoLoader The gallery's account-photo loader, whose memory already holds the photo, or null for one of its own.
+ * @param pageScheme The account's own appearance, which the pages follow until one is picked on the phone.
  */
 @Composable
 fun ProfileSheetHost(
@@ -83,13 +87,14 @@ fun ProfileSheetHost(
     ai: AiAccount? = null,
     feedback: FeedbackTracker? = null,
     photoLoader: ImageLoader? = null,
+    pageScheme: PageScheme = PageScheme.System,
 ) {
     val state by settings.state.collectAsStateWithLifecycle()
     val agents by settings.agents.collectAsStateWithLifecycle()
     LaunchedEffect(settings) { settings.refresh() }
     ProfileSheet(state, appVersion(LocalContext.current), updates, onSignOut = settings::signOut, onClose = onClose,
         photoLoader = photoLoader ?: rememberPublicAccountPhotoLoader(), ai = ai, feedback = feedback,
-        agents = AgentsActions(agents, settings::loadAgents, settings::removeAgent))
+        agents = AgentsActions(agents, settings::loadAgents, settings::removeAgent), themes = LocalThemePrefs.current, pageScheme = pageScheme)
 }
 
 /**
@@ -105,6 +110,8 @@ fun ProfileSheetHost(
  * @param ai The account's Claude Code and Codex, or null for a sheet without the AI rows.
  * @param feedback Sends feedback, or null for a sheet without the Send feedback row and page.
  * @param agents The Connected agents page's state and actions, or null for a sheet without that row.
+ * @param themes The phone's theme setting, or null for a sheet without the Appearance group.
+ * @param pageScheme The account's own appearance, which the pages follow until one is picked on the phone.
  */
 @Composable
 fun ProfileSheet(
@@ -117,6 +124,8 @@ fun ProfileSheet(
     ai: AiAccount? = null,
     feedback: FeedbackTracker? = null,
     agents: AgentsActions? = null,
+    themes: ThemePrefs? = null,
+    pageScheme: PageScheme = PageScheme.System,
 ) {
     var page by remember { mutableStateOf<ProfilePage?>(null) }
     val services = ai?.let { rememberAiSignInServices(it) }
@@ -126,10 +135,13 @@ fun ProfileSheet(
     PullyPagedSheet("Profile", page, onBack = { page = null }, onClose = onClose) { shown ->
         if (shown == ProfilePage.Agents && agents != null) {
             ConnectedAgentsPage(agents.state, agents.onLoad, agents.onRemove)
-        } else if (shown == null || shown == ProfilePage.Agents || ai == null || services == null) {
+        } else if (shown == ProfilePage.Theme && themes != null) {
+            ThemePage(themes)
+        } else if (shown == null || shown == ProfilePage.Agents || shown == ProfilePage.Theme || ai == null || services == null) {
             ProfileSheetContent(account, version, updates, onSignOut, onClose, photoLoader,
                 aiRows = ai?.let { mine -> { AiRows(mine, feedback = feedback != null) { page = it } } },
-                onAgents = agents?.let { { page = ProfilePage.Agents } })
+                onAgents = agents?.let { { page = ProfilePage.Agents } },
+                appearance = themes?.let { prefs -> rememberAppearanceRows(prefs, pageScheme) { page = ProfilePage.Theme } })
         } else when (shown) {
             ProfilePage.Model -> ModelPage(ai, ai.prefs, open = { page = it }, onDone = { page = null })
             ProfilePage.Effort -> EffortPage(ai, ai.prefs, onDone = { page = null })
@@ -140,7 +152,7 @@ fun ProfileSheet(
             ProfilePage.FeedbackEffort -> EffortPage(ai, ai.feedbackPrefs, onDone = { page = ProfilePage.Feedback })
             ProfilePage.ClaudeSignIn -> AiSignInPage(services, AiCli.Claude, notify)
             ProfilePage.CodexSignIn -> AiSignInPage(services, AiCli.Codex, notify)
-            ProfilePage.Agents -> Unit
+            ProfilePage.Agents, ProfilePage.Theme -> Unit
         }
     }
 }
@@ -201,9 +213,17 @@ internal fun ColumnScope.ProfileSheetContent(
     photoLoader: ImageLoader?,
     aiRows: (@Composable () -> Unit)? = null,
     onAgents: (() -> Unit)? = null,
+    appearance: AppearanceRows? = null,
 ) {
     AccountCard(account, photoLoader)
     aiRows?.invoke()
+    if (appearance != null) {
+        CardMenuHeading("Appearance")
+        AppearanceTabs(appearance.selected, appearance.onSelect)
+        CardMenuGroup(Modifier.padding(top = 12.dp)) {
+            SheetRow(painterResource(R.drawable.ic_palette), "Theme", appearance.onTheme, detail = appearance.themeName, trailing = { SheetRowChevron() })
+        }
+    }
     if (updates.visible) {
         CardMenuHeading("App")
         CardMenuGroup(Modifier.padding(top = 12.dp)) {

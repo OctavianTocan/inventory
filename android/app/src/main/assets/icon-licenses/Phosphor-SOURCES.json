@@ -482,6 +482,18 @@
       "path_count": 1
     },
     {
+      "resource": "ic_palette",
+      "icon": "palette",
+      "weight": "regular",
+      "source_path": "assets/regular/palette.svg",
+      "source_sha256": "f16925171ff434d8e8768da0d06867d77cd50d9e78932ab12af65bccac7a1375",
+      "android_width": "20dp",
+      "android_height": "20dp",
+      "fill_color": "#FFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_pause_fill",
       "icon": "pause",
       "weight": "fill",

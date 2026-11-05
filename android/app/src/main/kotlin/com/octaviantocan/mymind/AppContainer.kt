@@ -31,6 +31,7 @@ import com.octaviantocan.mymind.feedback.FeedbackStore
 import com.octaviantocan.mymind.feedback.FeedbackTracker
 import com.octaviantocan.mymind.feedback.FeedbackWorker
 import com.octaviantocan.mymind.ui.menu.DownloadsSaver
+import com.octaviantocan.mymind.ui.theme.ThemePrefs
 import com.octaviantocan.mymind.update.AutoInstaller
 import com.octaviantocan.mymind.update.SessionApkInstaller
 import com.octaviantocan.mymind.update.UploadActivity
@@ -69,6 +70,9 @@ class AppContainer(context: Context) {
         onShipped = { UpdateWorker.checkNow(context.applicationContext) },
         schedule = { FeedbackWorker.schedule(context.applicationContext) },
     )
+
+    /** The colour theme picked on this phone. */
+    val themePrefs = ThemePrefs(context)
 
     /** The searches last pressed on this phone, for the opened search page. */
     val recentSearches = RecentSearches(context)

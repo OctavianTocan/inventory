@@ -90,6 +90,7 @@ import com.octaviantocan.mymind.ui.library.productShop
 import com.octaviantocan.mymind.ui.library.readerVideo
 import com.octaviantocan.mymind.ui.library.redditComments
 import com.octaviantocan.mymind.ui.library.tileKind
+import com.octaviantocan.mymind.ui.theme.CardSheetColors
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import coil3.compose.AsyncImage
 import androidx.compose.ui.text.SpanStyle
@@ -226,7 +227,7 @@ fun CardDetailDialog(
                     scrollState = scrollState, actions = actions, details = details, reading = reading,
                     editingTags = editingTags)
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp).clip(CircleShape)
-                    .background((if (light) LightCardSheetColors else DarkCardSheetColors).grabber))
+                    .background(MymindTheme.palette.sheet.grabber))
             }
         }
     }
@@ -277,7 +278,7 @@ internal fun CardDetail(
     reading: Boolean = false,
     editingTags: Boolean = false,
 ) {
-    val colors = if (MymindTheme.page.document.luminance() < 0.5f) DarkCardSheetColors else LightCardSheetColors
+    val colors = MymindTheme.palette.sheet
     val density = LocalDensity.current
     val uriHandler = LocalUriHandler.current
     val open = onOpenSource ?: { url: String -> runCatching { uriHandler.openUri(url) }; Unit }

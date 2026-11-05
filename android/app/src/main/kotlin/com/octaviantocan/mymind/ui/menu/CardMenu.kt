@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.ui.theme.AppFontFamily
 import com.octaviantocan.mymind.ui.card.*
+import com.octaviantocan.mymind.ui.theme.CardSheetColors
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
 /** Actions supported by the card menu; ordering and availability come from cardMenuItems. */
@@ -77,8 +78,10 @@ internal val LocalCardMenuAccent = staticCompositionLocalOf<Color?> { null }
 internal val CardMenuFont = AppFontFamily
 
 /** Neutral Pully paper and controls; the card accent is confined to the top hint and grabber. */
+@Composable
+@ReadOnlyComposable
 internal fun cardMenuSheetColors(accent: Color?, dark: Boolean): CardSheetColors {
-    val base = if (dark) DarkCardSheetColors else LightCardSheetColors
+    val base = MymindTheme.theme.palette(dark).sheet
     if (accent == null) return base
     return CardSheetColors(
         paper = base.paper,
@@ -96,7 +99,7 @@ internal fun menuColors(): MenuColors {
     val dark = MymindTheme.colors.dark
     val sheet = cardMenuSheetColors(LocalCardMenuAccent.current, dark)
     return MenuColors(sheet.scrim, sheet.paper, sheet.raised, sheet.text,
-        sheet.raised, if (dark) Color(0xFFFF98AA) else Color(0xFFB4233A), sheet.grabber)
+        sheet.raised, MymindTheme.theme.palette(dark).sheetInk.danger, sheet.grabber)
 }
 
 /** Shipped artwork for each card action. */
@@ -317,7 +320,7 @@ internal fun SheetRowDivider(start: Dp = 52.dp) {
 internal fun SheetSwitch(checked: Boolean) {
     val colors = menuColors()
     val dark = MymindTheme.colors.dark
-    val track by animateColorAsState(if (checked) colors.rowText else if (dark) Color(0xFF3A3A3A) else Color(0xFFE3E5E3), tween(200), label = "switchTrack")
+    val track by animateColorAsState(if (checked) colors.rowText else MymindTheme.palette.sheetInk.switchOff, tween(200), label = "switchTrack")
     val thumb by animateDpAsState(if (checked) 23.dp else 3.dp, tween(200), label = "switchThumb")
     Box(Modifier.size(52.dp, 32.dp).clip(CircleShape).background(track)) {
         Box(Modifier.offset(x = thumb, y = 3.dp).size(26.dp).cardSurfaceShadow(CircleShape).clip(CircleShape)

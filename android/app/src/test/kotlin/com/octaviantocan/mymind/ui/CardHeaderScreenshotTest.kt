@@ -20,8 +20,8 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.octaviantocan.mymind.ui.card.defaultCardHeaderIcons
 import com.octaviantocan.mymind.ui.card.ReaderHeader
 import com.octaviantocan.mymind.ui.card.LocalCardSheetColors
-import com.octaviantocan.mymind.ui.card.LightCardSheetColors
-import com.octaviantocan.mymind.ui.card.DarkCardSheetColors
+import com.octaviantocan.mymind.ui.theme.LightCardSheetColors
+import com.octaviantocan.mymind.ui.theme.DarkCardSheetColors
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

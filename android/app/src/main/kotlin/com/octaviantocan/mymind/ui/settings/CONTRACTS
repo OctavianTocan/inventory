@@ -80,3 +80,39 @@ merged_not_released, no_change or failed), after which the phone MUST stop askin
 the job. A shipped job MUST start the update check, and its tap MUST open the app on the
 update screen. A denied notification permission MUST NOT crash or block the job.
 Source: design_draft.md decision 2 (Tavi, 5 Nov 2026).
+
+@cc [owner:OctavianTocan,label:product;design] profile-theme-picks-pullys-themes
+The Profile sheet MUST offer a Theme row under Appearance, showing the theme in use, that
+opens a page inside the same sheet listing every colour theme Pully offers (Pully's own
+palette and every theme Pully converts from OpenCode), with ThyMind's own colours first
+and the default. The page MUST have a Find a theme search, show each theme as four dots
+(screen, accent, success, error) in the look on screen and a tick on the one in use. A tap
+MUST apply the theme at once through Pully's wipe, without leaving the page, and the
+phone MUST keep the pick through restarts and sign-outs. With system animations off the
+theme MUST change without the wipe.
+Source: Tavi, 5 November 2026 ("Look into how Pully does themes, and let's bring the same
+themes functionality and all the themes from it"); pulls.review `theme-colour-themes` at
+9a44869.
+
+@cc [owner:OctavianTocan,label:product;design] profile-appearance-system-light-dark
+The Appearance group MUST start with Pully's System, Light and Dark capsule tabs, the one
+in use raised. A pick MUST apply at once to the whole app, the native chrome, the pages
+and every sheet, whatever appearance the account has, through Pully's wipe: from the top
+right for Dark, from the top left otherwise, and without a wipe when no colour on screen
+changes or system animations are off. The phone MUST keep the pick through restarts and
+sign-outs. Until one is picked, the chrome follows the system and the pages the account's
+own appearance, and the tabs show the account's.
+Source: Tavi, 5 November 2026 ("Also bring in the System/Light/Dark toggle, and the effect
+it does over the app, too"); pulls.review Settings Appearance `CapsuleTabs` and
+`ThemeWipe` at 9a44869.
+
+@cc [owner:OctavianTocan,label:design;architecture] profile-theme-changes-colours-only
+A colour theme replaces colours only: type, shapes, spacing, motion and components MUST be
+the same under every theme. Every theme MUST define the gallery, the pages, the native
+chrome and the sheets for the light and the dark look, so no screen keeps a colour from
+another theme; a theme with one look MUST use it for both. Colours a card takes from what
+it holds (a network's own colour, a type colour, a picture) MUST NOT change with the
+theme, and the splash keeps ThyMind's own colours. ThyMind's own theme MUST draw exactly
+as the app did before themes.
+Source: Tavi, 5 November 2026 (as `profile-theme-picks-pullys-themes`); pulls.review
+`theme-changes-colours-only` at 9a44869.

@@ -13,7 +13,7 @@ import androidx.compose.ui.text.TextStyle
 
 private val LocalMymindColors = staticCompositionLocalOf<MymindColors> { error("MymindTheme is missing") }
 private val LocalMymindFonts = staticCompositionLocalOf<MymindFonts> { error("MymindTheme is missing") }
-private val LocalPageColors = staticCompositionLocalOf<PageColors> { error("MymindTheme is missing") }
+private val LocalThemePalette = staticCompositionLocalOf<ThemePalette> { error("MymindTheme is missing") }
 private val LocalChromeColors = staticCompositionLocalOf<MymindColors?> { null }
 
 /** Access to the colours and fonts of the enclosing [MymindTheme]. */
@@ -28,7 +28,15 @@ object MymindTheme {
 
     /** Colours of the library and card pages in the current appearance. */
     val page: PageColors
-        @Composable @ReadOnlyComposable get() = LocalPageColors.current
+        @Composable @ReadOnlyComposable get() = LocalThemePalette.current.page
+
+    /** Every colour of the current theme in the current appearance. */
+    val palette: ThemePalette
+        @Composable @ReadOnlyComposable get() = LocalThemePalette.current
+
+    /** The colour theme the app is drawn in, for a part that needs its other look. */
+    val theme: ColorTheme
+        @Composable @ReadOnlyComposable get() = LocalColorTheme.current
 
     /** Colours of the native chrome, which follows the system even inside a [PageTheme]. */
     val chrome: MymindColors
@@ -65,7 +73,8 @@ enum class PageScheme {
 }
 
 /**
- * Applies the account's appearance to library and card pages inside a [MymindTheme] that follows the system.
+ * Applies the appearance to library and card pages inside a [MymindTheme] that follows the system: the one picked on
+ * this phone in Profile, else the account's own.
  *
  * @param scheme Appearance the account picked.
  * @param content The page.
@@ -73,30 +82,36 @@ enum class PageScheme {
 @Composable
 fun PageTheme(scheme: PageScheme, content: @Composable () -> Unit) {
     val chrome = MymindTheme.chrome
-    MymindTheme(dark = scheme.isDark(chrome.dark)) {
+    val picked = LocalThemePrefs.current?.appearance ?: scheme
+    MymindTheme(dark = picked.isDark(chrome.dark)) {
         CompositionLocalProvider(LocalChromeColors provides chrome, content = content)
     }
 }
 
 /**
- * Applies the app's colours and fonts, and a Material 3 theme built from them for the stock components.
+ * Applies the app's colours and fonts, and a Material 3 theme built from them for the stock components. The colours
+ * are [theme]'s palette for the look [dark] asks for; a one-look theme draws its one look either way, and
+ * [MymindColors.dark] then says which look is really on screen.
  *
  * @param dark True for the dark appearance; follows the system setting by default.
+ * @param theme The colour theme; the enclosing one by default, ThyMind's own outside any.
  * @param content Content drawn with the theme.
  */
 @Composable
-fun MymindTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    val colors = if (dark) MymindDarkColors else MymindLightColors
+fun MymindTheme(dark: Boolean = isSystemInDarkTheme(), theme: ColorTheme = LocalColorTheme.current, content: @Composable () -> Unit) {
+    val palette = theme.palette(dark)
+    val colors = palette.colors
     val fonts = MymindDefaultFonts
-    val scheme = if (dark) {
-        darkColorScheme(primary = colors.accent, background = colors.page, surface = colors.page)
+    val scheme = if (colors.dark) {
+        darkColorScheme(primary = colors.accent, background = colors.page, surface = colors.page, error = colors.danger)
     } else {
-        lightColorScheme(primary = colors.accent, background = colors.page, surface = colors.page)
+        lightColorScheme(primary = colors.accent, background = colors.page, surface = colors.page, error = colors.danger)
     }
     CompositionLocalProvider(
+        LocalColorTheme provides theme,
         LocalMymindColors provides colors,
         LocalMymindFonts provides fonts,
-        LocalPageColors provides if (dark) DarkPageColors else LightPageColors,
+        LocalThemePalette provides palette,
     ) {
         MaterialTheme(colorScheme = scheme, typography = appTypography(fonts), content = content)
     }
