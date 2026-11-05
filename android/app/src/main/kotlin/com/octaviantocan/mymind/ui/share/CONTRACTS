@@ -49,6 +49,20 @@ model ("Let's use OpenAI's API for this"), and raised the limit from 500 MB to
 5 GB ("Let's raise it to 5GB, actually. That makes it very useful."). The reader
 section is Claude's choice.
 
+@cc [owner:OctavianTocan,label:product;security] share-reads-gallery-in-place
+A shared photo or video that the Gallery keeps on the phone (its own MediaStore
+entry, or the one a Google Photos link wraps) MUST upload from that file, without a
+copy on the phone, when ThyMind holds full photo and video access. ThyMind MUST ask
+for that access at most once, before saving a share that holds such an item, and
+MUST NOT ask for anything else. Without full access (refused, or only some photos
+allowed) and for every other shared file, the share MUST still save from a copy.
+ThyMind MUST NOT read a Gallery entry, in place or to copy it, unless the share
+carried a read grant (Android grants only what the sender could read), and MUST
+unwrap a Google Photos link only when that authority belongs to the preinstalled
+Google Photos, so another app cannot use ThyMind's access to read the Gallery.
+Source: Tavi, 5 November 2026, chose "Read from the Gallery" over copying, because a
+5 GB video needed 5 GB free on the phone.
+
 @cc [owner:OctavianTocan,label:product] share-sheet-shows-thymind-tags
 When one thing is shared, the sheet MUST show the tags ThyMind gave it as soon
 as they reach the phone, before the tags the user added, each marked with the

@@ -2,6 +2,7 @@ package com.octaviantocan.mymind.data
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import java.io.File
 import java.io.FileNotFoundException
@@ -43,6 +44,44 @@ fun uploadFileOf(resolver: ContentResolver, uri: Uri): UploadFile? {
         resolver.openInputStream(uri) ?: throw FileNotFoundException(uri.toString())
     }
 }
+
+/**
+ * The Gallery file behind a shared item: the item itself when the Gallery shared its own MediaStore entry, or the entry
+ * Google Photos wraps in its link for a photo or video kept on the phone.
+ *
+ * @param uri The shared item.
+ * @param trustPhotos Whether the Photos authority belongs to the preinstalled Google Photos; any app could declare it
+ *   where Photos is missing.
+ * @return The MediaStore entry, or null for anything else (a cloud-only Photos item, a file from another app).
+ */
+fun mediaStoreUriOf(uri: Uri, trustPhotos: Boolean = true): Uri? = when (uri.authority) {
+    MediaStore.AUTHORITY -> uri
+    GOOGLE_PHOTOS_AUTHORITY -> if (!trustPhotos) null else uri.pathSegments.firstOrNull { it.startsWith("content://${MediaStore.AUTHORITY}/") }?.let(Uri::parse)
+    else -> null
+}
+
+/**
+ * Reads a shared Gallery item in place, without a copy, when ThyMind may read the Gallery itself, so the upload can
+ * still read it after the share sheet closes and the sharing app's permission ends.
+ *
+ * @param resolver Resolver that reads the file.
+ * @param uri The shared item.
+ * @param canReadGallery Whether ThyMind holds full photo and video access.
+ * @param trustPhotos As for [mediaStoreUriOf].
+ * @return The Gallery file as an upload, or null when it has to be copied instead.
+ */
+fun galleryUploadOf(resolver: ContentResolver, uri: Uri, canReadGallery: Boolean, trustPhotos: Boolean): UploadFile? {
+    if (!canReadGallery) return null
+    val media = mediaStoreUriOf(uri, trustPhotos) ?: return null
+    return try {
+        uploadFileOf(resolver, media)
+    } catch (_: SecurityException) {
+        null
+    }
+}
+
+/** Authority of Google Photos' links to its items. */
+const val GOOGLE_PHOTOS_AUTHORITY = "com.google.android.apps.photos.contentprovider"
 
 /**
  * Copies a shared file into [directory], so it can still be read after the share sheet closes and the sharing app's

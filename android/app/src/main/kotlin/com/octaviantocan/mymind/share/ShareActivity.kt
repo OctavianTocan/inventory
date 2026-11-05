@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -19,6 +20,7 @@ import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.SessionState
 import com.octaviantocan.mymind.data.copiedUploadOf
+import com.octaviantocan.mymind.data.galleryUploadOf
 import com.octaviantocan.mymind.data.uploadFileOf
 import com.octaviantocan.mymind.ui.menu.suggestSpace
 import com.octaviantocan.mymind.ui.share.SavePhase
@@ -28,6 +30,7 @@ import com.octaviantocan.mymind.ui.share.ShareSheetState
 import com.octaviantocan.mymind.ui.share.SharedFile
 import com.octaviantocan.mymind.ui.share.thymindTags
 import com.octaviantocan.mymind.ui.theme.MymindTheme
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -36,6 +39,15 @@ import java.io.File
 
 /** Receives text, links, pictures, videos, audio files and PDFs shared from other apps and saves them to the library. */
 class ShareActivity : ComponentActivity() {
+    private var galleryAnswer: CompletableDeferred<Unit>? = null
+
+    // Android grants a share's files only when the sending app could read them itself (ui/share/CONTRACTS).
+    private val shareGranted: Boolean
+        get() = intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0
+    private val askGallery = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        galleryAnswer?.complete(Unit)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -50,6 +62,14 @@ class ShareActivity : ComponentActivity() {
             container.session.restore()
             val signedIn = container.session.state.value is SessionState.SignedIn
             val state = parseShare(requestOf(intent), signedIn, ContentProbe(contentResolver))
+            if (state is ShareState.Ready && GalleryAccess.shouldAsk(this@ShareActivity, state.items)) {
+                GalleryAccess.markAsked(this@ShareActivity)
+                // Asked once, before saving, so a big video can upload from the Gallery's own file.
+                val answer = CompletableDeferred<Unit>()
+                galleryAnswer = answer
+                askGallery.launch(GalleryAccess.permissions)
+                answer.await()
+            }
             setContent {
                 MymindTheme(dark = container.themePrefs.chromeDark(isSystemInDarkTheme()), theme = container.themePrefs.theme) {
                     when (state) {
@@ -75,7 +95,12 @@ class ShareActivity : ComponentActivity() {
         val online = remember { container.connectivity.isOnline() }
         val controller = remember {
             ShareController(scope, library, activity = container.uploadActivity) { uri ->
-                withContext(Dispatchers.IO) { copiedUploadOf(contentResolver, Uri.parse(uri), sharedDirectory()) }
+                withContext(Dispatchers.IO) {
+                    val shared = Uri.parse(uri)
+                    if (!GalleryAccess.mayRead(shared, shareGranted)) return@withContext null
+                    galleryUploadOf(contentResolver, shared, GalleryAccess.granted(applicationContext), GalleryAccess.photosIsGenuine(applicationContext))
+                        ?: copiedUploadOf(contentResolver, shared, sharedDirectory())
+                }
             }.also { it.start(ready.items) }
         }
         val state = remember { ShareSheetState(ready.items) }

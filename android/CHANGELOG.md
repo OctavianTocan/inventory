@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.70 (81), 2026-11-05
+Share big videos without filling up the phone.
+
+### Changed
+- A photo or video shared from the Gallery or Google Photos now uploads straight from the Gallery's own file, so a 5 GB video no longer needs 5 GB free for a copy. The first time you share one, Android asks once to let ThyMind see your photos and videos. If you say no, or allow only some, sharing still works by copying, as before.
+
 ## 0.6.67 (78), 2026-11-05
 ThyMind updates when you open it, like Pully.
 
