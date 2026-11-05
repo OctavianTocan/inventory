@@ -84,8 +84,8 @@ pub fn ai_configured(offline: bool) -> bool {
     if !env_set("GEMINI_API_KEY") {
         return false;
     }
-    let typesafe = if env_set("TYPESAFE_API_KEY") { &["TYPESAFE_BASE_URL"][..] } else { &[] };
-    !offline || ["GEMINI_BASE_URL", "AI_CHAT_BASE_URL"].iter().chain(typesafe).all(|name| loopback(name))
+    let decisions = if env_set("OPENAI_API_KEY") { &["OPENAI_BASE_URL"][..] } else { &[] };
+    !offline || ["GEMINI_BASE_URL", "AI_CHAT_BASE_URL"].iter().chain(decisions).all(|name| loopback(name))
 }
 
 // A summary the user wrote, or one imported from their library, is not replaced by a later analysis.

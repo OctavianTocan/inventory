@@ -1,4 +1,4 @@
-//! New-save enrichment and the resumable backfill, against stubbed Gemini and TypeSafe.
+//! New-save enrichment and the resumable backfill, against stubbed Gemini and OpenAI Decisions.
 
 #[path = "tools_common/mod.rs"]
 mod tools_common;
@@ -51,8 +51,8 @@ impl Fetch for Stub {
         } else if chat {
             let content = json::to_string(&obj! { "title" => "Generated title", "summary" => "A generated summary.", "tags" => mm_core::arr!["alpha", "design"] }.into());
             json::to_string(&obj! { "choices" => mm_core::arr![obj! { "message" => obj! { "content" => content } }] }.into())
-        } else if url.contains("/v1/systemone") {
-            r#"{"answers":{"t0":{"noul":0.9},"t1":{"noul":0.8}}}"#.to_owned()
+        } else if url.contains("/v1/decisions") {
+            r#"{"answers":[{"type":"predicate","name":"t0","probability":0.9},{"type":"predicate","name":"t1","probability":0.8}]}"#.to_owned()
         } else {
             "{}".to_owned()
         };
@@ -106,7 +106,7 @@ fn vector() -> Value {
     Value::Array((0..768).map(|index| Value::from((index % 5) as f64 / 5.0)).collect())
 }
 
-fn env(typesafe: bool) -> Vec<(String, String)> {
+fn env(decisions: bool) -> Vec<(String, String)> {
     let mut pairs = vec![
         ("OFFLINE", "1"),
         ("GEMINI_API_KEY", "test-key"),
@@ -114,9 +114,9 @@ fn env(typesafe: bool) -> Vec<(String, String)> {
         ("AI_CHAT_BASE_URL", "http://127.0.0.1:9/v1beta/openai"),
         ("OWNER_EMAIL", "owner@example.com"),
     ];
-    if typesafe {
-        pairs.push(("TYPESAFE_API_KEY", "test-typesafe"));
-        pairs.push(("TYPESAFE_BASE_URL", "http://127.0.0.1:9"));
+    if decisions {
+        pairs.push(("OPENAI_API_KEY", "test-openai"));
+        pairs.push(("OPENAI_BASE_URL", "http://127.0.0.1:9/v1"));
     }
     pairs.into_iter().map(|(key, value)| (key.to_owned(), value.to_owned())).collect()
 }
@@ -129,9 +129,9 @@ fn random(size: usize) -> Vec<u8> {
     vec![1; size]
 }
 
-async fn open(chat_status: u16, typesafe: bool) -> Harness {
+async fn open(chat_status: u16, decisions: bool) -> Harness {
     forget_vocabulary();
-    runtime::set_env(env(typesafe).into_iter().collect());
+    runtime::set_env(env(decisions).into_iter().collect());
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("enrich-{}-{}", std::process::id(), runtime::random_bytes(3).iter().map(|byte| format!("{byte:02x}")).collect::<String>()));
     std::fs::create_dir_all(&dir).unwrap();
     let db = Rc::new(Sqlite::open(dir.join("library.db"), false).unwrap());
@@ -224,12 +224,12 @@ fn new_save_enriches_on_the_worker_path() {
         assert_eq!(summary_of(&h.db, &id), "A generated summary.");
         assert!(tag_flags(&h.db, &id).iter().any(|(_, flags)| *flags == 2));
         assert_eq!(embedding_len(&h.db, &id), Some(3072));
-        assert!(h.calls.0.borrow().iter().any(|(_, url, _)| url.contains("/v1/systemone")));
+        assert!(h.calls.0.borrow().iter().any(|(_, url, _)| url.contains("/v1/decisions")));
     });
 }
 
 #[test]
-fn new_save_keeps_chat_tags_without_typesafe() {
+fn new_save_keeps_chat_tags_without_decisions() {
     let _guard = LOCK.lock().unwrap();
     mymind::runtime::run(async {
         let h = open(200, false).await;
@@ -237,7 +237,7 @@ fn new_save_keeps_chat_tags_without_typesafe() {
         assert_eq!(status, 201, "{body}");
         let id = json::parse(&body).unwrap().get("id").to_js_string();
         assert!(tag_flags(&h.db, &id).iter().any(|(_, flags)| *flags == 2));
-        assert!(h.calls.0.borrow().iter().all(|(_, url, _)| !url.contains("/v1/systemone")));
+        assert!(h.calls.0.borrow().iter().all(|(_, url, _)| !url.contains("/v1/decisions")));
     });
 }
 
@@ -400,7 +400,7 @@ fn command_runs_the_hosted_backfill_with_the_session_cookie() {
         Box::new(move |request: &tools_common::Req| {
             assert_eq!(request.header("cookie"), Some("mm_session=abc"));
             if request.method == "GET" {
-                return tools_common::Resp::json(200, r#"{"cards":1,"missingSummary":1,"missingTags":1,"missingEmbedding":1,"skippedComplete":0,"skippedEmpty":0,"chatInputTokens":300,"chatOutputTokens":150,"embedTokens":40,"estimatedUsd":0.000098,"typesafe":false}"#);
+                return tools_common::Resp::json(200, r#"{"cards":1,"missingSummary":1,"missingTags":1,"missingEmbedding":1,"skippedComplete":0,"skippedEmpty":0,"chatInputTokens":300,"chatOutputTokens":150,"embedTokens":40,"estimatedUsd":0.000098,"decisions":false}"#);
             }
             posts += 1;
             if posts == 1 {

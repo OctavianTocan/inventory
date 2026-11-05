@@ -67,13 +67,14 @@ fn run_with_fake(
     let fake = ai_fake(true);
     let url = base_override.map_or_else(|| fake.url(), str::to_owned);
     let chat = format!("{url}/v1beta/openai");
+    let openai = format!("{url}/v1");
     if let Some(contents) = dot_env {
         std::fs::write(root.join("fixture-vars"), contents).unwrap();
     }
     let mut env: Vec<(&str, &str)> = vec![
         ("GEMINI_BASE_URL", &url),
         ("AI_CHAT_BASE_URL", &chat),
-        ("TYPESAFE_BASE_URL", &url),
+        ("OPENAI_BASE_URL", &openai),
     ];
     env.extend_from_slice(extra_env);
     let out = run_rust(&root, "try-ai", args, &env, None);
@@ -82,7 +83,7 @@ fn run_with_fake(
 
 #[test]
 fn usage_errors() {
-    let default_keys = [("GEMINI_API_KEY", "fixture-key"), ("TYPESAFE_API_KEY", "fixture-jev")];
+    let default_keys = [("GEMINI_API_KEY", "fixture-key"), ("OPENAI_API_KEY", "fixture-openai")];
     for (label, args, message) in [
         ("unknown", &["--unknown"][..], "Unknown option '--unknown'"),
         ("zero-cards", &["--cards", "0"][..], "Usage: node tools/try-ai.mjs"),
@@ -101,7 +102,7 @@ fn usage_errors() {
 
 #[test]
 fn analyzes_recorded_cards() {
-    let default_keys = [("GEMINI_API_KEY", "fixture-key"), ("TYPESAFE_API_KEY", "fixture-jev")];
+    let default_keys = [("GEMINI_API_KEY", "fixture-key"), ("OPENAI_API_KEY", "fixture-openai")];
     let (out, requests) = run_with_fake("defaults", &[], &default_keys, None, None);
     assert_eq!(out.status, 0, "stderr: {}", out.stderr);
     assert!(out.stdout.starts_with("library: 3 cards, vocabulary of 5 tags, analyzing 3"), "{}", out.stdout);
@@ -113,7 +114,7 @@ fn analyzes_recorded_cards() {
 
 #[test]
 fn ranks_given_queries() {
-    let default_keys = [("GEMINI_API_KEY", "fixture-key"), ("TYPESAFE_API_KEY", "fixture-jev")];
+    let default_keys = [("GEMINI_API_KEY", "fixture-key"), ("OPENAI_API_KEY", "fixture-openai")];
     let (out, _) = run_with_fake(
         "queries",
         &["--cards", "2", "--vocab", "3", "--query", "design systems", "--query", "rust"],
@@ -128,16 +129,16 @@ fn ranks_given_queries() {
 
 #[test]
 fn missing_keys_and_endpoints() {
-    let (no_gemini, _) = run_with_fake("no-gemini", &["--cards", "1"], &[("TYPESAFE_API_KEY", "fixture-jev")], None, None);
+    let (no_gemini, _) = run_with_fake("no-gemini", &["--cards", "1"], &[("OPENAI_API_KEY", "fixture-openai")], None, None);
     assert_eq!(no_gemini.status, 1);
     assert!(no_gemini.stderr.contains("GEMINI_API_KEY is not set"), "{}", no_gemini.stderr);
 
-    let (no_jev, _) = run_with_fake("no-jev", &["--cards", "1"], &[("GEMINI_API_KEY", "fixture-key")], None, None);
-    assert_eq!(no_jev.status, 0, "stderr: {}", no_jev.stderr);
-    assert!(no_jev.stdout.contains("[chat]"), "{}", no_jev.stdout);
+    let (no_decisions, _) = run_with_fake("no-decisions", &["--cards", "1"], &[("GEMINI_API_KEY", "fixture-key")], None, None);
+    assert_eq!(no_decisions.status, 0, "stderr: {}", no_decisions.stderr);
+    assert!(no_decisions.stdout.contains("[chat]"), "{}", no_decisions.stdout);
 
     let closed = closed_url();
-    let default_keys = [("GEMINI_API_KEY", "fixture-key"), ("TYPESAFE_API_KEY", "fixture-jev")];
+    let default_keys = [("GEMINI_API_KEY", "fixture-key"), ("OPENAI_API_KEY", "fixture-openai")];
     let (dead, _) = run_with_fake("closed", &["--cards", "1"], &default_keys, None, Some(&closed));
     assert_eq!(dead.status, 1);
     assert!(dead.stderr.starts_with("error: "), "{}", dead.stderr);
@@ -145,19 +146,19 @@ fn missing_keys_and_endpoints() {
 
 #[test]
 fn reads_keys_from_dot_env_without_overriding_the_environment() {
-    let dot = "GEMINI_API_KEY=from-dot-env\nTYPESAFE_API_KEY=jev-from-dot-env\n";
+    let dot = "GEMINI_API_KEY=from-dot-env\nOPENAI_API_KEY=openai-from-dot-env\n";
     let (out, requests) = run_with_fake("dot-env", &["--cards", "1", "--query", "design"], &[], Some(dot), None);
     assert_eq!(out.status, 0, "stderr: {}", out.stderr);
-    assert!(requests.iter().any(|line| line.contains("from-dot-env") || line.contains("jev-from-dot-env")), "{requests:?}");
+    assert!(requests.iter().any(|line| line.contains("from-dot-env") || line.contains("openai-from-dot-env")), "{requests:?}");
 
     let (override_out, override_reqs) = run_with_fake(
         "dot-env-override",
         &["--cards", "1", "--query", "design"],
-        &[("GEMINI_API_KEY", "env-wins"), ("TYPESAFE_API_KEY", "jev-env-wins")],
+        &[("GEMINI_API_KEY", "env-wins"), ("OPENAI_API_KEY", "openai-env-wins")],
         Some(dot),
         None,
     );
     assert_eq!(override_out.status, 0, "stderr: {}", override_out.stderr);
-    assert!(override_reqs.iter().any(|line| line.contains("jev-env-wins")), "{override_reqs:?}");
-    assert!(!override_reqs.iter().any(|line| line.contains("jev-from-dot-env")), "{override_reqs:?}");
+    assert!(override_reqs.iter().any(|line| line.contains("openai-env-wins")), "{override_reqs:?}");
+    assert!(!override_reqs.iter().any(|line| line.contains("openai-from-dot-env")), "{override_reqs:?}");
 }

@@ -56,10 +56,11 @@ pub struct Estimate {
     pub chat_output_tokens: usize,
     /// Rough embedding input tokens.
     pub embed_tokens: usize,
-    /// Rough USD from the rates above. TypeSafe is not included.
+    /// Rough USD from the rates above. OpenAI tag picking is not included.
     pub estimated_usd: f64,
-    /// `TYPESAFE_API_KEY` is set, so tag picking would run. Its price is not in `estimated_usd`.
-    pub typesafe: bool,
+    /// `OPENAI_API_KEY` is set, so tag picking with OpenAI's Decisions API would run. Its price is not in
+    /// `estimated_usd`.
+    pub decisions: bool,
 }
 
 impl Estimate {
@@ -76,7 +77,7 @@ impl Estimate {
             "chatOutputTokens" => self.chat_output_tokens as f64,
             "embedTokens" => self.embed_tokens as f64,
             "estimatedUsd" => self.estimated_usd,
-            "typesafe" => self.typesafe,
+            "decisions" => self.decisions,
             "rates" => obj! {
                 "embedUsdPerMillion" => EMBED_USD_PER_MILLION,
                 "chatInputUsdPerMillion" => CHAT_INPUT_USD_PER_MILLION,
@@ -182,7 +183,7 @@ pub fn estimate(store: &Store) -> Result<Estimate> {
 /// # Arguments
 /// * `store` - Open library. Read again after each model call so an edit during the call is not overwritten.
 /// * `writer` - Writer for the gap updates.
-/// * `fetch` - Outbound HTTP for Gemini and, when configured, TypeSafe.
+/// * `fetch` - Outbound HTTP for Gemini and, when configured, OpenAI.
 /// * `images` - Cover images. A missing image does not fail the card.
 /// * `limit` - Maximum cards to attempt. Zero writes nothing.
 ///
@@ -398,7 +399,7 @@ fn classify(store: &Store) -> Result<(Estimate, Vec<Work>)> {
         &[],
     )?;
     let mut estimate = Estimate {
-        typesafe: runtime::env("TYPESAFE_API_KEY").is_some_and(|key| !key.is_empty()),
+        decisions: runtime::env("OPENAI_API_KEY").is_some_and(|key| !key.is_empty()),
         ..Estimate::empty()
     };
     let mut pending = Vec::new();
@@ -464,7 +465,7 @@ impl Estimate {
             chat_output_tokens: 0,
             embed_tokens: 0,
             estimated_usd: 0.0,
-            typesafe: false,
+            decisions: false,
         }
     }
 }

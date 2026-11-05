@@ -436,11 +436,11 @@ impl Harness {
     ///
     /// # Arguments
     /// * `ai` - Enable the local Gemini/chat fixture.
-    /// * `typesafe` - Enable the local TypeSafe fixture.
+    /// * `decisions` - Enable tag picking against the local OpenAI Decisions fixture.
     ///
     /// # Returns
     /// Nothing; no process or environment file is read.
-    pub fn env(&self, ai: bool, typesafe: bool) {
+    pub fn env(&self, ai: bool, decisions: bool) {
         let mut vars = HashMap::from([
             ("OFFLINE".into(), "1".into()),
             (
@@ -451,12 +451,13 @@ impl Harness {
         if ai {
             vars.insert("GEMINI_API_KEY".into(), "fixture-key".into());
         }
-        if typesafe {
-            vars.insert("TYPESAFE_API_KEY".into(), "fixture-typesafe-key".into());
+        if decisions {
+            vars.insert("OPENAI_API_KEY".into(), "fixture-openai-key".into());
         }
-        for name in ["GEMINI_BASE_URL", "AI_CHAT_BASE_URL", "TYPESAFE_BASE_URL"] {
+        for name in ["GEMINI_BASE_URL", "AI_CHAT_BASE_URL"] {
             vars.insert(name.into(), self.fixtures.base.clone());
         }
+        vars.insert("OPENAI_BASE_URL".into(), format!("{}/v1", self.fixtures.base.trim_end_matches('/')));
         runtime::set_env(vars);
     }
 

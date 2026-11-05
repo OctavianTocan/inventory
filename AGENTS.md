@@ -16,7 +16,7 @@ It is its own product: nothing checks it against mymind any more.
    UI; the GitHub repository must stay private. The database stays off Git: `.env`, `data/`, `library/`,
    `downloads/` and `evidence/` stay local. Run `npm run bundle` before committing library changes, and never put
    cookies, JWTs or API keys into commits, reports, logs or prompts (Codex prompts leave the machine too).
-3. **Secrets live in `.env` only** (`TYPESAFE_API_KEY`, LLM keys, OAuth client secrets), read through
+3. **Secrets live in `.env` only** (`OPENAI_API_KEY`, LLM keys, OAuth client secrets), read through
    the server process environment, never shipped to the browser.
 4. **No bot-detection workarounds.** No user-agent spoofing or stealth tricks against mymind.
 5. **Git:** work on a branch, never force-push `main`. Commit each finished, verified step and push the branch to
@@ -110,7 +110,9 @@ that work, do not change version numbers or `android/CHANGELOG.md`; the feedback
   task given as a text prefix such as `task: search result | query: …`), and summaries/tags with a cheap chat model
   through the OpenAI-compatible endpoint `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`.
   EmbeddingGemma 2 itself is open weights only; `gemini-embedding-2` is Google's hosted equivalent.
-- **TypeSafe (Jev)**: a classification model (typed yes/no, choice and score answers), not a text generator. Before
-  using it, read the skill at https://github.com/typesafe-ai/skills/blob/main/skills/typesafe-ai/SKILL.md and
-  the live docs at https://docs.typesafe.ai (start from `llms.txt`). API: `POST https://api.typesafe.ai/v1/systemone`
-  with `Authorization: Bearer $TYPESAFE_API_KEY`.
+- **OpenAI Decisions API** (`OPENAI_API_KEY`): typed answers, not text: `predicate` (a probability), `choice` (one
+  of up to 255 options, with probabilities) and `score`, up to 400 questions per request about one input of text,
+  JSON and images of any size. Model `gpt-6-luna`; $0.10 per 1M input tokens, output free. API:
+  `POST https://api.openai.com/v1/decisions` with `Authorization: Bearer $OPENAI_API_KEY`; read the live guide at
+  https://developers.openai.com/api/docs/guides/decisions before changing a call. It picks final tags (`Ai::pick_tags`,
+  replacing TypeSafe Jev on 5 Nov 2026). The same key runs video transcription.

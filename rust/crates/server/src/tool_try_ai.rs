@@ -53,7 +53,7 @@ fn decode_component(input: &str) -> Result<String, String> {
     String::from_utf8(out).map_err(|_| malformed())
 }
 
-// The cover image on disk for a card, preferring formats Jev and Gemini embeddings accept.
+// The cover image on disk for a card, preferring formats Gemini embeddings accept.
 fn find_image(root: &Path, html: &str) -> Result<Option<Cover>, String> {
     let mut found = Vec::new();
     let mut at = 0;
@@ -150,7 +150,7 @@ fn spread<'a>(list: &[&'a Card], n: f64) -> Vec<&'a Card> {
     list.iter().enumerate().filter(|(index, _)| (*index as f64) % step == 0.0).map(|(_, card)| *card).take(n as usize).collect()
 }
 
-// About 60% image cards, the first a JPEG or PNG one so Jev's image path runs too.
+// About 60% image cards, the first a JPEG or PNG one so the Decisions image path runs too.
 fn pick_cards(cards: &[Card], count: f64) -> Vec<&Card> {
     let with_image: Vec<&Card> = cards.iter().filter(|card| card.image.is_some()).collect();
     let mut jpeg: Vec<&Card> = with_image.iter().copied().filter(|card| card.image.as_ref().is_some_and(|image| image.mime != "image/webp")).collect();

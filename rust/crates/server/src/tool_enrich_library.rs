@@ -93,14 +93,14 @@ fn print_estimate(estimate: &Estimate) {
         estimate.chat_input_tokens, estimate.chat_output_tokens, estimate.embed_tokens
     );
     println!(
-        "Estimated cost: ${} USD (chat input ${}/1M, output ${}/1M, embeddings ${}/1M; TypeSafe not included)",
+        "Estimated cost: ${} USD (chat input ${}/1M, output ${}/1M, embeddings ${}/1M; OpenAI tag picking not included)",
         number::to_fixed(estimate.estimated_usd, 6),
         number::number_to_string(0.10),
         number::number_to_string(0.40),
         number::number_to_string(0.20)
     );
-    if estimate.typesafe {
-        println!("TypeSafe tag picking is configured and is not included in the cost.");
+    if estimate.decisions {
+        println!("OpenAI tag picking is configured and is not included in the cost.");
     }
 }
 
@@ -152,7 +152,7 @@ fn estimate_from(value: &Value) -> Estimate {
         chat_output_tokens: field_number(value, "chatOutputTokens"),
         embed_tokens: field_number(value, "embedTokens"),
         estimated_usd: value.get("estimatedUsd").as_f64().unwrap_or(0.0),
-        typesafe: value.get("typesafe").truthy(),
+        decisions: value.get("decisions").truthy(),
     }
 }
 

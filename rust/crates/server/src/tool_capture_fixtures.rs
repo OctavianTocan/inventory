@@ -262,25 +262,23 @@ fn fixture_page(name: &str, base: &str) -> Reply {
     )
 }
 
+// Answer OpenAI Decisions predicates: tags "design" and "image" fit, every other tag does not.
 fn questions_answer(body: &Value) -> std::result::Result<Reply, ()> {
     static TAG: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| Regex::new(r#"tag "([^"]+)""#).unwrap());
-    let questions = body.get("questions");
-    let entries: Vec<(String, &Value)> = match questions {
-        Value::Object(object) => object.iter().map(|(key, question)| (key.into_owned(), question)).collect(),
-        Value::Array(items) => items.iter().enumerate().map(|(index, question)| (index.to_string(), question)).collect(),
-        _ => return Err(()),
+    let Value::Array(questions) = body.get("questions") else {
+        return Err(());
     };
-    let mut answers = Object::default();
-    for (key, question) in entries {
+    let mut answers = Vec::new();
+    for question in questions {
         if question.is_nullish() {
             return Err(());
         }
         let instructions = question.get("instructions").to_js_string();
         let wanted = TAG.captures(&instructions).map(|found| tag_key(&found[1])).unwrap_or_default();
-        let noul = if wanted == "design" || wanted == "image" { 0.95 } else { 0.1 };
-        answers.insert(key, obj! { "type" => "noul", "noul" => noul });
+        let probability = if wanted == "design" || wanted == "image" { 0.95 } else { 0.1 };
+        answers.push(obj! { "type" => "predicate", "name" => question.get("name").clone(), "probability" => probability }.into());
     }
-    Ok(json_reply(&obj! { "answers" => Value::Object(answers) }.into(), 200))
+    Ok(json_reply(&obj! { "answers" => Value::Array(answers) }.into(), 200))
 }
 
 async fn answer(state: &Arc<Mutex<State>>, media: &Media, base: &str, method: &str, target: &str, text: &str) -> std::result::Result<Reply, ()> {
@@ -356,7 +354,7 @@ async fn answer(state: &Arc<Mutex<State>>, media: &Media, base: &str, method: &s
         let message = obj! { "message" => obj! { "content" => json::to_string(&content.into()) } };
         return Ok(json_reply(&obj! { "choices" => Value::Array(vec![message.into()]) }.into(), 200));
     }
-    if path == "/v1/systemone" {
+    if path == "/v1/decisions" {
         return questions_answer(&body);
     }
     let name = path.get(1..).unwrap_or("");

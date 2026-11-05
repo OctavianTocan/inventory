@@ -63,7 +63,7 @@ by atomic rename after successful processing. Temporary uploads have a shared 1 
 original after commit; its row retains idempotency until expiry and attachment reuse resolves permanent media.
 
 AI runs after capture, after saved notes and on `POST /cards/:id/analyze`. The native environment loader reads `.env` when present. Set `GEMINI_API_KEY` for hosted summaries and 768-dimension embeddings;
-`TYPESAFE_API_KEY` optionally selects final tags with Jev. Cover images are converted to PNG for analysis. The
+`OPENAI_API_KEY` optionally selects final tags with OpenAI's Decisions API (`gpt-6-luna`). Cover images are converted to PNG for analysis. The
 library's tag vocabulary is passed to `analyze`; generic labels are filtered, manual tags are preserved, AI tags
 use flag `2`, summaries appear in the detail TL;DR and embeddings persist in the SQLite `embeddings` BLOB table.
 Missing keys and API failures retain the card and clear processing state. `STORE_READONLY=1` disables all capture

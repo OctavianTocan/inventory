@@ -400,7 +400,7 @@ fn text_of(value: &mm_js::Value) -> String {
 }
 
 /// A fake of the hosted AI APIs: Gemini embeddings (`:embedContent`, `:batchEmbedContents`), the chat endpoint and
-/// TypeSafe Jev, with answers that depend only on the request text. `usage` adds `usageMetadata` to batch answers.
+/// OpenAI Decisions, with answers that depend only on the request text. `usage` adds `usageMetadata` to batch answers.
 pub fn ai_fake(usage: bool) -> Fake {
     Fake::start(move || {
         Box::new(move |request: &Req| {
@@ -423,24 +423,24 @@ pub fn ai_fake(usage: bool) -> Fake {
                 let envelope = mm_js::json::to_string(&mm_js::obj! { "choices" => mm_js::Value::Array(vec![mm_js::obj! { "message" => mm_js::obj! { "content" => content } }.into()]) }.into());
                 return Resp::json(200, &envelope);
             }
-            if request.path.ends_with("/v1/systemone") {
-                let keys: Vec<String> = body.get("questions").as_object().map(|object| object.keys().map(|key| key.into_owned()).collect()).unwrap_or_default();
-                let answers: Vec<String> = keys.iter().enumerate().map(|(i, key)| format!("\"{key}\":{{\"noul\":{}}}", [0.9, 0.75, 0.3, 0.65, 0.85][i % 5])).collect();
-                return Resp::json(200, &format!("{{\"answers\":{{{}}}}}", answers.join(",")));
+            if request.path.ends_with("/v1/decisions") {
+                let questions = body.get("questions").as_array().cloned().unwrap_or_default();
+                let answers: Vec<String> = questions.iter().enumerate().map(|(i, question)| format!("{{\"type\":\"predicate\",\"name\":\"{}\",\"probability\":{}}}", question.get("name").to_js_string(), [0.9, 0.75, 0.3, 0.65, 0.85][i % 5])).collect();
+                return Resp::json(200, &format!("{{\"answers\":[{}]}}", answers.join(",")));
             }
             Resp::json(404, "{\"error\":{\"message\":\"unknown route\"}}")
         })
     })
 }
 
-/// Each request as one comparable line: method, path, the headers that matter, and the body with random Jev image
+/// Each request as one comparable line: method, path, the headers that matter, and the body with random image
 /// names replaced.
 pub fn request_lines(fake: &Fake) -> Vec<String> {
     let uuid = regex::Regex::new(r"mymind-image-[0-9a-f-]{36}").unwrap();
     fake.log()
         .iter()
         .map(|request| {
-            let headers: Vec<String> = ["x-goog-api-key", "authorization", "content-type", "typesafe-danger-zone-images"].iter().map(|name| format!("{name}={}", request.header(name).unwrap_or("-"))).collect();
+            let headers: Vec<String> = ["x-goog-api-key", "authorization", "content-type"].iter().map(|name| format!("{name}={}", request.header(name).unwrap_or("-"))).collect();
             format!("{} {}?{} {} {}", request.method, request.path, request.query, headers.join(" "), uuid.replace_all(&String::from_utf8_lossy(&request.body), "mymind-image-<id>"))
         })
         .collect()

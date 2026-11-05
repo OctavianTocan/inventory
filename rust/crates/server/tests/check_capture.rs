@@ -1266,11 +1266,16 @@ async fn quality(h: &Harness) {
         "check-capture-quality.mjs:119",
         !requests
             .iter()
-            .find(|request| request.path == "/v1/systemone")
+            .find(|request| request.path == "/v1/decisions")
             .unwrap()
             .body
-            .get("assets")
-            .truthy()
+            .get("input")
+            .get("0")
+            .get("content")
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|part| text(part, "type") == "input_image")
     );
     for (kind, text_override) in [
         (Some("Image"), None),
@@ -1772,14 +1777,14 @@ async fn ai(h: &Harness, image: &str, article: &str) {
         text(inline, "mime_type"),
         "image/png"
     );
-    let jev = &requests[before_ai..]
+    let decisions = &requests[before_ai..]
         .iter()
-        .find(|request| request.path == "/v1/systemone")
+        .find(|request| request.path == "/v1/decisions")
         .unwrap()
         .body;
     verify!(
         "check-capture.mjs:343",
-        !jev.get("questions").as_object().unwrap().is_empty()
+        !decisions.get("questions").as_array().unwrap().is_empty()
     );
     verify!(
         "check-capture.mjs:344",
@@ -1885,7 +1890,7 @@ async fn ai(h: &Harness, image: &str, article: &str) {
         .fixtures
         .requests()
         .iter()
-        .filter(|request| request.path == "/v1/systemone")
+        .filter(|request| request.path == "/v1/decisions")
         .count();
     jobs.schedule(article, false);
     jobs.drain().await;
@@ -1894,7 +1899,7 @@ async fn ai(h: &Harness, image: &str, article: &str) {
         h.fixtures
             .requests()
             .iter()
-            .filter(|request| request.path == "/v1/systemone")
+            .filter(|request| request.path == "/v1/decisions")
             .count(),
         before
     );

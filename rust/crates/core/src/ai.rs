@@ -27,18 +27,14 @@ use crate::runtime;
 use crate::Error;
 
 const CHAT_TEXT_CHARS: usize = 8000;
-const JEV_TEXT_CHARS: usize = 6000;
-const JEV_MODEL: &str = "jev-latest";
-const JEV_MIN_P: f64 = 0.6;
-const JEV_QUESTIONS_PER_REQUEST: usize = 100;
+const DECISIONS_TEXT_CHARS: usize = 6000;
+const DECISIONS_MODEL: &str = "gpt-6-luna";
+const TAG_MIN_P: f64 = 0.6;
+const DECISIONS_QUESTIONS_PER_REQUEST: usize = 400;
 const MAX_TAGS: usize = 10;
 const NEAREST_TAGS: usize = 20;
 const CHAT_IMAGE_MAX_BYTES: usize = 10 * 1024 * 1024;
-const JEV_MIN_SIDE: u32 = 256;
-const JEV_MAX_SIDE: u32 = 1568;
-const JEV_MIN_PIXELS: f64 = 78_400.0;
-const JEV_MAX_PIXELS: f64 = 2_458_624.0;
-const JEV_MAX_BYTES: usize = 16 * 1024 * 1024;
+const DECISIONS_IMAGE_MAX_BYTES: usize = 20 * 1024 * 1024;
 const MAX_RETRIES: u32 = 3;
 const TIMEOUT_MS: u64 = 60_000;
 
@@ -71,17 +67,17 @@ pub enum Service {
     Gemini,
     /// The chat model.
     Chat,
-    /// TypeSafe Jev.
-    Typesafe,
+    /// OpenAI's Decisions API.
+    OpenAi,
 }
 
 impl Service {
-    /// The name the JS gave the service (`gemini`, `chat`, `typesafe`).
+    /// The service's name in errors and logs (`gemini`, `chat`, `openai`).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Gemini => "gemini",
             Self::Chat => "chat",
-            Self::Typesafe => "typesafe",
+            Self::OpenAi => "openai",
         }
     }
 }
@@ -224,7 +220,7 @@ pub struct Description {
     pub tags: Vec<String>,
 }
 
-/// A tag Jev judged.
+/// A tag the Decisions API judged.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PickedTag {
     /// The caller's spelling.
@@ -247,7 +243,7 @@ pub enum TagSource {
 pub struct AnalysisTag {
     /// The tag name, spelled as in the vocabulary when it is there.
     pub name: String,
-    /// Jev's probability, or `None` when Jev was not used.
+    /// The Decisions API's probability, or `None` when tag picking did not run.
     pub p: Option<f64>,
     /// Whether the library already had the tag.
     pub source: TagSource,
@@ -304,8 +300,8 @@ fn chat_base() -> String {
     trim_base(env_or("AI_CHAT_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"))
 }
 
-fn typesafe_base() -> String {
-    trim_base(env_or("TYPESAFE_BASE_URL", "https://api.typesafe.ai"))
+fn openai_base() -> String {
+    trim_base(env_or("OPENAI_BASE_URL", "https://api.openai.com/v1"))
 }
 
 fn require_key(name: &str, purpose: &str) -> std::result::Result<String, AiError> {
@@ -316,7 +312,7 @@ fn require_key(name: &str, purpose: &str) -> std::result::Result<String, AiError
 
 fn redact(value: &str) -> String {
     let mut out = value.to_owned();
-    for name in ["GEMINI_API_KEY", "AI_CHAT_API_KEY", "TYPESAFE_API_KEY"] {
+    for name in ["GEMINI_API_KEY", "AI_CHAT_API_KEY", "TYPESAFE_API_KEY", "OPENAI_API_KEY"] {
         if let Some(secret) = runtime::env(name).filter(|secret| !secret.is_empty()) {
             out = out.replace(&secret, "[redacted]");
         }
@@ -479,7 +475,7 @@ fn sniff_image(data: &[u8]) -> Option<Sniffed> {
             }
             at += 12 + u64::from(be32(start));
         }
-        return Some(Sniffed { mime: "image/png", width: be32(16), height: be32(20), animated, bytes: length });
+        return Some(Sniffed { mime: "image/png", animated, bytes: length });
     }
     if length >= 4 && data[0] == 0xff && data[1] == 0xd8 {
         let mut at = 2;
@@ -500,7 +496,7 @@ fn sniff_image(data: &[u8]) -> Option<Sniffed> {
             let block = usize::from(be16(at + 2));
             let is_frame = (0xc0..=0xcf).contains(&marker) && ![0xc4, 0xc8, 0xcc].contains(&marker);
             if is_frame && at + 9 <= length {
-                return Some(Sniffed { mime: "image/jpeg", width: u32::from(be16(at + 7)), height: u32::from(be16(at + 5)), animated: false, bytes: length });
+                return Some(Sniffed { mime: "image/jpeg", animated: false, bytes: length });
             }
             if marker == 0xda {
                 break;
@@ -510,15 +506,13 @@ fn sniff_image(data: &[u8]) -> Option<Sniffed> {
         return None;
     }
     if length >= 12 && &data[..4] == b"RIFF" && &data[8..12] == b"WEBP" {
-        return Some(Sniffed { mime: "image/webp", width: 0, height: 0, animated: false, bytes: length });
+        return Some(Sniffed { mime: "image/webp", animated: false, bytes: length });
     }
     None
 }
 
 struct Sniffed {
     mime: &'static str,
-    width: u32,
-    height: u32,
     animated: bool,
     bytes: usize,
 }
@@ -538,20 +532,46 @@ fn chat_image(item: &AiItem) -> Option<(&'static str, String)> {
     (info.bytes <= CHAT_IMAGE_MAX_BYTES).then(|| (info.mime, base64::encode(data)))
 }
 
-fn jev_image(item: &AiItem) -> Option<(&'static str, String)> {
+// A still PNG, JPEG or WebP of any size up to 20 MB, as the data URL the Decisions API reads.
+fn decisions_image(item: &AiItem) -> Option<String> {
     let data = &item.image.as_ref()?.data;
     let info = sniff_image(data)?;
-    if info.animated || (info.mime != "image/png" && info.mime != "image/jpeg") {
+    (!info.animated && info.bytes <= DECISIONS_IMAGE_MAX_BYTES).then(|| format!("data:{};base64,{}", info.mime, base64::encode(data)))
+}
+
+/// The Decisions `input` describing a card: its words as JSON under `item`, and its picture when `with_picture`.
+///
+/// # Arguments
+/// * `item` - The card; title, source, URL and text are clipped to 500, 200, 500 and 6000 characters.
+/// * `with_picture` - Send a still PNG, JPEG or WebP picture of up to 20 MB, of any size in pixels.
+///
+/// # Returns
+/// One user message, or `None` when the card has no words and no usable picture.
+pub fn decision_input(item: &AiItem, with_picture: bool) -> Option<Value> {
+    let image = if with_picture { decisions_image(item) } else { None };
+    let mut fields = mm_js::Object::new();
+    for (field, value) in [
+        ("title", clip(item.title.as_deref(), 500)),
+        ("source", clip(item.domain.as_deref(), 200)),
+        ("url", clip(item.url.as_deref(), 500)),
+        ("text", clip(item.text.as_deref(), DECISIONS_TEXT_CHARS)),
+    ] {
+        if !value.is_empty() {
+            fields.insert(field, value);
+        }
+    }
+    if fields.is_empty() && image.is_none() {
         return None;
     }
-    let pixels = f64::from(info.width) * f64::from(info.height);
-    let in_range = info.width >= JEV_MIN_SIDE
-        && info.height >= JEV_MIN_SIDE
-        && info.width <= JEV_MAX_SIDE
-        && info.height <= JEV_MAX_SIDE
-        && (JEV_MIN_PIXELS..=JEV_MAX_PIXELS).contains(&pixels)
-        && info.bytes <= JEV_MAX_BYTES;
-    in_range.then(|| (if info.mime == "image/png" { "png" } else { "jpg" }, base64::encode(data)))
+    let mut content = vec![
+        Value::from(obj! { "type" => "input_text", "text" => "A saved item from someone's personal library." }),
+        obj! { "type" => "input_json", "data" => obj! { "item" => fields } }.into(),
+    ];
+    if let Some(url) = image {
+        content.push(obj! { "type" => "input_text", "text" => "The item's picture:" }.into());
+        content.push(obj! { "type" => "input_image", "image_url" => url, "detail" => "auto" }.into());
+    }
+    Some(Value::Array(vec![obj! { "role" => "user", "content" => Value::Array(content) }.into()]))
 }
 
 fn normalize_tag(value: &Value) -> String {
@@ -588,7 +608,7 @@ fn has_embeddable_content(item: &AiItem) -> bool {
 }
 
 /// Whether a card is understood from its picture rather than its words: an image, screenshot or video, or fewer than
-/// 200 characters of text. Such a card's analysis waits for the picture, and Jev is shown it.
+/// 200 characters of text. Such a card's analysis waits for the picture, and tag picking is shown it.
 ///
 /// # Arguments
 /// * `item` - The card's kind and text.
@@ -921,22 +941,46 @@ impl<'a> Ai<'a> {
         Ok(Description { title, summary, tags })
     }
 
-    /// Judge candidate tags against an item with TypeSafe Jev, one yes/no question per candidate (`pickTags`).
+    /// Ask OpenAI's Decisions API typed questions about one input (`POST /v1/decisions`, `gpt-6-luna`).
     ///
     /// # Arguments
-    /// * `item` - The card; the image is sent only when it is PNG or JPEG, 256-1568 px per side and within Jev's
-    ///   pixel and size limits, otherwise it is left out (never resized).
-    /// * `candidates` - Candidate tag names; duplicates (by tag key) and empty names are dropped, and more than 100
+    /// * `input` - The Decisions `input`: a string, or messages with `input_text`, `input_json` and `input_image`
+    ///   parts.
+    /// * `questions` - Up to 400 `predicate`, `choice` or `score` questions, each with a unique `name`.
+    ///
+    /// # Returns
+    /// The `answers` array in question order; an answer may be a `refusal`.
+    ///
+    /// # Errors
+    /// `OPENAI_API_KEY` is missing, the API fails after retries, or the answer has no `answers` array.
+    pub async fn decide(&self, input: Value, questions: Vec<Value>) -> std::result::Result<Vec<Value>, AiError> {
+        let key = require_key("OPENAI_API_KEY", "decisions with OpenAI")?;
+        let headers = Headers::from([("authorization", format!("Bearer {key}"))]);
+        let url = format!("{}/decisions", openai_base());
+        let body = obj! { "model" => DECISIONS_MODEL, "input" => input, "questions" => Value::Array(questions) };
+        let data = self.post_json(Service::OpenAi, &url, &headers, &body.into()).await?;
+        match data.get("answers") {
+            Value::Array(answers) => Ok(answers.clone()),
+            _ => Err(AiError::service("openai decisions returned no answers", Service::OpenAi)),
+        }
+    }
+
+    /// Judge candidate tags against an item with OpenAI's Decisions API, one predicate per candidate (`pickTags`).
+    ///
+    /// # Arguments
+    /// * `item` - The card; for a card understood from its picture ([`needs_picture`]), a still PNG, JPEG or WebP
+    ///   image of any size up to 20 MB is sent too.
+    /// * `candidates` - Candidate tag names; duplicates (by tag key) and empty names are dropped, and more than 400
     ///   are judged in further requests.
     ///
     /// # Returns
     /// Candidates with probability of fit at least 0.6, highest first, at most 10; `name` keeps the caller's
-    /// spelling. Empty when the item has no text and no usable image.
+    /// spelling. Empty when the item has no text and no usable image. A refused or malformed answer drops that tag.
     ///
     /// # Errors
-    /// `TYPESAFE_API_KEY` is missing or the API fails after retries.
+    /// `OPENAI_API_KEY` is missing or the API fails after retries.
     pub async fn pick_tags(&self, item: &AiItem, candidates: &[String]) -> std::result::Result<Vec<PickedTag>, AiError> {
-        let key = require_key("TYPESAFE_API_KEY", "tag picking with TypeSafe Jev")?;
+        require_key("OPENAI_API_KEY", "tag picking with OpenAI Decisions")?;
         let mut seen = HashSet::new();
         let mut names: Vec<String> = Vec::new();
         for candidate in candidates {
@@ -948,62 +992,33 @@ impl<'a> Ai<'a> {
         if names.is_empty() {
             return Ok(Vec::new());
         }
-        let image = if visual_analysis(item) { jev_image(item) } else { None };
-        let mut state = mm_js::Object::new();
-        let mut present = false;
-        for (field, value) in [
-            ("title", clip(item.title.as_deref(), 500)),
-            ("source", clip(item.domain.as_deref(), 200)),
-            ("url", clip(item.url.as_deref(), 500)),
-            ("text", clip(item.text.as_deref(), JEV_TEXT_CHARS)),
-        ] {
-            if !value.is_empty() {
-                present = true;
-                state.insert(field, value);
-            }
-        }
-        let image_ref = image.as_ref().map(|_| format!("mymind-image-{}", runtime::random_uuid()));
-        if let Some(reference) = &image_ref {
-            present = true;
-            state.insert("image", reference.as_str());
-        }
-        if !present {
+        let Some(input) = decision_input(item, visual_analysis(item)) else {
             return Ok(Vec::new());
-        }
-        let mut headers = Headers::from([("authorization", format!("Bearer {key}"))]);
-        if image.is_some() {
-            headers.set("TypeSafe-Danger-Zone-Images", "true");
-        }
-        let url = format!("{}/v1/systemone", typesafe_base());
+        };
         let mut picked: Vec<PickedTag> = Vec::new();
-        for batch in names.chunks(JEV_QUESTIONS_PER_REQUEST) {
-            let questions: mm_js::Object = batch
+        for batch in names.chunks(DECISIONS_QUESTIONS_PER_REQUEST) {
+            let questions = batch
                 .iter()
                 .enumerate()
                 .map(|(index, name)| {
                     let instructions = format!(
-                        "Someone saved `item` to their personal library and wants to find it later. Would they file it under the tag {}?",
+                        "Someone saved this item to their personal library and wants to find it later. Would they file it under the tag {}?",
                         json::quote(name)
                     );
-                    (format!("t{index}"), Value::from(obj! { "type" => "noul", "instructions" => instructions }))
+                    obj! { "type" => "predicate", "name" => format!("t{index}"), "instructions" => instructions }.into()
                 })
                 .collect();
-            let mut body = obj! { "model" => JEV_MODEL, "state" => obj! { "item" => state.clone() } };
-            if let (Some((format, data)), Some(reference)) = (&image, &image_ref) {
-                body.insert(
-                    "assets",
-                    obj! { reference.as_str() => obj! { "type" => "image", "format" => *format, "data_base64" => data.as_str() } },
-                );
-            }
-            body.insert("questions", questions);
-            let data = self.post_json(Service::Typesafe, &url, &headers, &body.into()).await?;
-            for (index, name) in batch.iter().enumerate() {
-                if let Value::Number(p) = data.get("answers").get(&format!("t{index}")).get("noul") {
-                    picked.push(PickedTag { name: name.clone(), p: *p });
+            let answers = self.decide(input.clone(), questions).await?;
+            for answer in &answers {
+                let index = answer.get("name").as_str().and_then(|name| name.strip_prefix('t')).and_then(|index| index.parse::<usize>().ok());
+                if let (Some(name), Value::Number(p)) = (index.and_then(|index| batch.get(index)), answer.get("probability")) {
+                    if answer.get("type").as_str() == Some("predicate") && !picked.iter().any(|tag| tag.name == *name) {
+                        picked.push(PickedTag { name: name.clone(), p: *p });
+                    }
                 }
             }
         }
-        picked.retain(|tag| tag.p >= JEV_MIN_P);
+        picked.retain(|tag| tag.p >= TAG_MIN_P);
         picked.sort_by(|a, b| by_difference(b.p - a.p));
         picked.truncate(MAX_TAGS);
         Ok(picked)
@@ -1055,8 +1070,8 @@ impl<'a> Ai<'a> {
     }
 
     /// Auto-label a card: summary, final tags and embedding (`analyze`). The chat model proposes tags, the
-    /// vocabulary's 20 nearest tags by embedding similarity join them as candidates, and Jev picks the final set;
-    /// without `TYPESAFE_API_KEY` the chat model's tags are returned unjudged. An item with no title, no text and no
+    /// vocabulary's 20 nearest tags by embedding similarity join them as candidates, and OpenAI's Decisions API
+    /// picks the final set; without `OPENAI_API_KEY` the chat model's tags are returned unjudged. An item with no title, no text and no
     /// PNG/JPEG image is embedded from its generated summary instead.
     ///
     /// # Arguments
@@ -1094,7 +1109,7 @@ impl<'a> Ai<'a> {
             obj! { "name" => name, "p" => p, "source" => if source_of(name) == TagSource::Vocabulary { "vocabulary" } else { "chat" } }.into()
         };
 
-        let judged: Vec<Value> = if runtime::env("TYPESAFE_API_KEY").is_none_or(|key| key.is_empty()) {
+        let judged: Vec<Value> = if runtime::env("OPENAI_API_KEY").is_none_or(|key| key.is_empty()) {
             proposed.iter().map(|name| resolve(name)).map(|name| record(&name, None)).collect()
         } else {
             let mut scored: Vec<(&str, f64)> = vocab.iter().map(|tag| (tag.name.as_str(), cosine(&embedding, &tag.embedding))).collect();
