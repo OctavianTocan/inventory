@@ -1,4 +1,4 @@
-//! Claude Code and Codex for ThyMind, through the AI kit it shares with Pully (`vendor/pulls.review/ai-kit`): each
+//! Claude Code and Codex for ThyMind, through the AI kit it shares with Pully (`vendor/ai-kit`): each
 //! person's own subscription sign-in, the CLIs' model lists, and search that Claude or Codex reads, ranks and answers
 //! ([`search`]).
 //!

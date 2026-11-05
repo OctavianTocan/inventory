@@ -1,4 +1,3 @@
-[submodule "vendor/pulls.review"]
-	path = vendor/pulls.review
-	url = https://github.com/OctavianTocan/Pully
-	shallow = true
+[submodule "vendor/ai-kit"]
+	path = vendor/ai-kit
+	url = https://github.com/OctavianTocan/ai-kit

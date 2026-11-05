@@ -16,6 +16,6 @@ dependencyResolutionManagement {
 rootProject.name = "mymind-android"
 include(":app")
 // The app half of the AI kit shared with Pully (Claude Code and Codex sign-in, models, efforts), from the
-// vendor/pulls.review submodule.
+// vendor/ai-kit submodule (OctavianTocan/ai-kit).
 include(":ai-kit")
-project(":ai-kit").projectDir = file("../vendor/pulls.review/ai-kit/kotlin")
+project(":ai-kit").projectDir = file("../vendor/ai-kit/kotlin")

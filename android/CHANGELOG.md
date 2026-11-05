@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.56 (67), 2026-11-05
+The AI kit moves to its own home.
+
+### Changed
+- Nothing changes on screen. The Claude Code and Codex code ThyMind shares with Pully now comes from its own private repository, ai-kit, instead of from inside Pully.
+
 ## 0.6.55 (66), 2026-11-05
 Spaces and search, polished.
 

@@ -4,6 +4,6 @@
 !rust/crates/
 !rust/test-support/
 !rust/agent/cli-versions.env
-!vendor/pulls.review/ai-kit/
-vendor/pulls.review/ai-kit/target/
-vendor/pulls.review/ai-kit/kotlin/
+!vendor/ai-kit/
+vendor/ai-kit/target/
+vendor/ai-kit/kotlin/

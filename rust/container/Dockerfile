@@ -9,7 +9,7 @@ RUN ./fetch-libvips.sh linux-x64
 COPY rust/Cargo.toml rust/Cargo.lock ./
 COPY rust/crates ./crates
 COPY rust/test-support ./test-support
-COPY vendor/pulls.review/ai-kit /vendor/pulls.review/ai-kit
+COPY vendor/ai-kit /vendor/ai-kit
 RUN cargo build --release --locked -p mymind
 
 FROM debian:bookworm-slim

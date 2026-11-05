@@ -9,7 +9,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 marker="deploy/.last-worker-deploy"
 head="$(git rev-parse HEAD)"
-flagged='^(rust/crates/core/src/auth\.rs|rust/crates/server/src/serve\.rs|rust/crates/server/src/download\.rs|.*wrangler\.jsonc|feedback-runner/|vendor/pulls\.review)'
+flagged='^(rust/crates/core/src/auth\.rs|rust/crates/server/src/serve\.rs|rust/crates/server/src/download\.rs|.*wrangler\.jsonc|feedback-runner/|vendor/(pulls\.review|ai-kit))'
 
 if [[ -f "$marker" ]]; then
   since="$(cat "$marker")"

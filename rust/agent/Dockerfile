@@ -6,7 +6,7 @@ WORKDIR /src
 COPY rust/Cargo.toml rust/Cargo.lock ./
 COPY rust/crates ./crates
 COPY rust/test-support ./test-support
-COPY vendor/pulls.review/ai-kit /vendor/pulls.review/ai-kit
+COPY vendor/ai-kit /vendor/ai-kit
 RUN cargo build --release --locked -p mm-ai --bin mymind-agent-runner
 
 FROM node:22-bookworm-slim

@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - android/**
+      - vendor/ai-kit
       - deploy/android-release*
       - deploy/publish-android.sh
       - .github/workflows/android-*.yml
@@ -19,6 +20,10 @@ on:
       base:
         description: Commit to compare for an Android version increase
         type: string
+        required: true
+    secrets:
+      AI_KIT_DEPLOY_KEY:
+        description: Read-only deploy key for the private ai-kit submodule
         required: true
 
 permissions:
@@ -33,8 +38,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          submodules: true
           ref: ${{ inputs.revision || github.sha }}
+      - uses: ./.github/actions/ai-kit
+        with:
+          key: ${{ secrets.AI_KIT_DEPLOY_KEY }}
+          path: vendor/ai-kit
       - name: Require a new version for Android runtime changes
         env:
           BASE_REVISION: ${{ inputs.base || github.event.pull_request.base.sha || github.event.before }}

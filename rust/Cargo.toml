@@ -15,8 +15,8 @@ mm-sqlite = { path = "crates/sqlite" }
 mymind = { path = "crates/server" }
 mm-ai = { path = "crates/ai" }
 mm-feedback = { path = "crates/feedback" }
-# The AI layer shared with Pully (pulls.review), pinned as the vendor/pulls.review submodule.
-ai-kit = { path = "../vendor/pulls.review/ai-kit", default-features = false }
+# The AI layer shared with Pully, pinned as the vendor/ai-kit submodule (private OctavianTocan/ai-kit).
+ai-kit = { path = "../vendor/ai-kit", default-features = false }
 serde_json = "1"
 anyhow = "1"
 mm-test-support = { path = "test-support" }

@@ -7,7 +7,7 @@ is forwarded to mymind.
 ## Run it
 
 ```bash
-git submodule update --init             # once per clone: the AI kit shared with Pully, vendor/pulls.review
+git submodule update --init             # once per clone: the AI kit shared with Pully, vendor/ai-kit
 SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm ci   # Node developer tooling
 rust/fetch-libvips.sh                   # once per clone, platform libvips
 (cd rust && nice -n 19 cargo build --offline --release -j 2 -p mymind)
@@ -168,7 +168,7 @@ npm --prefix rust/crates/worker run deploy
 ```
 
 The deploy also builds the AI agents' container (`rust/agent/Dockerfile`), where each account's Claude Code and
-Codex run, from the AI kit in the `vendor/pulls.review` submodule; run `git submodule update --init` first.
+Codex run, from the AI kit in the `vendor/ai-kit` submodule (private OctavianTocan/ai-kit); run `git submodule update --init` first.
 
 Until 2026-10-24, **mini-002** (`mini-002-netcup` on Tailscale, a Debian server) keeps running the previous host from
 the checkout `~/apps/mymind-reconstruction`, behind the Cloudflare tunnel `mymind`, as the fallback: the Worker's

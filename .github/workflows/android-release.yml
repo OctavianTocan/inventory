@@ -53,6 +53,8 @@ jobs:
     with:
       revision: ${{ needs.revision.outputs.sha }}
       base: ${{ needs.revision.outputs.base }}
+    secrets:
+      AI_KIT_DEPLOY_KEY: ${{ secrets.AI_KIT_DEPLOY_KEY }}
 
   publish:
     needs: [revision, manual-verify]
@@ -77,7 +79,10 @@ jobs:
         with:
           ref: ${{ needs.revision.outputs.sha }}
           persist-credentials: false
-          submodules: true
+      - uses: ./.github/actions/ai-kit
+        with:
+          key: ${{ secrets.AI_KIT_DEPLOY_KEY }}
+          path: vendor/ai-kit
       - name: Require release configuration
         run: |
           for name in ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_PASSWORD ANDROID_RELEASE_CERT_SHA256 ANDROID_GOOGLE_WEB_CLIENT_ID CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN TEST_USER_NAME TEST_USER_PASSWORD; do

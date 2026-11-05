@@ -1,4 +1,4 @@
-// A port of ai-kit's `redact` (vendor/pulls.review/ai-kit/src/redact.rs) for text that leaves a feedback sandbox: the
+// A port of ai-kit's `redact` (vendor/ai-kit/src/redact.rs) for text that leaves a feedback sandbox: the
 // agent's summary and description, CI log tails and errors. ai-kit's contract `kit-secrets-never-leave` names this port.
 
 /** Names whose values are redacted whatever their length (ai-kit `KNOWN_SECRETS`). */
