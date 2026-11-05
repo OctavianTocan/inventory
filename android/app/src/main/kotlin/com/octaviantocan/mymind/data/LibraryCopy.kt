@@ -27,7 +27,7 @@ const val FEED_MEMORY_CARDS = 200
 /** Cards per page the phone's copy answers with, as the server's gallery does. */
 const val LOCAL_PAGE_CARDS = 50
 
-// Card flag bits: pinned to Top of Mind, and the private, draft and stub bits that hide a card from the grid.
+// Card flag bits: pinned, and the private, draft and stub bits that hide a card from the grid.
 private const val PINNED_FLAG = 512
 private const val GRID_HIDDEN_FLAGS = 8 or 131_072 or 262_144
 
@@ -166,12 +166,12 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         CardPage(shown.map { decode(it.second) }, next)
     }
 
-    /** @return Top of Mind from the copy, in pin order, or null when it cannot be read. */
+    /** @return Pinned from the copy, in pin order, or null when it cannot be read. */
     suspend fun pinned(): CardPage? = owned(null) { db -> CardPage(pinnedIn(db)) }
 
     /**
      * @param newest How many of the gallery's newest cards to include.
-     * @return The cards whose pictures the phone keeps for use offline: Top of Mind, then the gallery's [newest] cards,
+     * @return The cards whose pictures the phone keeps for use offline: Pinned, then the gallery's [newest] cards,
      *   each once; null when the copy cannot be read.
      */
     suspend fun pictureCards(newest: Int): List<Card>? = owned(null) { db ->

@@ -39,6 +39,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -443,7 +447,6 @@ private fun NewSpaceSlot(onClick: () -> Unit) {
 }
 
 /** The New space form in place: a name, a colour and Create and add. A failure keeps what was typed for another try. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NewSpaceForm(creation: CardSpaceCreationState, onCreate: (name: String, color: String) -> Unit) {
     val colors = menuColors()
@@ -457,38 +460,106 @@ private fun NewSpaceForm(creation: CardSpaceCreationState, onCreate: (name: Stri
     Column(Modifier.fillMaxWidth().cardSurfaceShadow(shape, note = true).clip(shape).background(colors.row).border(2.dp, colors.rowText, shape)
         .padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("New space", style = TextStyle(color = colors.rowText, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, fontFamily = CardMenuFont))
-        BasicTextField(
-            value = name,
-            onValueChange = { name = it },
-            enabled = !busy,
-            singleLine = true,
-            textStyle = TextStyle(color = colors.rowText, fontSize = 17.sp, lineHeight = 22.sp, fontFamily = CardMenuFont),
-            cursorBrush = SolidColor(colors.rowText),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { submit() }),
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Space name" }
-                .clip(RoundedCornerShape(12.dp)).background(colors.sheet).padding(horizontal = 14.dp, vertical = 13.dp),
-            decorationBox = { field ->
-                Box {
-                    if (name.isEmpty()) Text("Name it", style = mutedStyle(colors).copy(fontSize = 17.sp, lineHeight = 22.sp))
-                    field()
-                }
-            },
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            SPACE_COLORS.forEach { choice ->
-                Box(Modifier.size(40.dp).clip(CircleShape)
-                    .clickable(enabled = !busy, role = Role.RadioButton) { color = choice }
-                    .semantics { contentDescription = "Space color $choice"; selected = color == choice },
-                    contentAlignment = Alignment.Center) {
-                    SpaceRing(parseHexColor(choice) ?: colors.rowText, color == choice, 28.dp)
-                }
-            }
-        }
+        SpaceNameAndColor(name, { name = it }, color, { color = it }, busy, onDone = submit)
         if (error != null) Text(error, style = mutedStyle(colors).copy(color = colors.dangerText))
         SheetCta(if (busy) "Creating…" else "Create and add", if (busy) null else R.drawable.ic_library_add, enabled = ready) { submit() }
     }
 }
+
+/**
+ * A new space's name field and colour rings, inside a raised group of the sheet.
+ *
+ * @param name The name typed so far.
+ * @param onName Called with each edit of the name.
+ * @param color The picked colour, one of [SPACE_COLORS].
+ * @param onColor Called with a tapped colour.
+ * @param busy True while the space is being made: nothing can be changed.
+ * @param onDone Called when the keyboard's Done is pressed.
+ * @param focusOnOpen True puts the cursor in the name field once it shows.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun SpaceNameAndColor(
+    name: String,
+    onName: (String) -> Unit,
+    color: String,
+    onColor: (String) -> Unit,
+    busy: Boolean,
+    onDone: () -> Unit,
+    focusOnOpen: Boolean = false,
+) {
+    val colors = menuColors()
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (!focusOnOpen) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { focus.requestFocus() }
+    }
+    BasicTextField(
+        value = name,
+        onValueChange = onName,
+        enabled = !busy,
+        singleLine = true,
+        textStyle = TextStyle(color = colors.rowText, fontSize = 17.sp, lineHeight = 22.sp, fontFamily = CardMenuFont),
+        cursorBrush = SolidColor(colors.rowText),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { onDone() }),
+        modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = "Space name" }
+            .clip(RoundedCornerShape(12.dp)).background(colors.sheet).padding(horizontal = 14.dp, vertical = 13.dp),
+        decorationBox = { field ->
+            Box {
+                if (name.isEmpty()) Text("Name it", style = mutedStyle(colors).copy(fontSize = 17.sp, lineHeight = 22.sp))
+                field()
+            }
+        },
+    )
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        SPACE_COLORS.forEach { choice ->
+            Box(Modifier.size(40.dp).clip(CircleShape)
+                .clickable(enabled = !busy, role = Role.RadioButton) { onColor(choice) }
+                .semantics { contentDescription = "Space color $choice"; selected = color == choice },
+                contentAlignment = Alignment.Center) {
+                SpaceRing(parseHexColor(choice) ?: colors.rowText, color == choice, 28.dp)
+            }
+        }
+    }
+}
+
+/**
+ * The New space sheet the Spaces page's + and its New space tile open: Pully's sheet with the name and colour in one
+ * raised group and Create space under them, in place of mymind's two-step modal (Tavi, 5 November 2026).
+ *
+ * @param busy True while the space is being made.
+ * @param error Why the last try failed, or null; what was typed stays for another try.
+ * @param onClose Called once the sheet has closed by drag, Back or a tap outside.
+ * @param onCreate Called with the trimmed name and the colour when Create space is tapped.
+ */
+@Composable
+fun NewSpaceSheet(busy: Boolean, error: String?, onClose: () -> Unit, onCreate: (name: String, color: String) -> Unit) {
+    PullySheet(NEW_SPACE_TITLE, onClose) { NewSpaceSheetContent(busy, error, onCreate) }
+}
+
+/** The body of [NewSpaceSheet], also drawn by screenshot fixtures inside a bare panel. */
+@Composable
+internal fun NewSpaceSheetContent(busy: Boolean, error: String?, onCreate: (name: String, color: String) -> Unit, focusOnOpen: Boolean = true) {
+    val colors = menuColors()
+    var name by rememberSaveable { mutableStateOf("") }
+    var color by rememberSaveable { mutableStateOf(SPACE_COLORS.first()) }
+    val ready = name.isNotBlank() && !busy
+    val submit = { if (ready) onCreate(name.trim(), color) }
+    Text("Keep cards that belong together in one place.", Modifier.padding(start = 4.dp, top = 4.dp), style = mutedStyle(colors))
+    CardMenuGroup(Modifier.padding(top = 16.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            SpaceNameAndColor(name, { name = it }, color, { color = it }, busy, onDone = submit, focusOnOpen = focusOnOpen)
+        }
+    }
+    if (error != null) Text(error, Modifier.padding(start = 4.dp, top = 12.dp), style = mutedStyle(colors).copy(color = colors.dangerText))
+    SheetCta(if (busy) "Creating…" else "Create space", if (busy) null else R.drawable.ic_library_add, Modifier.padding(top = 20.dp),
+        enabled = ready) { submit() }
+}
+
+/** Title of the New space sheet. */
+const val NEW_SPACE_TITLE = "New space"
 
 private fun mutedStyle(colors: MenuColors) = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 15.sp, lineHeight = 21.sp, fontFamily = CardMenuFont)
 

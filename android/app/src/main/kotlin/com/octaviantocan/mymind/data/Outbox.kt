@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 /** How the ids of tags added while offline start, so a removal can tell them from the server's. */
 internal const val LOCAL_TAG = "outbox-tag:"
 
-// Card flag bit of a card pinned to Top of Mind.
+// Card flag bit of a card pinned.
 private const val PINNED_FLAG = 512
 
 /** A change made in the app, kept on the phone until the server has it. */
@@ -23,7 +23,7 @@ sealed interface Edit {
     /** The card changed, or null when the phone does not know it or the change is to a space. */
     val cardId: String?
 
-    /** @property pinned True pins the card to Top of Mind, false takes it off. */
+    /** @property pinned True pins the card, false takes it off. */
     @Serializable @SerialName("pin")
     data class Pin(override val cardId: String, val pinned: Boolean) : Edit
 

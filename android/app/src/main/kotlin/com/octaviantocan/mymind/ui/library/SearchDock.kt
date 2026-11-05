@@ -74,6 +74,7 @@ import com.octaviantocan.mymind.data.AiSpace
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
+import com.octaviantocan.mymind.ui.card.scrollEdgeFade
 import com.octaviantocan.mymind.ui.shell.FieldHeight
 import com.octaviantocan.mymind.ui.shell.FootIcon
 import com.octaviantocan.mymind.ui.shell.FootMotion
@@ -176,8 +177,10 @@ internal fun SearchStart(
     onLongPressCard: ((Card) -> Unit)?,
 ) {
     val colors = LibraryStyle.colors
+    val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 20.dp, bottom = 16.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().scrollEdgeFade(scroll, colors.background, top = 32.dp, bottom = 32.dp)
+            .verticalScroll(scroll).padding(top = 20.dp, bottom = 16.dp)) {
             Text("Find something", Modifier.padding(horizontal = 20.dp, vertical = 12.dp).semantics { heading() },
                 style = LibraryStyle.title, color = colors.text)
             if (dock.openedLately.isNotEmpty()) {
@@ -352,7 +355,9 @@ private fun EngineDock(
             if (!open) FootIcon(R.drawable.ic_caret_down, Modifier.graphicsLayer { rotationZ = 180f }, tint = colors.muted, size = 18.dp)
         }
         if (!open) return@DockCard
-        Column(Modifier.fillMaxWidth().heightIn(max = DOCK_MAX_BODY).verticalScroll(rememberScrollState())) {
+        val bodyScroll = rememberScrollState()
+        Column(Modifier.fillMaxWidth().heightIn(max = DOCK_MAX_BODY).scrollEdgeFade(bodyScroll, colors.raised, top = 12.dp, bottom = 12.dp)
+            .verticalScroll(bodyScroll)) {
             if (body != null) {
                 Text(body, Modifier.padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite }, style = ANSWER, color = colors.text,
                     maxLines = if (more) Int.MAX_VALUE else ANSWER_LINES, overflow = TextOverflow.Ellipsis,

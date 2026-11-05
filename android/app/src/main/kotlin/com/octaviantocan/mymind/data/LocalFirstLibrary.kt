@@ -9,7 +9,7 @@ private const val WRITE_SYNC_WAIT_MS = 5_000L
 
 /**
  * The library the screens use. Once the phone's copy holds the whole library and the server still feeds it changes,
- * the gallery, Top of Mind, cards, the spaces and space pages come from the copy without waiting on the network; space
+ * the gallery, Pinned, cards, the spaces and space pages come from the copy without waiting on the network; space
  * pages only when the copy's cards carry their place in the space, which older servers leave out. Everything else
  * comes from the server, and the copy answers search, cards, spaces and space pages too when the network is down.
  *
@@ -47,8 +47,8 @@ class LocalFirstLibrary(
         else -> server.cards(cursor)
     }
 
-    override suspend fun topOfMind(cursor: String?): ApiResult<CardPage> =
-        (if (cursor == null && wholeCopy()) copy.pinned() else null)?.let { ApiResult.Ok(it) } ?: server.topOfMind(cursor)
+    override suspend fun pinned(cursor: String?): ApiResult<CardPage> =
+        (if (cursor == null && wholeCopy()) copy.pinned() else null)?.let { ApiResult.Ok(it) } ?: server.pinned(cursor)
 
     override suspend fun search(query: String, cursor: String?): ApiResult<CardPage> =
         offline(server.search(query, cursor)) { if (cursor == null) copy.search(query) else null }

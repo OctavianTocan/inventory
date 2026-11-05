@@ -45,7 +45,7 @@ class ShellScreenshotTest {
     private fun tabBar(dark: Boolean, name: String) {
         render(dark) { MymindTabBar(Tab.Everything, onSelect = {}, modifier = Modifier.align(Alignment.BottomCenter)) }
         compose.mainClock.advanceTimeBy(SETTLE_MS)
-        compose.onNodeWithText("Everything").assertIsSelected()
+        compose.onNodeWithText("All").assertIsSelected()
         compose.onRoot().captureRoboImage("screenshots/$name.png")
     }
 

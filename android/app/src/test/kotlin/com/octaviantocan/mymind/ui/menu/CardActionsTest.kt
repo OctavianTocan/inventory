@@ -29,7 +29,7 @@ class CardActionsTest {
     fun articleWithSourceOutsideASpace() {
         val items = cardMenuItems(testCard("a", type = "Article", url = "https://example.com/a"), spaceId = null)
         assertEquals(
-            listOf(CardMenuAction.ViewSource, CardMenuAction.AddTags, CardMenuAction.AddToSpace, CardMenuAction.AddToTopOfMind, CardMenuAction.DeleteCard),
+            listOf(CardMenuAction.ViewSource, CardMenuAction.AddTags, CardMenuAction.AddToSpace, CardMenuAction.Pin, CardMenuAction.DeleteCard),
             actionsOf(items),
         )
         assertTrue(items.none { it.locked })
@@ -48,7 +48,7 @@ class CardActionsTest {
     fun noteInASpaceThatIsPinned() {
         val items = cardMenuItems(testCard("n", type = "Note", flags = 512), spaceId = "s1")
         assertEquals(
-            listOf(CardMenuAction.Copy, CardMenuAction.AddTags, CardMenuAction.RemoveFromSpace, CardMenuAction.RemoveFromTopOfMind, CardMenuAction.DeleteCard),
+            listOf(CardMenuAction.Copy, CardMenuAction.AddTags, CardMenuAction.RemoveFromSpace, CardMenuAction.Unpin, CardMenuAction.DeleteCard),
             actionsOf(items),
         )
     }
@@ -74,9 +74,9 @@ class CardActionsTest {
         assertEquals(CardMenuOutcome.OpenUrl("https://example.com/c"), actions.perform(CardMenuItem(CardMenuAction.ViewSource), card, null))
         val note = testCard("n", type = "Note", note = "text of n")
         assertEquals(CardMenuOutcome.Copy("text of n"), actions.perform(CardMenuItem(CardMenuAction.Copy), note, null))
-        val pinned = actions.perform(CardMenuItem(CardMenuAction.AddToTopOfMind), card, null) as CardMenuOutcome.PinChanged
+        val pinned = actions.perform(CardMenuItem(CardMenuAction.Pin), card, null) as CardMenuOutcome.PinChanged
         assertTrue(pinned.card.pinned)
-        val unpinned = actions.perform(CardMenuItem(CardMenuAction.RemoveFromTopOfMind), pinned.card, null) as CardMenuOutcome.PinChanged
+        val unpinned = actions.perform(CardMenuItem(CardMenuAction.Unpin), pinned.card, null) as CardMenuOutcome.PinChanged
         assertFalse(unpinned.card.pinned)
         assertEquals(CardMenuOutcome.RemovedFromSpace("s1", "c"), actions.perform(CardMenuItem(CardMenuAction.RemoveFromSpace), card, "s1"))
         assertEquals(CardMenuOutcome.Deleted("c"), actions.perform(CardMenuItem(CardMenuAction.DeleteCard), card, null))

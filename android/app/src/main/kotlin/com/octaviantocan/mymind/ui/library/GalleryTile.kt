@@ -87,7 +87,7 @@ private val SOURCE_LINE = 16.sp
 /** The corner radius of a gallery tile, the web showcase's `rounded-lg` (Tavi, 29 October 2026). */
 internal val TILE_CORNER = 12.dp
 
-/** The corner radius of a Top of Mind card. */
+/** The corner radius of a Pinned card. */
 private val HIGHLIGHT_CORNER = 28.dp
 
 /** How high a gallery tile stands off the paper: the soft shadow every print casts, as look 07 Prints draws them. */
@@ -99,7 +99,7 @@ private val PRINT_BORDER = 4.dp
 /** The border round the picture of a print with words under it; it is drawn scaled with the words. */
 private val PRINT_WORDS_BORDER = 5.dp
 
-/** The border round a Top of Mind print's picture. */
+/** The border round a Pinned print's picture. */
 private val HIGHLIGHT_BORDER = 6.dp
 
 /**
@@ -443,7 +443,7 @@ private fun PrintTile(words: TileWords, source: String?, highlight: Boolean, mar
     }
 }
 
-/** A tile's inset, in pixels, at [width] pixels across: tighter on a narrow tile, wider on a Top of Mind card. */
+/** A tile's inset, in pixels, at [width] pixels across: tighter on a narrow tile, wider on a Pinned card. */
 private fun Density.tileInset(width: Int, highlight: Boolean): Float = when {
     highlight -> 16.dp.toPx()
     width < 110.dp.toPx() -> 8.dp.toPx()
@@ -530,7 +530,7 @@ private fun TileText(text: AnnotatedString, highlight: Boolean, modifier: Modifi
 private fun TileText(text: String, highlight: Boolean, modifier: Modifier, color: Color = LibraryStyle.colors.text, maxLines: Int = Int.MAX_VALUE,
     paper: Color = LibraryStyle.colors.raised) = TileText(AnnotatedString(text), highlight, modifier, color, maxLines, paper)
 
-/** The line height of a Top of Mind card's words. */
+/** The line height of a Pinned card's words. */
 private val HIGHLIGHT_LINE = 22.8.sp
 
 /** The last layout of a tile's words, which [fadeLastLine] reads as it draws; drawing follows every layout. */

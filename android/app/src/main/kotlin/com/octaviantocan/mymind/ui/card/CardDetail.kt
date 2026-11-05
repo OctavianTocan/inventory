@@ -117,7 +117,7 @@ private val LEAD_PARTS = setOf(ReaderPart.Post, ReaderPart.Note, ReaderPart.Summ
  * @property onShare Opens the Share sheet from the header.
  * @property onAddTags Opens Add tags from the Tags section.
  * @property onCopyLink Puts the card's link on the clipboard, from the name's card.
- * @property onTogglePin Pins the card to Top of Mind or takes it off, from the name's card.
+ * @property onTogglePin Pins the card or takes it off, from the name's card.
  * @property onSpaces Opens the card's spaces, from the name's card.
  * @property onOpenRecent Opens a recently opened card in place of this one.
  * @property onEverything Leaves the reader for the Everything gallery.
@@ -308,10 +308,9 @@ internal fun CardDetail(
                 ReaderHeader(cardHeading(card), named, onBack = back, onName = { named = !named }, onShare = actions.onShare, icons = headerIcons,
                     progress = if (inReader) ({ readingScroll.value / readingScroll.maxValue.coerceAtLeast(1).toFloat() }) else null)
                 Box(Modifier.fillMaxWidth().weight(1f)) {
-                    val fade = with(density) { 20.dp.toPx() }
                     val shown = if (inReader) readingScroll else scrollState
                     Column(Modifier.fillMaxSize()
-                        .sheetEdgeFade(color = colors.paper, topStrength = { (shown.value / fade).coerceIn(0f, 1f) })
+                        .scrollEdgeFade(shown, colors.paper, bottom = 0.dp)
                         .verticalScroll(shown)) {
                         if (inReader) ReaderModeBody(card, paragraphs, onBack = back)
                         else ReaderBody(card, onRemoveTag?.takeIf { editingTags }, actions.onEditingTags?.let { set -> { set(false) } },

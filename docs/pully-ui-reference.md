@@ -70,7 +70,7 @@ card stays at the gesture's height within scroll limits. Projected outer edges m
 clip or leave temporary horizontal slack while pinching; canonical stops fill the width.
 Stable card keys and explicit image request sizes retain previews between pointer frames;
 creating a new projection may reuse a cached painter once.
-Top of Mind and the account header do not scale. Accessible larger/smaller actions expose the
+Pinned and the account header do not scale. Accessible larger/smaller actions expose the
 same density settings. These are recorded in
 [`ui/library/CONTRACTS`](../android/app/src/main/kotlin/com/octaviantocan/mymind/ui/library/CONTRACTS).
 

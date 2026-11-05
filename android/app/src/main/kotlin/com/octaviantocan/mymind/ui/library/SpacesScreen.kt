@@ -1,6 +1,20 @@
 package com.octaviantocan.mymind.ui.library
 
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import com.octaviantocan.mymind.ui.menu.CardMenuGroup
+import com.octaviantocan.mymind.ui.menu.HoldToDeleteRow
+import com.octaviantocan.mymind.ui.menu.PullySheet
+import com.octaviantocan.mymind.ui.menu.SheetRow
+import com.octaviantocan.mymind.ui.settings.glassSource
+import com.octaviantocan.mymind.ui.settings.rememberGlassBackdrop
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import com.octaviantocan.mymind.ui.shell.FootCircleButton
 import com.octaviantocan.mymind.ui.theme.LibraryColors
@@ -23,8 +37,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +69,12 @@ import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.ui.errors.WebErrorScreen
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
+/** The colours a new space can take, in the order the web's new space modal offered them. */
+val SPACE_COLORS = listOf(
+    "#75ffc0", "#c0c2ce", "#ff8fa4", "#000", "#19aad1", "#17c37b", "#ffdcd0", "#166ff4",
+    "#cdff06", "#f96", "#bfb5d7", "#96cbd1", "#cba0aa", "#fdf06f", "#7a30cf", "#ef3e4a",
+)
+
 /** Height of the title row of the Spaces list and of an opened space. */
 val VIEW_HEADER_HEIGHT = GALLERY_CONTROLS_HEIGHT
 
@@ -83,6 +101,7 @@ private val COVER_FRAME = 160.dp
  * @param onAddToSpace Called with the opened space when "Add to this space" is picked in its menu.
  * @param modifier Modifier for the page.
  * @param onLongPressCard Called with a card long-pressed inside a space and that space's id.
+ * @param onNewSpace Called when the New space tile at the end of the list is tapped.
  * @param controls The gallery's fixed controls, drawn over the list of spaces.
  */
 @Composable
@@ -95,6 +114,7 @@ fun SpacesScreen(
     onAddToSpace: (Space) -> Unit,
     modifier: Modifier = Modifier,
     onLongPressCard: ((Card, String) -> Unit)? = null,
+    onNewSpace: () -> Unit = {},
     controls: @Composable BoxScope.() -> Unit = {},
 ) {
     val spaces by viewModel.spaces.collectAsStateWithLifecycle()
@@ -113,6 +133,7 @@ fun SpacesScreen(
             controls = controls,
             mosaic = listMosaic,
             scroll = listScroll,
+            onNewSpace = onNewSpace,
         )
     } else {
         val feed = viewModel.spaceFeed(openSpace.id)
@@ -134,8 +155,7 @@ fun SpacesScreen(
 
 /**
  * The list of spaces on the gallery paper: a title that scrolls away under the fixed controls, then card stacks with
- * each space's name, two across until a pinch changes their size as it does in the gallery. Creating a space is offered
- * by the Add sheet rather than a floating button.
+ * each space's name, two across until a pinch changes their size as it does in the gallery, then a New space tile.
  *
  * @param state Spaces and their first cards.
  * @param onOpenSpace Called with a tapped space.
@@ -145,6 +165,7 @@ fun SpacesScreen(
  * @param controls The gallery's fixed controls, drawn over the list.
  * @param mosaic The list's size, kept by the caller so it survives opening a space.
  * @param scroll The list's scroll position, kept for the same reason.
+ * @param onNewSpace Called when the New space tile after the spaces is tapped.
  */
 @Composable
 fun SpaceListContent(
@@ -156,22 +177,33 @@ fun SpaceListContent(
     controls: @Composable BoxScope.() -> Unit = {},
     mosaic: MosaicState = rememberMosaicState(),
     scroll: LazyListState = rememberLazyListState(),
+    onNewSpace: () -> Unit = {},
 ) {
+    val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
     Box(modifier.fillMaxSize().background(LibraryStyle.colors.background)) {
         when {
             state.spaces.isEmpty() && state.error != null -> WebErrorScreen(onRetry = onRetry)
             state.spaces.isEmpty() && !state.loaded -> PageSpinner()
-            else -> PullRefresh(state.refreshing, onRefresh, top = VIEW_HEADER_HEIGHT) {
-                val cards = remember(state.spaces) { state.spaces.map(::spaceCard) }
-                val tiles = remember(state.spaces, state.covers) { SpaceMosaicTiles(state.spaces.associateBy { it.id }, state.covers) }
-                LibraryMosaic(FeedState(cards, endReached = true), onLoadMore = {},
-                    onOpenCard = { card -> state.spaces.firstOrNull { it.id == card.id }?.let(onOpenSpace) },
-                    state = scroll, mosaic = mosaic, header = { GalleryTitle("All Spaces") }, tiles = tiles, label = "All spaces")
+            else -> {
+                PullRefresh(state.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop), top = VIEW_HEADER_HEIGHT) {
+                    // The New space tile follows the spaces, so making one is always at the end of the list.
+                    val cards = remember(state.spaces) { state.spaces.map(::spaceCard) + NEW_SPACE_CARD }
+                    val tiles = remember(state.spaces, state.covers) { SpaceMosaicTiles(state.spaces.associateBy { it.id }, state.covers) }
+                    LibraryMosaic(FeedState(cards, endReached = true), onLoadMore = {},
+                        onOpenCard = { card ->
+                            if (card.id == NEW_SPACE_CARD.id) onNewSpace() else state.spaces.firstOrNull { it.id == card.id }?.let(onOpenSpace)
+                        },
+                        state = scroll, mosaic = mosaic, header = { GalleryTitle("All Spaces") }, tiles = tiles, label = "All spaces")
+                }
+                GalleryScrollEdge(backdrop, LibraryStyle.colors.background, Modifier.align(Alignment.TopCenter), visible = { scroll.scrolledBy() })
             }
         }
         controls()
     }
 }
+
+/** The card that stands for the New space tile after the spaces; no space has this id. */
+private val NEW_SPACE_CARD = Card(id = "new-space-tile", type = "Space", flags = 0, created = "", modified = "", bumped = "", title = "New space")
 
 /** The card that stands for [space] in the mosaic: only its id and name, which the mosaic keys and lays it out by. */
 private fun spaceCard(space: Space): Card =
@@ -192,6 +224,7 @@ private class SpaceMosaicTiles(private val spaces: Map<String, Space>, private v
 
     @Composable
     override fun Tile(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, enabled: Boolean, imageRequestSizePx: Int, modifier: Modifier) {
+        if (card.id == NEW_SPACE_CARD.id) return NewSpaceStack(onClick, modifier, enabled)
         val space = spaces[card.id] ?: return
         SpaceStack(space, covers[card.id], onClick, modifier, enabled, imageRequestSizePx)
     }
@@ -203,6 +236,7 @@ private class SpaceMosaicTiles(private val spaces: Map<String, Space>, private v
 
     @Composable
     override fun Copy(card: Card, imageRequestSizePx: Int) {
+        if (card.id == NEW_SPACE_CARD.id) return NewSpaceStack({}, Modifier.fillMaxSize(), enabled = false)
         val space = spaces[card.id] ?: return
         SpaceStack(space, covers[card.id], {}, Modifier.fillMaxSize(), enabled = false, imageRequestSizePx = imageRequestSizePx)
     }
@@ -239,36 +273,73 @@ fun SpaceContent(
     onLongPressCard: ((Card) -> Unit)? = null,
 ) {
     val mosaic = rememberMosaicState(reels = true)
+    val scroll = rememberLazyListState()
+    val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
     Box(modifier.fillMaxSize().background(LibraryStyle.colors.background)) {
         if (feed.empty) {
             PageSpinner()
         } else {
-            PullRefresh(feed.refreshing, onRefresh, top = VIEW_HEADER_HEIGHT) {
-                LibraryMosaic(feed, onLoadMore, onOpenCard, mosaic = mosaic, onLongPressCard = onLongPressCard, header = {
+            PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop), top = VIEW_HEADER_HEIGHT) {
+                LibraryMosaic(feed, onLoadMore, onOpenCard, state = scroll, mosaic = mosaic, onLongPressCard = onLongPressCard, header = {
                     GalleryTitle(space.name.orEmpty(), start = SPACE_BACK_INSET, end = SPACE_MENU_INSET)
                 })
             }
+            GalleryScrollEdge(backdrop, LibraryStyle.colors.background, Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = 1f - mosaic.reel },
+                visible = { scroll.scrolledBy() })
         }
         FootCircleButton(R.drawable.ic_sheet_back, "Back", onBack,
             Modifier.align(Alignment.TopStart).awayInReels(mosaic).padding(start = 16.dp, top = 12.dp), size = 44.dp)
-        SpaceOptions(onAdd, onDelete, Modifier.align(Alignment.TopEnd).awayInReels(mosaic).padding(end = 16.dp, top = 12.dp))
+        SpaceOptions(space.name.orEmpty(), onAdd, onDelete, Modifier.align(Alignment.TopEnd).awayInReels(mosaic).padding(end = 16.dp, top = 12.dp))
     }
 }
 
-/** The opened space's options: adding to it, and deleting it, with the long-press haptic the web gives the menu. */
+/**
+ * The opened space's options as a Pully sheet under the space's name: adding to it, and deleting it with a hold, as a
+ * card is deleted. The button gives the long-press haptic the web gives the menu.
+ */
 @Composable
-private fun SpaceOptions(onAdd: () -> Unit, onDelete: (() -> Unit)?, modifier: Modifier = Modifier) {
+private fun SpaceOptions(name: String, onAdd: () -> Unit, onDelete: (() -> Unit)?, modifier: Modifier = Modifier) {
     val haptic = LocalHapticFeedback.current
-    var expanded by remember { mutableStateOf(false) }
-    Box(modifier) {
-        FootCircleButton(R.drawable.ic_sheet_more, "Space options", {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            expanded = true
-        }, size = 44.dp)
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text("Add to this space") }, onClick = { expanded = false; onAdd() })
-            if (onDelete != null) DropdownMenuItem(text = { Text("Delete space") }, onClick = { expanded = false; onDelete() })
+    var open by remember { mutableStateOf(false) }
+    FootCircleButton(R.drawable.ic_sheet_more, "Space options", {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        open = true
+    }, modifier, size = 44.dp)
+    if (open) PullySheet(name.ifBlank { "Space" }, onClose = { open = false }) {
+        CardMenuGroup(Modifier.padding(top = 20.dp)) {
+            SheetRow(painterResource(R.drawable.ic_library_add), "Add to this space", { open = false; onAdd() },
+                detail = "Photos, files or the camera")
         }
+        if (onDelete != null) CardMenuGroup(Modifier.padding(top = 20.dp)) {
+            HoldToDeleteRow(onDelete = { open = false; onDelete() }, label = "Delete space", detail = "Its cards stay in your mind")
+        }
+    }
+}
+
+/**
+ * The tile after the spaces that makes a new one: a stack's square outlined on the page with a plus in it, and "New
+ * space" where a space shows its name (Tavi, 5 November 2026).
+ *
+ * @param onClick Called when the tile is tapped.
+ * @param modifier Modifier for the cell.
+ * @param enabled False for a drawing that takes no touches.
+ */
+@Composable
+private fun NewSpaceStack(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val colors = LibraryStyle.colors
+    val shape = RoundedCornerShape(TILE_RADIUS)
+    val press = if (enabled) Modifier.clickable(role = Role.Button, onClickLabel = "New space", onClick = onClick) else Modifier
+    Column(modifier.then(press), horizontalAlignment = Alignment.CenterHorizontally) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(minOf(maxWidth, maxHeight)).scale(STACK_SCALE).clip(shape)
+                .background(colors.muted.copy(alpha = 0.08f)).border(1.5.dp, colors.muted.copy(alpha = 0.35f), shape),
+                contentAlignment = Alignment.Center) {
+                Box(Modifier.size(56.dp).clip(CircleShape).background(colors.raised), contentAlignment = Alignment.Center) {
+                    Image(painterResource(R.drawable.ic_library_add), null, Modifier.size(26.dp), colorFilter = ColorFilter.tint(colors.text))
+                }
+            }
+        }
+        Text("New space", Modifier.padding(vertical = 10.dp), style = LibraryStyle.body, color = colors.text, maxLines = 1)
     }
 }
 

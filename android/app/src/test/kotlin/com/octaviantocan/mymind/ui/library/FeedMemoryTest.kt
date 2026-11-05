@@ -182,7 +182,7 @@ class FeedMemoryTest {
     }
 
     @Test
-    fun theGalleryAndTopOfMindAreKeptApart() = runTest(dispatcher) {
+    fun theGalleryAndPinnedAreKeptApart() = runTest(dispatcher) {
         val memory = Memory()
         val library = FakeLibrary(
             pages = mapOf(null to CardPage(listOf(testCard("a")))),

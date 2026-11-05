@@ -1,6 +1,7 @@
 package com.octaviantocan.mymind.ui.card
 
 import android.provider.Settings
+import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -21,6 +22,7 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -66,6 +68,25 @@ fun Modifier.sheetEdgeFade(
         if (top > 0.dp) fadeBand(source, topLayers, color, topInset(), top.toPx(), true, radius, topStrength())
         if (bottom > 0.dp) fadeBand(source, bottomLayers, color, size.height - bottom.toPx(), bottom.toPx(), false, radius, bottomStrength())
     }
+}
+
+/**
+ * [sheetEdgeFade] at both ends of a scrolling column (the app's edge rule, Tavi, 5 November 2026): the top band shows
+ * once [scroll] has left its start and the bottom band while more lies below, each growing in over [reach] of scroll.
+ *
+ * @param scroll The column's scroll state.
+ * @param color The colour of the page under the column.
+ * @param top Height of the top band.
+ * @param bottom Height of the bottom band.
+ * @param reach Scroll over which each band comes in.
+ */
+@Composable
+fun Modifier.scrollEdgeFade(scroll: ScrollState, color: Color, top: Dp = 20.dp, bottom: Dp = 20.dp, reach: Dp = 20.dp): Modifier {
+    val px = with(LocalDensity.current) { reach.toPx() }
+    return sheetEdgeFade(top = top, bottom = bottom, color = color,
+        topStrength = { (scroll.value / px).coerceIn(0f, 1f) },
+        // Before the first measure the end is not known yet, so the bottom band waits for it.
+        bottomStrength = { if (scroll.maxValue == Int.MAX_VALUE) 0f else ((scroll.maxValue - scroll.value) / px).coerceIn(0f, 1f) })
 }
 
 /** How many blur layers make a band: radius a third, two thirds and all of the blur, reaching all, two thirds and a third of the way in. */

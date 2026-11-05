@@ -77,7 +77,7 @@ fun tileKind(card: Card): TileKind = when (card.type) {
     else -> if (card.cover?.src != null || card.blob != null) TileKind.Media else TileKind.Plain
 }
 
-/** True when [this] card is pinned to Top of Mind. */
+/** True when [this] card is pinned. */
 val Card.pinned: Boolean get() = (flags and PINNED_FLAG) != 0 || pinPosition != null
 
 /** True when [this] card is an article the reader view can show. */

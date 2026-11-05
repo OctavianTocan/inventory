@@ -111,7 +111,7 @@ class Repository(private val api: MymindApi, private val session: Session, priva
     override suspend fun removeFromSpace(spaceId: String, cardId: String): ApiResult<Unit> =
         api.removeFromSpace(spaceId, cardId)
 
-    override suspend fun topOfMind(cursor: String?): ApiResult<CardPage> = api.topOfMind(PAGE_SIZE, cursor)
+    override suspend fun pinned(cursor: String?): ApiResult<CardPage> = api.pinned(PAGE_SIZE, cursor)
 
     override suspend fun card(cardId: String): ApiResult<Card> = api.card(cardId)
 

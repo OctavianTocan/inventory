@@ -138,7 +138,7 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
      * @param cursor `next` of the previous page, or null for the first page.
      * @return One page of the pinned cards in pin order.
      */
-    suspend fun topOfMind(limit: Int, cursor: String?): ApiResult<CardPage> =
+    suspend fun pinned(limit: Int, cursor: String?): ApiResult<CardPage> =
         send(get("app/v1/top-of-mind", "limit" to limit.toString(), "cursor" to cursor), CardPage.serializer())
 
     /**
@@ -362,7 +362,7 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
     }
 
     /**
-     * Pins the card to Top of Mind or takes it off.
+     * Pins the card or takes it off.
      *
      * @param id Card id.
      * @param pinned True to pin, false to unpin.

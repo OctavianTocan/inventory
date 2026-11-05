@@ -28,7 +28,7 @@ the web showcase ("the way some tiles are bigger and some are smaller looks nice
 Every gallery tile MUST have 12 dp round corners, the web showcase's, and they MUST stay
 12 dp on screen at every density and at every moment of a pinch, including a tile with
 words drawn scaled from its frame, and so MUST a print's shadow (gallery-tiles-are-prints). The cards MUST sit 16 dp in from each side of the
-screen, the inset Top of Mind starts at, and a card sliding off one end of its line
+screen, the inset Pinned starts at, and a card sliding off one end of its line
 leaves at that edge. The space between cards MUST be about a twentieth of a column, from
 6 to 24 dp, as the showcase spaces its wall (`wallGap` in octa-ui's `apps/showcase`): on a
 phone 16 dp at one column, 8 at two and 6 at three and four. The Spaces list keeps its own
@@ -53,7 +53,7 @@ quote's author or a video's channel, MAY show under them once the tile has room 
 lines of words beside it (three on a card of words), and MUST NOT repeat them. A post keeps
 its network's colour (gallery-posts-look-like-posts) and casts the same shadow; a PDF's
 page stands on the paper with its own (gallery-pdfs-show-their-first-page). In the dark
-scheme the prints are the raised colour. Top of Mind's cards are prints too, with a wider
+scheme the prints are the raised colour. Pinned's cards are prints too, with a wider
 border.
 Source: Tavi, 1 November 2026 ("I still don't like how they look, nor the size of the text
 as you zoom"), then his pick of 07 Prints on the card looks canvas the same day ("Let's do
@@ -61,7 +61,7 @@ as you zoom"), then his pick of 07 Prints on the card looks canvas the same day 
 
 @cc [owner:OctavianTocan,label:product;design] gallery-mixed-cards-keep-text-and-images
 A note, social post, article or saved link with text and a picture MUST show both in its gallery
-preview, including the smallest density and Top of Mind. Neither the cover nor a
+preview, including the smallest density and Pinned. Neither the cover nor a
 generated title may replace the note or post body. Text and images MUST have separate
 visible areas, and text MUST use the app's font with enough contrast against its paper. A
 photo or video with an authored note MUST also retain that note beside its image.
@@ -213,9 +213,9 @@ and stuff should work on the results too. Pinching is a thing in this app all ac
 app").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-highlights-stay-above-the-bricks
-Top of Mind MUST remain above the main mosaic, in pin order, as a horizontal rail of
+Pinned MUST remain above the main mosaic, in pin order, as a horizontal rail of
 large highlight cards. The rail MUST remain horizontally scrollable and scroll
-vertically with the mosaic, without a visible "Top of Mind" text heading. Profile
+vertically with the mosaic, without a visible "Pinned" text heading. Profile
 and highlights MUST NOT scale with a mosaic pinch.
 Source: Tavi, 22 October 2026, Google Photos layout request and gallery polish in the Codex conversation.
 
@@ -241,22 +241,32 @@ Source: Tavi, 28 October 2026 ("get completely rid of any stuff related to the r
 page").
 
 @cc [owner:OctavianTocan,label:design;interaction] gallery-top-edge-blurs-the-scrolling-content
-Once the page has scrolled, the cards passing under the status bar and the fixed
+On Everything, Ask's results, the Spaces list and an opened space, once the page has scrolled, the cards passing under the status bar and the fixed
 controls MUST soften through true backdrop blur that fades into the sharp viewport;
 at the top of the page there is no blur. It MUST sample the displayed
 gallery rather than create a second feed or replace the cards with an opaque
 gradient. The fixed controls stay sharp, and the decorative blur MUST NOT own taps,
 pinches or pull-to-refresh gestures.
 Source: Tavi's annotated gallery screenshot, 22 October 2026: "We're missing blur
-on the top part of the scrollable section."
+on the top part of the scrollable section."; extended to every gallery page on 5
+November 2026 (scroll-views-blur-their-edges).
 
 @cc [owner:OctavianTocan,label:product;design] spaces-share-the-gallery-page
 The Spaces list and an opened space MUST use the gallery's background, title row and
 floating controls, not a separate page style. Spaces MUST NOT have a floating create
-button: New space is offered in the Add sheet opened from the Spaces list, and
-adding to or deleting an opened space lives in that space's options menu.
+button. The Spaces list MUST end with a New space tile, a stack's square with a plus
+where a cover would be, and the + on the Spaces list MUST open the New space sheet
+straight away, never the Add sheet with its add-to-your-mind sources. New space is
+Pully's sheet with the name and colour in one raised group and Create space under it,
+never mymind's modal. An opened space's options (Add to this space, Delete space held
+as a card's delete is) MUST be a Pully sheet under the space's name, never a Material
+menu or dialog.
 Source: Tavi's recorded review, 22 October 2026 ("the background should be the same",
-"remove the orange plus, but keep the functionality").
+"remove the orange plus, but keep the functionality"); Tavi, 5 November 2026 ("there
+should be a space that has a little plus in the middle instead of an image and is called
+'New Space'", "there's no real reason for that one to open a bottom sheet when you're in
+the Spaces", "Make it into a bottom sheet and use our actual design system. That also
+goes for the little dot menu").
 
 @cc [owner:OctavianTocan,label:product;design;motion] gallery-videos-play-quietly
 Video tiles MUST NOT show a camera icon. A video kept on the library server MUST play
@@ -363,7 +373,7 @@ Source: Tavi's recorded review, 22 October 2026 ("repositories I think could use
 the repositories cover").
 
 @cc [owner:OctavianTocan,label:product;privacy] gallery-opens-from-the-phone
-Everything, Top of Mind and the page scheme MUST open on what they showed last time,
+Everything, Pinned and the page scheme MUST open on what they showed last time,
 read from the phone's own copy (`data/LibraryCopy.kt`), before the server answers. The
 server's first page then decides: when the list already starts with it, the list stays
 and paging goes on after it; otherwise the list becomes the fresh page. Without the
@@ -376,7 +386,7 @@ Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search"
 
 @cc [owner:OctavianTocan,label:product;privacy] gallery-works-offline
 Once the phone holds the whole library (`data/LibraryCopy.kt`, filled page by page from
-`/app/v1/changes` by `data/LibrarySync.kt`), Everything, Top of Mind, the Spaces tab and
+`/app/v1/changes` by `data/LibrarySync.kt`), Everything, Pinned, the Spaces tab and
 its covers and space pages MUST read from it, in the
 server's order, without waiting on the network. Space pages read from it only once its
 cards carry their place in the space (`spaceRanks`); before that they ask the server.
@@ -435,7 +445,7 @@ Source: Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Whol
 "ThyMind: a Zero-style sync engine", step 4.
 
 @cc [owner:OctavianTocan,label:product;architecture] gallery-follows-the-copy
-Once the phone's copy holds the whole library, the gallery, Top of Mind, the Spaces tab,
+Once the phone's copy holds the whole library, the gallery, Pinned, the Spaces tab,
 an open space and an opened card MUST redraw from the copy whenever it changes
 (`LibraryCopy.changes`): a sync, a change made on the phone or a card read again from the
 server all show the same way, without a screen asking the server again. Lists that did

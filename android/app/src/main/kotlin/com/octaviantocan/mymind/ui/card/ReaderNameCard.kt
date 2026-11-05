@@ -59,7 +59,7 @@ import com.octaviantocan.mymind.ui.theme.MymindTheme
 
 /**
  * The name's card: tapping the reader's name grows its pill into a card of the card's details over a light scrim, with
- * Copy link, Top of Mind and its spaces, then the cards opened before it. Tapping its name, the scrim or Back hides it.
+ * Copy link, Pinned and its spaces, then the cards opened before it. Tapping its name, the scrim or Back hides it.
  *
  * @param visible True while it shows; it grows in and shrinks back into the pill.
  * @param card The card the reader shows.
@@ -81,6 +81,7 @@ internal fun ReaderNameCard(visible: Boolean, card: Card, details: ReaderDetails
             .clickable(remember { MutableInteractionSource() }, indication = null, enabled = visible, role = Role.Button,
                 onClickLabel = "Hide card details", onClick = onClose))
         val shape = RoundedCornerShape(24.dp)
+        val scroll = rememberScrollState()
         Column(
             Modifier.windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 16.dp)
                 .graphicsLayer {
@@ -91,7 +92,8 @@ internal fun ReaderNameCard(visible: Boolean, card: Card, details: ReaderDetails
                 }
                 .fillMaxWidth().cardSurfaceShadow(shape, note = true).clip(shape).background(colors.paper)
                 .semantics { paneTitle = "About this card" }
-                .verticalScroll(rememberScrollState())
+                .scrollEdgeFade(scroll, colors.paper)
+                .verticalScroll(scroll)
                 .padding(start = 12.dp, end = 12.dp, bottom = 16.dp),
         ) {
             Row(Modifier.fillMaxWidth().height(44.dp).clickable(remember { MutableInteractionSource() }, CardSheetIndication,
@@ -110,8 +112,8 @@ internal fun ReaderNameCard(visible: Boolean, card: Card, details: ReaderDetails
                 }
                 actions.onTogglePin?.let { toggle ->
                     add {
-                        SheetRow(painterResource(R.drawable.topofmindicon), "Top of Mind", toggle,
-                            detail = if (card.pinned) "Pinned" else "Keep it above everything else", role = Role.Switch,
+                        SheetRow(painterResource(R.drawable.topofmindicon), "Pin", toggle,
+                            detail = if (card.pinned) "Pinned" else "Keep it first in your mind", role = Role.Switch,
                             trailing = { SheetSwitch(card.pinned) })
                     }
                 }
@@ -139,7 +141,7 @@ internal fun ReaderNameCard(visible: Boolean, card: Card, details: ReaderDetails
                     }
                     actions.onEverything?.let { everything ->
                         SheetRowDivider()
-                        SheetRow(painterResource(R.drawable.ic_sheet_back), "Back to Everything", then(everything))
+                        SheetRow(painterResource(R.drawable.ic_sheet_back), "Back to All", then(everything))
                     }
                 }
             }

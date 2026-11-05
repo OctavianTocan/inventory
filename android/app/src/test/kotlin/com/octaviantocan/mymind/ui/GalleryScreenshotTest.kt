@@ -190,7 +190,7 @@ class GalleryScreenshotTest(private val dark: Boolean) {
             }) {
                 EverythingContent(FeedState(sample, endReached = true), searching, null,
                     SearchType.entries.map { it.suggestion }, null, emptyList(), {}, {}, {}, {}, {}, {}, {}, {},
-                    topOfMind = highlights, gridState = remember { LazyListState() }, mosaic = remember { mosaicState })
+                    pinned = highlights, gridState = remember { LazyListState() }, mosaic = remember { mosaicState })
             }
         }
         compose.mainClock.autoAdvance = true

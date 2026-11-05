@@ -43,7 +43,7 @@ class KeptPicturesTest {
         )
 
     @Test
-    fun fetchesTopOfMindThenTheNewestCardsPicturesItDoesNotHave() = runBlocking {
+    fun fetchesPinnedThenTheNewestCardsPicturesItDoesNotHave() = runBlocking {
         val newest = (1..KEPT_PICTURE_CARDS + 5L).map { pictured("c%04d".format(it), it) }
         val others = listOf(
             pictured("pinned-old", 0, flags = 512, pin = 0),

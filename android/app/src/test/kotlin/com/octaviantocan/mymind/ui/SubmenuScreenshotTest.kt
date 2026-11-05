@@ -20,7 +20,7 @@ import com.octaviantocan.mymind.data.Suggestion
 import com.octaviantocan.mymind.data.Tag
 import com.octaviantocan.mymind.ui.card.CardDetail
 import com.octaviantocan.mymind.ui.library.FeedState
-import com.octaviantocan.mymind.ui.library.NewSpaceContent
+import com.octaviantocan.mymind.ui.menu.NewSpaceSheetContent
 import com.octaviantocan.mymind.ui.library.SAME_VIBE_LABEL
 import com.octaviantocan.mymind.ui.library.SPACE_COLORS
 import com.octaviantocan.mymind.ui.library.SearchFilter
@@ -161,33 +161,20 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
         CardImagePage(PICTURED, onShare = {})
     }
 
-    private fun newSpace(name: String, step: Int) {
+    @Test
+    fun newSpace() {
         render {
             Box(Modifier.fillMaxSize()) {
                 ShellFrame(Tab.Spaces, onSelectTab = {}, scheme = PageScheme.System) {
                     SpaceListContent(LibrarySamples.spaces, onOpenSpace = {}, onRetry = {})
                 }
                 PageTheme(PageScheme.System) {
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)), contentAlignment = Alignment.Center) {
-                        NewSpaceContent(
-                            onCreate = { _, _ -> },
-                            initialName = if (step == 1) "" else "Weekend plans",
-                            initialStep = step,
-                            initialColor = if (step == 1) null else SPACE_COLORS[9],
-                            focusOnOpen = false,
-                        )
-                    }
+                    SheetFixture("New space") { NewSpaceSheetContent(busy = false, error = null, onCreate = { _, _ -> }, focusOnOpen = false) }
                 }
             }
         }
-        capture(name)
+        capture("S07_new_space")
     }
-
-    @Test
-    fun newSpaceName() = newSpace("S07_new_space_name", 1)
-
-    @Test
-    fun newSpaceColor() = newSpace("S07_new_space_color", 2)
 
     @Test
     fun undoDelete() {

@@ -157,7 +157,7 @@ class CardDetailInteractionTest {
         nameCard.assertExists()
         compose.onNodeWithText("Design, Reading").assertExists()
         compose.onNodeWithText("Copy link").assertDoesNotExist()
-        compose.onNodeWithText("Top of Mind").performClick()
+        compose.onNodeWithText("Pin").performClick()
         compose.mainClock.advanceTimeBy(1000)
         nameCard.assertExists()
         compose.change { back.onBackPressed() }

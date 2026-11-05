@@ -161,7 +161,7 @@ class LibrarySyncTest {
         assertEquals("c55", first.cards.first().id)
         val second = (library.cards(first.next) as ApiResult.Ok).value
         assertEquals(6, second.cards.size)
-        assertEquals(listOf("p"), (library.topOfMind(null) as ApiResult.Ok).value.cards.map { it.id })
+        assertEquals(listOf("p"), (library.pinned(null) as ApiResult.Ok).value.cards.map { it.id })
         library.cards("s2")
         assertEquals("a server cursor still reads the server", listOf("cards:s2"), server.calls.filter { it.startsWith("cards") })
     }
@@ -235,7 +235,7 @@ class LibrarySyncTest {
             feed = mapOf("t1" to answer(listOf(testCard("b").copy(bumped = "2026-02-01T00:00:00Z"), testCard("p", flags = 512)), "t2"))
             viewModel.syncNow()
             assertEquals(listOf("b", "p", "a"), viewModel.everything.state.value.cards.map { it.id })
-            assertEquals(listOf("p"), viewModel.topOfMind.state.value.cards.map { it.id })
+            assertEquals(listOf("p"), viewModel.pinned.state.value.cards.map { it.id })
         } finally {
             Dispatchers.resetMain()
         }
@@ -257,7 +257,7 @@ class LibrarySyncTest {
             outboxServer.writeFailure = ApiFailure.Network
             library.setPinned("a", true)
             main.scheduler.advanceUntilIdle()
-            assertEquals("so does a change made on the phone", listOf("a"), viewModel.topOfMind.state.value.cards.map { it.id })
+            assertEquals("so does a change made on the phone", listOf("a"), viewModel.pinned.state.value.cards.map { it.id })
         } finally {
             Dispatchers.resetMain()
         }

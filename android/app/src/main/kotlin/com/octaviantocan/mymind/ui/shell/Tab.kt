@@ -11,6 +11,6 @@ import com.octaviantocan.mymind.R
  * @property darkIcon Icon used in the dark appearance.
  */
 enum class Tab(val label: String, @DrawableRes val lightIcon: Int, @DrawableRes val darkIcon: Int) {
-    Everything("Everything", R.drawable.ic_tab_everything, R.drawable.ic_tab_everything),
+    Everything("All", R.drawable.ic_tab_everything, R.drawable.ic_tab_everything),
     Spaces("Spaces", R.drawable.ic_tab_spaces, R.drawable.ic_tab_spaces),
 }

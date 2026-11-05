@@ -129,7 +129,7 @@ class LibraryCopyTest {
     }
 
     @Test
-    fun topOfMindKeepsPinOrderThenNewestFirst() = runBlocking {
+    fun pinnedKeepsPinOrderThenNewestFirst() = runBlocking {
         signIn("session-a")
         copy.apply(ChangesPage(listOf(
             testCard("second", flags = 512, pinPosition = 1),

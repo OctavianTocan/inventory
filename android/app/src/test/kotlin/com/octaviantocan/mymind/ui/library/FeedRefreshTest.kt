@@ -148,31 +148,31 @@ class FeedRefreshTest {
     }
 
     @Test
-    fun topOfMindIsReadFromItsRouteAndAgainAfterAPin() = runTest(dispatcher) {
+    fun pinnedIsReadFromItsRouteAndAgainAfterAPin() = runTest(dispatcher) {
         val library = FakeLibrary(
             pages = mapOf(null to CardPage(listOf(testCard("a"), testCard("p1", pinPosition = 1, flags = 512)))),
             pinnedPages = mapOf(null to CardPage(listOf(testCard("p1", pinPosition = 1, flags = 512)))),
         )
         val viewModel = LibraryViewModel(library, io = dispatcher)
         advanceUntilIdle()
-        assertEquals(listOf("p1"), viewModel.topOfMind.state.value.cards.map { it.id })
+        assertEquals(listOf("p1"), viewModel.pinned.state.value.cards.map { it.id })
 
         library.pinnedPages = mapOf(null to CardPage(listOf(testCard("p1", pinPosition = 1, flags = 512), testCard("a", pinPosition = 2, flags = 512))))
-        viewModel.perform(CardMenuItem(CardMenuAction.AddToTopOfMind), testCard("a"), null)
+        viewModel.perform(CardMenuItem(CardMenuAction.Pin), testCard("a"), null)
         advanceUntilIdle()
-        assertEquals(listOf("p1", "a"), viewModel.topOfMind.state.value.cards.map { it.id })
-        assertEquals(2, library.calls.count { it == "topOfMind:null" })
+        assertEquals(listOf("p1", "a"), viewModel.pinned.state.value.cards.map { it.id })
+        assertEquals(2, library.calls.count { it == "pinned:null" })
     }
 
     @Test
-    fun pullingEverythingReadsTheLibraryAndTopOfMindAgain() = runTest(dispatcher) {
+    fun pullingEverythingReadsTheLibraryAndPinnedAgain() = runTest(dispatcher) {
         val library = FakeLibrary(pages = mapOf(null to CardPage(listOf(testCard("a")))), pinnedPages = mapOf(null to CardPage(listOf(testCard("p")))))
         val viewModel = LibraryViewModel(library, io = dispatcher)
         advanceUntilIdle()
         library.calls.clear()
         viewModel.refreshEverything()
         advanceUntilIdle()
-        assertEquals(listOf("cards:null", "topOfMind:null"), library.calls.filter { it.startsWith("cards:") || it.startsWith("topOfMind:") })
+        assertEquals(listOf("cards:null", "pinned:null"), library.calls.filter { it.startsWith("cards:") || it.startsWith("pinned:") })
     }
 
     @Test

@@ -123,10 +123,10 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Space on each side of the cards, the web showcase's on a phone; Top of Mind starts at the same inset. */
+/** Space on each side of the cards, the web showcase's on a phone; Pinned starts at the same inset. */
 private val MOSAIC_MARGIN = 16.dp
 
-/** Space between the page's header, such as its title or Top of Mind, and the first cards. */
+/** Space between the page's header, such as its title or Pinned, and the first cards. */
 private val MOSAIC_HEADER_GAP = 4.dp
 private const val MOSAIC_HEADER = "gallery-header"
 private const val MOSAIC_END = "gallery-end"

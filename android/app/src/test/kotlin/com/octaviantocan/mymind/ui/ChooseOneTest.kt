@@ -46,10 +46,10 @@ class ChooseOneTest {
         compose.setPhoneContent(false) { CardMenuContent(cardMenuItems(article.copy(pinPosition = 1), null), onSelect = {}) }
         compose.mainClock.advanceTimeBy(500)
         assertTrue(top("Add to space") < top("Open source"))
-        assertEquals(top("Open source"), top("Top of Mind"), 1f)
-        assertTrue(top("Top of Mind") < top("Add tags"))
+        assertEquals(top("Open source"), top("Pin"), 1f)
+        assertTrue(top("Pin") < top("Add tags"))
         assertTrue(top("Add tags") < top("Delete card"))
-        compose.onNodeWithContentDescription("Top of Mind, pinned").assertExists()
+        compose.onNodeWithContentDescription("Pinned").assertExists()
         compose.onNodeWithText("Hold to delete").assertExists()
     }
 

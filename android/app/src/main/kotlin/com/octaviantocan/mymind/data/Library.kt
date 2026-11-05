@@ -93,7 +93,7 @@ interface Library {
 
     /**
      * @param cardId Card to change.
-     * @param pinned True pins the card to Top of Mind, false takes it off.
+     * @param pinned True pins the card, false takes it off.
      * @return Success, or the failure.
      */
     suspend fun setPinned(cardId: String, pinned: Boolean): ApiResult<Unit>
@@ -113,9 +113,9 @@ interface Library {
 
     /**
      * @param cursor `next` of the previous page, or null for the first page.
-     * @return One page of the cards pinned to Top of Mind, in pin order.
+     * @return One page of the cards pinned, in pin order.
      */
-    suspend fun topOfMind(cursor: String?): ApiResult<CardPage>
+    suspend fun pinned(cursor: String?): ApiResult<CardPage>
 
     /**
      * @param cardId Card to read.

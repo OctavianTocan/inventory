@@ -85,7 +85,9 @@ and letting go settles on the nearer page, or on the next one the way a throw we
 finger has moved it part of the way, on Pully's critically damped page spring. A tab or the
 circle glides the row to its page. The bar MUST change with the page as the finger lets go,
 through library-navigation-is-the-gallery-capsule and library-search-morphs-the-navigation.
-A swipe onto Ask MUST NOT raise the keyboard; the circle still focuses the field. Closing
+Arriving on Ask, by the circle or by a swipe, MUST put the cursor in its field (Tavi,
+5 November 2026: "When I swipe over to the search screen, the search input should be
+automatically focused"); only Same Vibe's similar cards open it with the keyboard down. Closing
 Ask goes back to the page it was opened from. Two fingers are a pinch and MUST NOT turn a
 page; a page in full screen (library-bar-leaves-for-full-screen) MUST NOT swipe, and a
 page's full screen MUST only hide the bar while that page is on screen. Each page keeps its
@@ -95,3 +97,20 @@ Source: Tavi, 5 November 2026 ("I want to be able to swipe between the everythin
 and ask pages. Should feel seamless to go from one to another. Just as it does in Pully");
 pulls.review kit-side-pages-slide-whole, kit-side-pages-keep-state and
 kit-drags-carry-on-or-settle.
+
+@cc [owner:OctavianTocan,label:design;motion] scroll-views-blur-their-edges
+Every scrolling view in the app MUST blur and fade its content into the page at the
+top once it has scrolled away from its start, and at the bottom while more lies below:
+the galleries (Everything, Ask's results, the Spaces list and an opened space) through
+gallery-top-edge-blurs-the-scrolling-content and the mosaic's foot fade, and every
+other scrolling column (Ask before anything is typed, the search dock's answer, the
+sheets, the reader and its name card) through `scrollEdgeFade`. At rest at an edge,
+that edge stays sharp. The reader's foot keeps its own fade under its buttons instead.
+Source: Tavi, 5 November 2026 ("If there's a scroll view, we have blur at the top and
+at the bottom when it's scrolled ... We are, in fact, also not doing it in the spaces").
+
+@cc [owner:OctavianTocan,label:product] gallery-tab-is-called-all
+The tab of the whole library, mymind's Everything, MUST be named "All" wherever the app
+shows or speaks it, such as the bar's tab and the reader's Back to All.
+Source: Tavi, 5 November 2026 ("Rename it to 'All'"), picked over Mind, Home and All
+cards when asked what to call Everything.

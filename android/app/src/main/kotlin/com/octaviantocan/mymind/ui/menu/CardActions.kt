@@ -36,7 +36,7 @@ fun cardMenuItems(card: Card, spaceId: String?, features: Set<String> = emptySet
     if (canCopy(card)) add(CardMenuItem(CardMenuAction.Copy))
     add(CardMenuItem(CardMenuAction.AddTags))
     add(CardMenuItem(if (spaceId != null) CardMenuAction.RemoveFromSpace else CardMenuAction.AddToSpace))
-    add(CardMenuItem(if (card.pinned) CardMenuAction.RemoveFromTopOfMind else CardMenuAction.AddToTopOfMind))
+    add(CardMenuItem(if (card.pinned) CardMenuAction.Unpin else CardMenuAction.Pin))
     add(CardMenuItem(CardMenuAction.DeleteCard))
 }
 
@@ -64,7 +64,7 @@ sealed interface CardMenuOutcome {
     data class RemovedFromSpace(val spaceId: String, val cardId: String) : CardMenuOutcome
 
     /**
-     * The card was pinned to Top of Mind or taken off it.
+     * The card was pinned or taken off it.
      *
      * @property card The card with its new pin state.
      */
@@ -192,8 +192,8 @@ class CardActions(private val library: Library, private val saver: FileSaver) {
             CardMenuAction.SameVibe -> CardMenuOutcome.ShowSimilar(card)
             CardMenuAction.AddTags -> CardMenuOutcome.OpenSubmenu(CardSubmenu.Tags)
             CardMenuAction.AddToSpace -> CardMenuOutcome.OpenSubmenu(CardSubmenu.Spaces)
-            CardMenuAction.AddToTopOfMind, CardMenuAction.RemoveFromTopOfMind -> {
-                val pin = item.action == CardMenuAction.AddToTopOfMind
+            CardMenuAction.Pin, CardMenuAction.Unpin -> {
+                val pin = item.action == CardMenuAction.Pin
                 library.setPinned(card.id, pin).then { CardMenuOutcome.PinChanged(card.withPin(pin)) }
             }
             CardMenuAction.DeleteCard -> library.trash(card.id).then { CardMenuOutcome.Deleted(card.id) }
@@ -261,6 +261,6 @@ private inline fun ApiResult<Unit>.then(done: () -> CardMenuOutcome): CardMenuOu
 
 private const val PINNED_FLAG = 512
 
-/** Copy of the card with the Top of Mind pin set or cleared. */
+/** Copy of the card with the pin set or cleared. */
 private fun Card.withPin(pinned: Boolean): Card =
     if (pinned) copy(flags = flags or PINNED_FLAG) else copy(flags = flags and PINNED_FLAG.inv(), pinPosition = null)

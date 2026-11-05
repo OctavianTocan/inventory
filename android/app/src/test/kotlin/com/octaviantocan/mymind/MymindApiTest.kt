@@ -117,9 +117,9 @@ class MymindApiTest {
     }
 
     @Test
-    fun topOfMindReadsThePinnedRoute() = runBlocking {
+    fun pinnedReadsThePinnedRoute() = runBlocking {
         answer("""{"cards":[{"id":"p1","type":"Note","flags":512,"created":"x","modified":"x","bumped":"x"}],"next":null}""")
-        val page = (api.topOfMind(50, null) as ApiResult.Ok).value
+        val page = (api.pinned(50, null) as ApiResult.Ok).value
         assertEquals(listOf("p1"), page.cards.map { it.id })
         assertEquals("/app/v1/top-of-mind?limit=50", server.takeRequest().path)
     }

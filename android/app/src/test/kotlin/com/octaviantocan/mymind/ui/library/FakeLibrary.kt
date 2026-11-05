@@ -28,7 +28,7 @@ import java.io.InputStream
  * @param flags Card flags.
  * @param url Source address.
  * @param blob Uploaded file.
- * @param pinPosition Top of Mind position.
+ * @param pinPosition Pinned position.
  * @param title Title.
  * @param note Note text.
  * @param tags Tags.
@@ -74,7 +74,7 @@ fun testCard(
  * @param recent Recent tags.
  * @param suggestions Search suggestions by query.
  * @param media Bytes of uploaded files by path.
- * @param pinnedPages Pages of Top of Mind by cursor.
+ * @param pinnedPages Pages of Pinned by cursor.
  * @param cardsById Cards `card` answers with; a missing id fails with 404.
  * @param searchHits Cards every search answers with.
  */
@@ -172,8 +172,8 @@ class FakeLibrary(
 
     override suspend fun removeFromSpace(spaceId: String, cardId: String) = write("unspace:$spaceId:$cardId") {}
 
-    override suspend fun topOfMind(cursor: String?): ApiResult<CardPage> {
-        calls += "topOfMind:$cursor"
+    override suspend fun pinned(cursor: String?): ApiResult<CardPage> {
+        calls += "pinned:$cursor"
         return pinnedPages[cursor]?.let { ApiResult.Ok(it) } ?: ApiResult.Failed(ApiFailure.Network)
     }
 

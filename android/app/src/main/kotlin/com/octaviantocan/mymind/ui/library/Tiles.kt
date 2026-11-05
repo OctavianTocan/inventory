@@ -422,14 +422,14 @@ private fun PlainTile(card: Card) {
 }
 
 /**
- * A card in the Top of Mind row: a 124 x 100 dp crop of the card.
+ * A card in the Pinned row: a 124 x 100 dp crop of the card.
  *
  * @param card Pinned card.
  * @param onClick Called when the tile is tapped.
  * @param modifier Modifier for the tile.
  */
 @Composable
-fun TopOfMindTile(card: Card, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun PinnedTile(card: Card, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val page = MymindTheme.page
     val kind = tileKind(card)
     Column(

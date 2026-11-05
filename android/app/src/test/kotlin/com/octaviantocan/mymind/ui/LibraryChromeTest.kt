@@ -64,7 +64,7 @@ class LibraryChromeTest {
                     onChoose = {}, onRemoveFilter = {}, onLoadMore = {}, onLoadMoreResults = {}, onRetry = {},
                     onOpenCard = { opened += it.id }, onOpenSettings = { controls += "settings" }, onAdd = { controls += "add" },
                     onLongPressCard = { held += it.id },
-                    onRefresh = { refreshes++ }, topOfMind = highlights, gridState = state, mosaic = mosaic,
+                    onRefresh = { refreshes++ }, pinned = highlights, gridState = state, mosaic = mosaic,
                 )
             }
         }
@@ -82,7 +82,7 @@ class LibraryChromeTest {
         val before = controlBounds()
         val gallery = compose.onNodeWithContentDescription("Card gallery")
         val rail = compose.onNodeWithContentDescription("Pinned cards").assertIsDisplayed()
-        compose.onNodeWithText("Top of Mind").assertDoesNotExist()
+        compose.onNodeWithText("Pinned").assertDoesNotExist()
         assertTrue("The page scrolls beneath the floating controls", gallery.fetchSemanticsNode().boundsInRoot.top <= before.minOf { it.top })
 
         rail.performTouchInput { swipeLeft(durationMillis = 500) }

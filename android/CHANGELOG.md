@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.55 (66), 2026-11-05
+Spaces and search, polished.
+
+### Added
+- The Spaces list ends with a New space tile, a plus where a cover would be. Tap it to make a space.
+- Every scrolling page and sheet now blurs its content into the page at the top once scrolled, and at the bottom while more lies below: Spaces, an opened space, search and its results, the sheets and the card's details.
+
+### Changed
+- Swiping onto Ask puts the cursor in the search field, as the search button does.
+- The + on Spaces opens New space straight away instead of the Add sheet.
+- New space is now a sheet in the app's own style: name and colour together, then Create space. If it fails, it says why and keeps what you typed.
+- An opened space's ⋯ opens a sheet: Add to this space, and Delete space, held down like deleting a card.
+- Top of Mind is now called Pinned, and its action Pin.
+- The Everything tab is now called All.
+
 ## 0.6.54 (65), 2026-11-05
 ThyMind's tags show up while you share.
 

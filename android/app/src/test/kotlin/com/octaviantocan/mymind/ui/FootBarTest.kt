@@ -97,13 +97,13 @@ class FootBarTest {
         var searched = 0
         show(bars) { MymindTabBar(selected, onSelect = { selected = it }, onSearch = { searched++ }) }
         val slot = bars.top
-        compose.onNodeWithText("Everything").assertIsSelected()
+        compose.onNodeWithText("All").assertIsSelected()
         compose.onNodeWithText("Create").assertDoesNotExist()
         compose.onNodeWithText("Serendipity").assertDoesNotExist()
         compose.onNodeWithText("Spaces").performClick()
         settle()
         compose.onNodeWithText("Spaces").assertIsSelected()
-        compose.onAllNodesWithText("Everything").assertCountEquals(1)
+        compose.onAllNodesWithText("All").assertCountEquals(1)
         compose.onNodeWithContentDescription("Search").performClick()
         compose.runOnIdle { assertEquals(1, searched); assertSame(slot, bars.top); assertEquals(1, bars.slots.size) }
     }
@@ -145,7 +145,7 @@ class FootBarTest {
         compose.onNodeWithContentDescription("Close search").performClick()
         settle()
         compose.onNodeWithContentDescription("Search your mind").assertDoesNotExist()
-        compose.onAllNodesWithText("Everything").assertCountEquals(1)
+        compose.onAllNodesWithText("All").assertCountEquals(1)
         compose.runOnIdle { assertEquals(1, bars.slots.size); assertEquals(0, openedCard) }
     }
 

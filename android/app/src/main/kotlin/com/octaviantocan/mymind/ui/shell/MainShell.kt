@@ -17,10 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -81,7 +78,7 @@ import com.octaviantocan.mymind.ui.library.pinned
 import com.octaviantocan.mymind.ui.library.EverythingScreen
 import com.octaviantocan.mymind.ui.library.GalleryControls
 import com.octaviantocan.mymind.ui.library.LibraryViewModel
-import com.octaviantocan.mymind.ui.library.NewSpaceDialog
+import com.octaviantocan.mymind.ui.menu.NewSpaceSheet
 import com.octaviantocan.mymind.ui.library.SpacesScreen
 import com.octaviantocan.mymind.ui.library.rememberPublicAccountPhotoLoader
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -153,9 +150,8 @@ data class OpenedCard(val card: Card, val spaceId: String?, val reading: Boolean
  *
  * @property spaceId Space the new cards join, or null outside a space.
  * @property title Title of the Add sheet.
- * @property newSpace True offers New space too, as the Spaces tab does.
  */
-private data class AddTarget(val spaceId: String?, val title: String = "Add to your mind", val newSpace: Boolean = false)
+private data class AddTarget(val spaceId: String?, val title: String = "Add to your mind")
 
 /**
  * The signed-in shell: the page of the selected tab with the tab bar over its bottom edge, an opened card over both,
@@ -178,7 +174,7 @@ fun MainShell(
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Everything) }
     var searchActive by rememberSaveable { mutableStateOf(false) }
-    // Ask was opened by its button, so its field takes the cursor; a swipe onto it leaves the keyboard down.
+    // Opening Ask, by its button or a swipe, puts the cursor in its field; showing similar cards leaves the keyboard down.
     var askFocus by remember { mutableStateOf(true) }
     var openSpace by remember { mutableStateOf<Space?>(null) }
     var opened by remember { mutableStateOf<OpenedCard?>(null) }
@@ -193,7 +189,9 @@ fun MainShell(
     // Cards opened before the one on screen, latest first, for the reader's name card.
     val recent = remember { mutableStateListOf<Card>() }
     var newSpaceOpen by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf<Space?>(null) }
+    var creatingSpace by remember { mutableStateOf(false) }
+    var newSpaceError by remember { mutableStateOf<String?>(null) }
+    val openNewSpace = { newSpaceError = null; newSpaceOpen = true }
     var failure by remember { mutableStateOf<ApiFailure?>(null) }
     var deleteHold by remember { mutableFloatStateOf(0f) }
     // The reader a delete closed, to open again on Undo.
@@ -216,8 +214,7 @@ fun MainShell(
     val page = if (searching) ASK_PAGE else tab.ordinal
     val pages = rememberSidePages(page, PAGE_COUNT) { next ->
         if (next == ASK_PAGE) {
-            focusManager.clearFocus()
-            askFocus = false
+            askFocus = true
             searchActive = true
         } else {
             selectTab(Tab.entries[next])
@@ -313,7 +310,7 @@ fun MainShell(
     }
     val togglePin = { card: Card ->
         scope.launch {
-            val pin = CardMenuItem(if (card.pinned) CardMenuAction.RemoveFromTopOfMind else CardMenuAction.AddToTopOfMind)
+            val pin = CardMenuItem(if (card.pinned) CardMenuAction.Unpin else CardMenuAction.Pin)
             when (val outcome = viewModel.perform(pin, card, null)) {
                 is CardMenuOutcome.PinChanged -> updateCard(outcome.card)
                 is CardMenuOutcome.Failed -> failure = outcome.failure
@@ -459,13 +456,22 @@ fun MainShell(
                     openSpace,
                     onOpenSpace = { openSpace = it },
                     onOpenCard = openCard,
-                    onDeleteSpace = { deleting = it },
+                    onDeleteSpace = { space ->
+                        scope.launch {
+                            when (val answer = viewModel.deleteSpace(space)) {
+                                is ApiResult.Ok -> if (openSpace?.id == space.id) openSpace = null
+                                is ApiResult.Failed -> failure = answer.failure
+                            }
+                        }
+                    },
                     onAddToSpace = { adding = AddTarget(it.id, "Add to ${it.name}") },
                     onLongPressCard = openMenu,
+                    onNewSpace = openNewSpace,
                 ) {
                     GalleryControls(
                         onSettings = { profileOpen = true },
-                        onAdd = { adding = AddTarget(null, newSpace = true) },
+                        // On Spaces the + can only mean a new space, so it opens that sheet straight away.
+                        onAdd = openNewSpace,
                         modifier = Modifier.align(Alignment.TopEnd),
                         photoUrl = account.photoUrl,
                         photoLoader = photoLoader,
@@ -674,39 +680,28 @@ fun MainShell(
                 null
             },
             onClose = { adding = null },
-            onNewSpace = if (target.newSpace) ({ adding = null; newSpaceOpen = true }) else null,
         )
     }
     if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false }, ai = ai, photoLoader = photoLoader)
     if (newSpaceOpen) {
         PageTheme(scheme) {
-            NewSpaceDialog(
-                onDismiss = { newSpaceOpen = false },
+            NewSpaceSheet(
+                busy = creatingSpace,
+                error = newSpaceError,
+                onClose = { newSpaceOpen = false },
                 onCreate = { name, color ->
-                    newSpaceOpen = false
-                    scope.launch { (viewModel.createSpace(name, color) as? ApiResult.Failed)?.let { failure = it.failure } }
+                    creatingSpace = true
+                    newSpaceError = null
+                    scope.launch {
+                        when (val answer = viewModel.createSpace(name, color)) {
+                            is ApiResult.Ok -> newSpaceOpen = false
+                            is ApiResult.Failed -> newSpaceError = describe(answer.failure)
+                        }
+                        creatingSpace = false
+                    }
                 },
             )
         }
-    }
-    deleting?.let { space ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text(DELETE_SPACE_TITLE) },
-            text = { Text(DELETE_SPACE_TEXT) },
-            confirmButton = {
-                TextButton(onClick = {
-                    deleting = null
-                    scope.launch {
-                        when (val answer = viewModel.deleteSpace(space)) {
-                            is ApiResult.Ok -> if (openSpace?.id == space.id) openSpace = null
-                            is ApiResult.Failed -> failure = answer.failure
-                        }
-                    }
-                }) { Text("Delete space") }
-            },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
-        )
     }
     extras()
     failure?.let { ApiErrorDialog(title = null, message = describe(it), onDismiss = { failure = null }) }
@@ -720,9 +715,6 @@ private const val NO_PICTURE = "The picture could not be loaded"
 
 /** How many recently opened cards the shell keeps for the reader's name card. */
 private const val RECENT_KEPT = 8
-
-private const val DELETE_SPACE_TITLE = "Delete this space?"
-private const val DELETE_SPACE_TEXT = "The cards in it stay in your mind."
 
 /**
  * The frame of the signed-in screens: the page between the status bar and the tab bar in the account's appearance,

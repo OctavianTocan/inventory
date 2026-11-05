@@ -183,7 +183,7 @@ class LibraryModelsTest {
         assertFalse("me" in library.calls)
 
         val card = viewModel.everything.state.value.cards.first()
-        viewModel.perform(CardMenuItem(CardMenuAction.AddToTopOfMind), card, null)
+        viewModel.perform(CardMenuItem(CardMenuAction.Pin), card, null)
         assertTrue(viewModel.everything.state.value.cards.first().pinned)
         viewModel.perform(CardMenuItem(CardMenuAction.DeleteCard), card, null)
         assertEquals(listOf("b"), viewModel.everything.state.value.cards.map { it.id })

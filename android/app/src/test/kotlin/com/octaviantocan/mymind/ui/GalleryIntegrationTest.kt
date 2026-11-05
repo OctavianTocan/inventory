@@ -13,6 +13,7 @@ import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.semantics.SemanticsActions
@@ -53,10 +54,11 @@ import org.robolectric.annotation.Config
 class GalleryIntegrationTest {
     @get:Rule val compose = createComposeRule()
     private var server: MockWebServer? = null
+    private lateinit var library: FakeLibrary
     @After fun closeServer() { server?.shutdown() }
 
     private fun showShell(searchHits: List<Card> = listOf(testCard("hit")), spaces: List<Space> = emptyList()): LibraryViewModel {
-        val library = FakeLibrary(pages = mapOf(null to CardPage((1..100).map { testCard("p$it", type = "Image", title = "Photo $it") })),
+        library = FakeLibrary(pages = mapOf(null to CardPage((1..100).map { testCard("p$it", type = "Image", title = "Photo $it") })),
             searchHits = searchHits, spaceList = spaces)
         val model = LibraryViewModel(library)
         val local = MockWebServer().apply {
@@ -100,7 +102,7 @@ class GalleryIntegrationTest {
         compose.onNodeWithText("Spaces").assertIsSelected()
         compose.onNodeWithContentDescription("Search your mind").assertDoesNotExist()
         compose.runOnIdle { assertEquals("", model.search.query.value) }
-        compose.onNodeWithText("Everything").performClick()
+        compose.onNodeWithText("All").performClick()
         compose.onNodeWithContentDescription("Card gallery").assertExists()
     }
 
@@ -113,13 +115,13 @@ class GalleryIntegrationTest {
         compose.onNodeWithContentDescription("Card gallery").assertDoesNotExist()
         compose.onRoot().performTouchInput { swipeLeft(startX = width * 0.9f, endX = width * 0.1f) }
         compose.onNodeWithText("Find something").assertIsDisplayed()
-        // A swipe onto Ask leaves the keyboard down.
-        compose.onNodeWithContentDescription("Search your mind").assertIsNotFocused()
+        // "When I swipe over to the search screen, the search input should be automatically focused" (Tavi, 5 Nov 2026).
+        compose.onNodeWithContentDescription("Search your mind").assertIsFocused()
         compose.onRoot().performTouchInput { swipeRight(startX = width * 0.1f, endX = width * 0.9f) }
         compose.onNodeWithText("Spaces").assertIsSelected()
         compose.onNodeWithContentDescription("Search your mind").assertDoesNotExist()
         compose.onRoot().performTouchInput { swipeRight(startX = width * 0.1f, endX = width * 0.9f) }
-        compose.onNodeWithText("Everything").assertIsSelected()
+        compose.onNodeWithText("All").assertIsSelected()
         compose.onNodeWithContentDescription("Card gallery").assertIsDisplayed()
     }
 
@@ -131,7 +133,7 @@ class GalleryIntegrationTest {
             moveBy(Offset(0f, 0f), delayMillis = 400)
             up()
         }
-        compose.onNodeWithText("Everything").assertIsSelected()
+        compose.onNodeWithText("All").assertIsSelected()
         compose.onNodeWithContentDescription("Card gallery").assertIsDisplayed()
     }
 
@@ -144,7 +146,7 @@ class GalleryIntegrationTest {
         val before = gallery.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
         assertTrue(before > 0f)
         compose.onNodeWithText("Spaces").performClick()
-        compose.onNodeWithText("Everything").performClick()
+        compose.onNodeWithText("All").performClick()
         compose.runOnIdle { }
         assertEquals("3 columns", gallery.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
         assertEquals(before, gallery.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value(), 1f)
@@ -192,5 +194,36 @@ class GalleryIntegrationTest {
         compose.onNodeWithContentDescription("Back").performClick()
         compose.waitForIdle()
         assertEquals("4 columns", compose.onNodeWithContentDescription("All spaces").fetchSemanticsNode().config[SemanticsProperties.StateDescription])
+    }
+
+    @Test fun thePlusOnSpacesAndTheNewSpaceTileOpenTheNewSpaceSheet() {
+        // "On the Spaces screen ... there should be a space that has a little plus in the middle ... if you press the
+        // plus, we already assume that you're trying to add a space" (Tavi, 5 Nov 2026).
+        showShell(spaces = listOf(Space("s1", "Walks", "#ff5924")))
+        compose.onNodeWithText("Spaces").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Add").performClick()
+        compose.onNodeWithText("Create space").assertIsDisplayed()
+        compose.onNodeWithText("Photos").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Space name").performTextInput("Recipes")
+        compose.onNodeWithText("Create space").performClick()
+        compose.waitForIdle()
+        assertTrue(library.calls.any { it.startsWith("newSpace:Recipes:") })
+        compose.onNodeWithText("Create space").assertDoesNotExist()
+        compose.onNodeWithText("New space").performClick()
+        compose.onNodeWithText("Create space").assertIsDisplayed()
+    }
+
+    @Test fun aSpaceOptionsAreASheetAndDeletingIsHeld() {
+        showShell(spaces = listOf(Space("s1", "Walks", "#ff5924")))
+        compose.onNodeWithText("Spaces").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Walks").performClick()
+        compose.onNodeWithContentDescription("Space options").performClick()
+        compose.onNodeWithText("Add to this space").assertIsDisplayed()
+        compose.onNodeWithText("Delete space").performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        assertTrue("deleteSpace:s1" in library.calls)
+        compose.onNodeWithText("Add to this space").assertDoesNotExist()
     }
 }

@@ -48,8 +48,8 @@ enum class CardMenuAction(val label: String, @param:DrawableRes val icon: Int, v
     AddTags("Add tags", R.drawable.addtagsicon),
     AddToSpace("Add to space", R.drawable.addtospaceicon),
     RemoveFromSpace("Remove from space", R.drawable.removefromspaceicon),
-    AddToTopOfMind("Top of Mind", R.drawable.topofmindicon),
-    RemoveFromTopOfMind("Top of Mind", R.drawable.removetopofmindicon),
+    Pin("Pin", R.drawable.topofmindicon),
+    Unpin("Pin", R.drawable.removetopofmindicon),
     DeleteCard("Delete card", R.drawable.deleteicon, danger = true),
 }
 
@@ -156,8 +156,8 @@ fun CardMenuContent(
 
 private val SPACE_ACTIONS = setOf(CardMenuAction.AddToSpace, CardMenuAction.RemoveFromSpace)
 private val CHOICES = listOf(CardMenuAction.AddToSpace, CardMenuAction.RemoveFromSpace, CardMenuAction.SameVibe, CardMenuAction.ReaderMode)
-private val TILES = listOf(CardMenuAction.ViewSource, CardMenuAction.Copy, CardMenuAction.Download, CardMenuAction.AddToTopOfMind,
-    CardMenuAction.RemoveFromTopOfMind, CardMenuAction.AddTags)
+private val TILES = listOf(CardMenuAction.ViewSource, CardMenuAction.Copy, CardMenuAction.Download, CardMenuAction.Pin,
+    CardMenuAction.Unpin, CardMenuAction.AddTags)
 
 /** The kit's small, muted, non-folding section heading, outside the raised group. */
 @Composable
@@ -177,13 +177,13 @@ internal fun CardMenuGroup(modifier: Modifier = Modifier, content: @Composable C
 
 @Composable
 private fun CardQuickAction(item: CardMenuItem, colors: MenuColors, icons: CardMenuIcons, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val pinned = item.action == CardMenuAction.RemoveFromTopOfMind
+    val pinned = item.action == CardMenuAction.Unpin
     val label = when (item.action) {
         CardMenuAction.ViewSource -> "Open source"
         CardMenuAction.Copy -> "Copy"
         else -> item.action.label
     }
-    SheetTile(icons.icon(item.action), label, onClick, modifier, description = if (pinned) "Top of Mind, pinned" else item.action.label,
+    SheetTile(icons.icon(item.action), label, onClick, modifier, description = if (pinned) "Pinned" else item.action.label,
         enabled = enabled, on = pinned)
 }
 
@@ -212,7 +212,7 @@ private fun CardChoice(item: CardMenuItem, icons: CardMenuIcons, enabled: Boolea
  * @param modifier Modifier for the tile; callers in a row give each tile the same weight.
  * @param description Spoken name, when the label alone is too short.
  * @param enabled False ignores taps.
- * @param on True fills the tile with ink, for a setting that is on, such as a pinned card's Top of Mind.
+ * @param on True fills the tile with ink, for a setting that is on, such as a pinned card's Pin.
  */
 @Composable
 internal fun SheetTile(icon: Painter, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, description: String = label, enabled: Boolean = true,

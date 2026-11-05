@@ -83,7 +83,7 @@ fun EverythingScreen(
     openedLately: List<Card> = emptyList(),
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
-    val pinned by viewModel.topOfMind.state.collectAsStateWithLifecycle()
+    val pinned by viewModel.pinned.state.collectAsStateWithLifecycle()
     val query by viewModel.search.query.collectAsStateWithLifecycle()
     val filter by viewModel.search.filter.collectAsStateWithLifecycle()
     val types by viewModel.search.types.collectAsStateWithLifecycle()
@@ -112,7 +112,7 @@ fun EverythingScreen(
         onLoadMore = viewModel.everything::loadMore, onLoadMoreResults = results::loadMore,
         onRetry = viewModel.everything::reload, onOpenCard = onOpenCard,
         onOpenSettings = onOpenSettings, onAdd = onAdd, modifier = modifier,
-        topOfMind = pinned.cards, onLoadMoreTopOfMind = viewModel.topOfMind::loadMore,
+        pinned = pinned.cards, onLoadMorePinned = viewModel.pinned::loadMore,
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
         onLongPressCard = onLongPressCard,
         photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, ai = rank,
@@ -160,8 +160,8 @@ fun EverythingContent(
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
     gridState: LazyListState = rememberLazyListState(),
-    topOfMind: List<Card> = emptyList(),
-    onLoadMoreTopOfMind: () -> Unit = {},
+    pinned: List<Card> = emptyList(),
+    onLoadMorePinned: () -> Unit = {},
     onRefresh: () -> Unit = {},
     onRefreshResults: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
@@ -178,10 +178,11 @@ fun EverythingContent(
     val colors = LibraryStyle.colors
     val accountPhotoLoader = photoLoader ?: if (photoUrl != null) rememberPublicAccountPhotoLoader() else null
     val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
+    val resultsBackdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
     Box(modifier.fillMaxSize().background(colors.background)) {
         when {
             searching && searchResults != null -> {
-                PullRefresh(searchResults.refreshing, onRefreshResults) {
+                PullRefresh(searchResults.refreshing, onRefreshResults, Modifier.fillMaxSize().glassSource(resultsBackdrop)) {
                     LibraryMosaic(searchResults, onLoadMoreResults, onOpenCard, state = resultsState, mosaic = mosaic,
                         onLongPressCard = onLongPressCard, header = {
                             ResultsTitle(filter.takeIf { dock.query.isBlank() }, searchResults)
@@ -190,6 +191,8 @@ fun EverythingContent(
                             if (searchResults.cards.isEmpty() && !docked) GalleryFeedNotice(searchResults, onLoadMoreResults, search = true)
                         })
                 }
+                GalleryScrollEdge(resultsBackdrop, colors.background, Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = 1f - mosaic.reel },
+                    visible = { resultsState.scrolledBy() })
                 SearchResultsDock(searchResults, filter, suggestions, ai, dock, dockActions, resultsState,
                     onChoose, onRemoveFilter, onAiTag, onOpenSpace, onOpenCard)
             }
@@ -199,7 +202,7 @@ fun EverythingContent(
                     LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
                         onLongPressCard = onLongPressCard, header = {
                             GalleryTitle("Your mind")
-                            GalleryHighlights(topOfMind, onOpenCard, onLoadMore = onLoadMoreTopOfMind, onLongPressCard = onLongPressCard)
+                            GalleryHighlights(pinned, onOpenCard, onLoadMore = onLoadMorePinned, onLongPressCard = onLongPressCard)
                             if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
                         })
                 }

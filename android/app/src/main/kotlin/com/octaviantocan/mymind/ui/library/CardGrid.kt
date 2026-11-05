@@ -111,7 +111,7 @@ private fun GridFooter(feed: FeedState, onRetry: () -> Unit) {
 }
 
 /**
- * The horizontal Top of Mind row above the Everything grid.
+ * The horizontal Pinned row above the Everything grid.
  *
  * @param cards Pinned cards in pin order.
  * @param onOpenCard Called with the tapped card.
@@ -119,7 +119,7 @@ private fun GridFooter(feed: FeedState, onRetry: () -> Unit) {
  * @param onLoadMore Called when the end of the loaded pins comes near.
  */
 @Composable
-fun TopOfMindRow(cards: List<Card>, onOpenCard: (Card) -> Unit, modifier: Modifier = Modifier, onLoadMore: () -> Unit = {}) {
+fun PinnedRow(cards: List<Card>, onOpenCard: (Card) -> Unit, modifier: Modifier = Modifier, onLoadMore: () -> Unit = {}) {
     val state = rememberLazyListState()
     SideEffect {
         // Without this, a new first pin lands left of a row resting at its start.
@@ -142,7 +142,7 @@ fun TopOfMindRow(cards: List<Card>, onOpenCard: (Card) -> Unit, modifier: Modifi
         contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
         horizontalArrangement = Arrangement.spacedBy(PAGE_GUTTER),
     ) {
-        items(cards, key = { it.id }) { card -> TopOfMindTile(card, onClick = { onOpenCard(card) }) }
+        items(cards, key = { it.id }) { card -> PinnedTile(card, onClick = { onOpenCard(card) }) }
     }
 }
 
@@ -161,17 +161,17 @@ fun PageSpinner(modifier: Modifier = Modifier) {
 }
 
 /**
- * Header item holding the Top of Mind row, 11 dp above the grid as on the web page.
+ * Header item holding the Pinned row, 11 dp above the grid as on the web page.
  *
  * @param cards Pinned cards in pin order.
  * @param onOpenCard Called with the tapped card.
  * @param onLoadMore Called when the end of the loaded pins comes near.
  */
-fun LazyStaggeredGridScope.topOfMindHeader(cards: List<Card>, onOpenCard: (Card) -> Unit, onLoadMore: () -> Unit = {}) {
+fun LazyStaggeredGridScope.pinnedHeader(cards: List<Card>, onOpenCard: (Card) -> Unit, onLoadMore: () -> Unit = {}) {
     if (cards.isEmpty()) return
     item(key = "top-of-mind", span = StaggeredGridItemSpan.FullLine) {
         Column {
-            TopOfMindRow(cards, onOpenCard, Modifier.bleed(PAGE_GUTTER), onLoadMore)
+            PinnedRow(cards, onOpenCard, Modifier.bleed(PAGE_GUTTER), onLoadMore)
             Spacer(Modifier.height(1.dp))
         }
     }

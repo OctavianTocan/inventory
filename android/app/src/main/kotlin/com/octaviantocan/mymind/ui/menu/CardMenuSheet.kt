@@ -97,9 +97,8 @@ internal fun CardMenuSheet(
             }) {
             CardMenuPageSwitch(submenu, Modifier.fillMaxWidth(), slow = true) { page ->
                 val scroll = scrolls.getOrPut(page) { ScrollState(0) }
-                val fade = with(LocalDensity.current) { 20.dp.toPx() }
                 Column(Modifier.fillMaxWidth()
-                    .sheetEdgeFade(color = colors.paper, topStrength = { (scroll.value / fade).coerceIn(0f, 1f) })
+                    .scrollEdgeFade(scroll, colors.paper)
                     .verticalScroll(scroll).navigationBarsPadding()) {
                     if (page != null) submenuContent(page)
                     else rootContent?.invoke() ?: CardMenuContent(items, onSelect, icons = icons, enabled = !position.closing, spaces = spaces,
@@ -223,10 +222,9 @@ internal fun CardMenuPanel(
                         .size(36.dp, 4.dp).clip(CircleShape).background(colors.grabber))
                     CardHeader(title, onClose = dismiss, enabled = !position.closing, closeLabel = closeLabel,
                         onBack = onBack, titleContent = titleContent)
-                    val fade = with(density) { 20.dp.toPx() }
                     Column(Modifier.fillMaxWidth().weight(1f, fill = false).then(
                         if (scrollState != null) Modifier
-                            .sheetEdgeFade(color = colors.paper, topStrength = { (scrollState.value / fade).coerceIn(0f, 1f) })
+                            .scrollEdgeFade(scrollState, colors.paper)
                             .verticalScroll(scrollState).navigationBarsPadding()
                         else Modifier,
                     ), content = content)
@@ -270,9 +268,8 @@ internal fun <T : SheetPage> PullyPagedSheet(title: String, page: T?, onBack: ()
             }) {
             SheetPageSwitch(page, depth, Modifier.fillMaxWidth(), slow = true) { shown ->
                 val scroll = scrolls.getOrPut(shown) { ScrollState(0) }
-                val fade = with(LocalDensity.current) { 20.dp.toPx() }
                 Column(Modifier.fillMaxWidth()
-                    .sheetEdgeFade(color = colors.paper, topStrength = { (scroll.value / fade).coerceIn(0f, 1f) })
+                    .scrollEdgeFade(scroll, colors.paper)
                     .verticalScroll(scroll).navigationBarsPadding().padding(start = 16.dp, end = 16.dp, bottom = 30.dp)) {
                     content(shown)
                 }

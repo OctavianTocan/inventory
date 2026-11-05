@@ -17,6 +17,7 @@ import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.shell.ShellFrame
 import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.PageScheme
+import com.octaviantocan.mymind.ui.menu.NewSpaceSheetContent
 import com.octaviantocan.mymind.ui.upload.AddSheetContent
 import com.octaviantocan.mymind.ui.upload.UploadQueueStrip
 import org.junit.Rule
@@ -27,7 +28,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.Instant
 
-/** The Add sheet (S21), the upload queue strip, pull to refresh and Top of Mind, in the system mode of the parameter. */
+/** The Add sheet (S21), the upload queue strip, pull to refresh and Pinned, in the system mode of the parameter. */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = PHONE_QUALIFIERS, fontScale = PHONE_FONT_SCALE)
@@ -51,16 +52,16 @@ class UploadScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun addSheet() {
-        shell(overlay = { SheetFixture("Add to your mind") { AddSheetContent({}, {}, onCamera = {}, onNewSpace = null) } }) { SampleEverything() }
+        shell(overlay = { SheetFixture("Add to your mind") { AddSheetContent({}, {}, onCamera = {}) } }) { SampleEverything() }
         capture("S21_add_sheet")
     }
 
     @Test
-    fun addSheetOnSpacesWithoutCamera() {
-        shell(Tab.Spaces, overlay = { SheetFixture("Add to your mind") { AddSheetContent({}, {}, onCamera = null, onNewSpace = {}) } }) {
+    fun newSpaceSheetOnSpaces() {
+        shell(Tab.Spaces, overlay = { SheetFixture("New space") { NewSpaceSheetContent(busy = false, error = null, onCreate = { _, _ -> }, focusOnOpen = false) } }) {
             SpaceListContent(LibrarySamples.spaces, onOpenSpace = {}, onRetry = {})
         }
-        capture("S21_add_sheet_spaces_no_camera")
+        capture("S21_new_space_sheet")
     }
 
     @Test
@@ -97,12 +98,12 @@ class UploadScreenshotTest(private val dark: Boolean) {
     }
 
     @Test
-    fun topOfMind() {
-        val pins = LibrarySamples.topOfMind + listOf(
+    fun pinned() {
+        val pins = LibrarySamples.pinned + listOf(
             testCard("t4", type = "Note", flags = 512, pinPosition = 4, title = null).copy(note = "A pinned note"),
             testCard("t5", type = "Article", flags = 512, pinPosition = 5, title = "Another pinned article"),
         )
-        shell { SampleEverything(feed = FeedState(LibrarySamples.grid), topOfMind = pins) }
+        shell { SampleEverything(feed = FeedState(LibrarySamples.grid), pinned = pins) }
         capture("S06_top_of_mind")
     }
 

@@ -129,8 +129,8 @@ class LibraryViewModel(
     /** The Everything tab's cards, newest first. */
     val everything = CardFeed(viewModelScope, memory?.feed("everything")) { shown(library.cards(it)) }
 
-    /** Cards pinned to Top of Mind, in pin order. */
-    val topOfMind = CardFeed(viewModelScope, memory?.feed("top-of-mind")) { shown(library.topOfMind(it)) }
+    /** Cards pinned, in pin order. */
+    val pinned = CardFeed(viewModelScope, memory?.feed("top-of-mind")) { shown(library.pinned(it)) }
 
     /** The card waiting out its Undo before it goes to the trash, or null. */
     val deleting: StateFlow<Card?> = mutableDeleting
@@ -164,7 +164,7 @@ class LibraryViewModel(
 
     init {
         everything.loadMore()
-        topOfMind.loadMore()
+        pinned.loadMore()
         changes?.let { copyChanges ->
             viewModelScope.launch {
                 copyChanges.collect {
@@ -211,17 +211,17 @@ class LibraryViewModel(
     }
 
     /**
-     * Pull to refresh on Everything: syncs the phone's copy, then reads the library and Top of Mind again; every page
+     * Pull to refresh on Everything: syncs the phone's copy, then reads the library and Pinned again; every page
      * shown when the sync brought changes, the first page otherwise.
      */
     fun refreshEverything() {
         val sync = sync ?: return run {
             everything.refresh()
-            topOfMind.refresh()
+            pinned.refresh()
         }
         val pulled = viewModelScope.async { withTimeoutOrNull(REFRESH_SYNC_WAIT_MS) { sync.sync() }.changedAnything() }
         everything.refresh { pulled.await() }
-        topOfMind.refresh { pulled.await() }
+        pinned.refresh { pulled.await() }
     }
 
     /** Syncs the phone's copy, as when the app comes back or the network returns, and shows what changed. */
@@ -262,7 +262,7 @@ class LibraryViewModel(
     // Reads every list on show again from the phone's copy, keeping each as it is when nothing in it changed.
     private suspend fun showCopy() {
         everything.reread()
-        topOfMind.reread()
+        pinned.reread()
         spaceFeeds.values.forEach { it.reread() }
         if (mutableSpaces.value.loaded && !mutableSpaces.value.loading) readSpaces()
         mutableRedrawn.tryEmit(Unit)
@@ -336,7 +336,7 @@ class LibraryViewModel(
             }
             is CardMenuOutcome.PinChanged -> {
                 replaceEverywhere(outcome.card)
-                topOfMind.refresh()
+                pinned.refresh()
             }
             is CardMenuOutcome.ShowSimilar -> search.similarTo(outcome.card)
             is CardMenuOutcome.OpenSubmenu -> when (outcome.submenu) {
@@ -582,7 +582,7 @@ class LibraryViewModel(
 
     private fun replaceEverywhere(card: Card) = feeds().forEach { it.replace(card) }
 
-    private fun feeds() = listOf(everything, topOfMind, search.results.value) + spaceFeeds.values
+    private fun feeds() = listOf(everything, pinned, search.results.value) + spaceFeeds.values
 }
 
 /**

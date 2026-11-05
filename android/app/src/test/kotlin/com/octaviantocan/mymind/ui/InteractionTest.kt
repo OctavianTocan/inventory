@@ -24,14 +24,13 @@ import com.octaviantocan.mymind.ui.library.CardGrid
 import com.octaviantocan.mymind.ui.library.FeedState
 import com.octaviantocan.mymind.ui.library.QueuedUpload
 import com.octaviantocan.mymind.ui.library.SpaceContent
-import com.octaviantocan.mymind.ui.library.TopOfMindRow
+import com.octaviantocan.mymind.ui.library.PinnedRow
 import com.octaviantocan.mymind.ui.library.UploadQueueState
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.shell.MymindTabBar
 import com.octaviantocan.mymind.ui.shell.Tab
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import com.octaviantocan.mymind.ui.upload.AddSheetContent
-import com.octaviantocan.mymind.ui.upload.NEW_SPACE
 import com.octaviantocan.mymind.ui.upload.PICK_FILES
 import com.octaviantocan.mymind.ui.upload.PHOTO_LIBRARY
 import com.octaviantocan.mymind.ui.upload.TAKE_PHOTO
@@ -105,7 +104,7 @@ class InteractionTest {
     fun aNewFirstPinShowsAtTheStartOfTheRow() {
         val pinned = (1..10).map { testCard("p$it", type = "Article", title = "Pin $it") }
         var pins by mutableStateOf(pinned)
-        show { TopOfMindRow(pins, onOpenCard = {}) }
+        show { PinnedRow(pins, onOpenCard = {}) }
         pins = listOf(testCard("p0", type = "Article", title = "New pin")) + pinned
         compose.onNodeWithText("New pin").assertIsDisplayed()
     }
@@ -123,25 +122,21 @@ class InteractionTest {
     }
 
     @Test
-    fun theAddSheetOffersEachSourceAndNewSpaceOnlyWhereAsked() {
+    fun theAddSheetOffersEachSource() {
         var photos = 0
         var files = 0
         var camera = 0
-        var spaces = 0
         var withCamera by mutableStateOf(true)
-        var onSpaces by mutableStateOf(false)
         show {
             SheetFixture("Add to your mind") {
-                AddSheetContent({ photos++ }, { files++ }, if (withCamera) ({ camera++ }) else null, if (onSpaces) ({ spaces++ }) else null)
+                AddSheetContent({ photos++ }, { files++ }, if (withCamera) ({ camera++ }) else null)
             }
         }
         compose.onNodeWithText(PHOTO_LIBRARY).performClick()
         compose.onNodeWithText(PICK_FILES).performClick()
         compose.onNodeWithText(TAKE_PHOTO).performClick()
-        compose.onNodeWithText(NEW_SPACE).assertDoesNotExist()
-        onSpaces = true
-        compose.onNodeWithText(NEW_SPACE).performClick()
-        assertEquals(listOf(1, 1, 1, 1), listOf(photos, files, camera, spaces))
+        compose.onNodeWithText("New space").assertDoesNotExist()
+        assertEquals(listOf(1, 1, 1), listOf(photos, files, camera))
         withCamera = false
         compose.onNodeWithText(TAKE_PHOTO).assertDoesNotExist()
     }

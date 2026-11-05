@@ -72,9 +72,11 @@ const val DELETE_HOLD_MS = 1_300L
  *
  * @param onDelete Called once the hold completes.
  * @param onProgress How far the hold has come, from 0 to 1, each frame; 0 when it is let go or the row leaves.
+ * @param label What the row deletes, such as Delete space.
+ * @param detail The muted line under [label] before the hold starts.
  */
 @Composable
-internal fun HoldToDeleteRow(onDelete: () -> Unit, onProgress: (Float) -> Unit = {}) {
+internal fun HoldToDeleteRow(onDelete: () -> Unit, onProgress: (Float) -> Unit = {}, label: String = "Delete card", detail: String = "Hold to delete") {
     val colors = menuColors()
     val haptic = rememberSheetHaptics()
     val feedback = LocalHapticFeedback.current
@@ -114,7 +116,7 @@ internal fun HoldToDeleteRow(onDelete: () -> Unit, onProgress: (Float) -> Unit =
             }
             .semantics(mergeDescendants = true) {
                 role = Role.Button
-                onClick(label = "Delete card") { delete(); true }
+                onClick(label = label) { delete(); true }
             }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -122,9 +124,9 @@ internal fun HoldToDeleteRow(onDelete: () -> Unit, onProgress: (Float) -> Unit =
     ) {
         Image(painterResource(R.drawable.deleteicon), null, Modifier.size(22.dp), colorFilter = ColorFilter.tint(danger))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(if (holding) "Keep holding to delete" else "Delete card",
+            Text(if (holding) "Keep holding to delete" else label,
                 style = TextStyle(color = danger, fontSize = 17.sp, lineHeight = 22.sp, fontFamily = CardMenuFont))
-            Text(if (holding) "Let go to keep it" else "Hold to delete",
+            Text(if (holding) "Let go to keep it" else detail,
                 style = TextStyle(color = colors.rowText.copy(alpha = 0.65f), fontSize = 15.sp, lineHeight = 21.sp, fontFamily = CardMenuFont))
         }
         if (holding) ProgressRing(progress, danger, 25.dp)

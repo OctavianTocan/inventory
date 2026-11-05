@@ -71,9 +71,9 @@ delete; M14, the card shrinks while Delete is held).
 @cc [owner:OctavianTocan,label:design] card-sheet-actions-have-hierarchy
 The root sheet, titled Choose one, MUST lead with the card's big choices (Add to
 space, Same Vibe, Reader Mode) as raised cards with a muted line on what each
-means, then its quick actions as tiles two by two (Open source, Copy, Download, Top
-of Mind, Add tags), then Delete card alone in its own group, omitting what the card
-cannot do. The Top of Mind tile MUST show an ink on state while the card is pinned.
+means, then its quick actions as tiles two by two (Open source, Copy, Download,
+Pin, Add tags), then Delete card alone in its own group, omitting what the card
+cannot do. The Pin tile MUST show an ink on state while the card is pinned.
 Section headings MUST be small, muted and non-folding, without a count, divider or
 chevron. Cards and tiles use 16dp corners and Pully's 2dp-down, 12dp-blur, 10% ink
 canvas shadow with its tight edge; header controls use the 10dp/8% variant. The
@@ -105,3 +105,10 @@ Each other choice closes the sheet before it hands off to the system's share she
 or the clipboard.
 Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M25, the Share
 sheet with the card as an image).
+
+@cc [owner:OctavianTocan,label:product] pinning-is-called-pin
+The app MUST call keeping a card first "Pin" and the cards kept that way "Pinned",
+never mymind's "Top of Mind": the sheet's tile and the reader's switch read Pin, and a
+pinned card's tile is spoken as Pinned.
+Source: Tavi, 5 November 2026 ("Rename 'Top of mind' everywhere for 'Pinned'. Same for
+the actions to 'Pin'").

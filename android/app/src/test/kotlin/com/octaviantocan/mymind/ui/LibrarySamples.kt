@@ -28,7 +28,7 @@ object LibrarySamples {
 
     private const val PINNED = 512
 
-    val topOfMind = listOf(
+    val pinned = listOf(
         picture("t1", "WebPage", 1200, 900, "#e9edf2", "Pinned page", PINNED, 1),
         testCard("t2", type = "Article", flags = PINNED, pinPosition = 2, title = "A pinned article about layouts"),
         picture("t3", "WebPage", 1200, 630, "#f5f5f5", "Another pinned page", PINNED, 3),
@@ -50,7 +50,7 @@ object LibrarySamples {
         picture("g10", "Image", 900, 900, "#55606e", "A square picture"),
     )
 
-    val feed = FeedState(cards = topOfMind + grid)
+    val feed = FeedState(cards = pinned + grid)
 
     val spaces = SpacesState(
         spaces = listOf(
@@ -93,7 +93,7 @@ object LibrarySamples {
  * @param suggestions Tag suggestions above the results.
  * @param query Text in the search field.
  * @param grid Scroll position of the grid; null keeps one of its own.
- * @param topOfMind Pinned cards of the Top of Mind row.
+ * @param pinned Pinned cards of the Pinned row.
  */
 @Composable
 fun SampleEverything(
@@ -105,7 +105,7 @@ fun SampleEverything(
     suggestions: List<Suggestion> = emptyList(),
     query: String = "",
     grid: LazyListState? = null,
-    topOfMind: List<Card> = LibrarySamples.topOfMind,
+    pinned: List<Card> = LibrarySamples.pinned,
 ) {
     EverythingContent(
         feed = feed,
@@ -123,7 +123,7 @@ fun SampleEverything(
         onOpenSettings = {},
         onAdd = {},
         gridState = grid ?: remember { LazyListState() },
-        topOfMind = topOfMind,
+        pinned = pinned,
     )
 }
 
