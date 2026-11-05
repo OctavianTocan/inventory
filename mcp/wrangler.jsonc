@@ -1,0 +1,26 @@
+// ThyMind for AI agents: the remote MCP server (README.md here, docs/mcp.md). It shares the app's hostname
+// (Tavi, 2026-11-05: "mymind.octaviantocan.com/mcp") through two routes more specific than the `mymind` Worker's
+// `/*`, and reaches the library only through the `mymind` Worker's own API over a service binding.
+{
+  "name": "thymind-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-15",
+  // CIMD: the OAuth library fetches each client's metadata document only from public addresses.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "mymind.octaviantocan.com/mcp*", "zone_name": "octaviantocan.com" },
+    { "pattern": "mymind.octaviantocan.com/.well-known/oauth-*", "zone_name": "octaviantocan.com" }
+  ],
+  "vars": {
+    "PUBLIC_URL": "https://mymind.octaviantocan.com"
+  },
+  // Secrets (wrangler secret put): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, the `mymind` Worker's own web client.
+  "services": [{ "binding": "LIBRARY_API", "service": "mymind" }],
+  // Create with `npx wrangler kv namespace create OAUTH_KV` and paste its id here before the first deploy.
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE_WITH_OAUTH_KV_ID" }],
+  // One person's agents together: 120 tool calls a minute.
+  "ratelimits": [{ "name": "LIMITER", "namespace_id": "4417", "simple": { "limit": 120, "period": 60 } }],
+  "observability": { "enabled": true }
+}

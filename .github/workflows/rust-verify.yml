@@ -41,9 +41,9 @@ jobs:
       - name: Check the Worker builds for wasm
         working-directory: rust
         run: cargo check -p mm-worker --target wasm32-unknown-unknown --locked
-      - name: Test the feedback runner
+      - name: Test the feedback runner and the MCP server
         run: |
-          for dir in feedback-runner feedback-runner/spike; do
+          for dir in feedback-runner feedback-runner/spike mcp; do
             if [[ -f "$dir/package.json" ]]; then
               (cd "$dir" && npm ci && npm run check)
             fi
