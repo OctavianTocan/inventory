@@ -4,7 +4,7 @@ import { Files } from "@cloudflare/sandbox";
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 
 import type { Env } from "./env";
-import { decide, type Policy } from "./outbound";
+import { decide, readRepos, type Policy } from "./outbound";
 import type { Engine } from "./states";
 
 const CA = "/etc/cloudflare/certs/cloudflare-containers-ca.crt";
@@ -89,7 +89,7 @@ install -d -o agent -g agent /workspace ${HOME} && install -d -m 700 ${ROUND}`);
       await files.writeFile(`${HOME}/${path}`, JSON.stringify(content, null, 2));
     }
     const { files: _files, prompt, ...job } = input;
-    await files.writeFile(`${ROUND}/input.json`, JSON.stringify({ ...job, repo: this.env.REPO }));
+    await files.writeFile(`${ROUND}/input.json`, JSON.stringify({ ...job, repo: this.env.REPO, readRepos: readRepos(this.env.READ_REPOS) }));
     await files.writeFile(`${ROUND}/prompt.txt`, prompt);
     await this.#root(`chown -R agent:agent ${HOME} && chmod -R go-rwx ${HOME}
 setsid nohup python3 /opt/feedback/round.py > ${ROUND}/log 2>&1 < /dev/null &`);

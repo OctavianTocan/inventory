@@ -11,6 +11,8 @@ export interface Env {
   AGENT_HOME: DurableObjectNamespace;
   /** `owner/name` of the repository feedback changes. */
   REPO: string;
+  /** Comma-separated `owner/name` repositories rounds may fetch (with history) but never push: Pully and ai-kit. */
+  READ_REPOS?: string;
   /** The stored GitHub CLI sign-in (secret). */
   GITHUB_TOKEN: string;
   /** Comma-separated check names a change must pass; default `android,rust`. */

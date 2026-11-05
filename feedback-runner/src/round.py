@@ -15,6 +15,7 @@ import time
 
 ROUND = "/workspace/round"
 REPO_DIR = "/workspace/repo"
+CONTEXT_DIR = "/workspace/context"
 HOME = "/home/agent"
 AGENT = "agent"
 AGENT_TIMEOUT = 45 * 60
@@ -60,6 +61,17 @@ def run(args, timeout=600, check=True, cwd=REPO_DIR, as_agent=True):
 
 def git(*args, check=True, timeout=600):
     return run(["git", *args], check=check, timeout=timeout)
+
+
+def fetch_context(repos):
+    """The ai-kit submodule, and each read-only repository with its whole history but files fetched as read
+    (blobless), into CONTEXT_DIR/<name>. A failure leaves that one out; the round goes on."""
+    git("submodule", "update", "--init", "--depth", "1", check=False, timeout=900)
+    run(["mkdir", "-p", CONTEXT_DIR], cwd="/workspace", check=False)
+    for repo in repos:
+        name = repo.split("/")[-1]
+        run(["git", "clone", "--filter=blob:none", f"https://github.com/{repo}", f"{CONTEXT_DIR}/{name}"],
+            cwd="/workspace", check=False, timeout=900)
 
 
 def agent_argv(job, prompt):
@@ -183,6 +195,8 @@ def main():
         if job.get("conflict"):
             git("merge", "--no-edit", "origin/main", check=False)
         start = git("rev-parse", "HEAD").stdout.strip()
+        phase("context")
+        fetch_context(job.get("readRepos") or [])
 
         phase("agent")
         try:

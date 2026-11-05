@@ -55,6 +55,26 @@ describe("outbound handler", () => {
     expect(api.response.status).toBe(403);
   });
 
+  it("lets the read-only repositories be fetched with the sign-in, but never pushed", async () => {
+    const env = { ...ENV, READ_REPOS: "OctavianTocan/Pully, OctavianTocan/ai-kit" };
+    const { sent, send } = recorder();
+    const refs = await decide(new Request("https://github.com/OctavianTocan/Pully/info/refs?service=git-upload-pack"), POLICY, env, send);
+    expect(refs.response.status).toBe(200);
+    expect(sent[0].headers.get("authorization")).toContain("Basic ");
+    const pack = await decide(new Request("https://github.com/OctavianTocan/ai-kit.git/git-upload-pack", { method: "POST", body: "0000" }), POLICY, env, send);
+    expect(pack.response.status).toBe(200);
+    const pushRefs = await decide(new Request("https://github.com/OctavianTocan/Pully/info/refs?service=git-receive-pack"), POLICY, env, send);
+    expect(pushRefs.response.status).toBe(403);
+    const push = await decide(
+      new Request("https://github.com/OctavianTocan/ai-kit.git/git-receive-pack", { method: "POST", body: pushBody(`${Z} ${A} ${POLICY.ownRef}\0report-status`) }),
+      POLICY, env, send,
+    );
+    expect(push.response.status).toBe(403);
+    expect(sent).toHaveLength(2);
+    const unlisted = await decide(new Request("https://github.com/OctavianTocan/Other/info/refs?service=git-upload-pack"), POLICY, env, send);
+    expect(unlisted.response.status).toBe(403);
+  });
+
   it("passes the chosen engine's hosts and package downloads, and refuses the rest", async () => {
     const { send } = recorder();
     const status = async (url: string, method = "GET", policy = POLICY) => (await decide(new Request(url, { method }), policy, ENV, send)).response.status;

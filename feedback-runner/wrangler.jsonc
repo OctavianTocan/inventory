@@ -9,6 +9,8 @@
   "vars": {
     "REPO": "OctavianTocan/mymind-reconstruction",
     "REQUIRED_CHECKS": "android,rust",
+    // Fetched with full history into /workspace/context for the agent to read; pushes there are refused (Tavi, 5 Nov 2026).
+    "READ_REPOS": "OctavianTocan/Pully,OctavianTocan/ai-kit",
     "SANDBOX_INSTANCE": "standard-1"
   },
   "durable_objects": {

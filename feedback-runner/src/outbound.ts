@@ -1,6 +1,7 @@
 // Every HTTP and HTTPS request leaving a feedback sandbox goes through `decide` (docs/feedback.md, Outbound handler).
-// It adds the GitHub sign-in to git traffic for the one repository, lets pushes reach only the round's own branch, and
-// passes the chosen engine's hosts and package downloads. Everything else is refused. Host names are logged; paths,
+// It adds the GitHub sign-in to git traffic for the one repository, lets pushes reach only the round's own branch, lets
+// the read-only repositories (`READ_REPOS`: Pully and ai-kit) be fetched but never pushed, and passes the chosen engine's
+// hosts and package downloads. Everything else is refused. Host names are logged; paths,
 // headers and bodies never are.
 import type { Fetcher, GitHubEnv } from "./github";
 import { readPush, refusePush } from "./push";
@@ -37,7 +38,7 @@ export interface Decision {
  * @param send how allowed requests are sent on
  * @returns the answer to give the sandbox, and the decision
  */
-export async function decide(request: Request, policy: Policy, env: GitHubEnv, send: Fetcher = (r) => fetch(r)): Promise<Decision> {
+export async function decide(request: Request, policy: Policy, env: GitHubEnv & { READ_REPOS?: string }, send: Fetcher = (r) => fetch(r)): Promise<Decision> {
   const url = new URL(request.url);
   if (url.protocol !== "https:") return refuse("plain HTTP is not allowed");
   if (url.hostname === "github.com") return git(request, url, policy, env, send);
@@ -48,20 +49,34 @@ export async function decide(request: Request, policy: Policy, env: GitHubEnv, s
   return refuse(`${url.hostname} is not reachable from this sandbox`);
 }
 
-/** Git smart HTTP for the one repository: adds the sign-in, and lets pushes through to the own branch only. */
-async function git(request: Request, url: URL, policy: Policy, env: GitHubEnv, send: Fetcher): Promise<Decision> {
-  const prefix = `/${env.REPO}`;
-  const rest = url.pathname.startsWith(`${prefix}.git/`)
-    ? url.pathname.slice(prefix.length + 4)
-    : url.pathname.startsWith(`${prefix}/`)
-      ? url.pathname.slice(prefix.length)
-      : null;
+/** `owner/name` of each repository rounds may fetch but never push (`READ_REPOS`, comma-separated). */
+export function readRepos(value: string | undefined): string[] {
+  return (value ?? "").split(",").map((name) => name.trim()).filter(Boolean);
+}
+
+/** The git path after `/<repo>` or `/<repo>.git`, or null when the path is not under that repository. */
+function under(pathname: string, repo: string): string | null {
+  const prefix = `/${repo}`.toLowerCase();
+  const path = pathname.toLowerCase();
+  if (path.startsWith(`${prefix}.git/`)) return pathname.slice(prefix.length + 4);
+  if (path.startsWith(`${prefix}/`)) return pathname.slice(prefix.length);
+  return null;
+}
+
+/** Git smart HTTP: the one repository may be fetched and pushed to the own branch; read-only ones only fetched. */
+async function git(request: Request, url: URL, policy: Policy, env: GitHubEnv & { READ_REPOS?: string }, send: Fetcher): Promise<Decision> {
+  const own = under(url.pathname, env.REPO);
+  const readOnly = own === null ? readRepos(env.READ_REPOS).map((repo) => under(url.pathname, repo)).find((rest) => rest !== null) ?? null : null;
+  const rest = own ?? readOnly;
   const service = url.searchParams.get("service");
-  const known =
-    (rest === "/info/refs" && request.method === "GET" && (service === "git-upload-pack" || service === "git-receive-pack")) ||
-    (rest === "/git-upload-pack" && request.method === "POST") ||
-    (rest === "/git-receive-pack" && request.method === "POST");
-  if (!known) return refuse("only git fetch and push to this repository are allowed");
+  const fetches =
+    (rest === "/info/refs" && request.method === "GET" && service === "git-upload-pack") ||
+    (rest === "/git-upload-pack" && request.method === "POST");
+  const pushes =
+    own !== null &&
+    ((rest === "/info/refs" && request.method === "GET" && service === "git-receive-pack") ||
+      (rest === "/git-receive-pack" && request.method === "POST"));
+  if (!fetches && !pushes) return refuse("only git fetch of the allowed repositories and push to this one are allowed");
 
   const headers = new Headers(request.headers);
   headers.delete("authorization");

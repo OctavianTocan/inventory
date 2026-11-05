@@ -28,10 +28,13 @@ reaches it through the `FEEDBACK_RUNNER` service binding after its sign-in gate,
   it waits on GitHub.
 - `FeedbackSandbox` (`src/sandbox.ts`, one per round, `standard-1`): starts the container, trusts the outbound
   handler's certificate, writes the sign-in files into the agent's home, and runs `src/round.py` in the background.
-  The round clones shallowly, runs the CLI for at most 45 minutes, adds the CHANGELOG entry the release gate asks for,
+  The round clones shallowly with the `vendor/ai-kit` submodule, clones each `READ_REPOS` repository (Pully and
+  ai-kit) with its whole history but without file contents until read (`--filter=blob:none`) into
+  `/workspace/context/<name>`, runs the CLI for at most 45 minutes, adds the CHANGELOG entry the release gate asks for,
   refuses to push a commit holding a sign-in file's text, and pushes `feedback/<id>`.
-- The outbound handler (`src/outbound.ts`) adds the GitHub sign-in to git traffic for this repository only, lets a push
-  update only the round's own branch and never delete it, passes the engine's hosts (Claude Code: `api.anthropic.com`
+- The outbound handler (`src/outbound.ts`) adds the GitHub sign-in to git traffic for this repository and the
+  `READ_REPOS` ones (fetch only, never push; Tavi, 5 Nov 2026), lets a push update only the round's own branch and
+  never delete it, passes the engine's hosts (Claude Code: `api.anthropic.com`
   plus its sign-in hosts; Codex: `chatgpt.com`, `auth.openai.com`, `api.openai.com`) and GET downloads from
   `index.crates.io`, `static.crates.io` and `registry.npmjs.org`, and refuses everything else.
 - Each round borrows the sender's sign-in from their `AgentHome` (`POST /feedback/checkout`, ai-kit) and gives it back
