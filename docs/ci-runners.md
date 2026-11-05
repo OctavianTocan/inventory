@@ -23,3 +23,8 @@ These runners persist between jobs and share an account and host. Only trusted
 collaborators should be able to run workflows; changing repository access also
 changes who can run code on the host. Android publication and Alchemy cloud
 operations retain their existing triggers and protections.
+
+Two checks run on every pull request and on `main`: `android` (Android verify) and `rust` (Rust verify:
+the native test targets that run without the owner's library, the wasm check of the Worker, and the feedback
+runner's tests). Feedback agents' pull requests (docs/feedback.md) run on these same runners, where the release
+keystore and Cloudflare token also live; Tavi accepted that risk on 5 November 2026.

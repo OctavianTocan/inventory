@@ -226,11 +226,38 @@ fn prose_put(client: &mut Client, path: &str, body: &Value) {
     );
 }
 
+// Wait for the server's start-up ThumbHash sweep to finish, so its card updates cannot move a checkpoint the test
+// expects to stay put (on a busy machine the sweep outlasts the first writes).
+fn pictures_hashed(db: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let waiting = Sqlite::open(db, true)
+            .unwrap()
+            .one(
+                "SELECT count(*) AS n FROM cards WHERE deleted_ns IS NULL AND (
+                   (json_extract(extras, '$.cover.src') LIKE '/media/%' AND json_extract(extras, '$.cover.thumbHash') IS NULL)
+                   OR (json_extract(extras, '$.cover') IS NULL AND json_extract(data, '$.blob.path') IS NOT NULL
+                       AND json_extract(data, '$.blob.thumbHash') IS NULL))",
+                &[],
+            )
+            .unwrap()
+            .unwrap()
+            .int("n")
+            .unwrap();
+        if waiting == 0 {
+            return;
+        }
+        assert!(Instant::now() < deadline, "{waiting} pictures still lack a ThumbHash after 60 s");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 #[test]
 fn every_original_write_assertion_and_committed_hub_event() {
     let root = root("writes");
     let db = library(&root);
     let server = start(&root, &db, false, &[]);
+    pictures_hashed(&db);
     let mut client = Client::new(server.port);
     let hub = Hub::connect(server.port);
     let initial_quota = get(&mut client, "/quota");

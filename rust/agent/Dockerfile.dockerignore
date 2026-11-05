@@ -3,6 +3,7 @@
 !rust/Cargo.lock
 !rust/crates/
 !rust/test-support/
+!rust/agent/cli-versions.env
 !vendor/pulls.review/ai-kit/
 vendor/pulls.review/ai-kit/target/
 vendor/pulls.review/ai-kit/kotlin/

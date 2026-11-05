@@ -10,15 +10,19 @@ COPY vendor/pulls.review/ai-kit /vendor/pulls.review/ai-kit
 RUN cargo build --release --locked -p mm-ai --bin mymind-agent-runner
 
 FROM node:22-bookworm-slim
-ARG CLAUDE_CODE_VERSION=latest
-ARG CODEX_VERSION=latest
+# The CLI versions come from cli-versions.env; a non-empty build argument overrides one for a trial build.
+ARG CLAUDE_CODE_VERSION=
+ARG CODEX_VERSION=
 
 # git and ripgrep support the CLIs; flock (util-linux) guards login updates.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates git ripgrep util-linux \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "@openai/codex@${CODEX_VERSION}" \
+COPY rust/agent/cli-versions.env /etc/cli-versions.env
+RUN claude="${CLAUDE_CODE_VERSION}" codex="${CODEX_VERSION}" \
+  && . /etc/cli-versions.env \
+  && npm install -g "@anthropic-ai/claude-code@${claude:-$CLAUDE_CODE_VERSION}" "@openai/codex@${codex:-$CODEX_VERSION}" \
   && npm cache clean --force
 
 # The runner runs as root and keeps the login homes in /homes, which only root can read; each CLI job runs as

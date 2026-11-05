@@ -44,11 +44,6 @@ in_container() {
   docker run --rm --init --pull never --mount "type=volume,source=$volume,target=/home/agent" "$@"
 }
 
-# The newest published version, so a rebuild installs a new CLI instead of reusing the cached layer.
-latest() {
-  npm view "$1" version 2>/dev/null || echo latest
-}
-
 build() {
   need_docker
   local uid gid
@@ -63,8 +58,8 @@ build() {
     --file "$here/local.Dockerfile" \
     --build-arg "AGENT_UID=$uid" \
     --build-arg "AGENT_GID=$gid" \
-    --build-arg "CLAUDE_CODE_VERSION=${CLAUDE_CODE_VERSION:-$(latest @anthropic-ai/claude-code)}" \
-    --build-arg "CODEX_VERSION=${CODEX_VERSION:-$(latest @openai/codex)}" \
+    --build-arg "CLAUDE_CODE_VERSION=${CLAUDE_CODE_VERSION:-$(. "$here/cli-versions.env" && echo "$CLAUDE_CODE_VERSION")}" \
+    --build-arg "CODEX_VERSION=${CODEX_VERSION:-$(. "$here/cli-versions.env" && echo "$CODEX_VERSION")}" \
     --tag "$image" \
     "$here"
 }

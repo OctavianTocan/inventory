@@ -1,0 +1,50 @@
+name: Rust verify
+
+on:
+  # Every PR gets the same required check; a paths-filtered required check can remain pending forever.
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: [self-hosted, linux, x64, mymind-linux]
+    timeout-minutes: 25
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.0
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
+      - name: Fetch libvips for the server crate
+        run: rust/fetch-libvips.sh
+      - name: Test the native crates
+        working-directory: rust
+        # mm-worker only builds for wasm; the next step checks it. The other test targets compare against the owner's
+        # library (rust/fixtures.py copies data/, which never leaves his machine) or need Chromium, so they run by hand
+        # (README, Run the checks). Add a new target here when it runs without data/.
+        run: |
+          targets=(
+            app_changes app_push backend_gaps capture_more check_hub check_render check_store download_android
+            download_extension extension_auth google_domain hosted_media library_claim note_names search_hybrid
+            thumb_hash semantics check_capture_http check_hosted_media check_media check_search check_writes
+            enrich_library library media migrate_media screenshot tool_import_hosted tool_search_eval tool_seed_db
+            tool_try_ai worker worker_credentials
+          )
+          cargo test --workspace --exclude mm-worker --locked -j 2 --lib --bins "${targets[@]/#/--test=}" -- --test-threads=2
+      - name: Check the Worker builds for wasm
+        working-directory: rust
+        run: cargo check -p mm-worker --target wasm32-unknown-unknown --locked
+      - name: Test the feedback runner
+        run: |
+          for dir in feedback-runner feedback-runner/spike; do
+            if [[ -f "$dir/package.json" ]]; then
+              (cd "$dir" && npm ci && npm run check)
+            fi
+          done
