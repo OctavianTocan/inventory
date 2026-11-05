@@ -115,9 +115,11 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
     val updates = viewModel {
         UpdateViewModel(
             container.updater,
-            container.autoInstaller,
+            container.updateInstaller,
             container.whatsNew,
+            container.uploadActivity.count,
             { context.packageManager.canRequestPackageInstalls() },
+            BuildConfig.VERSION_CODE,
             "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
         )
     }
@@ -139,10 +141,10 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
             container.hub.stop()
         }
     }
-    val sheet by updates.sheet.collectAsStateWithLifecycle()
+    val gate by updates.gate.collectAsStateWithLifecycle()
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    LaunchedEffect(sheet != null) {
-        if (sheet != null && !container.updateNotifier.allowed() && !container.updatePrefs.askedNotifications) {
+    LaunchedEffect(gate != null) {
+        if (gate != null && !container.updateNotifier.allowed() && !container.updatePrefs.askedNotifications) {
             container.updatePrefs.askedNotifications = true
             askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -152,6 +154,11 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
     val previews = remember { VideoPreviews(context.applicationContext, container.httpClient) }
     ClosePreviewsOnDispose(previews)
     CompositionLocalProvider(LocalVideoPreviews provides previews) {
-        MainShell(library, settings, rows.copy(onAllow = allow), ai = container.ai, feedback = container.feedback) { UpdateOverlays(updates, allow) }
+        MainShell(library, settings, rows.copy(onAllow = allow), ai = container.ai, feedback = container.feedback) {
+            UpdateOverlays(updates, allow) {
+                generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+                    .filterIsInstance<android.app.Activity>().firstOrNull()?.moveTaskToBack(true)
+            }
+        }
     }
 }

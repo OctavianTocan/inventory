@@ -22,22 +22,22 @@ class UpdateNotifier(private val context: Context) {
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
 
     /**
-     * Asks the user to let the app install updates, once, so [release] and later versions install by themselves.
+     * Tells the user, while the app is closed, that [release] is ready; the tap opens the app on its update screen.
      *
-     * @param release The downloaded release that waits.
+     * @param release The newer release the server offers.
      */
-    fun allowNeeded(release: ReleaseInfo) {
+    fun ready(release: ReleaseInfo) {
         val open = PendingIntent.getActivity(
             context,
-            REQUEST_ALLOW,
-            allowInstallsIntent(context),
+            REQUEST_OPEN,
+            openUpdateIntent(context),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         post(
             NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification_download)
-                .setContentTitle("Allow mymind to install updates")
-                .setContentText("mymind ${release.versionName} is ready. Allow it once and updates install by themselves.")
+                .setContentTitle("ThyMind ${release.versionName} is ready")
+                .setContentText("Open ThyMind to update.")
                 .setContentIntent(open)
                 .setAutoCancel(true),
         )
@@ -59,7 +59,7 @@ class UpdateNotifier(private val context: Context) {
         post(
             NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification_download)
-                .setContentTitle("Finish installing mymind ${release?.versionName.orEmpty()}".trim())
+                .setContentTitle("Finish installing ThyMind ${release?.versionName.orEmpty()}".trim())
                 .setContentText("Tap to confirm with Android.")
                 .setContentIntent(open)
                 .setAutoCancel(true),
@@ -79,7 +79,7 @@ class UpdateNotifier(private val context: Context) {
     private companion object {
         const val CHANNEL = "updates"
         const val NOTIFICATION_ID = 1
-        const val REQUEST_ALLOW = 1
+        const val REQUEST_OPEN = 1
         const val REQUEST_PROMPT = 2
     }
 }

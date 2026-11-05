@@ -41,10 +41,26 @@ class Updater(
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val mutableState = MutableStateFlow<UpdateState>(UpdateState.None)
+    private val mutableOffer = MutableStateFlow(restoreOffer())
     private val lock = Mutex()
+
+    /**
+     * The newer release the server offers, or null when there is none. While it is set the app shows only the update
+     * screen. It starts as the last offer the phone heard of, so the screen is there from the first frame of a start,
+     * before the server answers again; a failed check keeps it and a server with nothing newer takes it away.
+     */
+    val offer: StateFlow<ReleaseInfo?> = mutableOffer
 
     /** What the updater is doing. */
     val state: StateFlow<UpdateState> = mutableState
+
+    private val mutablePrompt = MutableStateFlow<Intent?>(null)
+
+    /**
+     * Android's install prompt while it waits for the user's tap, or null. The update screen offers it again when the
+     * user comes back without finishing it.
+     */
+    val prompt: StateFlow<Intent?> = mutablePrompt
 
     /** True while the app is on screen; set by the activity. */
     @Volatile
@@ -60,7 +76,8 @@ class Updater(
     }
 
     /**
-     * Checks only when the last check is older than an hour.
+     * Checks only when the last check is older than five minutes, so coming back to the app often does not ask the
+     * server as often.
      *
      * @return The state after the call.
      */
@@ -84,10 +101,12 @@ class Updater(
         }
         prefs.lastCheckMs = clock()
         if (release == null || !isNewer(release.versionCode, installedCode)) {
+            saveOffer(null)
             withContext(io) { directory.deleteRecursively() }
             mutableState.value = UpdateState.UpToDate
             return@withLock mutableState.value
         }
+        saveOffer(release)
         try {
             val file = download(release)
             mutableState.value = UpdateState.Ready(release, file)
@@ -101,6 +120,7 @@ class Updater(
     suspend fun install() {
         val ready = mutableState.value as? UpdateState.Ready ?: return
         mutableState.value = UpdateState.Installing(ready.release)
+        mutablePrompt.value = null
         try {
             installer.install(ready.file)
         } catch (error: IOException) {
@@ -126,11 +146,14 @@ class Updater(
                     mutableState.value = UpdateState.Failed("Android asked for a confirmation without a prompt", release)
                     StatusAction.None
                 }
-                foreground -> StatusAction.OpenPrompt(confirm)
-                else -> StatusAction.NotifyPrompt(confirm)
+                else -> {
+                    mutablePrompt.value = confirm
+                    if (foreground) StatusAction.OpenPrompt(confirm) else StatusAction.NotifyPrompt(confirm)
+                }
             }
-            PackageInstaller.STATUS_SUCCESS -> StatusAction.None
+            PackageInstaller.STATUS_SUCCESS -> StatusAction.None.also { mutablePrompt.value = null }
             else -> {
+                mutablePrompt.value = null
                 mutableState.value = UpdateState.Failed(failureText(status, message), release)
                 StatusAction.None
             }
@@ -145,6 +168,21 @@ class Updater(
         PackageInstaller.STATUS_FAILURE_STORAGE -> "Not enough storage to install"
         PackageInstaller.STATUS_FAILURE_BLOCKED -> "Android blocked the install"
         else -> message?.takeIf { it.isNotBlank() } ?: "The install failed"
+    }
+
+    private fun restoreOffer(): ReleaseInfo? {
+        val saved = prefs.offerJson ?: return null
+        val release = runCatching { AppJson.decodeFromString(ReleaseInfo.serializer(), saved) }.getOrNull()
+        if (release == null || !isNewer(release.versionCode, installedCode)) {
+            prefs.offerJson = null
+            return null
+        }
+        return release
+    }
+
+    private fun saveOffer(release: ReleaseInfo?) {
+        mutableOffer.value = release
+        prefs.offerJson = release?.let { AppJson.encodeToString(ReleaseInfo.serializer(), it) }
     }
 
     private fun fail(before: UpdateState, reason: String): UpdateState {
@@ -226,7 +264,7 @@ class Updater(
     private class UpdateException(message: String) : IOException(message)
 
     private companion object {
-        const val STALE_MS = 60 * 60 * 1000L
+        const val STALE_MS = 5 * 60 * 1000L
         const val BUFFER = 64 * 1024
         const val PROGRESS_STEP = 0.01f
     }

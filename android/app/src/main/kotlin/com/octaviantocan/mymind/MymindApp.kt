@@ -10,8 +10,6 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.octaviantocan.mymind.data.PictureWorker
 import com.octaviantocan.mymind.feedback.FeedbackWorker
 import com.octaviantocan.mymind.update.ForegroundTracker
-import com.octaviantocan.mymind.update.UpdateInstallWorker
-import com.octaviantocan.mymind.update.UpdateState
 import com.octaviantocan.mymind.update.UpdateWorker
 import okio.Path.Companion.toOkioPath
 
@@ -28,12 +26,8 @@ class MymindApp : Application(), SingletonImageLoader.Factory {
         UpdateWorker.schedule(this)
         if (container.feedbackStore.hasActive()) FeedbackWorker.schedule(this)
         PictureWorker.schedule(this)
-        val updater = container.updater
-        ProcessLifecycleOwner.get().lifecycle.addObserver(
-            ForegroundTracker(updater) {
-                if (updater.state.value is UpdateState.Ready) UpdateInstallWorker.schedule(this, UpdateInstallWorker.LEAVE_DELAY_SECONDS)
-            },
-        )
+        UpdateWorker.cancelLeaveInstall(this)
+        ProcessLifecycleOwner.get().lifecycle.addObserver(ForegroundTracker(container.updater))
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

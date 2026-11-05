@@ -136,11 +136,11 @@ class UpdaterTest {
     }
 
     @Test
-    fun checkIfStaleWaitsAnHour() = runBlocking {
+    fun checkIfStaleWaitsFiveMinutes() = runBlocking {
         val updater = updater()
         server.enqueue(MockResponse().setResponseCode(404))
         updater.checkIfStale()
-        now += 59 * 60 * 1000L
+        now += 4 * 60 * 1000L
         updater.checkIfStale()
         assertEquals(1, server.requestCount)
         now += 2 * 60 * 1000L
@@ -189,6 +189,58 @@ class UpdaterTest {
         updater.install()
         val action = updater.onInstallStatus(PackageInstaller.STATUS_PENDING_USER_ACTION, null, Intent("prompt"))
         assertTrue(action is StatusAction.NotifyPrompt)
+    }
+
+    @Test
+    fun pendingUserActionKeepsThePromptUntilTheInstallEnds() = runBlocking {
+        enqueueRelease()
+        val updater = updater()
+        updater.check()
+        updater.install()
+        val prompt = Intent("prompt")
+        updater.onInstallStatus(PackageInstaller.STATUS_PENDING_USER_ACTION, null, prompt)
+        assertEquals(prompt, updater.prompt.value)
+        updater.onInstallStatus(PackageInstaller.STATUS_FAILURE_ABORTED, null, null)
+        assertEquals(null, updater.prompt.value)
+    }
+
+    @Test
+    fun aNewerReleaseIsOfferedAndRememberedAcrossStarts() = runBlocking {
+        enqueueRelease()
+        updater().check()
+        val restarted = updater()
+        assertEquals(3, restarted.offer.value?.versionCode)
+        assertEquals(UpdateState.None, restarted.state.value)
+    }
+
+    @Test
+    fun aFailedCheckKeepsTheOfferAndNothingNewerTakesItAway() = runBlocking {
+        enqueueRelease()
+        updater().check()
+        val updater = updater()
+        server.enqueue(MockResponse().setResponseCode(500))
+        updater.check()
+        assertEquals(3, updater.offer.value?.versionCode)
+        server.enqueue(MockResponse().setResponseCode(404))
+        updater.check()
+        assertEquals(null, updater.offer.value)
+        assertEquals(null, updater().offer.value)
+    }
+
+    @Test
+    fun aRememberedOfferTheAppAlreadyHasIsDropped() = runBlocking {
+        enqueueRelease()
+        updater().check()
+        assertEquals(null, updater(installed = 3).offer.value)
+        assertEquals(null, prefs.offerJson)
+    }
+
+    @Test
+    fun aFailedDownloadStillOffersTheRelease() = runBlocking {
+        enqueueRelease(body = apk.copyOf(10))
+        val updater = updater()
+        assertTrue(updater.check() is UpdateState.Failed)
+        assertEquals(3, updater.offer.value?.versionCode)
     }
 
     @Test

@@ -32,10 +32,10 @@ import com.octaviantocan.mymind.feedback.FeedbackTracker
 import com.octaviantocan.mymind.feedback.FeedbackWorker
 import com.octaviantocan.mymind.ui.menu.DownloadsSaver
 import com.octaviantocan.mymind.ui.theme.ThemePrefs
-import com.octaviantocan.mymind.update.AutoInstaller
 import com.octaviantocan.mymind.update.SessionApkInstaller
 import com.octaviantocan.mymind.update.UploadActivity
 import com.octaviantocan.mymind.update.UploadService
+import com.octaviantocan.mymind.update.UpdateInstaller
 import com.octaviantocan.mymind.update.UpdateNotifier
 import com.octaviantocan.mymind.update.UpdatePrefs
 import com.octaviantocan.mymind.update.UpdateWorker
@@ -125,11 +125,10 @@ class AppContainer(context: Context) {
         prefs = updatePrefs,
     )
     val uploadActivity = UploadActivity(onStart = { UploadService.start(context.applicationContext) })
-    val autoInstaller = AutoInstaller(
+    val updateInstaller = UpdateInstaller(
         updater,
         canInstall = { context.packageManager.canRequestPackageInstalls() },
         uploads = uploadActivity,
-        askToAllow = updateNotifier::allowNeeded,
     )
     val whatsNew = WhatsNew(
         updatePrefs,

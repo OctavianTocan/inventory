@@ -92,5 +92,6 @@ The production fingerprint is optional in local mode; if supplied, it is still e
 and `GRADLE_ARGS` retain their local build overrides.
 
 Repository tests and a green release job do not prove a phone installed the update. Confirm the authenticated
-hosted 0.4.0 (5) release first, then the device's version and installed certificate. Existing updater behavior still
-waits for the app to leave the screen and for uploads to finish before installing.
+hosted 0.4.0 (5) release first, then the device's version and installed certificate. The app installs
+only from its update screen, which shows over everything when the app opens while a newer release is offered; it
+waits for uploads in flight to finish before installing.

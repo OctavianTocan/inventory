@@ -26,4 +26,14 @@ class WhatsNew(private val prefs: UpdatePrefs, private val installedCode: Int, c
         if (seen == null || seen >= installedCode) return null
         return entries.firstOrNull { it.versionCode == installedCode }
     }
+
+    /**
+     * Records that the notes up to [versionCode] were read on the update screen, so they do not open again after the
+     * install.
+     *
+     * @param versionCode The version being installed.
+     */
+    fun markShown(versionCode: Int) {
+        if (versionCode > (prefs.shownChangelogCode ?: 0)) prefs.shownChangelogCode = versionCode
+    }
 }

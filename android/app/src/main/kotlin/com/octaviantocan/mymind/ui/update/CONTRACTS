@@ -12,3 +12,28 @@ Source: Tavi, 22 October 2026: "literally copy exactly the format from Pully for
 the changelog. It's a bottom sheet." pulls.review UpdateUi.kt WhatsNewSheet,
 ChangelogEntries, ChangelogItem and NewTag at
 20e889540b7c05ed9174b038ae366191932924e9.
+
+@cc [owner:OctavianTocan,label:product] update-screen-is-required
+When the server offers a newer release, ThyMind MUST show only the update screen, over
+everything, from the first frame of a start: "ThyMind 0.6.67 is ready", "Update to keep
+using ThyMind.", every newer version with its notes, and "Update to 0.6.67" as the main
+action. Nothing MUST close it but the update, and Back MUST leave the app. The phone
+remembers the last offer, so a start shows the screen before the server answers again;
+a failed check keeps the offer and a server with nothing newer takes it away. Updates
+MUST NOT install by themselves when the user leaves the app. Source: Tavi, 5 Nov 2026
+("updating when you open and not letting you use until updated. Like Pully"); pulls.review
+update-screen-is-required and updater-remembers-the-offer.
+
+@cc [owner:OctavianTocan,label:product] update-shows-its-progress
+Update MUST download (when the package is not on the phone yet), wait for any upload in
+flight and install in the app, showing how far it got in place. Without Android's
+install permission, Update MUST open its settings page and carry on by itself when the
+user comes back allowing it. A failed download or install MUST offer Try again, and an
+approval Android still waits for MUST offer Continue update; neither lets the user
+through. Source: Tavi, 5 Nov 2026; pulls.review update-shows-its-progress and
+update-confirmation-remains-actionable.
+
+@cc [owner:OctavianTocan,label:product] update-notifies-once
+While the app is closed, the background check MUST download a newer release and tell the
+user in a notification once per version; its tap opens the app on the update screen.
+Source: Tavi, 5 Nov 2026; pulls.review updater-notifies-once.

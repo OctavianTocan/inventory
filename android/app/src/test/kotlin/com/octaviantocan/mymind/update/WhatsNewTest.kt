@@ -43,6 +43,13 @@ class WhatsNewTest {
     }
 
     @Test
+    fun notesReadOnTheUpdateScreenDoNotOpenAgainAfterTheInstall() {
+        prefs.shownChangelogCode = 2
+        WhatsNew(prefs, 2, text).markShown(3)
+        assertNull(WhatsNew(prefs, 3, text).takePending())
+    }
+
+    @Test
     fun unreadableChangelogShowsNothing() {
         prefs.shownChangelogCode = 1
         assertNull(WhatsNew(prefs, 3, "garbage").takePending())

@@ -39,8 +39,11 @@ import com.octaviantocan.mymind.ui.settings.SettingsUiState
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 import com.octaviantocan.mymind.ui.update.AfterUpdateSheet
 import com.octaviantocan.mymind.ui.update.ChangelogScreen
-import com.octaviantocan.mymind.ui.update.AllowRequestContent
-import com.octaviantocan.mymind.ui.update.AllowRequestModel
+import com.octaviantocan.mymind.ui.update.UpdateGateContent
+import com.octaviantocan.mymind.ui.update.UpdateGateModel
+import com.octaviantocan.mymind.ui.update.UpdateStep
+import com.octaviantocan.mymind.ui.update.offeredEntries
+import com.octaviantocan.mymind.update.ReleaseHistory
 import com.octaviantocan.mymind.update.UpdateState
 import com.octaviantocan.mymind.update.updateStatusText
 import java.io.File
@@ -76,11 +79,80 @@ class UpdateScreenshotTest {
     }
 
 
-    @Test
-    fun allowRequestLight() = shot("update_allow_light", false) { AllowRequestContent(AllowRequestModel(release)) {} }
+    private val offered = release.copy(
+        history = listOf(
+            ReleaseHistory("0.3.0", 4, "2026-11-05", release.notes),
+            ReleaseHistory("0.2.1", 3, "2026-11-04", listOf("Search finds cards by meaning.")),
+            ReleaseHistory("0.2.0", 2, "2026-11-03", listOf("Already installed.")),
+        ),
+    )
+
+    private fun gate(step: UpdateStep) = UpdateGateModel(offered, offeredEntries(offered, 2), step)
 
     @Test
-    fun allowRequestDark() = shot("update_allow_dark", true) { AllowRequestContent(AllowRequestModel(release)) {} }
+    fun updateGateLight() = shot("update_gate_light", false) { UpdateGateContent(gate(UpdateStep.Idle), {}, {}) }
+
+    @Test
+    fun updateGateDark() = shot("update_gate_dark", true) { UpdateGateContent(gate(UpdateStep.Idle), {}, {}) }
+
+    @Test
+    fun updateGateDownloadingLight() = shot("update_gate_downloading_light", false) { UpdateGateContent(gate(UpdateStep.Downloading(0.42f)), {}, {}) }
+
+    @Test
+    fun updateGateFailedDark() = shot("update_gate_failed_dark", true) { UpdateGateContent(gate(UpdateStep.Failed("The install was cancelled")), {}, {}) }
+
+    @Test
+    fun updateGateListsOnlyTheVersionsNewerThanTheInstalledOne() {
+        assertEquals(listOf("0.3.0", "0.2.1"), offeredEntries(offered, 2).map { it.versionName })
+        assertEquals(listOf("0.3.0"), offeredEntries(release, 2).map { it.versionName })
+    }
+
+    private fun showStep(step: UpdateStep): Pair<IntArray, IntArray> {
+        val updates = IntArray(1)
+        val continues = IntArray(1)
+        compose.setPhoneContent(false) { UpdateGateContent(gate(step), { updates[0]++ }, { continues[0]++ }) }
+        compose.mainClock.advanceTimeBy(100)
+        return updates to continues
+    }
+
+    @Test
+    fun updateGateStartsTheUpdate() {
+        val (updates, _) = showStep(UpdateStep.Idle)
+        compose.onNodeWithText("ThyMind 0.3.0 is ready").assertIsDisplayed()
+        compose.onNodeWithText("Update to 0.3.0").performClick()
+        assertEquals(1, updates[0])
+    }
+
+    @Test
+    fun updateGateAsksToAllowInstallsAndOffersUpdateAgain() {
+        showStep(UpdateStep.NeedsAllow)
+        compose.onNodeWithText("Allow ThyMind to install updates first.").assertIsDisplayed()
+        compose.onNodeWithText("Update to 0.3.0").assertIsDisplayed()
+    }
+
+    @Test
+    fun updateGateOffersTryAgainAfterAFailure() {
+        val (updates, _) = showStep(UpdateStep.Failed("Download interrupted"))
+        compose.onNodeWithText("Download interrupted").assertIsDisplayed()
+        compose.onNodeWithText("Try again").performClick()
+        assertEquals(1, updates[0])
+    }
+
+    @Test
+    fun updateGateOffersContinueWhileAndroidWaits() {
+        val (updates, continues) = showStep(UpdateStep.Confirm)
+        compose.onNodeWithText("Continue update").performClick()
+        assertEquals(1, continues[0])
+        assertEquals(0, updates[0])
+    }
+
+    @Test
+    fun updateGateHasNoActionWhileInstalling() {
+        showStep(UpdateStep.Installing)
+        compose.onNodeWithText("Installing…").assertIsDisplayed()
+        compose.onAllNodesWithText("Continue update").assertCountEquals(0)
+        compose.onAllNodesWithText("Update to 0.3.0").assertCountEquals(0)
+    }
 
     @Test
     fun afterUpdateLight() = shot("update_after_light", false) { AfterUpdateSheet(entries[0]) {} }
@@ -192,17 +264,9 @@ class UpdateScreenshotTest {
     fun settingsFailedDark() = settingsRows(true, UpdateState.Failed("The install was cancelled", release), allowed = true, name = "failed")
 
     @Test
-    fun allowRequestAllowCallbackFires() {
-        var allowed = 0
-        compose.setPhoneContent(false) { AllowRequestContent(AllowRequestModel(release)) { allowed++ } }
-        compose.onNodeWithText("Allow mymind to install updates").performClick()
-        assertEquals(1, allowed)
-    }
-
-    @Test
-    fun readyStatusSaysWhenItInstalls() {
+    fun readyStatusNamesTheVersion() {
         val ready = UpdateState.Ready(release, File("a"))
-        assertEquals("Installs when you leave. Tap to install now", updateStatusText(ready, true))
+        assertEquals("0.3.0 is ready", updateStatusText(ready, true))
         assertEquals("0.3.0 is ready, allow installs below", updateStatusText(ready, false))
     }
 

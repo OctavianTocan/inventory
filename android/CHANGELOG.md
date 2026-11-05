@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.67 (78), 2026-11-05
+ThyMind updates when you open it, like Pully.
+
+### Changed
+- When a newer ThyMind is out, opening the app shows its update screen first: the new version, what it brings, and Update. Update downloads and installs it in the app and shows how far it got; you use ThyMind again once it is updated. Back leaves the app.
+- Updates no longer install by themselves when you leave the app. ThyMind still downloads a new version in the background and tells you once in a notification, so Update is quick.
+
 ## 0.6.64 (75), 2026-11-05
 Save videos up to 5 GB.
 

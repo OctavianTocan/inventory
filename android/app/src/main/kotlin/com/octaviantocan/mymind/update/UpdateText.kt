@@ -19,7 +19,7 @@ fun updateStatusText(state: UpdateState, installAllowed: Boolean = true): String
     UpdateState.Checking -> "Checking"
     is UpdateState.Downloading -> "Downloading ${(state.progress * 100).toInt()}%"
     is UpdateState.Ready ->
-        if (installAllowed) "Installs when you leave. Tap to install now"
+        if (installAllowed) "${state.release.versionName} is ready"
         else "${state.release.versionName} is ready, allow installs below"
     is UpdateState.Installing -> "Installing"
     is UpdateState.Failed -> "Failed: ${state.reason}"
