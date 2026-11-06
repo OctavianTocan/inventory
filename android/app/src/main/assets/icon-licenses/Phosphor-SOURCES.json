@@ -20,7 +20,7 @@
     "top_of_mind": "push-pin and push-pin-slash",
     "same_vibe": "sparkle",
     "notification_icons": "download-simple and upload-simple with white fill and transparent background for Android notification alpha silhouettes",
-    "search": "magnifying-glass; the gallery's Search circle pairs the bold glass with star-four for search by meaning",
+    "search": "magnifying-glass",
     "video_player": "play and pause fill, speaker-high and speaker-slash bold for the reader's video controls",
     "reader": "share-network for Share, link for Copy link, and text-align-left, article and quotes for the reader's summary, page and post sections"
   },
@@ -395,19 +395,6 @@
       "fill_color": "#FF000000",
       "root_attributes": {},
       "path_count": 1
-    },
-    {
-      "resource": "ic_library_search_spark",
-      "icon": "magnifying-glass + star-four",
-      "weight": "bold + fill",
-      "source_path": "assets/bold/magnifying-glass-bold.svg; assets/fill/star-four-fill.svg",
-      "source_sha256": "b73e393b20bff0aaee96b9e325d0276fe1ab5fc81b5080633a95827bd14ebae6; 2e323dacc3116d0fdd2e5748297a868469cdaedcd973b76b87fc127bb8082f91",
-      "android_width": "24dp",
-      "android_height": "24dp",
-      "fill_color": "#FF000000",
-      "root_attributes": {},
-      "path_count": 2,
-      "composition": "Both paths unchanged; the glass is scaled 0.8 and moved (10, 40), the star scaled 0.36 and moved (152, 14), as the search-with-sparkle mark of Google Photos."
     },
     {
       "resource": "ic_library_sky",

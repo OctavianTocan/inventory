@@ -1,26 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Phosphor Icons core 2.1.1, bold/magnifying-glass-bold.svg and fill/star-four-fill.svg, each placed by a group transform; MIT; see assets/icon-licenses/Phosphor-LICENSE.txt and Phosphor-SOURCES.json. -->
+<!-- AI search: a magnifier open at the top right with a four-point sparkle in the gap, drawn for Inventory after the
+     Ask glyph in Google Photos' search circle (Tavi, 6 November 2026). Measured from a Google Photos screenshot:
+     ring 5.43 at (9.4, 9.4) open from -10 to 70 degrees, 1.9 stroke with round caps, sparkle radius 4.4 at (17.4, 6.46). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="256"
-    android:viewportHeight="256">
-    <group
-        android:scaleX="0.8"
-        android:scaleY="0.8"
-        android:translateX="10"
-        android:translateY="40">
-        <path
-            android:fillColor="#FF000000"
-            android:pathData="M232.49,215.51,185,168a92.12,92.12,0,1,0-17,17l47.53,47.54a12,12,0,0,0,17-17ZM44,112a68,68,0,1,1,68,68A68.07,68.07,0,0,1,44,112Z" />
-    </group>
-    <group
-        android:scaleX="0.36"
-        android:scaleY="0.36"
-        android:translateX="152"
-        android:translateY="14">
-        <path
-            android:fillColor="#FF000000"
-            android:pathData="M240,128a15.79,15.79,0,0,1-10.5,15l-63.44,23.07L143,229.5a16,16,0,0,1-30,0L89.94,166.06,26.5,143a16,16,0,0,1,0-30L89.94,89.94,113,26.5a16,16,0,0,1,30,0l23.07,63.44L229.5,113A15.79,15.79,0,0,1,240,128Z" />
-    </group>
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M11.26,4.30A5.43,5.43 0 1,0 14.75,10.34 M13.24,13.24L19.66,19.66"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.9"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M17.40,2.06Q18.81,5.05 21.80,6.46Q18.81,7.87 17.40,10.86Q15.99,7.87 13.00,6.46Q15.99,5.05 17.40,2.06Z" />
 </vector>

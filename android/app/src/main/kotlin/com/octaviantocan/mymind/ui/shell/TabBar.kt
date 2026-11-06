@@ -88,7 +88,7 @@ fun MymindTabBar(
         hug = true,
         inset = NAVIGATION_INSET,
         field = false,
-        circle = FootCircle(R.drawable.ic_library_search_spark, "Search", onSearch, iconSize = 24.dp),
+        circle = FootCircle(R.drawable.ic_library_search_spark, "Search", onSearch, iconSize = 22.dp),
     ) { GalleryTabs(selected, onSelect) }
 }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.91 (102), 2026-11-06
+The search button looks like Google Photos' AI search.
+
+### Changed
+- The round search button beside the All and Spaces tabs now draws its magnifier and sparkle the way Google Photos does: the glass opens at the top right, where the sparkle sits, with softer rounded strokes. The same icon shows wherever Inventory marks AI, such as Link for AI agents and Connected agents.
+
 ## 0.6.90 (101), 2026-11-06
 Turn a picture that came in the wrong way round.
 

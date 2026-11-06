@@ -54,7 +54,9 @@ ee5cf358333cb1170f1923c7118e12af3f265b74.
 
 @cc [owner:OctavianTocan,label:product;design;motion] library-navigation-is-the-gallery-capsule
 The library navigation pill MUST offer All and Spaces as two icon tabs, with
-Search as a separate circular control showing a magnifier with a sparkle. It MUST NOT
+Search as a separate circular control showing a magnifier with a sparkle, drawn after
+Google Photos' AI search (Ask) glyph: the ring open at its top right with a four-point
+sparkle in the gap, in round-capped strokes, about 22dp in the 56dp circle. It MUST NOT
 add a Create tab. The pill is only as wide as its two tabs and sits centred with the
 circle beside it, leaving the corners of the screen to the cards. The chosen tab shows
 its filled icon on the selected highlight, the other its outline icon in a dark grey.
@@ -68,6 +70,10 @@ a second visible bar.
 Source: Tavi's pick of version 03, "Two icons, names on change", from the 15 Everything
 bars, 1 November 2026 ("Yeah! Let's use 03"), which replaced the Google Photos capsule
 with both labels of 22 and 23 October 2026; Tavi's no-Create decision, 22 October 2026.
+The glyph was redrawn after Google Photos' when Tavi said on 6 November 2026 that "the
+search icon is not quite like the Google Photos one" and that it keeps its sparkle ("It's
+the new AI search"); its proportions and size were measured by Claude from a Google Photos
+screenshot and are Claude's choice.
 
 @cc [owner:OctavianTocan,label:design;motion] library-steps-back-behind-the-reader
 While a card's reader is open, ShellFrame MUST draw the page and its bar as one card
