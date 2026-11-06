@@ -64,4 +64,4 @@ jobs:
         run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
       - name: Test and build the Android app
         working-directory: android
-        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon --max-workers=2
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintVitalRelease --no-daemon --max-workers=2

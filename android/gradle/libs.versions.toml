@@ -8,6 +8,7 @@ navigationCompose = "2.10.2"
 coreKtx = "1.19.1"
 datastore = "1.2.1"
 credentials = "1.6.0"
+fragment = "1.5.7"
 googleid = "1.2.1"
 serialization = "1.11.0"
 coroutines = "1.11.0"
@@ -37,6 +38,7 @@ androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
 androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
+androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }

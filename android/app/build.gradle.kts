@@ -154,6 +154,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
+    // Credentials' biometric puts fragment 1.2.5 on the compile classpath, and release lint then refuses
+    // registerForActivityResult; the APK already ships 1.5.7, so this only makes compile and runtime agree.
+    implementation(libs.androidx.fragment)
     implementation(libs.googleid)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.82 (93), 2026-11-06
+Brings every update since 0.6.67 to your phone.
+
+### Fixed
+- Versions after 0.6.67 never reached the phone, because a check in the release build stopped each one. This release carries all of them.
+
 ## 0.6.81 (92), 2026-11-06
 A shooting star brings in everything you save.
 
