@@ -3,7 +3,11 @@ package com.octaviantocan.mymind.ui.menu
 import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Blob
+import com.octaviantocan.mymind.data.Edit
+import com.octaviantocan.mymind.data.edited
 import com.octaviantocan.mymind.ui.library.FakeLibrary
+import com.octaviantocan.mymind.ui.library.storedRatio
+import com.octaviantocan.mymind.ui.library.turn
 import com.octaviantocan.mymind.ui.library.pinned
 import com.octaviantocan.mymind.ui.library.testCard
 import kotlinx.coroutines.test.runTest
@@ -81,6 +85,33 @@ class CardActionsTest {
         assertEquals(CardMenuOutcome.RemovedFromSpace("s1", "c"), actions.perform(CardMenuItem(CardMenuAction.RemoveFromSpace), card, "s1"))
         assertEquals(CardMenuOutcome.Deleted("c"), actions.perform(CardMenuItem(CardMenuAction.DeleteCard), card, null))
         assertEquals(listOf("pin:c:true", "pin:c:false", "unspace:s1:c", "trash:c"), library.calls)
+    }
+
+    @Test
+    fun rotateTurnsAPictureAQuarterAtATimeAndAFullTurnMakesItUprightAgain() = runTest {
+        val library = FakeLibrary()
+        val actions = CardActions(library, saver)
+        var photo = testCard("p", type = "Image", blob = Blob(type = "image/jpeg", path = "u/p.jpg", width = 400, height = 300))
+        assertTrue(CardMenuItem(CardMenuAction.Rotate) in cardMenuItems(photo, null))
+        assertEquals(4f / 3f, storedRatio(photo))
+        val turns = (1..4).map {
+            photo = (actions.perform(CardMenuItem(CardMenuAction.Rotate), photo, null) as CardMenuOutcome.Rotated).card
+            photo.rotation
+        }
+        assertEquals(listOf(90, 180, 270, null), turns)
+        assertEquals(listOf("rotate:p:90", "rotate:p:180", "rotate:p:270", "rotate:p:0"), library.calls)
+        assertEquals("a picture turned sideways stands the other way", 3f / 4f, storedRatio(photo.copy(rotation = 90)))
+        assertEquals(270, photo.copy(rotation = -90).turn)
+        assertEquals(180, photo.edited(Edit.Rotate("p", 180))?.rotation)
+        assertNull(photo.copy(rotation = 90).edited(Edit.Rotate("p", 0))?.rotation)
+    }
+
+    @Test
+    fun onlyPicturesTheyKeptCanBeRotated() {
+        val article = testCard("a", type = "Article", url = "https://example.com/a")
+        assertTrue(cardMenuItems(article, null).none { it.action == CardMenuAction.Rotate })
+        val video = testCard("v", type = "Video", blob = Blob(type = "video/mp4", path = "u/v.mp4"))
+        assertTrue(cardMenuItems(video, null).none { it.action == CardMenuAction.Rotate })
     }
 
     @Test

@@ -75,7 +75,7 @@ delete; M14, the card shrinks while Delete is held).
 The root sheet, titled Choose one, MUST lead with the card's big choices (Add to
 space, Same Vibe, Reader Mode) as raised cards with a muted line on what each
 means, then its quick actions as tiles two by two (Open source, Copy, Download,
-Pin, Add tags), then Delete card alone in its own group, omitting what the card
+Rotate, Pin, Add tags), then Delete card alone in its own group, omitting what the card
 cannot do. The Pin tile MUST show an ink on state while the card is pinned.
 Section headings MUST be small, muted and non-folding, without a count, divider or
 chevron. Cards and tiles use 16dp corners and Pully's 2dp-down, 12dp-blur, 10% ink
@@ -137,3 +137,15 @@ gallery) while its scrim still dims the whole window. On a phone held sideways a
 rest at its tall height, since half the window is too little to read.
 Source: Tavi, 5 November 2026 (follow Pully's foldable and rotated layouts); pulls.review
 sheets-and-foot-bars-stay-column-wide, DESIGN rule 208 (PR #137).
+
+@cc [owner:OctavianTocan,label:product] picture-rotation-is-kept
+A card that is a picture the person saved (an image or screenshot, not a video,
+PDF or link) MUST offer Rotate. Each tap MUST turn the picture a quarter clockwise
+and keep the sheet open for the next tap; a fourth tap makes it upright again. The
+turn MUST be saved with the card on the server, so the gallery tile's shape, the
+reel, the reader and the card shared as an image all show it turned, on every
+phone, and it waits on the phone like any other change while offline.
+Source: Tavi, 6 November 2026: "We also need the ability to rotate images in
+cards. So you can rotate it when its not in the right rotation you want." Quarter
+turns clockwise, the tile in Choose one and the sheet staying open are Claude's
+choices, not yet confirmed.

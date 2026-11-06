@@ -7,6 +7,8 @@ import com.octaviantocan.mymind.data.Library
 import com.octaviantocan.mymind.ui.card.ReaderPart
 import com.octaviantocan.mymind.ui.card.partText
 import com.octaviantocan.mymind.ui.library.TileKind
+import com.octaviantocan.mymind.ui.library.canTurnPicture
+import com.octaviantocan.mymind.ui.library.turn
 import com.octaviantocan.mymind.ui.library.noteText
 import com.octaviantocan.mymind.ui.library.postText
 import com.octaviantocan.mymind.ui.library.pinned
@@ -32,6 +34,7 @@ fun cardMenuItems(card: Card, spaceId: String?, features: Set<String> = emptySet
     if (card.type == "Image") add(CardMenuItem(CardMenuAction.SameVibe, locked = "sameVibe" !in features))
     if (partText(ReaderPart.Page, card) != null) add(CardMenuItem(CardMenuAction.ReaderMode))
     if (card.blob != null) add(CardMenuItem(CardMenuAction.Download))
+    if (canTurnPicture(card)) add(CardMenuItem(CardMenuAction.Rotate))
     if (!card.url.isNullOrBlank()) add(CardMenuItem(CardMenuAction.ViewSource))
     if (canCopy(card)) add(CardMenuItem(CardMenuAction.Copy))
     add(CardMenuItem(CardMenuAction.AddTags))
@@ -69,6 +72,13 @@ sealed interface CardMenuOutcome {
      * @property card The card with its new pin state.
      */
     data class PinChanged(val card: Card) : CardMenuOutcome
+
+    /**
+     * The card's picture turned a quarter clockwise; the sheet stays open for another turn.
+     *
+     * @property card The card with its new rotation.
+     */
+    data class Rotated(val card: Card) : CardMenuOutcome
 
     /**
      * The card's text is ready for the clipboard.
@@ -195,6 +205,10 @@ class CardActions(private val library: Library, private val saver: FileSaver) {
             CardMenuAction.Pin, CardMenuAction.Unpin -> {
                 val pin = item.action == CardMenuAction.Pin
                 library.setPinned(card.id, pin).then { CardMenuOutcome.PinChanged(card.withPin(pin)) }
+            }
+            CardMenuAction.Rotate -> {
+                val turn = (card.turn + 90) % 360
+                library.setRotation(card.id, turn).then { CardMenuOutcome.Rotated(card.copy(rotation = turn.takeIf { it != 0 })) }
             }
             CardMenuAction.DeleteCard -> library.trash(card.id).then { CardMenuOutcome.Deleted(card.id) }
             CardMenuAction.RemoveFromSpace -> {

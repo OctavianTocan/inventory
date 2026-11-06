@@ -145,7 +145,7 @@ internal fun GalleryTile(
     val colors = LibraryStyle.colors
     val kind = tileKind(card)
     val picture = galleryPicture(card)
-    val imageModel = rememberGalleryImage(picture, imageRequestSizePx)
+    val imageModel = rememberGalleryImage(picture, imageRequestSizePx, card.turn)
     val preview = rememberPicturePreview(card)
     val text = remember(card) { galleryText(card) }
     val pin = picture != null && productStandsTall(card)
@@ -261,16 +261,23 @@ private fun AudioTile(card: Card, highlight: Boolean) {
     }
 }
 
-/** What a tile loads for [picture]: its address, or a request at [imageRequestSizePx] cached under that address. */
+/**
+ * What a tile loads for [picture]: its address, or a request at [imageRequestSizePx] cached under that address. A
+ * picture the person turned ([turn] degrees clockwise) loads turned, cached apart from the upright one.
+ */
 @Composable
-internal fun rememberGalleryImage(picture: String?, imageRequestSizePx: Int?): Any? {
+internal fun rememberGalleryImage(picture: String?, imageRequestSizePx: Int?, turn: Int = 0): Any? {
     val context = LocalContext.current
-    return remember(picture, imageRequestSizePx, context) {
+    return remember(picture, imageRequestSizePx, turn, context) {
         picture?.let {
             val url = resolveMediaUrl(BuildConfig.SERVER_URL, it)
-            if (imageRequestSizePx == null) url else ImageRequest.Builder(context).data(url)
-                .size(imageRequestSizePx.coerceAtLeast(1)).scale(Scale.FIT)
-                .memoryCacheKey(url).placeholderMemoryCacheKey(url).build()
+            if (imageRequestSizePx == null) turnedPicture(context, url, turn)
+            else {
+                val key = if (turn == 0) url else "$url#turn$turn"
+                ImageRequest.Builder(context).data(url).turned(turn)
+                    .size(imageRequestSizePx.coerceAtLeast(1)).scale(Scale.FIT)
+                    .memoryCacheKey(key).placeholderMemoryCacheKey(key).build()
+            }
         }
     }
 }
@@ -288,6 +295,8 @@ internal fun galleryBackdrop(card: Card, colors: LibraryColors): MosaicBackdrop 
     }
     val onlyPicture = picture != null && tileKind(card) != TileKind.Post && !(galleryKeepsText(card) && galleryText(card).isNotBlank())
     if (!onlyPicture) return MosaicBackdrop(paper, null)
+    // The fill draws the address upright, so a turned picture's fill is its colour alone.
+    if (card.turn != 0) return MosaicBackdrop(parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper, null)
     return MosaicBackdrop(parseHexColor(card.cover?.dominantColor ?: card.blob?.dominantColor) ?: paper, resolveMediaUrl(BuildConfig.SERVER_URL, picture))
 }
 

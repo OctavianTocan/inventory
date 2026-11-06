@@ -227,3 +227,27 @@ fn a_malformed_push_is_rejected_whole() {
     assert_eq!(status(send(&library, "phone-a", (1..=PUSH_LIMIT + 1).map(|id| pin(id as f64)).collect())), Some(400));
     assert_eq!(card(&library, first).get("flags").as_f64().map(|flags| flags as i64 & 512), Some(0), "nothing of a rejected push applies");
 }
+
+#[test]
+fn a_picture_turned_on_the_phone_stays_turned_and_a_full_turn_takes_it_off() {
+    let library = library();
+    let first = library.ids[0].as_str();
+    let answer = send(
+        &library,
+        "phone-a",
+        vec![
+            change(1.0, "rotate", obj! { "cardId" => first, "rotation" => 90.0 }.into()),
+            change(2.0, "rotate", obj! { "cardId" => first, "rotation" => 45.0 }.into()),
+            change(3.0, "rotate", obj! { "cardId" => first, "rotation" => "90" }.into()),
+        ],
+    )
+    .unwrap();
+    assert_eq!(numbers(answer.get("refused")), vec![2.0, 3.0], "only quarter turns are kept");
+    assert_eq!(card(&library, first).get("rotation").as_f64(), Some(90.0));
+
+    send(&library, "phone-a", vec![change(4.0, "rotate", obj! { "cardId" => first, "rotation" => -90.0 }.into())]).unwrap();
+    assert_eq!(card(&library, first).get("rotation").as_f64(), Some(270.0), "a turn the other way is kept as the clockwise one");
+
+    send(&library, "phone-a", vec![change(5.0, "rotate", obj! { "cardId" => first, "rotation" => 360.0 }.into())]).unwrap();
+    assert!(card(&library, first).get("rotation").is_nullish(), "an upright picture sends no rotation");
+}

@@ -170,6 +170,8 @@ class FakeLibrary(
 
     override suspend fun setPinned(cardId: String, pinned: Boolean) = write("pin:$cardId:$pinned") {}
 
+    override suspend fun setRotation(cardId: String, rotation: Int) = write("rotate:$cardId:$rotation") {}
+
     override suspend fun trash(cardId: String) = write("trash:$cardId") {}
 
     override suspend fun removeFromSpace(spaceId: String, cardId: String) = write("unspace:$spaceId:$cardId") {}

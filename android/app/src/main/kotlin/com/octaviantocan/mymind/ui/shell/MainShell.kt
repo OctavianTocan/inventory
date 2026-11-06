@@ -561,8 +561,10 @@ fun MainShell(
             onSelect = { item ->
                 scope.launch {
                     val opensSubmenu = !item.locked && (item.action == CardMenuAction.AddTags || item.action == CardMenuAction.AddToSpace)
+                    // Rotate keeps the sheet open, so each tap turns the picture another quarter.
+                    val staysOpen = opensSubmenu || item.action == CardMenuAction.Rotate
                     if (sheetState.closing) return@launch
-                    if (!opensSubmenu) {
+                    if (!staysOpen) {
                         if (!sheetState.startClosing()) return@launch
                         sheetState.hide(motion)
                         menuOpen = false
@@ -584,6 +586,7 @@ fun MainShell(
                             if (opened?.card?.id == target.card.id) dropCard()
                         }
                         is CardMenuOutcome.PinChanged -> updateCard(outcome.card)
+                        is CardMenuOutcome.Rotated -> updateCard(outcome.card)
                         is CardMenuOutcome.Downloaded -> Toast.makeText(context, DOWNLOADED, Toast.LENGTH_SHORT).show()
                         is CardMenuOutcome.Read -> read(outcome.card, target.spaceId)
                         is CardMenuOutcome.ShowSimilar -> {

@@ -36,6 +36,12 @@ fn has(body: &Value, key: &str) -> Result<bool> {
     }
 }
 
+// Quarter turns clockwise, 0 to 3, of a rotation in degrees that is a whole multiple of 90.
+fn quarter_turns(rotation: &Value) -> Option<i32> {
+    let Value::Number(degrees) = rotation else { return None };
+    (degrees.is_finite() && degrees.fract() == 0.0 && degrees % 90.0 == 0.0 && degrees.abs() <= 3600.0).then(|| ((*degrees / 90.0) as i32).rem_euclid(4))
+}
+
 fn field<'v>(body: &'v Value, key: &str) -> Result<&'v Value> {
     if body.is_nullish() { Err(Error::invalid(format!("Cannot read properties of null (reading '{key}')"))) } else { Ok(body.get(key)) }
 }
@@ -565,15 +571,26 @@ impl Writer {
     ///
     /// # Arguments
     /// * `id` - Card id.
-    /// * `body` - Fields among `title`, `summary`, `description`, `flags`, `prose`, `source`, `siteName`, `domain`, `ocr`, `author`, `brand`, `format`, `objectNames`. A `summary` is kept as the user's own.
+    /// * `body` - Fields among `title`, `summary`, `description`, `flags`, `prose`, `source`, `siteName`, `domain`, `ocr`, `author`, `brand`, `format`, `objectNames`, and Inventory's `rotation`. A `summary` is kept as the user's own. `rotation` is how far the card's picture is turned clockwise, in degrees, a whole multiple of 90; it is kept from 0 to 270 and 0 removes it.
     ///
     /// # Returns
     /// An empty object.
     ///
     /// # Errors
-    /// Status 404 for an unknown card; status 400 for invalid flags or prose; the database's error.
+    /// Status 404 for an unknown card; status 400 for invalid flags, prose or rotation; the database's error.
     pub fn patch(&self, id: &str, body: &Value) -> Result<Value> {
         let mut row = self.load(id)?;
+        if has(body, "rotation")? {
+            match quarter_turns(body.get("rotation")) {
+                Some(0) => {
+                    row.extras.remove("rotation");
+                }
+                Some(turns) => {
+                    row.extras.set("rotation", Value::Number(f64::from(turns * 90)));
+                }
+                None => return Err(fail(400, "Invalid rotation")),
+            }
+        }
         if has(body, "flags")? {
             let flags = body.get("flags");
             let valid = matches!(flags, Value::Number(number) if number.is_finite() && number.fract() == 0.0 && *number >= 0.0);

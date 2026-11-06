@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.90 (101), 2026-11-06
+Turn a picture that came in the wrong way round.
+
+### Added
+- A picture's options now have Rotate. Each tap turns it a quarter clockwise, the options stay open so you can keep turning, and the picture stays turned in your library, the reader and when you share it.
+
 ## 0.6.87 (98), 2026-11-06
 Add Inventory to ChatGPT or Claude from the app.
 

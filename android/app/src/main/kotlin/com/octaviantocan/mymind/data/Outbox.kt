@@ -27,6 +27,10 @@ sealed interface Edit {
     @Serializable @SerialName("pin")
     data class Pin(override val cardId: String, val pinned: Boolean) : Edit
 
+    /** @property rotation How far the card's picture turns clockwise, in degrees: 0, 90, 180 or 270. */
+    @Serializable @SerialName("rotate")
+    data class Rotate(override val cardId: String, val rotation: Int) : Edit
+
     /** Moves the card to the trash. */
     @Serializable @SerialName("trash")
     data class Trash(override val cardId: String) : Edit
@@ -125,6 +129,7 @@ fun Edit.CreateCard.placeholder(): Card {
  */
 fun Card.edited(edit: Edit): Card? = when (edit) {
     is Edit.Pin -> if (edit.pinned) copy(flags = flags or PINNED_FLAG) else copy(flags = flags and PINNED_FLAG.inv(), pinPosition = null)
+    is Edit.Rotate -> copy(rotation = edit.rotation.takeIf { it != 0 })
     is Edit.Trash -> null
     is Edit.Note -> copy(note = edit.text)
     is Edit.AddTag -> if (tags.orEmpty().any { it.name == edit.name }) this else copy(tags = tags.orEmpty() + Tag(edit.localId, edit.name))
@@ -279,6 +284,7 @@ class Outbox(
 
     private suspend fun deliver(edit: Edit): ApiResult<Unit> = when (edit) {
         is Edit.Pin -> server.setPinned(edit.cardId, edit.pinned)
+        is Edit.Rotate -> server.setRotation(edit.cardId, edit.rotation)
         is Edit.Trash -> server.trash(edit.cardId)
         is Edit.Note -> server.setNote(edit.cardId, edit.text)
         is Edit.AddTag -> when (val answer = server.addTag(edit.cardId, edit.name)) {

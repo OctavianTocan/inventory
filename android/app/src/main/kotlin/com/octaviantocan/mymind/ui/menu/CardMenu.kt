@@ -44,6 +44,7 @@ enum class CardMenuAction(val label: String, @param:DrawableRes val icon: Int, v
     SameVibe("Same Vibe", R.drawable.samevibeicon),
     ReaderMode("Reader Mode", R.drawable.readermodeicon),
     Download("Download", R.drawable.downloadicon),
+    Rotate("Rotate", R.drawable.rotateicon),
     ViewSource("View original source", R.drawable.visitsourceicon),
     Copy("Copy to clipboard", R.drawable.copytoclipboardicon),
     AddTags("Add tags", R.drawable.addtagsicon),
@@ -159,8 +160,8 @@ fun CardMenuContent(
 
 private val SPACE_ACTIONS = setOf(CardMenuAction.AddToSpace, CardMenuAction.RemoveFromSpace)
 private val CHOICES = listOf(CardMenuAction.AddToSpace, CardMenuAction.RemoveFromSpace, CardMenuAction.SameVibe, CardMenuAction.ReaderMode)
-private val TILES = listOf(CardMenuAction.ViewSource, CardMenuAction.Copy, CardMenuAction.Download, CardMenuAction.Pin,
-    CardMenuAction.Unpin, CardMenuAction.AddTags)
+private val TILES = listOf(CardMenuAction.ViewSource, CardMenuAction.Copy, CardMenuAction.Download, CardMenuAction.Rotate,
+    CardMenuAction.Pin, CardMenuAction.Unpin, CardMenuAction.AddTags)
 
 /** The kit's small, muted, non-folding section heading, outside the raised group. */
 @Composable

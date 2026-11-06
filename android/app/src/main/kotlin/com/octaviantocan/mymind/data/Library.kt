@@ -106,6 +106,13 @@ interface Library {
     suspend fun setPinned(cardId: String, pinned: Boolean): ApiResult<Unit>
 
     /**
+     * @param cardId Card whose picture turns.
+     * @param rotation Degrees clockwise: 0, 90, 180 or 270.
+     * @return Success, or the failure.
+     */
+    suspend fun setRotation(cardId: String, rotation: Int): ApiResult<Unit>
+
+    /**
      * @param cardId Card to move to the trash.
      * @return Success, or the failure.
      */

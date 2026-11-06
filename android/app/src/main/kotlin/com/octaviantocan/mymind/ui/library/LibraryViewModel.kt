@@ -348,6 +348,7 @@ class LibraryViewModel(
                 replaceEverywhere(outcome.card)
                 pinned.refresh()
             }
+            is CardMenuOutcome.Rotated -> replaceEverywhere(outcome.card)
             is CardMenuOutcome.ShowSimilar -> search.similarTo(outcome.card)
             is CardMenuOutcome.OpenSubmenu -> when (outcome.submenu) {
                 CardSubmenu.Tags -> loadTagChoices()

@@ -108,6 +108,8 @@ data class Card(
     /** For a repeat save ThyMind folded into an earlier card and put in the trash, that earlier card's id. */
     val mergedInto: String? = null,
     val pinPosition: Long? = null,
+    /** How far the person turned the card's picture clockwise, in degrees (90, 180 or 270); null when upright. */
+    val rotation: Int? = null,
     val cover: Cover? = null,
     val blob: Blob? = null,
     val prose: JsonElement? = null,
@@ -303,6 +305,10 @@ data class NewSpaceBody(val name: String, val color: String)
  */
 @Serializable
 data class RenameSpaceBody(val name: String)
+
+/** `PATCH /objects/{id}` body that turns a card's picture: degrees clockwise, 0 for upright. */
+@Serializable
+data class RotationBody(val rotation: Int)
 
 /**
  * An answer that names what it created.

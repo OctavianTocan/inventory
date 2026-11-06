@@ -108,6 +108,9 @@ fn apply(store: &Store, writer: &Writer, name: &str, args: &Value) -> Result<Opt
             let pinned = args.get("pinned").as_bool().ok_or_else(|| bad("bad-change"))?;
             writer.flag(&card(&**db, args)?, 512, pinned, &Value::Undefined)?;
         }
+        "rotate" => {
+            writer.patch(&card(&**db, args)?, &obj! { "rotation" => args.get("rotation").clone() }.into())?;
+        }
         "trash" => {
             writer.trash(&card(&**db, args)?, false)?;
         }
@@ -157,7 +160,8 @@ fn refused(error: &Error) -> bool {
 /// sent again, as after an answer lost on the way, is skipped instead of applied twice. A change the library turns
 /// down (a card or space that is gone, a malformed change, a name this server does not know) is recorded as handled
 /// and listed in `refused`; the phone takes the server's version. Names: `pin` (`cardId`, `pinned`), `trash`
-/// (`cardId`), `note` (`cardId`, `text`, one paragraph per line), `add-tag` (`cardId`, `name`), `remove-tag`
+/// (`cardId`), `rotate` (`cardId`, `rotation`, the picture's clockwise turn in degrees, as [`Writer::patch`] keeps
+/// it), `note` (`cardId`, `text`, one paragraph per line), `add-tag` (`cardId`, `name`), `remove-tag`
 /// (`tagId`), `add-to-space` and `remove-from-space` (`cardId`, `spaceId`), `create-space` (`spaceId`, 32 lowercase
 /// hex digits the phone made, `name`, `color`), `delete-space` (`spaceId`), `create-card` (`cardId` made the same
 /// way, `content`, `source`, `note`) and `visit` (`cardId`, a find opened from Back today or the sky, as

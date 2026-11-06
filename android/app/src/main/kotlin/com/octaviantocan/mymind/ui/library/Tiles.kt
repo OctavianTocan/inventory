@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -158,7 +159,7 @@ fun CardPicture(card: Card, play: Boolean, modifier: Modifier = Modifier, whole:
             .background(pictureBackground(card)),
     ) {
         if (src != null) AsyncImage(
-            model = resolveMediaUrl(BuildConfig.SERVER_URL, src),
+            model = turnedPicture(LocalContext.current, resolveMediaUrl(BuildConfig.SERVER_URL, src), card.turn),
             contentDescription = null,
             placeholder = preview,
             error = preview,
@@ -190,7 +191,7 @@ private fun PictureImage(card: Card, modifier: Modifier = Modifier) {
     val src = galleryPicture(card) ?: return
     val preview = rememberPicturePreview(card)
     AsyncImage(
-        model = resolveMediaUrl(BuildConfig.SERVER_URL, src),
+        model = turnedPicture(LocalContext.current, resolveMediaUrl(BuildConfig.SERVER_URL, src), card.turn),
         contentDescription = null,
         placeholder = preview,
         error = preview,

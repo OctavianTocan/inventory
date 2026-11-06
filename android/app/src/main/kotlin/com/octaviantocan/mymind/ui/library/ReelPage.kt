@@ -90,7 +90,7 @@ private fun siteName(card: Card): String? = listOf(card.siteName, card.domain).f
 internal fun GalleryReelPage(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, imageRequestSizePx: Int, modifier: Modifier) {
     val info = remember(card) { reelInfo(card) }
     val picture = galleryPicture(card)
-    val image = rememberGalleryImage(picture, imageRequestSizePx)
+    val image = rememberGalleryImage(picture, imageRequestSizePx, card.turn)
     val preview = rememberPicturePreview(card)
     val previews = LocalVideoPreviews.current
     val video = remember(card) { previewVideo(card) }

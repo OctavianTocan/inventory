@@ -260,6 +260,7 @@ impl AppApi {
             ("suggestedSpace", extras.get("suggestedSpace").get("id").clone()),
             ("mergedInto", extras.get("mergedInto").clone()),
             ("pinPosition", extras.get("pinPosition").clone()),
+            ("rotation", extras.get("rotation").clone()),
             ("cover", cover),
             ("blob", blob),
             ("prose", prose),

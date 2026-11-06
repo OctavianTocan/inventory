@@ -58,11 +58,12 @@ internal fun mosaicSpan(card: Card): MosaicSpan {
     }
 }
 
-/** Width over height of the card's stored picture, or null when it has no usable size. */
+/** Width over height of the card's stored picture as the person turned it, or null when it has no usable size. */
 internal fun storedRatio(card: Card): Float? {
     val width = card.cover?.width ?: card.blob?.width
     val height = card.cover?.height ?: card.blob?.height
-    return if (width != null && height != null && width > 0 && height > 0) width.toFloat() / height else null
+    if (width == null || height == null || width <= 0 || height <= 0) return null
+    return if (card.turnedSideways) height.toFloat() / width else width.toFloat() / height
 }
 
 /** The bands of [mosaicLevel], for callers that only need which cards share a slot. */

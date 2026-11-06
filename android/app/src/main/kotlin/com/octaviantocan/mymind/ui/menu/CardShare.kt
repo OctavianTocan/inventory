@@ -15,6 +15,8 @@ import com.octaviantocan.mymind.BuildConfig
 import com.octaviantocan.mymind.data.resolveMediaUrl
 import com.octaviantocan.mymind.ui.library.cardHeading
 import com.octaviantocan.mymind.ui.library.galleryPicture
+import com.octaviantocan.mymind.ui.library.turn
+import com.octaviantocan.mymind.ui.library.turned
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -112,7 +114,7 @@ private fun cardImageDetail(card: Card): String {
  */
 internal suspend fun loadPicture(context: Context, card: Card): Bitmap? {
     val src = galleryPicture(card) ?: return null
-    val request = ImageRequest.Builder(context).data(resolveMediaUrl(BuildConfig.SERVER_URL, src)).allowHardware(false).build()
+    val request = ImageRequest.Builder(context).data(resolveMediaUrl(BuildConfig.SERVER_URL, src)).turned(card.turn).allowHardware(false).build()
     val result = SingletonImageLoader.get(context).execute(request) as? SuccessResult ?: return null
     return result.image.toBitmap()
 }

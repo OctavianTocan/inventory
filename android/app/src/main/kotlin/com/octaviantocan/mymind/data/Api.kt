@@ -406,6 +406,16 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
         write(Request.Builder().url(url("objects/$id/${if (pinned) "pin" else "unpin"}")).post("{}".toRequestBody(JSON_TYPE)))
 
     /**
+     * Turns the card's picture.
+     *
+     * @param id Card id.
+     * @param rotation Degrees clockwise: 0, 90, 180 or 270.
+     * @return Success, or the failure.
+     */
+    suspend fun setRotation(id: String, rotation: Int): ApiResult<Unit> =
+        write(Request.Builder().url(url("objects/$id")).patch(AppJson.encodeToString(RotationBody(rotation)).toRequestBody(JSON_TYPE)))
+
+    /**
      * Moves the card to the trash.
      *
      * @param id Card id.

@@ -119,6 +119,8 @@ class Repository(private val api: MymindApi, private val session: Session, priva
 
     override suspend fun setPinned(cardId: String, pinned: Boolean): ApiResult<Unit> = api.setPinned(cardId, pinned)
 
+    override suspend fun setRotation(cardId: String, rotation: Int): ApiResult<Unit> = api.setRotation(cardId, rotation)
+
     override suspend fun trash(cardId: String): ApiResult<Unit> = api.trash(cardId)
 
     override suspend fun removeFromSpace(spaceId: String, cardId: String): ApiResult<Unit> =

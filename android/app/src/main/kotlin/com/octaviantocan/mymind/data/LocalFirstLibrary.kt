@@ -95,6 +95,9 @@ class LocalFirstLibrary(
     override suspend fun setPinned(cardId: String, pinned: Boolean): ApiResult<Unit> =
         change(Edit.Pin(cardId, pinned), Unit) { server.setPinned(cardId, pinned) }
 
+    override suspend fun setRotation(cardId: String, rotation: Int): ApiResult<Unit> =
+        change(Edit.Rotate(cardId, rotation), Unit) { server.setRotation(cardId, rotation) }
+
     override suspend fun trash(cardId: String): ApiResult<Unit> = change(Edit.Trash(cardId), Unit) { server.trash(cardId) }
 
     override suspend fun removeFromSpace(spaceId: String, cardId: String): ApiResult<Unit> =
