@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.80 (91), 2026-11-06
+A new icon for Inventory.
+
+### Changed
+- The app icon is now a backpack drawn as a constellation, with a gold star at its centre, on a night sky.
+- With themed icons on, the icon shows the same backpack in your phone's colours.
+
 ## 0.6.79 (90), 2026-11-06
 Rename a space, and hold a space to see its options.
 

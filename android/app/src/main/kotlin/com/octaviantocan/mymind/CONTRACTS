@@ -16,3 +16,9 @@ wiped at sign-out, dropped when the server answers stop, and never stopping or s
 app when they cannot be sent. The app MUST NOT mention them, and there is no switch.
 Source: Tavi, 5 November 2026, the analytics brief: "Everything, card ids too", "Not
 mentioned", and "Build it, server first".
+
+@cc [owner:OctavianTocan,label:design] app-icon-backpack-constellation
+The launcher icon MUST be icon 11 "Backpack constellation" from the Inventory app icons canvas:
+a backpack drawn as a star figure with a gold star at its centre, on night teal, with a
+monochrome layer so Android's themed icons show the same figure. Source: Tavi, 6 November
+2026 ("Let's build 11 for now").
