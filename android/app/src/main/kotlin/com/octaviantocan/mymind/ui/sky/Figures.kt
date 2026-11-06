@@ -114,3 +114,27 @@ internal val FIGURES = listOf(
         "M 98.1 22.3 A 58 58 0 0 1 183.2 89.9 M 20 112 A 70 70 0 1 1 160 112 A 70 70 0 1 1 20 112 M 34 112 A 56 56 0 1 1 146 112 A 56 56 0 1 1 34 112 M 62 132 L 56 92 L 76 110 L 90 82 L 104 110 L 124 92 L 118 132 Z M 64 142 L 116 142",
     ),
 )
+
+/**
+ * What the finds of a constellation drawn as [figure] have in common, said under its name in the sky. The server picks
+ * the figure for what its finds are about (`rust/crates/core/src/sky.rs`, FIGURES), so this says that in the sky's
+ * words; empty for a figure this app does not know.
+ */
+internal fun aboutOf(figure: String): String = FIGURE_ABOUT[figure].orEmpty()
+
+private val FIGURE_ABOUT = mapOf(
+    "ship" to "Places and journeys you saved for one day",
+    "cup" to "Home, food and slow mornings",
+    "book" to "Things to read, write and learn",
+    "mountain" to "The outdoors, sport and big goals",
+    "lantern" to "Advice and words to find your way",
+    "camera" to "Photos, film and things to look at",
+    "harp" to "Music, sound and voices",
+    "tree" to "Plants, health and living things",
+    "house" to "Homes, rooms and places people make",
+    "compass" to "Maps, research and discovery",
+    "anvil" to "Tools, code and how things are made",
+    "bird" to "Art, imagination and what could be",
+    "wave" to "The sea, calm and the mind",
+    "coin" to "Money, shopping and work",
+)

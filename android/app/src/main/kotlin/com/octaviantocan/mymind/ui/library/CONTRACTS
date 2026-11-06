@@ -227,8 +227,8 @@ away (gallery-reels-at-one-column). The page title ("Your
 inventory", "All Spaces"; "Your inventory" replaced mymind's "Your mind" on Tavi's pick,
 6 November 2026) MUST scroll away with the page. The controls MUST remain
 available for an empty, loading or failed feed. Pull to refresh and mosaic gestures
-belong to the scrolling page; search and browsing MUST retain independent scroll
-positions.
+belong to the scrolling page (on All with a sky, the pull at the top looks up instead,
+sky-pull-down-looks-up); search and browsing MUST retain independent scroll positions.
 Source: Tavi, 22 October 2026, gallery polish in the Codex conversation; the recorded
 review of the same day ("the title should not be sticky", "the buttons should be
 sticky but without a background"). Rediscover left the row on 28 October 2026, see

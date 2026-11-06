@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.97 (108), 2026-11-06
+Your sky and Back today, rebuilt to look and move like the prototype.
+
+### Changed
+- Pull down at the top of your inventory to look up into Your sky; swipe up or press Back to come down again. The sky no longer has an X button.
+- Your sky is now the prototype's sky: a deep dome with a band of nebula, stars twinkling at three depths, lit stars that glow with spikes and the prototype's own bloom, and gold lines with light travelling between them. Each constellation shows its name and one line saying what its finds have in common.
+- Tapping a star moves in on it and its find condenses out of starlight, as in 13 Condense. Swipe to travel to the next star along the line; tap empty sky or press Back to see the whole sky again.
+- When you close a find you opened from Back today, its star flies into the star button, which counts the stars waiting to light. Looking up lights each of them with a shooting star.
+- Finds back today that you have not opened show as flickering holograms of themselves instead of under leaves. A tap restores one in a burst of light and opens it.
+- While there is a sky, pulling down at the top looks up instead of refreshing, and looking up syncs your library.
+
 ## 0.6.96 (107), 2026-11-06
 Copy and save pictures, one find or many.
 

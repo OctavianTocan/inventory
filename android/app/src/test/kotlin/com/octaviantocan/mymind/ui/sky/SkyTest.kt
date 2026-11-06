@@ -1,44 +1,39 @@
 package com.octaviantocan.mymind.ui.sky
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
-import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
-import com.octaviantocan.mymind.data.Blob
 import com.octaviantocan.mymind.data.Constellation
 import com.octaviantocan.mymind.data.Sky
 import com.octaviantocan.mymind.data.SkyStar
 import com.octaviantocan.mymind.ui.PHONE_QUALIFIERS
 import com.octaviantocan.mymind.ui.library.EverythingContent
 import com.octaviantocan.mymind.ui.library.FeedState
-import com.octaviantocan.mymind.ui.library.galleryTileShowsWords
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.setPhoneContent
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.Instant
 
 private fun ids(prefix: String) = (0 until 6).map { "$prefix$it" }
 
@@ -49,18 +44,21 @@ private val DONE = listOf(
     Constellation(3, "bird", "The Dreamer", "e0", ids("e"), lit = ids("e"), completed = "2026-10-30T10:00:00Z"),
 )
 
-private val LOOSE = (1..6).map { "l$it" }
+private val LOOSE = (1..3).map { "l$it" }
 
 private val SKY = Sky(
-    day = "2026-11-05",
-    back = listOf("c3", "l1", "l2"),
+    day = "2026-11-06",
+    back = listOf("c3", "l1", "x1"),
     active = ACTIVE,
     done = DONE,
-    stars = (listOf("c1", "c2") + ids("d") + ids("e") + LOOSE).map { SkyStar(it, "2026-11-01T10:00:00Z") },
+    stars = (listOf("c1", "c2") + ids("d").drop(1) + ids("e").drop(1) + LOOSE).map { SkyStar(it, "2026-11-01T10:00:00Z") },
 )
 
-private val FINDS = (ids("c") + ids("d") + ids("e") + LOOSE).associateWith { testCard(it, title = "Find $it") } +
+private val FINDS = (ids("c") + ids("d") + ids("e") + LOOSE + "x1").associateWith { testCard(it, title = "Find $it") } +
     ("c3" to testCard("c3", title = "Harbour at dusk"))
+
+// Every star but c2 has been seen light: c2 waits for the next look up.
+private val SEEN = SKY.stars.map { it.id }.toSet() - "c2"
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -69,7 +67,7 @@ class SkyTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun everyServerFigureHasSixJoinedStarsAndArtInItsSquare() {
+    fun everyServerFigureHasSixJoinedStarsArtAndWordsForWhatItHolds() {
         // The server's FIGURES in rust/crates/core/src/sky.rs, in its order.
         val server = listOf("ship", "cup", "book", "mountain", "lantern", "camera", "harp", "tree", "house", "compass", "anvil", "bird", "wave", "coin")
         assertEquals(server, FIGURES.map { it.id })
@@ -78,115 +76,142 @@ class SkyTest {
             assertTrue(figure.id, figure.stars.all { it.x in 0f..FIGURE_BOX && it.y in 0f..FIGURE_BOX })
             assertTrue(figure.id, figure.edges.all { (a, b) -> a != b && a in figure.stars.indices && b in figure.stars.indices })
             assertEquals(figure.id, figure.stars.indices.toSet(), figure.edges.flatMap { listOf(it.first, it.second) }.toSet())
-            val bounds = figure.path.getBounds()
-            assertTrue(figure.id, bounds.width >= FIGURE_BOX / 2 && bounds.left >= -12f && bounds.right <= FIGURE_BOX + 12f)
+            assertTrue(figure.id, aboutOf(figure.id).isNotBlank())
+            assertTrue(figure.id, figureStrokes(figure.art).isNotEmpty())
         }
         assertEquals("ship", figureOf("a figure from a newer server").id)
     }
 
     @Test
-    fun theActiveConstellationIsLargeAndLooseStarsKeepOutOfIt() {
-        val layout = skyLayout(SKY, 1080f, 2520f, 250f, 150f)
-        val active = layout.constellations.first()
-        assertTrue(active.active)
-        assertEquals(ids("c"), active.stars.map { it.id })
-        assertEquals(listOf(true, true, true, false, false, false), active.stars.map { it.lit })
-        assertFalse(active.complete)
-        val done = layout.constellations.drop(1)
-        assertEquals(listOf("bird", "lantern"), done.map { it.figure.id })
-        assertTrue(done.all { it.complete && it.size < active.size / 2 })
-        assertEquals(LOOSE.toSet(), layout.loose.map { it.id }.toSet())
-        val half = active.size / 2f
-        for (star in layout.stars) assertTrue(star.id, star.at.x in 0f..1080f && star.at.y in 250f..2370f)
-        for (star in layout.loose) {
-            val inside = kotlin.math.abs(star.at.x - active.center.x) < half && kotlin.math.abs(star.at.y - active.center.y) < half
-            assertFalse(star.id, inside)
-        }
-        // The same find sits in the same place every time.
-        assertEquals(layout.stars.map { it.at }, skyLayout(SKY, 1080f, 2520f, 250f, 150f).stars.map { it.at })
+    fun thePlanLightsWaitingFindsInFrontOfThePersonAndAFinishedOneFirst() {
+        val plan = skyPlan(SKY, SEEN, emptySet()).plan
+        assertEquals(1L, plan.center?.id)
+        assertEquals(listOf("c2"), plan.pending)
+        assertEquals(listOf(2L, 3L), plan.slots.map { it.id })
+        assertEquals(LOOSE, plan.loose)
+        // A star still flying to the button is not lit and does not wait yet.
+        val flying = skyPlan(SKY, SEEN + "c2", setOf("c1")).plan
+        assertFalse("c1" in flying.center!!.lit)
+        assertTrue(flying.pending.isEmpty())
+        // A constellation finished while the sky was away comes to the middle first, then the next forms.
+        val finished = SKY.copy(done = DONE + Constellation(4, "cup", "The Hearth", "f0", ids("f"), lit = ids("f"), completed = "2026-11-06T09:00:00Z"),
+            stars = SKY.stars + SkyStar("f5", "2026-11-06T09:00:00Z"))
+        val staged = skyPlan(finished, SEEN + "c2", emptySet()).plan
+        assertEquals(4L, staged.center?.id)
+        assertEquals(listOf(1L), staged.next.map { it.id })
+        assertEquals(listOf("f5"), staged.pending)
+        // Before the seen stars are read nothing waits.
+        assertTrue(skyPlan(SKY, null, emptySet()).plan.pending.isEmpty())
     }
 
     @Test
-    fun aTappedStarCondensesIntoItsFindWhichOpensAndASwipeTravelsAlongTheLines() {
-        runBlocking { Nebula.picture() }
-        val opened = mutableListOf<String>()
-        var closed = false
-        compose.setPhoneContent(true) { SkyScreen(SKY, FINDS, { opened += it }, { closed = true }) }
-        compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithText("Your sky").assertIsDisplayed()
-        compose.onNodeWithText("The Voyager").assertIsDisplayed()
-        compose.onRoot().captureRoboImage("screenshots/sky.png")
-        compose.onAllNodesWithContentDescription("Find c0, a lit star")[0].assertIsDisplayed()
-
-        compose.onNodeWithContentDescription("Harbour at dusk, a dark star").performClick()
-        compose.mainClock.advanceTimeBy(FOCUS_MS / 2L + CONDENSE_MS * 2L / 5L)
-        compose.onRoot().captureRoboImage("screenshots/sky_condensing.png")
-        compose.mainClock.advanceTimeBy(CONDENSE_MS.toLong())
-        compose.onRoot().captureRoboImage("screenshots/sky_condensed.png")
-        assertTrue("the find opens only when tapped", opened.isEmpty())
-        // A find of words shows its name on the tile, so it is not named again under it.
-        compose.onAllNodesWithText("Harbour at dusk").assertCountEquals(1)
-        compose.onNodeWithContentDescription("Harbour at dusk").performClick()
-        assertEquals(listOf("c3"), opened)
-
-        // The mast's star lies above the ship; dragging the sky left brings the star to its right, joined by a line.
-        compose.onRoot().performTouchInput { swipeLeft(startX = centerX + 200f, endX = centerX - 200f) }
-        compose.mainClock.advanceTimeBy(GLIDE_MS + CONDENSE_MS + 64L)
-        compose.onNodeWithContentDescription("Find c4").assertIsDisplayed()
-        compose.onAllNodesWithContentDescription("Harbour at dusk").assertCountEquals(0)
-        assertEquals("a swipe across the find does not open it", listOf("c3"), opened)
-
-        // A tap on empty sky moves back out; Close shuts the sky.
-        compose.onRoot().performTouchInput { click(Offset(width * 0.03f, height * 0.075f)) }
-        compose.mainClock.advanceTimeBy(FOCUS_MS + 64L)
-        compose.onAllNodesWithContentDescription("Find c4").assertCountEquals(0)
-        compose.onNodeWithContentDescription("Close the sky").performClick()
-        assertTrue(closed)
+    fun aFindIsNamedInOneLine() {
+        assertEquals("Harbour at dusk", findTitle(testCard("a", title = "Harbour   at\ndusk")))
+        val long = findTitle(testCard("b", title = "A very long title for a find that goes on far past one line under its star"))
+        assertTrue(long.length <= 46 && long.endsWith("…"))
+        val now = Instant.parse("2026-11-06T12:00:00Z")
+        assertEquals(2f, hologramStage(testCard("c").copy(bumped = "2026-08-01T00:00:00Z", created = "2026-08-01T00:00:00Z"), now))
+        assertEquals(3f, hologramStage(testCard("d").copy(bumped = "2024-01-01T00:00:00Z", created = "2024-01-01T00:00:00Z"), now))
     }
 
     @Test
-    fun onlyAPictureIsNamedUnderItsTile() {
-        assertTrue(galleryTileShowsWords(testCard("w", title = "Harbour at dusk")))
-        assertFalse(galleryTileShowsWords(testCard("p", type = "Image", blob = Blob(path = "p.jpg", type = "image/jpeg"))))
-    }
-
-    @Test
-    fun aSwipeFindsTheStarThatLiesThatWay() {
-        val active = skyLayout(SKY, 1080f, 2520f, 250f, 150f).constellations.first()
-        // The ship: 3 is the mast top, 4 the sail's right foot, 5 the left, 1 the keel.
-        assertEquals(4, starToward(active, 3, Offset(1f, 1f)))
-        assertEquals(5, starToward(active, 3, Offset(-1f, 1f)))
-        assertEquals(3, starToward(active, 1, Offset(0f, -1f)))
-        assertEquals(null, starToward(active, 3, Offset(0f, -1f)))
-    }
-
-    @Test
-    fun theStarButtonShowsOnceTheSkyHasStarsAndOpensIt() {
-        var state by mutableStateOf(BackTodayState())
-        var opens = 0
+    fun pullingDownAtTheTopLooksUpAtTheSkyWhereAStarLightsAndASwipeUpComesBack() {
+        val state by mutableStateOf(BackTodayState(SKY, FINDS.filterKeys { it in SKY.back }.values.sortedBy { SKY.back.indexOf(it.id) }, FINDS, SEEN))
+        var refreshes = 0
+        val seen = mutableListOf<String>()
         compose.setPhoneContent(false) {
             EverythingContent(
-                feed = FeedState(endReached = true), searching = false, searchResults = null,
+                feed = FeedState(cards = (1..12).map { testCard("g$it", title = "Gallery $it") }, endReached = true), searching = false, searchResults = null,
                 typeChips = emptyList(), filter = null, suggestions = emptyList(),
                 onChoose = {}, onRemoveFilter = {}, onLoadMore = {}, onLoadMoreResults = {},
                 onRetry = {}, onOpenCard = {}, onOpenSettings = {}, onAdd = {},
-                backToday = state, onSkyOpened = { opens++ },
+                backToday = state, onRefresh = { refreshes++ }, onSeen = { seen += it },
             )
         }
-        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(100)
+        compose.onRoot().captureRoboImage("screenshots/sky_00_gallery.png")
+        compose.onAllNodesWithContentDescription("A find from your past, flickering as a hologram").assertCountEquals(2)
+        compose.onNodeWithContentDescription("Your sky, 1 waiting to light").assertExists()
+
+        // Pull down from the top of the page: the camera tilts up with the finger.
+        compose.onRoot().performTouchInput {
+            down(Offset(centerX, 500f))
+            repeat(24) { moveBy(Offset(0f, 25f)); advanceEventTime(16) }
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.onRoot().captureRoboImage("screenshots/sky_01_pull.png")
+        compose.onRoot().performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(1200)
+        compose.onRoot().captureRoboImage("screenshots/sky_02_looking_up.png")
+        assertEquals("looking up syncs the library", 1, refreshes)
+        compose.mainClock.advanceTimeBy(1700)
+        compose.onRoot().captureRoboImage("screenshots/sky_03_sky.png")
+        compose.mainClock.advanceTimeBy(4000)
+        compose.onRoot().captureRoboImage("screenshots/sky_04_lit.png")
+        assertEquals(listOf("c2"), seen)
+        compose.onNodeWithContentDescription("Your sky").assertExists()
+        compose.onAllNodesWithContentDescription("Close the sky").assertCountEquals(0)
+
+        // A swipe up comes back down to the page.
+        compose.onRoot().performTouchInput {
+            down(Offset(centerX, 1800f))
+            repeat(20) { moveBy(Offset(0f, -40f)); advanceEventTime(16) }
+            up()
+        }
+        compose.mainClock.advanceTimeBy(3200)
         compose.onAllNodesWithContentDescription("Your sky").assertCountEquals(0)
-        state = BackTodayState(SKY.copy(active = null, done = emptyList(), stars = emptyList()))
+        compose.onAllNodesWithContentDescription("A find from your past, flickering as a hologram").assertCountEquals(2)
+    }
+
+    @Test
+    fun aTappedStarCondensesIntoItsFindAndASwipeGlidesToTheNextStar() {
+        val sky = SkyState()
+        val opened = mutableListOf<String>()
+        compose.setPhoneContent(true) {
+            Box(Modifier.fillMaxSize()) {
+                SkyBackdrop(sky, skyPlan(SKY, SKY.stars.map { it.id }.toSet(), emptySet()), FINDS, paused = false, onOpenFind = { opened += it }, onSeen = {}, onLookUp = {})
+                SkyOverlay(sky)
+            }
+        }
         compose.mainClock.advanceTimeByFrame()
-        compose.onAllNodesWithContentDescription("Your sky").assertCountEquals(0)
-        state = BackTodayState(SKY, finds = FINDS)
-        compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithContentDescription("Your sky").performClick()
-        compose.mainClock.advanceTimeBy(SKY_OPEN_MS + 32L)
-        assertEquals(1, opens)
-        compose.onNodeWithTag("sky").assertIsDisplayed()
-        compose.onNodeWithText("The Voyager").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Close the sky").performClick()
-        compose.mainClock.advanceTimeBy(SKY_OPEN_MS + 32L)
-        compose.onAllNodesWithTag("sky").assertCountEquals(0)
+        sky.lookUp()
+        compose.mainClock.advanceTimeBy(3000)
+        assertTrue(sky.lookingUp)
+
+        // Harbour at dusk is the dark star at index 3, the mast's top.
+        val (x, y) = assertNotNullPoint(sky, 3)
+        compose.onRoot().performTouchInput { click(Offset(x, y)) }
+        compose.mainClock.advanceTimeBy(1100)
+        compose.onRoot().captureRoboImage("screenshots/sky_05_condensing.png")
+        compose.mainClock.advanceTimeBy(2000)
+        compose.onRoot().captureRoboImage("screenshots/sky_06_condensed.png")
+        assertEquals("Harbour at dusk", sky.scene.memTitle)
+        assertTrue("moving in does not open the find", opened.isEmpty())
+
+        // From the mast's top, a swipe up and to the left glides down to the sail's right foot (index 4).
+        compose.onRoot().performTouchInput {
+            down(Offset(centerX, centerY))
+            repeat(10) { moveBy(Offset(-30f, -30f)); advanceEventTime(16) }
+            up()
+        }
+        compose.mainClock.advanceTimeBy(450)
+        compose.onRoot().captureRoboImage("screenshots/sky_07_gliding.png")
+        compose.mainClock.advanceTimeBy(3000)
+        assertEquals("c4", sky.scene.focusedCard)
+        assertTrue("a swipe does not open the find", opened.isEmpty())
+
+        // A tap on the find opens it; a tap on empty sky moves back out.
+        compose.onRoot().performTouchInput { click(Offset(centerX, height * 0.9f)) }
+        assertEquals(listOf("c4"), opened)
+        compose.onRoot().performTouchInput { click(Offset(width * 0.05f, height * 0.12f)) }
+        compose.mainClock.advanceTimeBy(1500)
+        assertEquals(null, sky.scene.focusedCard)
+    }
+
+    private fun assertNotNullPoint(sky: SkyState, i: Int): Pair<Float, Float> {
+        val size = compose.onRoot().fetchSemanticsNode().size
+        val point = sky.painter.starPoint(sky.scene, i, size.width.toFloat(), size.height.toFloat())
+        assertNotNull(point)
+        return point!!
     }
 }

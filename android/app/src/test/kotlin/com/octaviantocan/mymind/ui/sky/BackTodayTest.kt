@@ -116,23 +116,53 @@ class BackTodayTest {
     }
 
     @Test
-    fun aCoveredFindIsHiddenUntilTappedThenOpensAsItsLeavesBlowAway() {
+    fun aFindOpenedFromBackTodayWaitsOnTheStarButtonUntilItsStarLightsInTheSky() = runTest {
+        val library = SkyLibrary(TODAY.copy(stars = listOf(SkyStar("old3"))))
+        val model = BackTodayModel(this, library, SkyMemory(), today = { DAY })
+        model.load()
+        advanceUntilIdle()
+        // On the first run every star already in the sky counts as seen.
+        assertEquals(setOf("old3"), model.state.value.seen)
+        assertEquals(0, model.state.value.waiting)
+
+        model.uncover(FINDS[0])
+        advanceUntilIdle()
+        assertEquals("its star flies only once the find closes", setOf("old1"), model.state.value.arriving)
+        assertEquals(0, model.state.value.waiting)
+        model.landed("old1")
+        assertEquals(1, model.state.value.waiting)
+        model.markSeen("old1")
+        advanceUntilIdle()
+        assertEquals(0, model.state.value.waiting)
+
+        // One opened from its own star never flies; it lights where it is.
+        model.uncover(FINDS[1], arriving = false)
+        advanceUntilIdle()
+        assertTrue(model.state.value.arriving.isEmpty())
+    }
+
+    @Test
+    fun aHologramFindRestoresFromTheTapThenOpens() {
         val state = BackTodayState(TODAY.copy(stars = listOf(SkyStar("old3"))), FINDS)
         val uncovered = mutableListOf<String>()
         val opened = mutableListOf<String>()
+        var shakes = 0
         compose.mainClock.autoAdvance = false
-        compose.setContent { MymindTheme(dark = false) { BackTodayBand(state, { card, _ -> uncovered += card.id }, { opened += it.id }) } }
+        compose.setContent {
+            MymindTheme(dark = false) { BackTodayBand(state, { card, _ -> uncovered += card.id }, { opened += it.id }, onShake = { shakes++ }) }
+        }
         compose.mainClock.advanceTimeByFrame()
         compose.onNodeWithText("Back today").assertIsDisplayed()
-        compose.onAllNodesWithContentDescription("A find from your past, under fallen leaves").assertCountEquals(2)
+        compose.onAllNodesWithContentDescription("A find from your past, flickering as a hologram").assertCountEquals(2)
         compose.onAllNodesWithContentDescription("Harbour at dusk").assertCountEquals(0)
         compose.onNodeWithContentDescription("Lighthouse").assertIsDisplayed()
 
-        compose.onAllNodesWithContentDescription("A find from your past, under fallen leaves")[0].performClick()
+        compose.onAllNodesWithContentDescription("A find from your past, flickering as a hologram")[0].performClick()
         compose.mainClock.advanceTimeByFrame()
         assertEquals(listOf("old1"), uncovered)
-        assertTrue("the find opens while its leaves fly", opened.isEmpty())
-        compose.mainClock.advanceTimeBy(OPEN_AFTER_MS + 32)
+        assertTrue("the find opens once it has cleared", opened.isEmpty())
+        compose.mainClock.advanceTimeBy(1500)
         assertEquals(listOf("old1"), opened)
+        assertEquals(1, shakes)
     }
 }

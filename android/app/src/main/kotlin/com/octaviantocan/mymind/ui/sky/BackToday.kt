@@ -1,8 +1,6 @@
 package com.octaviantocan.mymind.ui.sky
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
+import android.graphics.RuntimeShader
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,24 +15,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.AppJson
@@ -44,23 +40,17 @@ import com.octaviantocan.mymind.data.LibraryMemory
 import com.octaviantocan.mymind.data.Sky
 import com.octaviantocan.mymind.data.SkyStar
 import com.octaviantocan.mymind.ui.library.GalleryTile
-import com.octaviantocan.mymind.ui.library.TILE_CORNER
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import java.time.Instant
 import java.time.LocalDate
-
-/** How long the leaves take to blow off a find. */
-internal const val BLOW_MS = 900
-
-/** When the find opens while its leaves still fly, so the card rises through the last of them. */
-internal const val OPEN_AFTER_MS = 520L
 
 /**
  * Back today as the band shows it.
@@ -68,13 +58,24 @@ internal const val OPEN_AFTER_MS = 520L
  * @property sky The day's sky, or null before one is known for today.
  * @property cards Today's finds that the library still holds, in the server's order.
  * @property finds The sky's finds that the library still holds, by id, once the sky has asked for them.
+ * @property seen The finds whose stars the person has seen light in the sky, or null before that is read.
+ * @property arriving Finds opened from Back today whose star has not reached the star button yet.
  */
-data class BackTodayState(val sky: Sky? = null, val cards: List<Card> = emptyList(), val finds: Map<String, Card> = emptyMap()) {
-    /** The finds opened from Back today or the sky; their leaves are gone. */
+data class BackTodayState(
+    val sky: Sky? = null,
+    val cards: List<Card> = emptyList(),
+    val finds: Map<String, Card> = emptyMap(),
+    val seen: Set<String>? = null,
+    val arriving: Set<String> = emptySet(),
+) {
+    /** The finds opened from Back today or the sky; they show as they are, no longer a hologram. */
     val uncovered: Set<String> get() = sky?.stars?.mapTo(HashSet()) { it.id }.orEmpty()
 
     /** True when the sky has anything to show: a constellation forming or finished, or a find opened again. */
     val hasSky: Boolean get() = sky != null && (sky.active != null || sky.done.isNotEmpty() || sky.stars.isNotEmpty())
+
+    /** How many finds wait to light their stars the next time the person looks up, for the star button's badge. */
+    val waiting: Int get() = if (seen == null) 0 else uncovered.count { it !in seen && it !in arriving }
 }
 
 /**
@@ -123,6 +124,40 @@ class BackTodayModel(
         if (mutableState.value.sky?.day != today()) load()
     }
 
+    /** Reads which stars the person has seen light; on the first run every star already there counts as seen. */
+    private suspend fun readSeen(sky: Sky) {
+        if (mutableState.value.seen != null) return
+        val kept = memory?.skySeen()?.let { json -> runCatching { AppJson.decodeFromString(SEEN, json) }.getOrNull() }
+        val seen = kept?.toSet() ?: sky.stars.mapTo(HashSet()) { it.id }.also { if (memory != null) save(it) }
+        mutableState.update { it.copy(seen = seen) }
+    }
+
+    private suspend fun save(seen: Set<String>) {
+        memory?.saveSkySeen(AppJson.encodeToString(SEEN, seen.toList()))
+    }
+
+    /**
+     * Records that a find's star lit in front of the person, so it no longer waits on the star button.
+     *
+     * @param id The find.
+     */
+    fun markSeen(id: String) {
+        val seen = mutableState.value.seen ?: return
+        if (id in seen) return
+        val next = seen + id
+        mutableState.update { it.copy(seen = next) }
+        scope.launch { save(next) }
+    }
+
+    /**
+     * The star of a find opened from Back today reached the star button; it now waits there to light.
+     *
+     * @param id The find.
+     */
+    fun landed(id: String) {
+        mutableState.update { it.copy(arriving = it.arriving - id) }
+    }
+
     /** Reads the cards of every find on the sky, for the sky's stars to name and open. */
     fun loadFinds() {
         val sky = mutableState.value.sky ?: return
@@ -140,16 +175,18 @@ class BackTodayModel(
     }
 
     /**
-     * Uncovers a find and records the visit, which lights its star.
+     * Uncovers a find and records the visit, which lights its star. One opened from Back today flies to the star button
+     * once it closes ([arriving]); one opened from its own star lights there.
      *
-     * @param card A find in the band.
+     * @param card A find in the band or the sky.
+     * @param arriving True for a find opened from Back today.
      */
-    fun uncover(card: Card) {
+    fun uncover(card: Card, arriving: Boolean = true) {
         val sky = mutableState.value.sky ?: return
         if (card.id in mutableState.value.uncovered) return
         val active = sky.active?.let { if (card.id in it.cards && card.id !in it.lit) it.copy(lit = it.lit + card.id) else it }
         val visited = sky.copy(stars = sky.stars + SkyStar(card.id, Instant.now().toString()), active = active)
-        mutableState.update { it.copy(sky = visited) }
+        mutableState.update { it.copy(sky = visited, arriving = if (arriving) it.arriving + card.id else it.arriving) }
         scope.launch {
             library.visit(card.id)
             memory?.saveSky(AppJson.encodeToString(Sky.serializer(), visited))
@@ -158,23 +195,28 @@ class BackTodayModel(
 
     private suspend fun show(sky: Sky?) {
         if (sky == null) {
-            mutableState.value = BackTodayState()
+            mutableState.update { BackTodayState(seen = it.seen, arriving = it.arriving) }
             return
         }
         val cards = sky.back.mapNotNull { id -> (library.card(id) as? ApiResult.Ok)?.value?.takeIf { it.deleted == null } }
-        mutableState.update { BackTodayState(sky, cards, it.finds) }
+        mutableState.update { it.copy(sky = sky, cards = cards) }
+        readSeen(sky)
     }
 }
 
+private val SEEN = ListSerializer(String.serializer())
+
 /**
- * Back today: up to three old finds under Pinned, each covered in fallen leaves until it is opened. A tap blows the
- * leaves away from the finger and opens the find as they fly; a find already opened today shows as it is.
+ * Back today: up to three old finds under Pinned, each a flickering blue hologram until it is opened (the prototype's
+ * Hologram, picked by Tavi on 6 November 2026). A tap restores it from the finger outward with a burst of glints, then
+ * opens it; a find already opened today shows as it is.
  *
  * @param state The band's finds.
- * @param onUncover Called as a covered find's leaves start to blow away, with where they blow from in the window's pixels.
+ * @param onUncover Called as a find's restore starts, with its centre in the window's pixels.
  * @param onOpenCard Opens a find.
  * @param modifier Modifier for the band.
  * @param onLongPressCard Called when an uncovered find is held, or null.
+ * @param onShake Called as a restore clears, for the page's shake.
  */
 @Composable
 fun BackTodayBand(
@@ -183,10 +225,12 @@ fun BackTodayBand(
     onOpenCard: (Card) -> Unit,
     modifier: Modifier = Modifier,
     onLongPressCard: ((Card) -> Unit)? = null,
+    onShake: () -> Unit = {},
 ) {
     if (state.cards.isEmpty()) return
     val colors = LibraryStyle.colors
     val uncovered = state.uncovered
+    val shader = remember { if (SkyShaders.supported) SkyShaders.hologram() else null }
     Column(modifier.fillMaxWidth().padding(bottom = 22.dp).testTag("back-today")) {
         Text("Back today", Modifier.padding(start = 20.dp, bottom = 10.dp), style = LibraryStyle.label, color = colors.muted)
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -197,7 +241,8 @@ fun BackTodayBand(
                     continue
                 }
                 key(card.id) {
-                    BackTodayFind(card, covered = card.id !in uncovered, onUncover, onOpenCard, onLongPressCard, Modifier.weight(1f).aspectRatio(0.8f))
+                    BackTodayFind(card, covered = card.id !in uncovered, shader, onUncover, onOpenCard, onLongPressCard, onShake,
+                        Modifier.weight(1f).aspectRatio(0.8f))
                 }
             }
         }
@@ -206,56 +251,61 @@ fun BackTodayBand(
 
 private const val BAND_SLOTS = 3
 
-// One find: its tile, under leaves until it is uncovered.
+// One find: its tile, a hologram until it is restored.
 @Composable
 private fun BackTodayFind(
     card: Card,
     covered: Boolean,
+    shader: RuntimeShader?,
     onUncover: (Card, Offset) -> Unit,
     onOpenCard: (Card) -> Unit,
     onLongPressCard: ((Card) -> Unit)?,
+    onShake: () -> Unit,
     modifier: Modifier,
 ) {
     val scope = rememberCoroutineScope()
-    val blown = remember(card.id) { Animatable(if (covered) 0f else 1f) }
-    var wind by remember(card.id) { mutableStateOf(Offset(0.5f, 0.5f)) }
-    var blowing by remember(card.id) { mutableStateOf(false) }
+    val hologram = remember(card.id) { Hologram(hologramStage(card)) }
     val latestUncover by rememberUpdatedState(onUncover)
     val latestOpen by rememberUpdatedState(onOpenCard)
+    val latestShake by rememberUpdatedState(onShake)
     // Where the tile is, kept without state so scrolling the gallery never recomposes it; read only on a tap.
     val placed = remember(card.id) { arrayOfNulls<LayoutCoordinates>(1) }
-    // The leaves stay while they fly, though the find counts as uncovered from the tap.
-    val leaves = covered || (blowing && blown.value < 1f)
-    fun blowFrom(at: Offset) {
-        if (blowing) return
-        blowing = true
-        wind = at
+    // It stays a hologram while it clears and its shine crosses, though it counts as uncovered from the tap.
+    val worn = covered || hologram.restoring
+    val density = LocalDensity.current.density
+    fun restoreFrom(at: Offset) {
+        if (hologram.restoring) return
         val tile = placed[0]?.takeIf { it.isAttached }
-        latestUncover(card, tile?.localToRoot(Offset(at.x * tile.size.width, at.y * tile.size.height)) ?: Offset.Zero)
+        latestUncover(card, tile?.localToRoot(Offset(tile.size.width / 2f, tile.size.height / 2f)) ?: Offset.Zero)
+        val width = (tile?.size?.width ?: 0) / density
+        val height = (tile?.size?.height ?: 0) / density
         scope.launch {
-            launch { blown.animateTo(1f, tween(BLOW_MS, easing = LinearEasing)) }
-            delay(OPEN_AFTER_MS)
+            hologram.restoreFrom(at, width, height, scope, onShake = { latestShake() })
             latestOpen(card)
         }
     }
-    Box(modifier.onPlaced { placed[0] = it }) {
-        GalleryTile(card, onClick = { onOpenCard(card) }, enabled = !leaves,
-            modifier = Modifier.fillMaxSize().then(if (leaves) Modifier.clearAndSetSemantics {} else Modifier),
+    if (worn) HologramClock(hologram)
+    Box(modifier.onPlaced { placed[0] = it }.graphicsLayer {
+        val s = hologram.lift.value
+        scaleX = s
+        scaleY = s
+    }) {
+        GalleryTile(card, onClick = { onOpenCard(card) }, enabled = !worn,
+            modifier = Modifier.fillMaxSize().then(if (worn) Modifier.hologram(hologram, shader).clearAndSetSemantics {} else Modifier),
             onLongClick = onLongPressCard?.let { { it(card) } })
-        if (leaves) {
+        if (worn) {
             Box(
                 Modifier.fillMaxSize()
-                    .graphicsLayer()
-                    .leafCover(card.id, TILE_CORNER, blown = { blown.value }, from = { wind })
                     .pointerInput(card.id) {
-                        detectTapGestures { at -> blowFrom(Offset(at.x / size.width, at.y / size.height)) }
+                        detectTapGestures { at -> restoreFrom(Offset(at.x / size.width, at.y / size.height)) }
                     }
                     .clearAndSetSemantics {
                         role = Role.Button
-                        contentDescription = "A find from your past, under fallen leaves"
-                        onClick("Uncover") { blowFrom(Offset(0.5f, 0.5f)); true }
+                        contentDescription = "A find from your past, flickering as a hologram"
+                        onClick("Restore") { restoreFrom(Offset(0.5f, 0.45f)); true }
                     },
             )
         }
+        HologramGlints(hologram, Modifier.fillMaxSize())
     }
 }

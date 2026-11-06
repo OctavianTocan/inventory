@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
@@ -953,7 +954,8 @@ fun ShellFrame(
         val shape = rememberWindowShape()
         val library: @Composable BoxScope.() -> Unit = {
             PageTheme(scheme) {
-                Box(Modifier.fillMaxSize().themeBackground(LibraryStyle.colors.background).statusBarsPadding()) {
+                Box(Modifier.fillMaxSize().themeBackground(LibraryStyle.colors.background)
+                    .drawBehind { immersion.strip?.invoke()?.let { drawRect(it, size = Size(size.width, top)) } }.statusBarsPadding()) {
                     // Sideways, the page sits in a readable column with the page colour either side (Pully's rule 207).
                     Box(if (shape == WindowShape.Sideways) Modifier.fillMaxHeight().readableWidth() else Modifier.fillMaxSize()) { page() }
                 }

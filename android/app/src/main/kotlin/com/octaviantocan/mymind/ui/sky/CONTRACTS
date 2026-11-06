@@ -15,60 +15,111 @@ at 23:05 and "implement all this other stuff into the actual app" at 23:06. The 
 today" label is Claude's choice, not yet confirmed by Tavi.
 
 @cc [owner:OctavianTocan,label:product;design;motion] back-today-finds-are-under-leaves
-A find in Back today that has not been opened MUST lie under fallen leaves that hide it
-whole, its words hidden from accessibility too, laid out the same each time for the same
-card. A tap MUST blow the leaves away from where the finger landed, the nearest first,
-lifting, turning and fading past the tile's edges, and MUST open the find while they
-are still flying. The find then counts as visited: its star lights (`visit`, sent
-through the outbox so it waits offline like any change, gallery-keeps-offline-changes)
-and it shows uncovered for the rest of the day. An opened find MUST NOT be covered again
-that day. The leaves MUST NOT move while untouched, so the band costs nothing while the
-gallery scrolls.
-Source: Tavi, 5 November 2026, 23:06 ("do the new stuff you mentioned for the Worn
-stuff"); the leaves are Claude's pick, 11 Leaves of the 30 worn directions on the
-"Your sky" canvas, not yet confirmed by Tavi.
+(The id is kept from the leaves this replaced.) A find in Back today that has not been
+opened MUST show as a flickering blue hologram of itself, only a memory of it left: its
+shapes and edges in cyan light with scan lines, jitter and flicker, more broken up the
+longer it has been left. Its words are hidden from accessibility, which offers Restore.
+A tap MUST restore it from where the finger landed outward: the tile lifts, a front of
+light clears the hologram with a burst of cyan glints, the page shakes once, a shine
+crosses the find, and the find opens as the shine starts. The find then counts as
+visited (`visit`, sent through the outbox so it waits offline like any change,
+gallery-keeps-offline-changes) and shows as it is for the rest of the day; it MUST NOT
+become a hologram again that day. Before Android 13 it is tinted blue instead.
+Source: Tavi, 6 November 2026, 12:43: "you've added leaves on top of the carts that are
+back for the day instead of something actually interesting. You should use Hologram",
+look 25 of the worn directions on the "Your sky" canvas (artboard ab04974a31ee); the
+restore and its glints are that prototype's. How far gone a find shows (by months since
+it was last saved, never less than stage 2, so every Back today find reads as a
+hologram) is Claude's choice, not yet confirmed by Tavi.
 
 @cc [owner:OctavianTocan,label:product;design;motion] sky-opens-from-the-star-button
 On All, a star button MUST sit beside Add once the sky has anything to show: a
 constellation forming or finished, or a find opened again. Before that it MUST NOT
-show, so it never opens an empty sky. When a find in Back today is uncovered, a star
-MUST fly from where the finger lifted the leaves to the star button and the button
-glows as it lands, before the find has opened over it. The button opens Your sky over
-the gallery: the tab bar steps away as it does for reels, and Back or Close shuts it.
-A find opened from the sky rises over it, and closing the find returns to the sky.
-Source: Tavi, 5 November 2026, 23:06 ("implement all this other stuff into the actual
-app"), building the "Your sky" prototype into the app. The button's place beside Add
-and the star's flight are Claude's choices, not yet confirmed by Tavi.
+show, so it never opens an empty sky. Tapping it looks up (sky-pull-down-looks-up).
+When a find opened from Back today closes, a star MUST leave where its tile sits and fly
+into the star button on a curve with a trail, the button bouncing and a gold ring
+spreading as it lands. It MUST NOT fly while the find is open over the page, where it
+could not be seen. The button MUST then show how many finds wait to light, and looking
+up MUST light each of them with a shooting star in front of the person, after which the
+count is gone. Which stars have lit is kept on the phone (`LibraryMemory.skySeen`); on
+the first run every star already in the sky counts as lit.
+Source: Tavi, 6 November 2026, 12:43: "The stars don't go into the Star button and show
+up as numbers. And they don't do it when you close the card, which is where it made
+sense because you can actually see it." The flight, bounce, ring and count are the
+prototype's (claude.ai/artifact/JvWYpVNhTuipvb119JDd6P).
+
+@cc [owner:OctavianTocan,label:product;design;motion] sky-pull-down-looks-up
+At the top of All, with a sky to show, pulling down MUST tilt the camera up as far as
+the finger pulls: the page tips away below, the sky opens above its top, and a star
+under the controls turns gold once letting go would look up. Letting go past that point
+MUST look up the rest of the way, in 2.6 seconds as the prototype does; short of it the
+page settles back. The page's title, its controls and the tab bar MUST leave first, so
+the top of the page opens straight onto the sky, and the status bar takes the sky's
+colour. In the sky, swiping up MUST come back down to the page, and Back does too. The
+sky MUST NOT have a close or X button.
+Source: Tavi, 6 November 2026, 12:43: "There's no transition by swiping between the Sky
+and the normal pages. Instead, you added an X button to the sky. That's shit. And
+unwanted." and "The transition looked far better here" (the prototype,
+claude.ai/artifact/JvWYpVNhTuipvb119JDd6P). While there is a sky, this pull replaces
+pull to refresh on All and looking up syncs the library instead; that is Claude's
+choice, not yet confirmed by Tavi.
 
 @cc [owner:OctavianTocan,label:product;design] sky-shows-constellations-not-sentences
-Your sky MUST show these, over a still nebula:
-- The active constellation, large. Its stars are lit for finds opened again since it
-  formed and dark otherwise, with gold lines between lit stars and dotted lines to dark
-  ones.
-- The finished constellations, smaller, with their figures drawn in.
-- Loose stars for the other finds opened from Back today.
-Its only words MUST be its title and the active constellation's name. No hints,
-sentences, counts, quests or levels go on the sky. A constellation MUST be drawn as one
-of the line figures, one for each figure the server names, and never with a find's
-words. Each star MUST name its find to accessibility. Tapping a star moves in on it
-(sky-star-condenses-into-its-find). Stars MAY twinkle only while the sky shows, and the
-nebula is painted once.
-Source: Tavi's reviews of the "Your sky" prototype, 5 November 2026:
-- 21:25: "Literally everything that isn't images looks god-awful in the stars."
-- Later rounds: no hint text or sentences on the sky, only one small constellation name.
-- 23:06: the request to build it into the app.
+Your sky MUST look and move as the prototype's does, with its light added the way the
+prototype adds it (in linear light, then shown), so stars glow rather than read as flat
+icons:
+- A dome of deep sky with a band of nebula, dust lanes and a warm core, and dusk low
+  down as the camera rises, under three layers of twinkling stars at different depths
+  and the dome's finest stars, with bloom and a vignette.
+- The middle constellation, large: lit stars as bright points with spikes and bloom,
+  dark ones as faint rings; gold lines with travelling pulses between lit stars and
+  dotted lines to dark ones.
+- The finished constellations smaller in their places, their figures drawn in light.
+- Loose stars for the other finds opened again, the latest twelve.
+A new constellation MUST gather out of a vortex of light and type its name in. One whose
+last star lights MUST surge along its lines, draw its figure, turn its name gold and
+move to its place among the finished ones. The sky's only words MUST be its title, the
+middle constellation's name, one short line under the name saying what its finds have
+in common (from its figure, such as "Places and journeys you saved for one day"), and a
+find's title while one shows. No hints, counts, quests or levels go on the sky. A
+constellation MUST be drawn as one of the line figures, one for each figure the server
+names, and never with a find's words. Stars twinkle only while the sky shows; the sky
+draws nothing and runs no clock while the camera is down on the page.
+Its bloom MUST be the prototype's, measured from the prototype's own frames rather than
+guessed: only light brighter than half blooms, in five widths from the finest to about a
+quarter of the screen, as strong as the prototype shows it (its bloom adds the blurred
+bright light about three times over at full strength, which is why the lit
+constellation sits in a warm cloud), so a faint or far star barely blooms, the lit
+constellation glows, and the brightest of the many small stars together give the band a
+faint haze. Where the phone can (Android 16 and later) each light is added in
+linear light on its own, as the prototype adds them; on older phones the lights are
+combined with Screen, which reads close but lets overlapping faint lights brighten each
+other. How the lights are combined on each kind of phone is Claude's choice, not yet
+confirmed by Tavi.
+Source: Tavi, 6 November 2026: 12:43, "The sky and stars, and constellations looked far
+better" in the prototype; 12:56, "Why is the starry sky so... Boring and lifeless?" and
+"Wtf even is a constellation? How would I know?"; 12:57, "The stars themselves and
+chains between them also look like shitty 2d icons. Instead of how cool they looked in
+the designs we made." The line under the name is Tavi's pick on 6 November 2026, 14:48:
+"Name plus what links them". Showing at most twelve loose stars and
+the extra places for finished constellations beyond the prototype's two are Claude's
+choices, not yet confirmed by Tavi.
 
 @cc [owner:OctavianTocan,label:product;design;motion] sky-star-condenses-into-its-find
-Tapping a star MUST move the camera in on it, and stars from all over the screen MUST
-fly together and become its find's tile, a picture named under it. Only a tap on
-that tile opens the find; moving in MUST NOT open it or count as a visit. A swipe MUST
-travel along the constellation to the star that lies that way, a spark running down the
-line between them, and the next find gathers the same way. A drag MUST NOT also open
-the find or star it began on. Back, or a tap on empty sky, moves back out. Accessibility
-MUST offer Next star and Previous star on the find. A star opened again MUST light only
-once the sky is back in view, with a flare, and a constellation whose last star lights
-then draws its figure in; a figure finished more than a day ago MUST simply be there.
-Source: Tavi, 5 November 2026, 23:06: "Let's do 13 Condense", variant 13 of the
-prototype's views. The stars landing evenly over the tile rather than on its picture,
-the name under the tile, swiping along the lines and the light-on-return flare are
-Claude's choices, not yet confirmed by Tavi.
+Tapping a star MUST move the camera in on it, and its find MUST condense out of
+starlight there as the prototype's view 13, Condense, does: thousands of points of light
+in the find's colours gather from all over the sky into its picture, which shows behind
+them as glowing smoke, with its title under it. A find with no picture gathers into a
+line figure for its kind. A find not yet opened shows faded until it is. Only a tap on
+the find opens it; moving in MUST NOT open it or count as a visit. A swipe MUST travel
+to the star that lies that way, a comet running down the line between them as the
+camera dips and the line surges, and the next find condenses the same way; while the
+finger is down the view follows it. A tap on empty sky, or Back, MUST move back out to
+the whole sky. A star opened from the sky MUST light once the find closes, its picture
+regaining its colour, and a constellation whose last star lights then completes.
+Accessibility MUST offer Back to your library, a way to each star of the middle
+constellation by its find's title, and Next star and Previous star while one shows.
+Source: Tavi, 5 November 2026, 23:06: "Let's do 13 Condense"; 6 November 2026, 12:43:
+"DId you use 13-Condense for the star tap? I hope you did." and "Did you implement all
+the swiping mechanics between stars?"; 12:56: "How do I even go back from being focused
+on a star? Why are the cards not using the condense effect?"

@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
@@ -26,6 +27,12 @@ class ShellImmersion {
 
     /** How far the page has gone full screen now, from 0 to 1. */
     fun amount(): Float = page?.invoke()?.coerceIn(0f, 1f) ?: 0f
+
+    /**
+     * A colour laid over the status bar's strip, read while drawing, for a page whose own top has become a picture,
+     * such as the sky; null leaves the strip the page's colour.
+     */
+    var strip: (() -> Color)? by mutableStateOf(null)
 }
 
 /** The shell's [ShellImmersion], or null outside a [ShellFrame]. */

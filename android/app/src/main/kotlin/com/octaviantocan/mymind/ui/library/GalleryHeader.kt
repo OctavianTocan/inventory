@@ -33,8 +33,9 @@ import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.shell.FootCircleButton
 import com.octaviantocan.mymind.ui.shell.FootPressTheme
 import com.octaviantocan.mymind.ui.shell.footShadow
-import com.octaviantocan.mymind.ui.sky.StarFlight
-import com.octaviantocan.mymind.ui.sky.starFlightTarget
+import com.octaviantocan.mymind.ui.sky.StarBadge
+import com.octaviantocan.mymind.ui.sky.StarMotes
+import com.octaviantocan.mymind.ui.sky.starMoteTarget
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import okhttp3.OkHttpClient
 
@@ -67,7 +68,8 @@ fun GalleryTitle(text: String, modifier: Modifier = Modifier, start: Dp = 20.dp,
  * @param photoUrl The account's Google photo, or null for the profile glyph.
  * @param photoLoader Loader for [photoUrl] that never carries the library session.
  * @param onSky Called when the star button beside Add is tapped, or null to show no star button.
- * @param flight Where stars uncovered in Back today fly to the star button, or null.
+ * @param motes Where stars of finds opened from Back today fly into the star button, or null.
+ * @param badge How many finds wait to light in the sky, shown on the star button.
  */
 @Composable
 fun GalleryControls(
@@ -77,13 +79,18 @@ fun GalleryControls(
     photoUrl: String? = null,
     photoLoader: ImageLoader? = null,
     onSky: (() -> Unit)? = null,
-    flight: StarFlight? = null,
+    motes: StarMotes? = null,
+    badge: Int = 0,
 ) {
     val colors = LibraryStyle.colors
     Column(modifier.padding(end = 16.dp, top = 12.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (onSky != null) {
-                FootCircleButton(R.drawable.ic_library_sky, "Your sky", onSky, if (flight != null) Modifier.starFlightTarget(flight) else Modifier, size = 44.dp)
+                Box {
+                    FootCircleButton(R.drawable.ic_library_sky, if (badge > 0) "Your sky, $badge waiting to light" else "Your sky", onSky,
+                        if (motes != null) Modifier.starMoteTarget(motes) else Modifier, size = 44.dp)
+                    StarBadge(badge, Modifier.align(Alignment.TopEnd).offset(6.dp, (-6).dp))
+                }
             }
             FootCircleButton(R.drawable.ic_library_add, "Add", onAdd, size = 44.dp)
             FootPressTheme {

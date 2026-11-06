@@ -62,6 +62,12 @@ interface LibraryMemory {
 
     /** @param json The latest Back today and sky answer, kept so the band shows at once and offline. */
     suspend fun saveSky(json: String) {}
+
+    /** @return The finds whose stars the person has seen light in the sky, as a JSON array of ids, or null before any. */
+    suspend fun skySeen(): String? = null
+
+    /** @param json The finds whose stars the person has seen light, as a JSON array of ids. */
+    suspend fun saveSkySeen(json: String) {}
 }
 
 /**
@@ -114,6 +120,10 @@ class LibraryCopy(context: Context, private val session: Session, private val io
     override suspend fun sky(): String? = owned(null) { db -> meta(db, SKY) }
 
     override suspend fun saveSky(json: String) = owned(Unit) { db -> setMeta(db, SKY, json) }
+
+    override suspend fun skySeen(): String? = owned(null) { db -> meta(db, SKY_SEEN) }
+
+    override suspend fun saveSkySeen(json: String) = owned(Unit) { db -> setMeta(db, SKY_SEEN, json) }
 
     /** @return True once the copy holds the whole library, so the gallery can be read from it. */
     suspend fun complete(): Boolean = owned(false) { db -> meta(db, COMPLETE) == "1" }
@@ -508,6 +518,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         const val OWNER = "owner"
         const val SCHEME = "scheme"
         const val SKY = "sky"
+        const val SKY_SEEN = "sky_seen"
         const val TOKEN = "sync_token"
         const val COMPLETE = "sync_complete"
         const val SPACES = "spaces"

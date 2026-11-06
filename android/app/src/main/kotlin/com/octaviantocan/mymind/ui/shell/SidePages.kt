@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -217,7 +218,20 @@ fun SidePages(state: SidePagesState, count: Int, modifier: Modifier = Modifier, 
             amount
         }
         outer.page = source
-        onDispose { if (outer.page === source) outer.page = null }
+        val strip = {
+            var color = Color.Transparent
+            immersions.forEachIndexed { page, immersion ->
+                val near = 1f - abs(page - state.at)
+                val own = immersion.strip?.invoke()
+                if (near > 0f && own != null && own.alpha * near > color.alpha) color = own.copy(alpha = own.alpha * near)
+            }
+            color
+        }
+        outer.strip = strip
+        onDispose {
+            if (outer.page === source) outer.page = null
+            if (outer.strip === strip) outer.strip = null
+        }
     }
     val immersed by remember(immersions, state.index) { derivedStateOf { (immersions.getOrNull(state.index)?.amount() ?: 0f) > 0f } }
     var drawn by remember { mutableStateOf(false) }

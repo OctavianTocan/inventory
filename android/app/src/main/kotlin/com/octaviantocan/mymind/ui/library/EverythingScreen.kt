@@ -29,12 +29,20 @@ import com.octaviantocan.mymind.ui.shell.FootPressTheme
 import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.settings.glassSource
 import com.octaviantocan.mymind.ui.settings.rememberGlassBackdrop
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.octaviantocan.mymind.ui.sky.BackTodayBand
 import com.octaviantocan.mymind.ui.sky.BackTodayState
-import com.octaviantocan.mymind.ui.sky.SkyLayer
-import com.octaviantocan.mymind.ui.sky.rememberSkyOpening
-import com.octaviantocan.mymind.ui.sky.rememberStarFlight
-import com.octaviantocan.mymind.ui.sky.starFlights
+import com.octaviantocan.mymind.ui.sky.SkyBackdrop
+import com.octaviantocan.mymind.ui.sky.SkyOverlay
+import com.octaviantocan.mymind.ui.sky.SkyState
+import com.octaviantocan.mymind.ui.sky.rememberSkyPull
+import com.octaviantocan.mymind.ui.sky.rememberSkyState
+import com.octaviantocan.mymind.ui.sky.rememberStarMotes
+import com.octaviantocan.mymind.ui.sky.skyPlan
+import com.octaviantocan.mymind.ui.sky.skyTilt
+import com.octaviantocan.mymind.ui.sky.starMotes
+import kotlinx.coroutines.launch
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
 /**
@@ -73,7 +81,8 @@ enum class SearchType(val type: String, val label: String, val slug: String) {
  * The library gallery; its search field lives in the shell's single floating bar.
  *
  * @param openedLately Cards opened lately, latest first, which the opened search page offers again.
- * @param cardOpen True while a card is open over the page, which then covers the sky.
+ * @param cardOpen True while a card is open over the page, which then covers the sky; as it closes, a find opened from
+ *   Back today sends its star to the star button and one opened from the sky lights its star.
  * @param choice Where holding a find and sliding gathers finds, in the gallery and in search results; null leaves holding
  * to open the card menu.
  */
@@ -126,14 +135,15 @@ fun EverythingScreen(
         onRetry = viewModel.everything::reload, onOpenCard = onOpenCard,
         onOpenSettings = onOpenSettings, onAdd = onAdd, modifier = modifier,
         pinned = pinned.cards, onLoadMorePinned = viewModel.pinned::loadMore,
-        backToday = backToday, onUncover = viewModel.backToday::uncover,
-        onSkyOpened = { viewModel.backToday.load(); viewModel.backToday.loadFinds() }, cardOpen = cardOpen,
+        backToday = backToday, onUncover = { viewModel.backToday.uncover(it) },
+        onSkyFinds = viewModel.backToday::loadFinds, cardOpen = cardOpen,
         onOpenStar = { id ->
             viewModel.backToday.state.value.finds[id]?.let { card ->
-                viewModel.backToday.uncover(card)
+                viewModel.backToday.uncover(card, arriving = false)
                 onOpenCard(card)
             }
         },
+        onSeen = viewModel.backToday::markSeen, onLanded = viewModel.backToday::landed,
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
         onLongPressCard = onLongPressCard, choice = choice,
         photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, ai = rank,
@@ -185,8 +195,10 @@ fun EverythingContent(
     onLoadMorePinned: () -> Unit = {},
     backToday: BackTodayState = BackTodayState(),
     onUncover: (Card) -> Unit = {},
-    onSkyOpened: () -> Unit = {},
+    onSkyFinds: () -> Unit = {},
     onOpenStar: (String) -> Unit = {},
+    onSeen: (String) -> Unit = {},
+    onLanded: (String) -> Unit = {},
     cardOpen: Boolean = false,
     onRefresh: () -> Unit = {},
     onRefreshResults: () -> Unit = {},
@@ -201,13 +213,12 @@ fun EverythingContent(
     photoLoader: ImageLoader? = null,
     dock: SearchDockState = SearchDockState(),
     dockActions: SearchDockActions = SearchDockActions(),
+    sky: SkyState = rememberSkyState(),
 ) {
     val colors = LibraryStyle.colors
     val accountPhotoLoader = photoLoader ?: if (photoUrl != null) rememberPublicAccountPhotoLoader() else null
     val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
     val resultsBackdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
-    val flight = rememberStarFlight()
-    val sky = rememberSkyOpening()
     Box(modifier.fillMaxSize().themeBackground(colors.background, backdrop = false)) {
         when {
             searching && searchResults != null -> {
@@ -227,21 +238,48 @@ fun EverythingContent(
             }
             searching -> SearchStart(typeChips, dock, dockActions, onChoose, onOpenCard, onLongPressCard)
             else -> Box(Modifier.fillMaxSize()) {
-                PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop), top = GALLERY_CONTROLS_HEIGHT) {
+                val motes = rememberStarMotes()
+                val scope = rememberCoroutineScope()
+                val hasSky = backToday.hasSky
+                val plan = remember(backToday.sky, backToday.seen, backToday.arriving) { skyPlan(backToday.sky, backToday.seen, backToday.arriving) }
+                val skyIds = remember(backToday.sky) { backToday.sky?.let { s -> (listOfNotNull(s.active) + s.done).flatMap { it.cards } + s.stars.map { it.id } }.orEmpty().toSet() }
+                LaunchedEffect(skyIds) { if (skyIds.isNotEmpty()) onSkyFinds() }
+                // Where each find opened from Back today sat, for its star to leave from once it closes.
+                val moteFrom = remember { HashMap<String, Offset>() }
+                val flying = remember { HashSet<String>() }
+                val latestToday by rememberUpdatedState(backToday)
+                val latestLanded by rememberUpdatedState(onLanded)
+                LaunchedEffect(cardOpen) {
+                    if (cardOpen) return@LaunchedEffect
+                    sky.scene.returned()
+                    for (id in latestToday.arriving) {
+                        if (!flying.add(id)) continue
+                        motes.fly(moteFrom[id] ?: Offset.Zero) { flying.remove(id); latestLanded(id) }
+                    }
+                }
+                SkyBackdrop(sky, plan, backToday.finds, paused = cardOpen, onOpenFind = onOpenStar, onSeen = onSeen,
+                    onLookUp = { onRefresh(); scope.launch { gridState.animateScrollToItem(0) } })
+                val pull = rememberSkyPull(sky) { hasSky && mosaic.reel == 0f }
+                PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().nestedScroll(pull).skyTilt(sky, colors.background) { gridState.scrolledBy() }
+                    .glassSource(backdrop), top = GALLERY_CONTROLS_HEIGHT, enabled = !hasSky) {
                     LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
                         onLongPressCard = onLongPressCard, choice = choice, header = {
-                            GalleryTitle("Your inventory")
+                            GalleryTitle("Your inventory", Modifier.graphicsLayer { alpha = sky.head })
                             GalleryHighlights(pinned, onOpenCard, onLoadMore = onLoadMorePinned, onLongPressCard = onLongPressCard)
-                            BackTodayBand(backToday, { card, at -> onUncover(card); flight.launch(at) }, onOpenCard, onLongPressCard = onLongPressCard)
+                            BackTodayBand(backToday, { card, at -> moteFrom[card.id] = at; onUncover(card) }, onOpenCard, onLongPressCard = onLongPressCard,
+                                onShake = { sky.scene.punch = 0.6f })
                             if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
                         })
                 }
-                GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = 1f - mosaic.reel },
+                GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = (1f - mosaic.reel) * sky.head },
                     visible = { gridState.scrolledBy() })
-                GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd).awayInReels(mosaic), photoUrl = photoUrl, photoLoader = accountPhotoLoader,
-                    onSky = if (backToday.hasSky) ({ sky.open(); onSkyOpened() }) else null, flight = flight)
-                Box(Modifier.fillMaxSize().starFlights(flight))
-                backToday.sky?.let { SkyLayer(sky, it, backToday.finds, onOpenStar, covered = cardOpen) }
+                GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd).awayInReels(mosaic).graphicsLayer {
+                    alpha = sky.head
+                    translationY = -(1f - sky.head) * 10.dp.toPx()
+                }, photoUrl = photoUrl, photoLoader = accountPhotoLoader,
+                    onSky = if (hasSky) sky::lookUp else null, motes = motes, badge = backToday.waiting)
+                Box(Modifier.fillMaxSize().starMotes(motes))
+                SkyOverlay(sky)
             }
         }
     }
