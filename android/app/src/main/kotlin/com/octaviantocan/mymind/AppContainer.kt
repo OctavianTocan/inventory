@@ -8,6 +8,7 @@ import coil3.SingletonImageLoader
 import com.octaviantocan.mymind.data.AiAccount
 import com.octaviantocan.mymind.data.AiClient
 import com.octaviantocan.mymind.data.AiPrefs
+import com.octaviantocan.mymind.data.Analytics
 import com.octaviantocan.mymind.data.AuthInterceptor
 import com.octaviantocan.mymind.data.Connectivity
 import com.octaviantocan.mymind.data.FeedbackClient
@@ -25,6 +26,7 @@ import com.octaviantocan.mymind.data.RecentSearches
 import com.octaviantocan.mymind.data.Repository
 import com.octaviantocan.mymind.data.Session
 import com.octaviantocan.mymind.data.SessionState
+import com.octaviantocan.mymind.data.Track
 import com.octaviantocan.mymind.data.refusedNotice
 import com.octaviantocan.mymind.feedback.FeedbackNotifier
 import com.octaviantocan.mymind.feedback.FeedbackStore
@@ -44,12 +46,15 @@ import com.octaviantocan.mymind.update.WhatsNew
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.io.File
 
 /** Manual dependency graph, created once per process. */
+private const val EVENTS_EVERY_MS = 60_000L
+
 class AppContainer(context: Context) {
     val connectivity = Connectivity(context)
     val session = Session(KeystoreTokenStore(context))
@@ -77,6 +82,28 @@ class AppContainer(context: Context) {
     /** The searches last pressed on this phone, for the opened search page. */
     val recentSearches = RecentSearches(context)
 
+    /** The phone's own usage events (`docs/analytics.md`), kept apart from the outbox and sent about once a minute. */
+    val analytics = Analytics(File(context.filesDir, "events.json")).also { Track.sink = it }
+    private val analyticsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scope ->
+        scope.launch {
+            while (true) {
+                delay(EVENTS_EVERY_MS)
+                sendEvents()
+            }
+        }
+    }
+
+    /** Sends the waiting usage events now when signed in and online; otherwise only writes them to their file. */
+    fun sendEvents() {
+        analyticsScope.launch {
+            if (session.state.value is SessionState.SignedIn && connectivity.isOnline()) {
+                analytics.send(BuildConfig.VERSION_NAME, repository::events)
+            } else {
+                analytics.fold()
+            }
+        }
+    }
+
     // The phone's copy of the library, its waiting changes, its pictures and its recent searches belong to one
     // session and are wiped whenever the app is signed out.
     val libraryCopy = LibraryCopy(context, session).also { copy ->
@@ -88,6 +115,7 @@ class AppContainer(context: Context) {
                 PictureWorker.cancel(app)
                 copy.clear()
                 recentSearches.clear()
+                analytics.clear()
                 withContext(Dispatchers.IO) { SingletonImageLoader.get(app).run { memoryCache?.clear(); diskCache?.clear() } }
             }
         }

@@ -43,6 +43,8 @@ pub struct Event {
     pub duration_ms: f64,
     /// The HTTP status of the answer.
     pub status: f64,
+    /// When the phone saw it, in milliseconds since 1970 (phone events; the row's `timestamp` is when it arrived).
+    pub at_ms: f64,
 }
 
 impl Event {
@@ -116,10 +118,12 @@ pub struct Point {
 /// | double3 | result count |
 /// | double4 | duration in ms |
 /// | double5 | HTTP status |
+/// | double6 | when the phone saw it, ms since 1970 |
 pub const LAYOUT: &str = "index1 = library key (first 32 hex of the SHA-256 of the library name); blob1 = event name; blob2 = app version; blob3 = screen; \
 blob4 = card id; blob5 = card kind; blob6 = search words; blob7 = detail (route, change name, feature or error); \
 blob8 = batch id; blob9 = client (android, mcp, extension, web); blob10 = account email; double1 = layout version; \
-double2 = count; double3 = result count; double4 = duration in ms; double5 = HTTP status";
+double2 = count; double3 = result count; double4 = duration in ms; double5 = HTTP status; \
+double6 = when the phone saw it (ms since 1970, phone events only; timestamp is when it arrived)";
 
 /// Who an event is about and where it came from, the same for every event of one request.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -180,6 +184,7 @@ pub fn point(event: &Event, origin: &Origin) -> Point {
             event.results,
             event.duration_ms,
             event.status,
+            event.at_ms,
         ],
     }
 }
@@ -421,6 +426,68 @@ pub fn daily(db: &dyn Sql, since: &str, library: &str) -> Result<Value> {
         );
     }
     Ok(obj! { "days" => days }.into())
+}
+
+/// Most events the phone sends in one batch; Analytics Engine takes 250 writes per request.
+pub const BATCH_LIMIT: usize = 100;
+
+/// The events the phone records (`android/.../data/Analytics.kt`). Any other name is dropped.
+pub const PHONE_EVENTS: &[&str] = &[
+    "start", "screen", "open", "search", "action", "share", "pinch", "swipe", "error",
+];
+
+/// One batch of the phone's own events (`POST /app/v1/events`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PhoneBatch {
+    /// The batch id the phone chose, the same on every event of the batch.
+    pub batch: String,
+    /// The app version that sent it.
+    pub version: String,
+    /// The kept events, at most [`BATCH_LIMIT`].
+    pub events: Vec<Event>,
+}
+
+/// Read a batch the phone sent: `{batch, version, events: [{name, screen, card, kind, words, detail, count, results,
+/// ms, at}]}`. Unknown names and malformed entries are dropped so an old or newer phone never gets an error back.
+///
+/// # Arguments
+/// * `body` - The parsed request body.
+/// * `client` - Who sent it ([`client_of`]), written on every event.
+///
+/// # Returns
+/// The batch, with at most [`BATCH_LIMIT`] events.
+pub fn phone_events(body: &Value, client: &str) -> PhoneBatch {
+    let text = |value: &Value, key: &str| value.get(key).as_str().map(cut).unwrap_or_default();
+    let number = |value: &Value, key: &str| {
+        value.get(key).as_f64().filter(|number| number.is_finite()).unwrap_or(0.0)
+    };
+    let events = body
+        .get("events")
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|entry| entry.get("name").as_str().is_some_and(|name| PHONE_EVENTS.contains(&name)))
+        .take(BATCH_LIMIT)
+        .map(|entry| Event {
+            name: text(entry, "name"),
+            screen: text(entry, "screen"),
+            card_id: text(entry, "card"),
+            card_kind: text(entry, "kind"),
+            words: text(entry, "words"),
+            detail: text(entry, "detail"),
+            client: client.to_owned(),
+            count: number(entry, "count"),
+            results: number(entry, "results"),
+            duration_ms: number(entry, "ms"),
+            status: 0.0,
+            at_ms: number(entry, "at"),
+        })
+        .collect();
+    PhoneBatch {
+        batch: text(body, "batch"),
+        version: text(body, "version"),
+        events,
+    }
 }
 
 /// Whether analytics is on: the `ANALYTICS` variable turns it off with `off`.

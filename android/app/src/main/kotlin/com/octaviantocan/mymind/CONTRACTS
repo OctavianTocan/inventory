@@ -6,3 +6,13 @@ already have the app or their saved settings: the applicationId com.octaviantoca
 the signing key, the update channel, preference keys such as the "thymind" theme id, and
 WorkManager job names. Source: Tavi, 5 November 2026 ("let's fully rename it to Inventory
 everywhere").
+
+@cc [owner:OctavianTocan,label:product;privacy;architecture] usage-events-stay-apart
+The app MUST record its own usage (coming to the front, the page shown, cards opened,
+searches with their words, card actions, shares, pinch counts) through `data/Analytics.kt`
+only, and send it to `POST /app/v1/events` (`docs/analytics.md`). These events MUST stay
+out of the outbox and the library copy: a capped queue of their own, oldest dropped first,
+wiped at sign-out, dropped when the server answers stop, and never stopping or slowing the
+app when they cannot be sent. The app MUST NOT mention them, and there is no switch.
+Source: Tavi, 5 November 2026, the analytics brief: "Everything, card ids too", "Not
+mentioned", and "Build it, server first".

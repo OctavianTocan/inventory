@@ -6,8 +6,11 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.octaviantocan.mymind.data.PictureWorker
+import com.octaviantocan.mymind.data.Track
 import com.octaviantocan.mymind.feedback.FeedbackWorker
 import com.octaviantocan.mymind.update.ForegroundTracker
 import com.octaviantocan.mymind.update.UpdateWorker
@@ -28,6 +31,11 @@ class MymindApp : Application(), SingletonImageLoader.Factory {
         PictureWorker.schedule(this)
         UpdateWorker.cancelLeaveInstall(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(ForegroundTracker(container.updater))
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) = Track.event("start")
+
+            override fun onStop(owner: LifecycleOwner) = container.sendEvents()
+        })
     }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =

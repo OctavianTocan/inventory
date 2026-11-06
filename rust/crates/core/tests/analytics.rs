@@ -95,6 +95,7 @@ fn every_field_lands_in_its_fixed_column() {
         results: 7.0,
         duration_ms: 31.0,
         status: 200.0,
+        at_ms: 1_762_000_000_000.0,
     };
     let origin = Origin {
         library: "u-tavi-abc".into(),
@@ -121,7 +122,7 @@ fn every_field_lands_in_its_fixed_column() {
     );
     assert_eq!(
         point.doubles,
-        [analytics::LAYOUT_VERSION, 2.0, 7.0, 31.0, 200.0]
+        [analytics::LAYOUT_VERSION, 2.0, 7.0, 31.0, 200.0, 1_762_000_000_000.0]
     );
     assert_eq!(point.index, analytics::index_of("u-tavi-abc"));
     assert_eq!(
@@ -316,4 +317,31 @@ fn daily_totals_count_a_library_and_a_day_written_twice_is_kept_once() {
             .as_deref(),
         Some("\"b@example.com\"")
     );
+}
+
+#[test]
+fn phone_batches_keep_known_events_only_and_at_most_a_hundred() {
+    let mut events = vec![
+        obj! { "name" => "open", "screen" => "all", "card" => "c1", "kind" => "Article", "at" => 1_762_000_000_000.0 }.into(),
+        obj! { "name" => "search", "words" => "harbour", "results" => 3.0 }.into(),
+        obj! { "name" => "pinch", "count" => 4.0, "detail" => "in" }.into(),
+        obj! { "name" => "made-up" }.into(),
+        obj! { "screen" => "no name" }.into(),
+        Value::from("not an object"),
+    ];
+    for _ in 0..150 {
+        events.push(obj! { "name" => "screen", "screen" => "spaces" }.into());
+    }
+    let body: Value = obj! { "batch" => "b1", "version" => "0.6.75", "events" => Value::Array(events) }.into();
+    let batch = analytics::phone_events(&body, "android");
+    assert_eq!((batch.batch.as_str(), batch.version.as_str()), ("b1", "0.6.75"));
+    assert_eq!(batch.events.len(), analytics::BATCH_LIMIT);
+    assert_eq!(batch.events[0].card_id, "c1");
+    assert_eq!(batch.events[0].at_ms, 1_762_000_000_000.0);
+    assert_eq!(batch.events[1].words, "harbour");
+    assert_eq!(batch.events[1].results, 3.0);
+    assert_eq!(batch.events[2].count, 4.0);
+    assert_eq!(batch.events[3].name, "screen", "unknown names and malformed entries are dropped");
+    assert!(batch.events.iter().all(|event| event.client == "android"));
+    assert!(analytics::phone_events(&Value::Null, "android").events.is_empty());
 }

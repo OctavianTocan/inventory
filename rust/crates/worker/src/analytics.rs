@@ -46,6 +46,51 @@ pub fn write(env: &Env, event: &Event, origin: &Origin) {
     }
 }
 
+/// Whether `path` is the phone's own events route, `POST /app/v1/events`.
+pub fn takes_events(path: &str) -> bool {
+    path == "/app/v1/events"
+}
+
+/// Write a batch of the phone's own events ([`analytics::phone_events`]) for the signed-in library. It answers
+/// `{kept}`, plus `stop: true` while analytics is off so the phone drops what it holds; a bad body keeps nothing and
+/// still answers 200, so the phone never retries a batch forever.
+///
+/// # Arguments
+/// * `request` - The incoming request.
+/// * `env` - The Worker's bindings.
+/// * `library` - The signed-in library's name.
+/// * `email` - The signed-in account's email.
+/// * `client` - Who sent it ([`analytics::client_of`]).
+///
+/// # Errors
+/// A failure reading the body.
+pub async fn take_events(
+    request: &web_sys::Request,
+    env: &Env,
+    library: &str,
+    email: &str,
+    client: &str,
+) -> Result<Response> {
+    if request.method() != "POST" {
+        return json_response(405, &obj! { "error" => "method-not-allowed" }.into());
+    }
+    if !on(env) {
+        return json_response(200, &obj! { "kept" => 0.0, "stop" => true }.into());
+    }
+    let body = json::parse(&crate::body_text(request).await?).unwrap_or(Value::Null);
+    let batch = analytics::phone_events(&body, client);
+    let origin = Origin {
+        library: library.to_owned(),
+        email: email.to_owned(),
+        version: batch.version,
+        batch: batch.batch,
+    };
+    for event in &batch.events {
+        write(env, event, &origin);
+    }
+    json_response(200, &obj! { "kept" => batch.events.len() as f64 }.into())
+}
+
 /// Whether `path` is one of the owner's analytics routes.
 pub fn serves(path: &str) -> bool {
     path.starts_with("/app/v1/analytics/")

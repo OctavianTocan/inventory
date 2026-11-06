@@ -3,6 +3,7 @@ package com.octaviantocan.mymind.ui.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.octaviantocan.mymind.data.ApiFailure
+import com.octaviantocan.mymind.data.Track
 import com.octaviantocan.mymind.data.AiRanking
 import com.octaviantocan.mymind.data.AiUnderstood
 import com.octaviantocan.mymind.data.ApiResult
@@ -335,6 +336,7 @@ class LibraryViewModel(
      */
     suspend fun perform(item: CardMenuItem, card: Card, spaceId: String?): CardMenuOutcome {
         val outcome = actions.perform(item, card, spaceId)
+        Track.event("action", screen = if (spaceId != null) "space" else "", card = card.id, kind = card.type, detail = item.action.name)
         when (outcome) {
             is CardMenuOutcome.Deleted -> feeds().forEach { it.remove(outcome.cardId) }
             is CardMenuOutcome.RemovedFromSpace -> {
@@ -711,6 +713,7 @@ class SearchModel(
         val text = searchText()
         val similar = mutableFilter.value?.similar == true
         if (!similar) recent?.add(mutableQuery.value)
+        Track.event("search", words = mutableQuery.value, detail = if (similar) "similar" else "")
         restart(0)
         val ai = ai ?: return
         if (text.isEmpty() || similar) return

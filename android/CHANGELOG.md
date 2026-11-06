@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.77 (88), 2026-11-06
+Small changes under the hood.
+
+### Changed
+- Small changes under the hood; nothing looks different.
+
 ## 0.6.76 (87), 2026-11-06
 Tap a star and its find gathers out of the sky.
 

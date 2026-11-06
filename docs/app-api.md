@@ -25,6 +25,7 @@ and `/app/v1/auth/google`. `email_verified` has to be boolean true. A subdomain 
 | `GET /app/v1/me` | none | `{"email": "...", "kind": "google" \| "password"}`. |
 | `GET /app/v1/agents` | none | Connected agents: `{"agents": [{"id", "name", "connected", "used"}]}`, the account's live app tokens that Inventory's MCP server holds (device `MCP: <name>`), most recently used first. Sign-in on only. |
 | `POST /app/v1/analytics/query` | `{"sql": "SELECT …"}` | Owner only (`OWNER_EMAIL`), `404` for everyone else: one bounded question over the usage events (`docs/analytics.md`). |
+| `POST /app/v1/events` | `{batch, version, events: [...]}` | The phone's own usage events, at most 100, unknown names dropped; answers `{kept}`, plus `stop: true` while analytics is off (`docs/analytics.md`). |
 | `GET /app/v1/analytics/daily?since&library` | none | Owner only, `404` for everyone else: the kept daily library totals (`docs/analytics.md`). |
 | `DELETE /app/v1/agents/<id>` | none | Signs one of the account's agents out (`204`); `404` for an id that is not one of its agents. The MCP server drops its grant on that agent's next call. |
 

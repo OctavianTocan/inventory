@@ -168,6 +168,10 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
      */
     suspend fun sky(day: String): ApiResult<Sky> = send(get("app/v1/sky", "day" to day), Sky.serializer())
 
+    /** Sends one batch of the phone's own usage events (`docs/analytics.md`). */
+    suspend fun events(batch: EventBatch): ApiResult<EventsAnswer> =
+        send(post("/app/v1/events", AppJson.encodeToString(EventBatch.serializer(), batch)), EventsAnswer.serializer())
+
     /**
      * Sends changes made on the phone through the server's push, which applies each change id once.
      *

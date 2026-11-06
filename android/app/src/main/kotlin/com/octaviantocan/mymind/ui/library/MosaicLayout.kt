@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.data.Track
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.exp
@@ -407,7 +408,9 @@ class MosaicState(initialColumns: Int = 2, val reels: Boolean = false) {
     }
 
     internal fun finishPinch() {
+        val before = columns
         columns = releaseColumns(finger, direction)
+        if (columns != before) Track.count("pinch", detail = "$columns")
         isPinching = false
         hopGap = 0f
     }

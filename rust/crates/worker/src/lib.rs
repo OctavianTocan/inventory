@@ -355,6 +355,9 @@ async fn route(request: web_sys::Request, env: Env) -> Result<Reply> {
     headers.set("x-mymind-email", gate.headers.get("x-mymind-email").unwrap_or_default());
     headers.set("x-mymind-sub", gate.headers.get("x-mymind-sub").unwrap_or_default());
     let email = gate.headers.get("x-mymind-email").unwrap_or_default().to_owned();
+    if analytics::takes_events(url.path()) {
+        return analytics::take_events(&request, &env, &library, &email, client).await.map(Reply::Built);
+    }
     if analytics::serves(url.path()) {
         return analytics::answer(&request, &env, &url, &email).await.map(Reply::Built);
     }

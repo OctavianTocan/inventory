@@ -502,7 +502,9 @@ spinners and AI work that looks alive.
 The words of each pressed search MUST be kept on the phone alone, at most the last five,
 newest first, with no repeat and never a filter or Same Vibe on its own. The list MUST NOT
 leave the phone, MUST be forgotten with Clear on the search page, and MUST be wiped
-whenever the app signs out, with the rest of the account's phone data.
+whenever the app signs out, with the rest of the account's phone data. Each pressed
+search's words do reach the server as one usage event (`usage-events-stay-apart`); the
+kept list itself never does.
 Source: Tavi, 5 November 2026 ("Let's build 10"), version 10's Recent list; the sign-out
 wipe follows gallery-keeps-offline-changes.
 

@@ -92,6 +92,9 @@ class Repository(private val api: MymindApi, private val session: Session, priva
      */
     suspend fun push(request: PushRequest): ApiResult<PushAnswer> = api.push(request)
 
+    /** Sends one batch of the phone's own usage events. */
+    suspend fun events(batch: EventBatch): ApiResult<EventsAnswer> = api.events(batch)
+
     override suspend fun searchSuggestions(query: String): ApiResult<List<Suggestion>> = api.searchSuggestions(query)
 
     override suspend fun tagSuggestions(query: String): ApiResult<List<String>> = api.tagSuggestions(query).map { tags -> tags.map { it.name } }

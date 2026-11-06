@@ -29,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.data.Track
 import com.octaviantocan.mymind.ui.card.siteOf
 
 /**
@@ -118,6 +119,7 @@ internal suspend fun cacheImage(context: Context, bitmap: Bitmap, name: String, 
 internal fun sharePicture(context: Context, uri: Uri, mime: String) {
     val intent = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.clipData = ClipData.newRawUri(null, uri)
+    Track.event("share", detail = "picture")
     runCatching { context.startActivity(Intent.createChooser(intent, null)) }
 }
 

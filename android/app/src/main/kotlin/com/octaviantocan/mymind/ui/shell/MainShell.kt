@@ -76,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.octaviantocan.mymind.data.AiAccount
 import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
+import com.octaviantocan.mymind.data.Track
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.uploadFileOf
@@ -245,6 +246,7 @@ fun MainShell(
         }
     }
     LaunchedEffect(settingsViewModel) { settingsViewModel.refresh() }
+    LaunchedEffect(page, openSpace?.id) { Track.event("screen", screen = if (openSpace != null) "space" else screenName(page)) }
     val photoLoader = if (account.photoUrl != null) rememberPublicAccountPhotoLoader() else null
     BackHandler(enabled = opened == null && !menuOpen && searching, onBack = closeSearch)
     val sheetState = key(menuOpen, menuFor?.card?.id) { rememberCardMenuPosition() }
@@ -265,6 +267,7 @@ fun MainShell(
         opened?.card?.takeIf { it.id != card.id }?.let(keepRecent)
         val rising = opened == null || readerSheet.closing
         opened = OpenedCard(card, spaceId)
+        Track.event("open", screen = if (spaceId != null) "space" else screenName(page), card = card.id, kind = card.type)
         if (rising) readerSheet.show(scope, motion)
     }
     val reopen = { card: OpenedCard -> opened = card; readerSheet.show(scope, motion) }
@@ -318,6 +321,7 @@ fun MainShell(
     val send = { text: String, subject: String? ->
         val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
         subject?.let { intent.putExtra(Intent.EXTRA_SUBJECT, it) }
+        Track.event("share", detail = "text")
         runCatching { context.startActivity(Intent.createChooser(intent, null)) }
         Unit
     }
@@ -893,3 +897,6 @@ private fun Modifier.stepBack(recede: () -> Float, top: Float, scrim: Color): Mo
     val r = recede()
     if (r > 0f) drawRect(scrim, alpha = r)
 }
+
+/** The name usage events give the shell's page [page]. */
+private fun screenName(page: Int): String = if (page == ASK_PAGE) "ask" else Tab.entries[page].name.lowercase()
