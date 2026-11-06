@@ -1,0 +1,293 @@
+
+/* Twelve takes on tags way C (Tavi, 5 Nov: "I definitely want C. But I want 12 variant explorations starting from
+   there."). Every one keeps C's idea: the card turns over and its back is where the space, tags and note are
+   changed, already filled in, closing by itself after five seconds unless touched. They differ in what the back is
+   and how the card moves. */
+document.head.appendChild(h(`<style>
+.tagp.bk { box-sizing: border-box; overflow: hidden; }
+.tagp.bk .ted { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.tagp.bk .cd { height: 3px; border-radius: 2px; background: rgba(255,255,255,.1); position: relative; margin-top: 8px; flex: none; }
+.tagp.bk .cd i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: 2px; }
+.tagp.bk .pick { margin-top: 6px; }
+
+.tagp.postcard { background: #F3EEE3; color: #2A2620; padding: 12px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+.tagp.postcard .pc { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 10px; flex: 1; min-height: 0; }
+.tagp.postcard .pc > b { background: rgba(42,38,32,.25); }
+.tagp.postcard .note { background: repeating-linear-gradient(180deg, transparent 0 21px, rgba(42,38,32,.18) 21px 22px); box-shadow: none; color: #2A2620; font-style: italic; font-size: 14px; line-height: 22px; padding: 2px 2px; height: 100%; border-radius: 0; }
+.tagp.postcard .note::placeholder { color: rgba(42,38,32,.45); }
+.tagp.postcard .stamps { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+.tagp.postcard .tg { height: auto; padding: 5px 2px 5px 7px; border-radius: 2px; background: #FFFDF8; color: #2A2620; font-size: 11.5px; box-shadow: 0 0 0 2px #FFFDF8, 0 0 0 3px rgba(42,38,32,.25), 0 2px 4px rgba(0,0,0,.15); outline: 2.5px dotted #F3EEE3; outline-offset: -1px; }
+.tagp.postcard .tg:nth-child(3n+1) { border-left: 3px solid #3E8DB5; } .tagp.postcard .tg:nth-child(3n+2) { border-left: 3px solid #B5705A; } .tagp.postcard .tg:nth-child(3n) { border-left: 3px solid #4F8A5B; }
+.tagp.postcard .tg .x { width: 22px; height: 22px; color: #6B6457; font-size: 15px; }
+.tagp.postcard .add { height: 30px; padding: 0 10px; border-color: rgba(42,38,32,.4); color: #2A2620; font-size: 12.5px; border-radius: 3px; }
+.tagp.postcard .addr { margin-top: auto; }
+.tagp.postcard .to { font-size: 12px; color: #6B6457; display: block; margin-bottom: 4px; }
+.tagp.postcard .spc { background: transparent; color: #2A2620; height: 30px; padding: 0 4px; border-bottom: 1.5px solid rgba(42,38,32,.4); border-radius: 0; font-size: 16px; }
+.tagp.postcard .pk { background: #FFFDF8; color: #2A2620; box-shadow: inset 0 0 0 1px rgba(42,38,32,.25); height: 28px; font-size: 12px; }
+.tagp.postcard .pcr { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.tagp.postcard .cd { background: rgba(42,38,32,.12); }
+.pmark { position: absolute; right: 18px; top: 10px; width: 120px; height: 70px; pointer-events: none; opacity: 0; }
+
+.tagp.chart { background: radial-gradient(120% 90% at 50% 30%, #13254A 0%, #0A1430 55%, #050A1C 100%); color: #E8ECF7; padding: 14px; box-shadow: inset 0 0 0 1px rgba(217,183,106,.45), inset 0 0 0 4px rgba(5,10,28,1), inset 0 0 0 5px rgba(217,183,106,.25); }
+.tagp.chart::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(1px 1px at 20px 30px, #fff, transparent), radial-gradient(1px 1px at 120px 80px, #cfe, transparent), radial-gradient(1.4px 1.4px at 220px 50px, #fff, transparent), radial-gradient(1px 1px at 70px 200px, #fff, transparent), radial-gradient(1px 1px at 180px 260px, #fde, transparent), radial-gradient(1px 1px at 250px 330px, #fff, transparent), radial-gradient(1.2px 1.2px at 40px 340px, #fff, transparent); opacity: .7; pointer-events: none; }
+.tagp.chart .ct { font-size: 12px; color: #D9B76A; text-align: center; }
+.tagp.chart .spc { display: flex; margin: 2px auto 0; background: transparent; color: #F4EBD2; font-size: 21px; font-weight: 500; height: 34px; }
+.tagp.chart .pick { justify-content: center; }
+.tagp.chart .pk { background: rgba(217,183,106,.1); color: #F4EBD2; box-shadow: inset 0 0 0 1px rgba(217,183,106,.35); height: 30px; font-size: 13px; }
+.tagp.chart .sky { position: relative; flex: 1; min-height: 150px; }
+.tagp.chart .sky svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.tagp.chart .tg { position: absolute; transform: translate(-9px, -9px); height: auto; padding: 0; background: transparent; box-shadow: none; display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: #E8ECF7; }
+.tagp.chart .tg .sd { width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle, #fff 0 2.5px, rgba(255,255,255,.5) 3.5px, transparent 9px); flex: none; }
+.tagp.chart .tg .x { width: 24px; height: 24px; color: rgba(232,236,247,.55); font-size: 15px; }
+.tagp.chart .add { align-self: center; height: 32px; border-color: rgba(217,183,106,.5); color: #F4EBD2; font-size: 13px; }
+.tagp.chart .note { background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px rgba(217,183,106,.25); color: #F4EBD2; font-size: 13.5px; margin-top: 8px; }
+.tagp.chart .cd { background: rgba(217,183,106,.15); }
+
+.tagp.tip { background: linear-gradient(180deg, #14161A, #0B0C0F); color: #DADCE0; padding: 14px 14px 12px; box-shadow: inset 0 0 0 1px var(--rc), inset 0 0 0 3px #0B0C0F, inset 0 0 0 4px rgba(255,255,255,.08), 0 0 30px -6px var(--rc); }
+.tagp.tip .nm { font-size: 17px; font-weight: 600; color: var(--rc); line-height: 1.2; }
+.tagp.tip .ty { font-size: 13px; color: #8E929A; margin: 3px 0 10px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.tagp.tip .spc { height: 28px; padding: 0 8px; background: rgba(255,255,255,.06); color: #F1F2F4; font-size: 13px; font-weight: 500; border-radius: 6px; }
+.tagp.tip .pk { height: 28px; border-radius: 6px; font-size: 12.5px; background: rgba(255,255,255,.05); color: #DADCE0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.tagp.tip hr { border: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent); margin: 8px 0; width: 100%; }
+.tagp.tip .ats { display: flex; flex-direction: column; gap: 1px; }
+.tagp.tip .tg { height: 30px; background: transparent; box-shadow: none; padding: 0 0 0 2px; color: #8FB8FF; font-size: 14.5px; justify-content: space-between; border-radius: 6px; }
+.tagp.tip .tg:hover { background: rgba(143,184,255,.06); }
+.tagp.tip .tg .x { width: 26px; height: 26px; color: #6E737C; font-size: 16px; }
+.tagp.tip .add { height: 30px; border: 0; padding: 0 2px; text-align: left; color: #6E737C; font-size: 14px; }
+.tagp.tip .note { background: transparent; box-shadow: none; color: #D9B76A; font-style: italic; font-size: 14px; padding: 2px; }
+.tagp.tip .note::placeholder { color: rgba(217,183,106,.5); }
+.tagp.tip .cd { background: rgba(255,255,255,.06); }
+
+.tagp.stick { background: #B9925E; background-image: repeating-linear-gradient(17deg, rgba(255,255,255,.04) 0 2px, transparent 2px 5px), repeating-linear-gradient(-23deg, rgba(0,0,0,.04) 0 1px, transparent 1px 4px); padding: 14px; color: #2A1E10; }
+.tagp.stick .badge { width: 92px; height: 92px; border-radius: 50%; margin: 0 auto 8px; display: grid; place-items: center; text-align: center; box-shadow: 0 0 0 4px #fff, 0 3px 8px rgba(0,0,0,.3); transform: rotate(-6deg); }
+.tagp.stick .badge .spc { background: transparent; color: #fff; font-size: 15px; font-weight: 700; flex-direction: column; height: auto; padding: 0; gap: 2px; text-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.tagp.stick .badge .spc i { display: none; }
+.tagp.stick .pick { justify-content: center; }
+.tagp.stick .pk { background: #fff; color: #2A1E10; box-shadow: 0 2px 4px rgba(0,0,0,.2); height: 30px; font-size: 12.5px; }
+.tagp.stick .row { gap: 8px; justify-content: center; }
+.tagp.stick .tg { height: 34px; background: var(--sk); color: #fff; font-weight: 600; font-size: 13.5px; box-shadow: 0 0 0 3px #fff, 0 3px 6px rgba(0,0,0,.28); transform: rotate(var(--rot)); padding-left: 12px; }
+.tagp.stick .tg .x { color: rgba(255,255,255,.85); width: 28px; height: 28px; }
+.tagp.stick .add { height: 34px; border: 2px dashed rgba(255,255,255,.75); color: #fff; border-radius: 10px; font-weight: 600; }
+.tagp.stick .note { margin-top: 12px; background: #FFF2A8; box-shadow: 0 3px 6px rgba(0,0,0,.25); color: #3A2E10; border-radius: 2px; transform: rotate(1.2deg); font-size: 14px; }
+.tagp.stick .note::placeholder { color: rgba(58,46,16,.5); }
+.tagp.stick .cd { background: rgba(0,0,0,.15); margin-top: auto; }
+
+.tagp.pass { background: #EEE7D6; background-image: repeating-radial-gradient(circle at 50% 120%, rgba(62,141,181,.06) 0 2px, transparent 2px 7px); color: #2D2A22; padding: 14px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.tagp.pass .ph { display: flex; justify-content: space-between; font-size: 12px; color: #7A7262; margin-bottom: 10px; }
+.tagp.pass .visa { align-self: flex-start; transform: rotate(-4deg); border: 2.5px solid var(--ink); box-shadow: inset 0 0 0 2px #EEE7D6, inset 0 0 0 3.5px var(--ink); padding: 8px 12px; border-radius: 4px; color: var(--ink); margin-bottom: 14px; }
+.tagp.pass .visa small { display: block; font-size: 10.5px; opacity: .8; }
+.tagp.pass .spc { background: transparent; color: var(--ink); font-size: 17px; font-weight: 700; height: 26px; padding: 0; }
+.tagp.pass .spc i { display: none; }
+.tagp.pass .pk { background: transparent; color: #2D2A22; box-shadow: inset 0 0 0 1.5px rgba(45,42,34,.35); height: 28px; font-size: 12.5px; border-radius: 4px; }
+.tagp.pass .row { gap: 10px; }
+.tagp.pass .tg { width: 84px; height: 84px; border-radius: 50%; padding: 0; justify-content: center; flex-direction: column; background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 0 5px #EEE7D6, inset 0 0 0 6px var(--ink); font-size: 12px; font-weight: 600; text-align: center; transform: rotate(var(--rot)); white-space: normal; line-height: 1.15; position: relative; opacity: .9; }
+.tagp.pass .tg .x { position: absolute; top: -4px; right: -4px; width: 24px; height: 24px; background: #EEE7D6; color: #7A7262; font-size: 15px; }
+.tagp.pass .add { width: 84px; height: 84px; border-radius: 50%; border: 2px dashed rgba(45,42,34,.35); color: #7A7262; font-size: 13px; padding: 0; }
+.tagp.pass .note { margin-top: 10px; background: repeating-linear-gradient(180deg, transparent 0 21px, rgba(45,42,34,.2) 21px 22px); box-shadow: none; color: #2D2A22; line-height: 22px; font-size: 14px; border-radius: 0; padding: 0 2px; }
+.tagp.pass .cd { background: rgba(45,42,34,.1); margin-top: auto; }
+
+.tagp.tkt { background: #F6F1E6; color: #24211B; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+.tagp.tkt .tb { background: var(--rc); color: #fff; padding: 10px 14px; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; }
+.tagp.tkt .tb small { font-weight: 400; opacity: .85; }
+.tagp.tkt .tm { padding: 12px 14px 8px; display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; }
+.tagp.tkt .tg { height: 30px; background: transparent; box-shadow: none; padding: 0; border-bottom: 1px dashed rgba(36,33,27,.2); border-radius: 0; justify-content: space-between; font-size: 14.5px; color: #24211B; }
+.tagp.tkt .tg .x { width: 26px; height: 26px; color: #8A8273; font-size: 16px; }
+.tagp.tkt .add { height: 30px; border: 0; padding: 0; text-align: left; color: #8A8273; font-size: 14px; }
+.tagp.tkt .note { margin-top: 6px; background: rgba(36,33,27,.04); box-shadow: none; color: #24211B; font-size: 13.5px; }
+.tagp.tkt .stub { position: relative; border-top: 2px dashed rgba(36,33,27,.3); padding: 10px 14px 12px; display: flex; align-items: center; justify-content: space-between; background: #F6F1E6; }
+.tagp.tkt .stub::before, .tagp.tkt .stub::after { content: ''; position: absolute; top: -9px; width: 16px; height: 16px; border-radius: 50%; background: #0A0F10; }
+.tagp.tkt .stub::before { left: -8px; } .tagp.tkt .stub::after { right: -8px; }
+.tagp.tkt .stub small { font-size: 11.5px; color: #8A8273; display: block; }
+.tagp.tkt .spc { background: transparent; color: #24211B; font-size: 16px; height: 28px; padding: 0; }
+.tagp.tkt .pk { background: rgba(36,33,27,.06); color: #24211B; box-shadow: none; height: 28px; font-size: 12.5px; }
+.tagp.tkt .cd { margin: 0 14px 0; background: rgba(36,33,27,.1); }
+
+.tagp.dial { background: radial-gradient(120% 80% at 50% 25%, #3A4044, #1C2023 70%); color: #E6E9EB; padding: 14px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.tagp.dial .dl { position: relative; width: 210px; height: 190px; margin: 0 auto; flex: none; }
+.tagp.dial .knob { position: absolute; left: 55px; top: 45px; width: 100px; height: 100px; border-radius: 50%; background: conic-gradient(from 0deg, #8E979B, #D7DDE0, #6F777B, #C9CFD2, #7B8387, #D7DDE0, #8E979B); box-shadow: 0 6px 14px rgba(0,0,0,.5), inset 0 0 0 6px rgba(0,0,0,.12); }
+.tagp.dial .knob::after { content: ''; position: absolute; left: 47px; top: 6px; width: 6px; height: 26px; border-radius: 3px; background: var(--rc); box-shadow: 0 0 10px var(--rc); }
+.tagp.dial .knob::before { content: ''; position: absolute; inset: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #4A5256, #23282B); }
+.tagp.dial .pk { position: absolute; transform: translate(-50%, -50%); height: 28px; padding: 0 10px; font-size: 12.5px; background: rgba(255,255,255,.04); color: #AEB5B9; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.tagp.dial .pk.on { color: #fff; background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1.5px var(--rc); }
+.tagp.dial .lbl { text-align: center; color: #8E979B; }
+.tagp.dial .row { justify-content: center; }
+.tagp.dial .tg { background: rgba(255,255,255,.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); color: #E6E9EB; }
+.tagp.dial .add { border-color: rgba(255,255,255,.3); color: #C9CFD2; }
+.tagp.dial .cd { margin-top: auto; }
+
+.tagp.eng { background: linear-gradient(135deg, #A9B0B3, #7E878B 50%, #9AA2A6); background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, rgba(0,0,0,.03) 1px 2px), linear-gradient(135deg, #A9B0B3, #7E878B 50%, #9AA2A6); color: #22282B; padding: 16px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
+.tagp.eng .lbl { color: #3A4246; text-shadow: 0 1px 0 rgba(255,255,255,.35); }
+.tagp.eng .spc, .tagp.eng .tg, .tagp.eng .pk { background: rgba(0,0,0,.08); color: #1B2023; box-shadow: inset 0 2px 3px rgba(0,0,0,.35), inset 0 -1px 0 rgba(255,255,255,.35); text-shadow: 0 1px 0 rgba(255,255,255,.4); font-weight: 600; border-radius: 6px; }
+.tagp.eng .spc i, .tagp.eng .pk i { box-shadow: inset 0 1px 2px rgba(0,0,0,.5); }
+.tagp.eng .tg .x { color: #3A4246; }
+.tagp.eng .add { border: 1.5px dashed rgba(27,32,35,.45); color: #2A3236; border-radius: 6px; }
+.tagp.eng .note { background: rgba(0,0,0,.08); box-shadow: inset 0 2px 3px rgba(0,0,0,.3); color: #1B2023; border-radius: 6px; }
+.tagp.eng .field { background: rgba(0,0,0,.1); color: #1B2023; box-shadow: inset 0 2px 3px rgba(0,0,0,.3); }
+.tagp.eng .cd { background: rgba(0,0,0,.15); margin-top: auto; }
+
+.tagp.small { background: rgba(8,20,22,.9); padding: 10px; color: #E8ECEB; }
+.tagp.small .lbl { display: none; }
+.tagp.small .row { gap: 5px; }
+.tagp.small .spc, .tagp.small .pk { height: 30px; font-size: 12.5px; padding: 0 8px 0 10px; }
+.tagp.small .tg { height: 30px; font-size: 12.5px; padding-left: 10px; }
+.tagp.small .tg .x { width: 26px; height: 26px; font-size: 16px; }
+.tagp.small .add { height: 30px; font-size: 12.5px; padding: 0 10px; }
+.tagp.small .row + .row { margin-top: 6px; }
+.tagp.small .cd { margin-top: auto; }
+
+.tagp.holo { background: linear-gradient(180deg, rgba(120,240,255,.12), rgba(120,240,255,.05)); background-image: repeating-linear-gradient(0deg, rgba(160,250,255,.07) 0 1px, transparent 1px 3px), linear-gradient(180deg, rgba(120,240,255,.14), rgba(120,240,255,.04)); color: #CFFBFF; padding: 16px; box-shadow: inset 0 0 0 1px rgba(150,245,255,.55), 0 0 24px rgba(120,240,255,.25); text-shadow: 1px 0 rgba(255,80,160,.45), -1px 0 rgba(80,200,255,.6); }
+.tagp.holo .hh { font-size: 12px; color: #8FEFFF; margin-bottom: 4px; }
+.tagp.holo .lbl { color: #7FDDEB; }
+.tagp.holo .spc, .tagp.holo .pk, .tagp.holo .tg { background: rgba(140,240,255,.1); color: #E6FDFF; box-shadow: inset 0 0 0 1px rgba(150,245,255,.5); border-radius: 4px; }
+.tagp.holo .tg .x { color: #9FF3FF; }
+.tagp.holo .add { border: 1px dashed rgba(150,245,255,.6); color: #BFF8FF; border-radius: 4px; }
+.tagp.holo .note { background: rgba(140,240,255,.06); box-shadow: inset 0 0 0 1px rgba(150,245,255,.35); color: #E6FDFF; border-radius: 4px; }
+.tagp.holo .cd { background: rgba(150,245,255,.15); margin-top: auto; }
+.hbeam { position: absolute; pointer-events: none; opacity: 0; background: linear-gradient(0deg, rgba(140,240,255,.45), rgba(140,240,255,0)); clip-path: polygon(42% 100%, 58% 100%, 100% 0, 0 0); filter: blur(2px); mix-blend-mode: screen; }
+
+.tagp.lib { background: #E8D7A4; background-image: linear-gradient(180deg, transparent 0 46px, rgba(181,60,60,.7) 46px 48px, transparent 48px), repeating-linear-gradient(180deg, transparent 0 33px, rgba(62,100,160,.28) 33px 34px); color: #2A2416; padding: 12px 14px; }
+.tagp.lib .lh { display: flex; justify-content: space-between; align-items: baseline; height: 30px; }
+.tagp.lib .lh small { font-size: 11.5px; color: #6E6346; }
+.tagp.lib .spc { background: transparent; color: #2A2416; height: 30px; padding: 0 2px; font-size: 15px; font-weight: 600; }
+.tagp.lib .pk { background: rgba(255,255,255,.35); color: #2A2416; box-shadow: none; height: 26px; font-size: 12px; }
+.tagp.lib .rows { margin-top: 12px; display: flex; flex-direction: column; }
+.tagp.lib .tg { height: 34px; background: transparent; box-shadow: none; border-radius: 0; padding: 0; justify-content: flex-start; gap: 10px; color: #2A2416; font-size: 14.5px; }
+.tagp.lib .tg .dt { color: #6A3FA0; font-size: 11.5px; font-weight: 700; border: 1.5px solid #6A3FA0; border-radius: 3px; padding: 1px 4px; transform: rotate(-3deg); opacity: .8; flex: none; }
+.tagp.lib .tg .x { margin-left: auto; width: 26px; height: 26px; color: #6E6346; font-size: 16px; }
+.tagp.lib .add { height: 34px; border: 0; padding: 0; text-align: left; color: #6E6346; font-size: 14px; }
+.tagp.lib .note { background: transparent; box-shadow: none; color: #2A2416; font-size: 14px; line-height: 34px; padding: 0 2px; border-radius: 0; }
+.tagp.lib .note::placeholder { color: rgba(42,36,22,.45); }
+.tagp.lib .cd { background: rgba(42,36,22,.12); margin-top: auto; }
+.kept { position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%) rotate(-12deg); color: #6A3FA0; border: 3px solid #6A3FA0; border-radius: 6px; padding: 4px 14px; font-size: 26px; font-weight: 700; opacity: 0; pointer-events: none; mix-blend-mode: multiply; }
+
+.tagp.min { background: rgba(9,13,15,.88); padding: 16px; color: #F4F2EF; }
+.tagp.min .lbl { display: none; }
+.tagp.min .row { gap: 8px; }
+.tagp.min .row + .row { margin-top: 14px; }
+.tagp.min .spc { height: 48px; padding: 0 14px 0 16px; border-radius: 24px; font-size: 17px; }
+.tagp.min .spc i { width: 12px; height: 12px; }
+.tagp.min .pk { height: 44px; border-radius: 22px; font-size: 15px; }
+.tagp.min .tg { height: 44px; border-radius: 22px; font-size: 16px; padding-left: 16px; background: rgba(244,242,239,.1); box-shadow: none; }
+.tagp.min .tg .x { width: 40px; height: 40px; font-size: 22px; }
+.tagp.min .add { width: 44px; height: 44px; padding: 0; border-radius: 22px; border: 0; background: #F4F2EF; color: #0E333A; font-size: 24px; line-height: 1; }
+.tagp.min .cd { margin-top: auto; }
+</style>`));
+
+/** Where the card's back is on the phone at scale sc, centred at y; sideways when land. */
+const backBox = (sc, y, land) => { const w = (land ? 284 : 200) * sc, h = (land ? 200 : 284) * sc; return { l: 180 - w / 2, t: y - h / 2, w, h, r: 16 * sc }; };
+const tagsTpl = (c, o = {}) => c.ts.tags.map((t, i) => `<span class="tg"${o.style ? ` style="${o.style(t, i)}"` : ''}>${o.pre ? o.pre(t, i) : ''}${o.hash === false ? '' : '# '}${t}<button type="button" class="x" data-t="${t}" aria-label="Remove ${t}">×</button></span>`).join('');
+const pickTpl = (c, picking, cls = 'row pick') => `<div class="${cls}"${picking ? '' : ' hidden'}>${SPACES.filter(s => s !== c.ts.space).map(s => `<button type="button" class="pk" data-s="${s.label}"><i style="background:${s.col}"></i>${s.label}</button>`).join('')}</div>`;
+const spcTpl = c => `<button type="button" class="spc"><i style="background:${c.ts.space.col}"></i>${c.ts.space.label}${CHEV}</button>`;
+const noteTpl = (c, rows = 2, ph = 'Why you kept it') => `<textarea class="field note" rows="${rows}" placeholder="${ph}">${c.ts.note}</textarea>`;
+const lastTag = el => [...el.querySelectorAll('.tg')].pop();
+/** A tag chip leaving: the way's own animation, resolving when it is gone. */
+const leaveA = (chip, kf, ms) => A(chip, kf, ms).finished;
+
+/**
+ * One take on way C. S: { name, d, skin, sc, y, land, flip ('y' | 'x'), pad, box (a fixed panel instead of the card
+ * back), head(c), tpl, after, fx(ed, c), note, enter(ed, c), leave(ed, c), editor(c, api) (an editor of its own instead
+ * of the shared one), timer (the editor shows the time left itself, on its ._left) }.
+ */
+function backWay(S) {
+  return { name: S.name, d: S.d, key: S.key,
+    run(id, c) { return tagSession(id, api => {
+      const sc = S.sc ?? 1.45, y = S.y ?? 352, B = S.box || backBox(sc, y, S.land), pad = S.pad ?? 11;
+      c.interactive = false; c.idle = false; c.tx = 0; c.ty = 0; c.k = 120; c.d = 18; c.ptr = null;
+      const turn = back => { if (S.flip === 'x') c.tx = back ? Math.PI : 0; else cardFlip3(c, c.flipT + Math.PI, 110, 17); c.rzT = back && S.land ? -Math.PI / 2 : 0; };
+      turn(true); tw(c, { y: S.cardY ?? y }, 460, E.inOut); tw(c.s, { sc: S.cardSc ?? sc }, 460, E.inOut); SFX.play('whoosh');
+      const ed = addHud(`<div class="tagp bk ${S.skin}" style="position:absolute;left:${B.l + pad}px;top:${B.t + pad}px;width:${B.w - 2 * pad}px;height:${B.h - 2 * pad}px;border-radius:${Math.max(6, B.r - pad * .7)}px;pointer-events:auto;display:flex;flex-direction:column;opacity:0;--rc:${c.C}">${S.head ? S.head(c) : ''}</div>`);
+      const te = S.editor ? S.editor(c, api) : tagEditor(c, api, { note: S.note ?? true, noteRows: S.noteRows ?? 3, tagLabel: S.tagLabel, tpl: S.tpl, after: S.after, fx: S.fx ? S.fx(ed, c) : null });
+      ed.appendChild(te);
+      let left = te._left;
+      if (!S.timer) { const cd = h(`<div class="cd"><i style="background:${S.cdCol || c.C}"></i></div>`); (S.cdIn ? ed.querySelector(S.cdIn) || ed : ed).appendChild(cd); left = cd.firstElementChild; fitPanel(ed, te); }
+      if (S.enter) S.enter(ed, c, id); else A(ed, [{ opacity: 0, transform: 'scale(.97)' }, { opacity: 1, transform: 'none' }], 220, { delay: 430 });
+      return { tick: f => { left.style.width = (100 - f * 100) + '%'; }, onHold: () => { left.style.opacity = '0'; },
+        leave: async () => {
+          if (S.leave) { try { await S.leave(ed, c, id); } catch (e) {} }
+          A(ed, [{ opacity: getComputedStyle(ed).opacity }, { opacity: 0 }], 140); await wait(120, id);
+          turn(false); tw(c, { y: 360 }, 460, E.inOut); tw(c.s, { sc: 1 }, 460, E.inOut); SFX.play('whoosh'); await wait(520, id);
+          c.k = 70; c.d = 9; c.idle = true; c.interactive = true; c.rzT = 0; },
+        cleanup: () => { ed.remove(); S.cleanup?.(); } };
+    }); } };
+}
+
+const INKS = ['#3E6FB5', '#8A3F6A', '#2F7A5B', '#B5562F', '#5A4FB5'];
+const STICK = ['#E2574C', '#3E8DB5', '#4F8A5B', '#8A6FB5', '#E2A23B'];
+TAGWAYS.push(
+  backWay({ key: 'C1', name: 'Postcard', skin: 'postcard', land: true, sc: 1.2, y: 360,
+    d: 'The card turns over and lies on its side as a postcard: your note on the left, the space as the address, the tags as stamps. When it goes, a postmark lands on the stamps.',
+    tpl: (c, pk) => `<div class="pc"><div class="pcl">${noteTpl(c, 6, 'Why you kept it…')}</div><b></b><div class="pcr"><div class="stamps">${tagsTpl(c, { hash: false })}<button type="button" class="add">+ Stamp</button></div><div class="addr"><span class="to">To</span>${spcTpl(c)}${pickTpl(c, pk)}</div></div></div>`,
+    fx: ed => ({ add: el => { const s = lastTag(el); if (s) A(s, [{ transform: 'translateY(-30px) rotate(-12deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], 260, { ease: 'cubic-bezier(.3,1.4,.5,1)' }); SFX.play('stamp'); } }),
+    leave: async (ed, c, id) => { const pm = h(`<svg class="pmark" viewBox="0 0 120 70"><circle cx="34" cy="35" r="27" fill="none" stroke="#3A3F7A" stroke-width="2.4"/><circle cx="34" cy="35" r="21" fill="none" stroke="#3A3F7A" stroke-width="1"/><text x="34" y="33" text-anchor="middle" font-size="9" fill="#3A3F7A" font-family="Google Sans Flex">5 Nov</text><text x="34" y="44" text-anchor="middle" font-size="7.5" fill="#3A3F7A" font-family="Google Sans Flex">Inventory</text>${[0, 1, 2, 3].map(i => `<path d="M62 ${20 + i * 10} q8 -5 14 0 t14 0 t14 0 t14 0" fill="none" stroke="#3A3F7A" stroke-width="2"/>`).join('')}</svg>`); ed.appendChild(pm);
+      SFX.play('stamp'); kick(.05); await A(pm, [{ opacity: 0, transform: 'scale(1.5) rotate(-14deg)' }, { opacity: .85, transform: 'scale(1) rotate(-8deg)' }], 160, { ease: 'cubic-bezier(.5,0,.8,.5)' }).finished; await wait(380, id); } }),
+
+  backWay({ key: 'C2', name: 'Star chart', skin: 'chart',
+    d: 'The back is a patch of night sky. The space is the constellation’s name, every tag is a star joined to the last, Add places a new star and × sends one falling. The note is a wish.',
+    tpl: (c, pk) => { const SP = [[22, 30], [112, 12], [150, 66], [96, 118], [24, 134], [60, 80], [150, 150], [16, 88]], P = c.ts.tags.map((t, i) => SP[i % SP.length]);
+      return `<div class="ct">Constellation</div>${spcTpl(c)}${pickTpl(c, pk)}<div class="sky"><svg>${P.slice(1).map((p, i) => `<line x1="${P[i][0]}" y1="${P[i][1]}" x2="${p[0]}" y2="${p[1]}" stroke="rgba(217,183,106,.55)" stroke-width="1"/>`).join('')}</svg>${tagsTpl(c, { hash: false, style: (t, i) => `left:${P[i][0]}px;top:${P[i][1]}px`, pre: () => '<i class="sd"></i>' })}</div><button type="button" class="add">+ Add a star</button>${noteTpl(c, 2, 'Make a wish')}`; },
+    fx: () => ({ add: el => { const s = lastTag(el); if (s) { A(s, [{ opacity: 0, transform: 'translate(-9px,-9px) scale(2.4)' }, { opacity: 1, transform: 'translate(-9px,-9px) scale(1)' }], 380); const [x, y] = center(s.querySelector('.sd')); sparks(x, y, '#FFF3C8', 14, 120, { g: 0, life: .5 }); } SFX.play('ting', 2); },
+      remove: s => { SFX.play('swoop'); return leaveA(s, [{ opacity: 1, transform: 'translate(-9px,-9px)' }, { opacity: 0, transform: 'translate(60px,50px) scale(.4)' }], 360); } }) }),
+
+  backWay({ key: 'C3', name: 'Item card', skin: 'tip', sc: 1.4, y: 344,
+    d: 'The back reads like an item in a role-playing game: the find’s name in its rarity colour, the space as its type, each tag a line of its own, the note as flavour text in gold.',
+    tpl: (c, pk) => `<div class="nm">Rangefinder camera, 1970s</div><div class="ty">${RN[c.r]} find, kept in ${spcTpl(c)}</div>${pickTpl(c, pk)}<hr><div class="ats">${tagsTpl(c, { hash: false, pre: () => '+ ' })}<button type="button" class="add">+ Add a line</button></div><hr>${noteTpl(c, 3, '“Why you kept it.”')}`,
+    fx: () => ({ add: el => { const s = lastTag(el); if (s) A(s, [{ background: 'rgba(143,184,255,.35)' }, { background: 'rgba(143,184,255,0)' }], 600); SFX.play('ting', 1); },
+      remove: s => { SFX.play('tick', 700); return leaveA(s, [{ opacity: 1, height: '30px' }, { opacity: 0, height: '0px' }], 200); } }) }),
+
+  backWay({ key: 'C4', name: 'Stickers', skin: 'stick',
+    d: 'The back is kraft paper. The space is a round badge, the tags are stickers stuck on at an angle; × peels one off, Add slaps a new one on. The note is a yellow sticky note.',
+    tpl: (c, pk) => `<div class="badge" style="background:${c.ts.space.col}">${spcTpl(c)}</div>${pickTpl(c, pk)}<div class="row">${tagsTpl(c, { style: (t, i) => `--sk:${STICK[(t.length + i) % 5]};--rot:${((i * 37) % 11) - 5}deg` })}<button type="button" class="add">+ Sticker</button></div>${noteTpl(c, 3, 'Why you kept it')}`,
+    fx: () => ({ add: el => { const s = lastTag(el); if (s) A(s, [{ transform: 'rotate(var(--rot)) scale(1.35)', opacity: 0 }, { transform: 'rotate(var(--rot)) scale(.94)', opacity: 1, offset: .7 }, { transform: 'rotate(var(--rot)) scale(1)' }], 260, { ease: 'ease-out' }); SFX.play('pop'); },
+      remove: s => { SFX.play('tear'); return leaveA(s, [{ transform: 'rotate(var(--rot))', opacity: 1 }, { transform: 'translate(10px,-30px) rotate(28deg) rotateX(60deg)', opacity: 0 }], 320); },
+      space: el => { const b = el.querySelector('.badge'); if (b) A(b, [{ transform: 'rotate(-6deg) scale(1.3)' }, { transform: 'rotate(-6deg) scale(1)' }], 260); SFX.play('pop'); } }) }),
+
+  backWay({ key: 'C5', name: 'Passport', skin: 'pass', flip: 'x',
+    d: 'The card flips up like a passport page. The space is the visa, every tag an entry stamp in its own ink; Add thumps a new stamp down. Remarks below for the note.',
+    head: () => `<div class="ph"><span>Entries</span><span>No. 024</span></div>`,
+    tpl: (c, pk) => `<div class="visa" style="--ink:${INKS[0]}"><small>Visa · kept in</small>${spcTpl(c)}</div>${pickTpl(c, pk)}<div class="row">${tagsTpl(c, { hash: false, style: (t, i) => `--ink:${INKS[(i + 1) % 5]};--rot:${((i * 53) % 21) - 10}deg` })}<button type="button" class="add">+ Stamp</button></div>${noteTpl(c, 2, 'Remarks')}`,
+    fx: () => ({ add: el => { const s = lastTag(el); if (s) A(s, [{ transform: 'rotate(var(--rot)) scale(1.6)', opacity: 0 }, { transform: 'rotate(var(--rot)) scale(1)', opacity: .9 }], 150, { ease: 'cubic-bezier(.6,0,.9,.5)' }); SFX.play('stamp'); kick(.06); },
+      remove: s => { SFX.play('paper'); return leaveA(s, [{ opacity: .9 }, { opacity: 0, filter: 'blur(3px)' }], 260); },
+      space: el => { const v = el.querySelector('.visa'); if (v) A(v, [{ transform: 'rotate(-4deg) scale(1.4)', opacity: 0 }, { transform: 'rotate(-4deg) scale(1)', opacity: 1 }], 150); SFX.play('stamp'); } }) }),
+
+  backWay({ key: 'C6', name: 'Ticket', skin: 'tkt',
+    d: 'The back is a ticket in the rarity colour: tags printed on it, the note below, the space on the stub. When it goes, the stub tears off along the perforation.',
+    head: c => `<div class="tb"><span>Admit one find</span><small>No. 024</small></div>`,
+    tpl: (c, pk) => `<div class="tm">${tagsTpl(c)}<button type="button" class="add">+ Add tag</button>${noteTpl(c, 2)}</div><div class="stub"><div><small>Space</small>${spcTpl(c)}${pickTpl(c, pk)}</div><svg width="40" height="40" viewBox="0 0 24 24"><path d="M12 2l7.5 8L12 22 4.5 10z" fill="${c.C}"/><path d="M12 2l7.5 8h-15z" fill="#fff" opacity=".4"/></svg></div>`,
+    cdIn: '.tm',
+    fx: () => ({ remove: s => { SFX.play('tick', 800); return leaveA(s, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(-20px)' }], 180); } }),
+    leave: async (ed, c, id) => { const s = ed.querySelector('.stub'); if (!s) return; SFX.play('tear'); await A(s, [{ transform: 'none', opacity: 1 }, { transform: 'translate(8px, 40px) rotate(7deg)', opacity: 0 }], 360, { ease: 'cubic-bezier(.5,0,.8,.4)' }).finished; await wait(120, id); } }),
+
+  (() => { let ang = null; const P = [[105, 18], [196, 95], [105, 176], [14, 95]], AN = [0, 90, 180, 270];
+    return backWay({ key: 'C7', name: 'Dial', skin: 'dial', note: false,
+      d: 'The back is a metal dial with your spaces round it; the find’s space is the one it points at. Tap another and the dial clicks round to it. Tags sit under the dial.',
+      tpl: (c, pk) => { const k = SPACES.indexOf(c.ts.space); return `<div class="lbl">Space</div><div class="dl"><div class="knob" style="transform:rotate(${ang ?? AN[k]}deg)"></div>${SPACES.map((s, i) => `<button type="button" class="pk${i === k ? ' on' : ''}" data-s="${s.label}" style="left:${P[i][0]}px;top:${P[i][1]}px"><i style="background:${s.col}"></i>${s.label}</button>`).join('')}</div><div class="lbl">Tags</div><div class="row">${tagsTpl(c)}<button type="button" class="add">+ Add tag</button></div>`; },
+      after: (el, c) => { const k = SPACES.indexOf(c.ts.space), to = AN[k], kn = el.querySelector('.knob'); if (ang != null && ang !== to) { let d = ((to - ang) % 360 + 540) % 360 - 180; const from = ang; A(kn, [{ transform: `rotate(${from}deg)` }, { transform: `rotate(${from + d}deg)` }], 380, { ease: 'cubic-bezier(.3,1.3,.5,1)' }); for (let i = 0; i < 4; i++) later(() => SFX.play('tick', 1800 - i * 150), i * 70); ang = from + d; } else ang = to; },
+      fx: () => ({}), cleanup: () => { ang = null; } }); })(),
+
+  backWay({ key: 'C8', name: 'Engraved', skin: 'eng',
+    d: 'The back is brushed steel and everything on it is engraved. Add burns a new tag into the metal letter by letter with sparks; × grinds one off.',
+    fx: () => ({ add: el => { const s = lastTag(el); if (!s) return; A(s, [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0 0 0)' }], 520, { ease: 'linear' }); SFX.play('zap', .5); const [x, y] = center(s); for (let i = 0; i < 8; i++) later(() => sparks(x - 40 + i * 11, y, '#FFD38A', 6, 120, { g: 300, life: .4 }), i * 60); },
+      remove: s => { SFX.play('zap', .3); const [x, y] = center(s); sparks(x, y, '#FFD38A', 26, 200, { g: 300, life: .5 }); return leaveA(s, [{ opacity: 1, transform: 'none' }, { opacity: .6, transform: 'translateX(-2px)', offset: .3 }, { opacity: 0, transform: 'translateX(2px)' }], 260); } }) }),
+
+  backWay({ key: 'C9', name: 'Small back', skin: 'small', sc: 1, y: 372, pad: 9, note: false,
+    d: 'The card turns over where it is, without growing: the back is a compact editor and the page around it stays in view. Less of a moment, more of a glance.' }),
+
+  backWay({ key: 'C10', name: 'Hologram', skin: 'holo', cardY: 600, cardSc: .62, box: { l: 26, t: 92, w: 308, h: 400, r: 8 }, pad: 0,
+    d: 'The card turns over and drops low, and its back projects a hologram above it: the space, tags and note float in the light. × dissolves a tag, Add flickers one in.',
+    head: () => `<div class="hh">Projected from the back of the card</div>`,
+    enter: (ed, c) => { const b = addHud(`<div class="hbeam" style="left:60px;top:470px;width:240px;height:120px"></div>`); ed._beam = b; A(b, [{ opacity: 0 }, { opacity: 1 }], 300, { delay: 380 }); A(ed, [{ opacity: 0, transform: 'scaleY(.02)' }, { opacity: .6, transform: 'scaleY(1.04)', offset: .6 }, { opacity: .3, offset: .75 }, { opacity: 1, transform: 'none' }], 420, { delay: 480 }); SFX.play('holo', .6); },
+    fx: () => ({ add: el => { const s = lastTag(el); if (s) A(s, [{ opacity: 0 }, { opacity: 1, offset: .2 }, { opacity: .2, offset: .4 }, { opacity: 1 }], 300); SFX.play('holo', .25); },
+      remove: s => { SFX.play('zap', .2); return leaveA(s, [{ opacity: 1, transform: 'none', filter: 'none' }, { opacity: 0, transform: 'scaleY(.1) scaleX(1.3)', filter: 'blur(2px)' }], 240); } }),
+    leave: async ed => { if (ed._beam) { A(ed._beam, [{ opacity: 1 }, { opacity: 0 }], 200); later(() => ed._beam.remove(), 220); } await A(ed, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scaleY(.02)' }], 200).finished; } }),
+
+  backWay({ key: 'C11', name: 'Library card', skin: 'lib',
+    d: 'The back is an old library card: the space is the shelf, every tag a ruled line with the day it was kept stamped beside it. When it goes, a big Kept stamp lands across it.',
+    tpl: (c, pk) => `<div class="lh"><small>Shelf</small>${spcTpl(c)}</div>${pickTpl(c, pk)}<div class="rows">${tagsTpl(c, { hash: false, pre: () => '<span class="dt">5 Nov</span>' })}<button type="button" class="add">+ Add a line</button></div>${noteTpl(c, 2, 'Remarks')}`,
+    fx: () => ({ add: el => { const s = lastTag(el); const d = s?.querySelector('.dt'); if (d) A(d, [{ transform: 'rotate(-3deg) scale(1.8)', opacity: 0 }, { transform: 'rotate(-3deg) scale(1)', opacity: .8 }], 140); SFX.play('stamp'); },
+      remove: s => { SFX.play('paper'); return leaveA(s, [{ opacity: 1, height: '34px' }, { opacity: 0, height: '0px' }], 200); } }),
+    leave: async (ed, c, id) => { const k = h(`<div class="kept">Kept · 5 Nov</div>`); ed.appendChild(k); SFX.play('stamp'); kick(.05); await A(k, [{ opacity: 0, transform: 'translate(-50%,-50%) rotate(-12deg) scale(1.6)' }, { opacity: .85, transform: 'translate(-50%,-50%) rotate(-12deg) scale(1)' }], 150, { ease: 'cubic-bezier(.6,0,.9,.5)' }).finished; await wait(420, id); } }),
+
+  backWay({ key: 'C12', name: 'Just the tags', skin: 'min', note: false,
+    d: 'The back with nothing but what you can change, big enough for a thumb: the space, the tags, a round plus to add one. No labels, no note.',
+    tpl: (c, pk) => `<div class="row">${spcTpl(c)}</div>${pickTpl(c, pk)}<div class="row">${tagsTpl(c)}<button type="button" class="add" aria-label="Add tag">+</button></div>` }),
+);

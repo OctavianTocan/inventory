@@ -17,7 +17,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,14 +28,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,11 +49,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -68,6 +74,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -158,15 +165,17 @@ internal fun TagGrid(state: ShareSheetState, accent: Color, left: () -> Float?, 
             .padding(9.dp),
     ) {
         Column(
-            Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)).background(Brush.verticalGradient(listOf(Color(0xFF10234A), Panel))).padding(14.dp),
+            Modifier.fillMaxSize().clip(RoundedCornerShape(18.dp)).background(Brush.verticalGradient(listOf(Color(0xFF10234A), Panel))).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             SpaceRow(state, haptic::tick)
             SearchField(state, accent, haptic::tick)
             val tiles = tagTiles(state)
             val finding = state.findingTags && state.foundTags.isEmpty() && state.typed.isBlank()
+            val grid = rememberLazyGridState()
             LazyVerticalGrid(
-                GridCells.Fixed(3), Modifier.fillMaxWidth().weight(1f),
+                GridCells.Fixed(3), Modifier.fillMaxWidth().weight(1f).fadeBottom { grid.canScrollForward }, grid,
+                contentPadding = PaddingValues(bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (finding) item(key = "finding") { FindingTile() }
@@ -243,31 +252,45 @@ private fun Tile(tile: TagTile, accent: Color, onTap: () -> Unit) {
     LaunchedEffect(taps) { if (taps > 0) { pop.snapTo(0.86f); pop.animateTo(1f, tween(320, easing = POP)) } }
     val shape = RoundedCornerShape(16.dp)
     Box(
-        Modifier.height(92.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value }.clip(shape)
+        Modifier.height(TILE_HEIGHT).graphicsLayer { scaleX = pop.value; scaleY = pop.value }.clip(shape)
             .background(if (tile.on) Paper.copy(alpha = 0.13f) else Paper.copy(alpha = 0.04f))
             .then(if (tile.on) Modifier.border(2.dp, accent, shape) else Modifier)
             .clickable(role = Role.Checkbox, onClickLabel = if (tile.on) "Take off ${tile.tag}" else "Add ${tile.tag}") { taps++; onTap() }
             .semantics { stateDescription = if (tile.on) "On" else "Off" },
     ) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(if (tile.on) accent else Paper.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-                Icon(tagIcon(tile.tag), if (tile.on) Color(0xFF0B2227) else Muted, 22f, 1.9f)
+        // The marks sit in a row of their own above the icon, 10 dp in from the corners, so neither touches the icon.
+        Column(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(Modifier.fillMaxWidth().height(18.dp).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (tile.byThyMind) {
+                    Image(painterResource(R.drawable.ic_library_search_spark), "From Inventory", Modifier.size(14.dp),
+                        colorFilter = ColorFilter.tint(Muted.copy(alpha = 0.8f)))
+                }
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.size(18.dp).clip(RoundedCornerShape(5.dp))
+                        .then(if (tile.on) Modifier.background(accent) else Modifier.border(1.5.dp, Paper.copy(alpha = 0.3f), RoundedCornerShape(5.dp))),
+                    contentAlignment = Alignment.Center,
+                ) { if (tile.on) Icon(CHECK, Color(0xFF0B2227), 11f, 4f) }
             }
+            Spacer(Modifier.height(2.dp))
+            Box(Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(if (tile.on) accent else Paper.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
+                Icon(tagIcon(tile.tag), if (tile.on) Color(0xFF0B2227) else Muted, 21f, 1.9f)
+            }
+            Spacer(Modifier.height(8.dp))
             // Long words shrink a little before they lose letters, for big system text.
-            BasicText(tile.tag, style = text(13f, Paper, FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            BasicText(tile.tag, style = text(13f, Paper, FontWeight.Normal).copy(textAlign = TextAlign.Center), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 autoSize = TextAutoSize.StepBased(minFontSize = 10.sp, maxFontSize = 13.sp))
         }
-        Box(
-            Modifier.align(Alignment.TopEnd).padding(8.dp).size(20.dp).clip(RoundedCornerShape(6.dp))
-                .then(if (tile.on) Modifier.background(accent) else Modifier.border(1.5.dp, Paper.copy(alpha = 0.3f), RoundedCornerShape(6.dp))),
-            contentAlignment = Alignment.Center,
-        ) { if (tile.on) Icon(CHECK, Color(0xFF0B2227), 12f, 4f) }
-        if (tile.byThyMind) {
-            Image(painterResource(R.drawable.ic_library_search_spark), "From Inventory", Modifier.align(Alignment.TopStart).padding(9.dp).size(14.dp),
-                colorFilter = ColorFilter.tint(Muted.copy(alpha = 0.8f)))
-        }
     }
+}
+
+/** Fades the last few dp of what is drawn while [more] says there is more below, so a cut-off row reads as a scroll. */
+private fun Modifier.fadeBottom(more: () -> Boolean) = graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+    drawContent()
+    if (!more()) return@drawWithContent
+    val f = 28.dp.toPx()
+    drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = size.height - f, endY = size.height),
+        topLeft = Offset(0f, size.height - f), size = Size(size.width, f), blendMode = BlendMode.DstOut)
 }
 
 /** A tile that breathes while ThyMind finds the tags for what was saved. */
@@ -275,7 +298,7 @@ private fun Tile(tile: TagTile, accent: Color, onTap: () -> Unit) {
 private fun FindingTile() {
     val breath by rememberInfiniteTransition(label = "finding tags").animateFloat(0.45f, 0.9f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "breath")
     Column(
-        Modifier.height(92.dp).clip(RoundedCornerShape(16.dp)).background(Paper.copy(alpha = 0.04f)).graphicsLayer { alpha = breath }
+        Modifier.height(TILE_HEIGHT).clip(RoundedCornerShape(16.dp)).background(Paper.copy(alpha = 0.04f)).graphicsLayer { alpha = breath }
             .semantics { contentDescription = FINDING_TAGS_TILE },
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -319,6 +342,7 @@ internal fun tagIcon(tag: String): String {
 }
 
 private const val MAX_TAG = 40
+private val TILE_HEIGHT = 106.dp
 private val POP = CubicBezierEasing(0.3f, 1.5f, 0.5f, 1f)
 private val NOT_WORD = Regex("""[^\p{L}\p{N}]+""")
 private val DECADE = Regex("""\b\d{2,4}s\b""")

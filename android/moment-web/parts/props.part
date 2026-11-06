@@ -1,0 +1,107 @@
+
+/* Props kit: materials, light and helpers every moment builds its 3D objects from. Positions are phone pixels. */
+/** Puts a 3D object at phone pixels (x, y) and z world units toward the viewer, and adds it to the scene. */
+function put3(o, x, y, z = 0) { o.position.set(wx(x), wy(y), z); ROOT.add(o); return o; }
+/** Where a 3D object (or a point in it) is on the phone, in pixels, so 2D sparks can start from it. */
+function px3(o, local) { const v = local ? o.localToWorld(local.clone()) : o.getWorldPosition(new THREE.Vector3()); v.project(CAM3); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; }
+/** Runs fn(dt, t) every frame while 3D is on; returns a function that stops it. */
+function every3(fn) { let t = 0; const f = dt => { t += dt; fn(dt, t); }; GL.tick.add(f); return () => GL.tick.delete(f); }
+/** A spring for one number: call s.to(v) to aim it, read s.v. */
+function spring1(v, k = 120, d = 12) { const s = { v, vel: 0, t: v, to(x) { s.t = x; return s; } }; every3(dt => { const n = Math.max(1, Math.ceil(dt / .01)), h = dt / n; for (let i = 0; i < n; i++) { s.vel += (k * (s.t - s.v) - d * s.vel) * h; s.v += s.vel * h; } }); return s; }
+const col3 = (c, k = 1) => new THREE.Color(c).multiplyScalar(k);
+/** Additive light that adds colour but no coverage, so on the see-through canvas it brightens what is behind instead of painting a dark box. */
+const ADDBLEND = { blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor };
+/** Material presets. Every one takes overrides. */
+const MAT = {
+  gold: (o = {}) => new THREE.MeshPhysicalMaterial({ color: '#F0B952', metalness: 1, roughness: .2, envMapIntensity: 1.5, clearcoat: .25, ...o }),
+  brass: (o = {}) => new THREE.MeshStandardMaterial({ color: '#C9A56A', metalness: 1, roughness: .32, envMapIntensity: 1.3, ...o }),
+  steel: (o = {}) => new THREE.MeshStandardMaterial({ color: '#C8D3D2', metalness: 1, roughness: .24, envMapIntensity: 1.4, ...o }),
+  gunmetal: (o = {}) => new THREE.MeshStandardMaterial({ color: '#4A5859', metalness: .9, roughness: .38, envMapIntensity: 1.2, ...o }),
+  chrome: (o = {}) => new THREE.MeshStandardMaterial({ color: '#FFFFFF', metalness: 1, roughness: .05, envMapIntensity: 1.6, ...o }),
+  paint: (c, o = {}) => new THREE.MeshPhysicalMaterial({ color: c, metalness: .1, roughness: .42, clearcoat: .8, clearcoatRoughness: .2, envMapIntensity: 1, ...o }),
+  matte: (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, metalness: 0, roughness: .85, envMapIntensity: .6, ...o }),
+  /** Cut crystal that bends light; needs something behind it to bend (an opaque backdrop or other objects). */
+  gem: (c, o = {}) => new THREE.MeshPhysicalMaterial({ color: '#FFFFFF', metalness: 0, roughness: 0, transmission: 1, thickness: 1.4, ior: 2.1, dispersion: 5, attenuationColor: new THREE.Color(c), attenuationDistance: .7, specularIntensity: 1, envMapIntensity: 2.2, flatShading: true, ...o }),
+  glass: (o = {}) => new THREE.MeshPhysicalMaterial({ color: '#FFFFFF', metalness: 0, roughness: .04, transmission: 1, thickness: .3, ior: 1.5, envMapIntensity: 1.6, transparent: true, ...o }),
+  /** Pure emitted light brighter than white, so bloom picks it up. k ~ 2-8. */
+  light: (c, k = 4, o = {}) => new THREE.MeshBasicMaterial({ color: col3(c, k), toneMapped: false, ...o }),
+  /** Additive light for glows and beams: invisible where black. */
+  add: (c, k = 1, o = {}) => new THREE.MeshBasicMaterial({ color: col3(c, k), transparent: true, ...ADDBLEND, depthWrite: false, toneMapped: false, ...o }),
+};
+let GLOW2 = null;
+/** A soft round light in 3D that always faces the camera; k above 1 makes it bloom. Set .material.opacity to fade. */
+function glow3(c, size = 1, k = 2) {
+  if (!GLOW2) { const cv = mkcv(128, 128), g = cv.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.2, 'rgba(255,255,255,.55)'); gr.addColorStop(.5, 'rgba(255,255,255,.14)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); GLOW2 = ctex(cv); GLOW2.keep = true; }
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW2, color: col3(c, k), transparent: true, ...ADDBLEND, depthWrite: false, toneMapped: false }));
+  s.scale.setScalar(size); return s;
+}
+/** Borrows one of the four point lights (they always exist, so adding one never stalls a phone). Lights metal nearby. */
+function lamp3(c, k = 8, dist = 6) { const l = LAMPS.find(l => !l.used) || LAMPS[3]; l.used = true; l.color.set(c); l.intensity = k; l.distance = dist; l.position.set(0, 0, 2); ROOT.add(l); return l; }
+/** A vertical beam of light, brightest at its foot and fading up, like a loot pillar. h and r in world units. */
+function beam3(c, h = 6, r = .5, k = 3) {
+  const m = new THREE.ShaderMaterial({ uniforms: { uC: { value: col3(c, k) }, uA: { value: 1 }, uT: { value: 0 } }, transparent: true, ...ADDBLEND, depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+    vertexShader: 'varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv = uv; vec4 wp = modelMatrix * vec4(position,1.); vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - wp.xyz); gl_Position = projectionMatrix * viewMatrix * wp; }',
+    fragmentShader: 'uniform vec3 uC; uniform float uA, uT; varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ float rim = pow(1. - abs(dot(vN, vV)), 1.6); float core = 1. - rim; float fall = pow(1. - vUv.y, 1.8); float flick = .85 + .15 * sin(vUv.y * 30. - uT * 9.); gl_FragColor = vec4(uC * (core * .9 + .25) * fall * flick * uA, 1.); }' });
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(r * .8, r, h, 32, 1, true), m); b.geometry.translate(0, h / 2, 0);
+  every3((dt, t) => { m.uniforms.uT.value = t; }); b.u = m.uniforms; return b;
+}
+/** A background plane far behind everything, filled by a fragment shader (uniforms uT time, uA fade, plus yours). o.opaque makes it solid so glass and gems refract it (fade the GL canvas in with A(glc, ...) instead). */
+function backdrop3(frag, uniforms = {}, o = {}) {
+  const u = { uT: { value: 0 }, uA: { value: 0 }, ...uniforms };
+  const m = new THREE.ShaderMaterial({ uniforms: u, depthWrite: false, toneMapped: false, transparent: !o.opaque,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }', fragmentShader: frag });
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(5.6 * 1.43, 11.4 * 1.43), m); p.position.z = -6; p.renderOrder = -10; ROOT.add(p);
+  every3((dt, t) => { u.uT.value = t; }); p.u = u; return p;
+}
+/** Shared GLSL: value noise and fbm, for backdrops. */
+const GLSL_NOISE = 'float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); } float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); } float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 5; i++) { s += a * vn(p); p = p * 2.03 + 1.7; a *= .5; } return s; }';
+/**
+ * Breaks a mesh into its triangles and throws them outward from its centre with spin; they fade by shrinking.
+ * Returns the group of pieces. The original mesh is hidden. o.back sends every piece away from the camera, so none crosses a card in front.
+ */
+function shatter3(mesh, o = {}) {
+  mesh.updateMatrixWorld(); const g = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone(); g.applyMatrix4(mesh.matrixWorld);
+  const pos = g.attributes.position, col = g.attributes.color, grp = new THREE.Group(), parts = [], c0 = new THREE.Vector3(); new THREE.Box3().setFromBufferAttribute(pos).getCenter(c0);
+  for (let i = 0; i < pos.count; i += 3) {
+    const a = new THREE.Vector3().fromBufferAttribute(pos, i), b = new THREE.Vector3().fromBufferAttribute(pos, i + 1), c = new THREE.Vector3().fromBufferAttribute(pos, i + 2);
+    const m = a.clone().add(b).add(c).divideScalar(3), tg = new THREE.BufferGeometry().setFromPoints([a.sub(m), b.sub(m), c.sub(m)]); tg.computeVertexNormals(); if (col) tg.setAttribute('color', new THREE.BufferAttribute(new Float32Array([0, 1, 2].flatMap(j => [col.getX(i + j), col.getY(i + j), col.getZ(i + j)])), 3));
+    const p = new THREE.Mesh(tg, o.mat || mesh.material); p.position.copy(m); const dir = m.clone().sub(c0).normalize().add(new THREE.Vector3(rnd(-.3, .3), rnd(-.1, .4), rnd(0, .6))).normalize(); if (o.back) dir.z = -Math.abs(dir.z) - .35;
+    p.userData = { v: dir.multiplyScalar(rnd(.6, 1) * (o.speed ?? 6)), w: new THREE.Vector3(rnd(-9, 9), rnd(-9, 9), rnd(-9, 9)), life: rnd(.7, 1.2) * (o.life ?? 1.2) }; parts.push(p); grp.add(p);
+  }
+  mesh.visible = false; ROOT.add(grp); const gv = o.g ?? 6;
+  every3((dt, t) => { for (const p of parts) { const u = p.userData; if (t > u.life) { p.visible = false; continue; } p.position.addScaledVector(u.v, dt); u.v.y -= gv * dt; u.v.multiplyScalar(Math.exp(-1.2 * dt)); p.rotation.x += u.w.x * dt; p.rotation.y += u.w.y * dt; p.rotation.z += u.w.z * dt; p.scale.setScalar(Math.max(.01, 1 - Math.pow(t / u.life, 3))); } });
+  return grp;
+}
+/** Turns a height canvas (white = high) into a normal map texture. */
+function normalFromHeight(hc, k = 2) {
+  const w = hc.width, h = hc.height, src = hc.getContext('2d').getImageData(0, 0, w, h).data, out = mkcv(w, h), og = out.getContext('2d'), od = og.createImageData(w, h);
+  const H = (x, y) => src[((Math.min(h - 1, Math.max(0, y))) * w + Math.min(w - 1, Math.max(0, x))) * 4] / 255;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const dx = (H(x + 1, y) - H(x - 1, y)) * k, dy = (H(x, y + 1) - H(x, y - 1)) * k, l = Math.hypot(dx, dy, 1), i = (y * w + x) * 4;
+    od.data[i] = (-dx / l * .5 + .5) * 255; od.data[i + 1] = (dy / l * .5 + .5) * 255; od.data[i + 2] = (1 / l * .5 + .5) * 255; od.data[i + 3] = 255; }
+  og.putImageData(od, 0, 0); return ctex(out, false);
+}
+/** A canvas texture drawn by fn(g, w, h). */
+function tex2d(w, h, fn, srgb = true) { const cv = mkcv(w, h), g = cv.getContext('2d'); fn(g, w, h); return ctex(cv, srgb); }
+/** A brilliant cut: rings of girdle, crown and pavilion facets, alternate rings turned half a step so facets are kites and triangles. */
+function cutGemGeo(r = 1, seg = 16) {
+  const rings = [[.0, -1.12, 0], [.46, -.66, 1], [1, -.07, 0], [1, .05, 0], [.82, .25, 1], [.55, .43, 0], [0, .43, 0]];
+  const P = rings.map(([rr, y, ph]) => Array.from({ length: seg }, (_, k) => { const a = (k + ph * .5) / seg * Math.PI * 2; return new THREE.Vector3(Math.cos(a) * rr * r, y * r, Math.sin(a) * rr * r); }));
+  const v = [];
+  for (let i = 0; i < rings.length - 1; i++) for (let k = 0; k < seg; k++) {
+    const a = P[i][k], b = P[i][(k + 1) % seg], c = P[i + 1][k], d = P[i + 1][(k + 1) % seg];
+    v.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry().setFromPoints(v); g.computeVertexNormals();
+  const cols = new Float32Array(v.length * 3); for (let i = 0; i < v.length; i += 6) { const k = rnd(.18, 1.45); cols.fill(k, i * 3, i * 3 + 18); } g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  return g;
+}
+/** Faceted stone: every facet its own brightness, mirror-smooth with a thin film for fire, and its own inner light. */
+const gemMat = c => new THREE.MeshPhysicalMaterial({ color: c, vertexColors: true, metalness: .55, roughness: .05, envMapIntensity: 3, iridescence: .9, iridescenceIOR: 1.8, iridescenceThicknessRange: [200, 800], clearcoat: 1, clearcoatRoughness: .02, emissive: c, emissiveIntensity: .25, flatShading: true });
+/** The card emerges from a 3D prop: a card face down at (x, y), hidden until shown. */
+function hiddenCard(x, y, o = {}) { const c = holoCard3({ x, y, z: o.z ?? 0, up: o.up ?? false, sc: o.sc ?? 1 }); c.vis = o.vis ?? 1; return c; }
+/** The big turn of a hidden card into the find: a spin that always lands face up (turns = extra whole turns, rounded). */
+function turnCard(c, o = {}) {
+  c.heat = o.heat ?? .35; tw(c, { heat: 0 }, o.coolMs ?? 900, E.out);
+  const base = Math.ceil(c.s.fl / (Math.PI * 2) + 1e-6) * Math.PI * 2; cardFlip3(c, base + Math.max(0, Math.round(o.turns ?? 1)) * Math.PI * 2, o.kf ?? 34, o.df ?? 7.5);
+  c.glowCol.set(c.C); c.glowA = 1; tw(c, { glowA: .42 }, 1300, E.out); if (o.sc) tw(c.s, { sc: o.sc }, o.scMs ?? 700, E.back);
+}

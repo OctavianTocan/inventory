@@ -1,0 +1,341 @@
+
+/* Real 3D for the props and the card, lit by a small studio of soft lights so metal and foil catch real highlights,
+   with bloom on whatever gets brighter than white. The canvas stays see-through, so the page's own backdrops,
+   skies and light rays show behind it and the 2D sparks draw over it. 1 world unit = 100 px of the phone. */
+const glc = document.getElementById('gl');
+const R3 = new THREE.WebGLRenderer({ canvas: glc, antialias: false, alpha: true, powerPreference: 'high-performance' });
+/* Phones get a lighter render: no 4x antialiasing on the HDR buffers (heavy, and some phone GPUs drop parts of the frame
+   with it), a lower starting resolution, and a resolution that steps down while frames keep running slow. */
+const PHONE = matchMedia('(pointer: coarse)').matches;
+let DPR = Math.min(window.devicePixelRatio || 1, 2);
+R3.setPixelRatio(DPR); R3.setSize(W, H, false); R3.setClearColor(0x000000, 0);
+R3.toneMapping = THREE.ACESFilmicToneMapping; R3.toneMappingExposure = 1.05;
+const S3 = new THREE.Scene();
+const CAM3 = new THREE.PerspectiveCamera(30, W / H, .1, 80); CAM3.position.set(0, 0, 14.182);
+const ROOT = new THREE.Group(); S3.add(ROOT);
+/* A warm key from the upper left so printed parts (the photo, the name) stay readable whatever the room reflects. */
+const KEY3 = new THREE.DirectionalLight('#FFF4E6', 2.2); KEY3.position.set(-3, 4, 9); S3.add(KEY3); S3.add(new THREE.AmbientLight('#CFE8E3', .5));
+const PMG = new THREE.PMREMGenerator(R3);
+/* Four point lights that always exist (dark until a moment borrows one), so lighting never changes shader programs mid-moment. */
+const LAMPS = Array.from({ length: 4 }, () => { const l = new THREE.PointLight('#FFFFFF', 0, 6, 1.6); S3.add(l); return l; });
+const GL = { on: false, tick: new Set() };
+const wx = x => (x - 180) / 100, wy = y => (380 - y) / 100;
+
+/** A dark room with soft boxes: a white key above, teal on the left, the find's rarity colour on the right. */
+function studio(rim) {
+  const s = new THREE.Scene();
+  s.add(new THREE.Mesh(new THREE.SphereGeometry(20, 24, 12), new THREE.MeshBasicMaterial({ color: '#06171A', side: THREE.BackSide })));
+  const soft = (w, h, x, y, z, col, k) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(k), side: THREE.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 0, 0); s.add(m); };
+  soft(7, 1.1, 0, 9, 4, '#FFFFFF', 7);
+  soft(1.1, 11, -9, 1, 2, '#A7D3CC', 3.2);
+  soft(1.1, 11, 9, -1, 2, rim, 4);
+  soft(7, 5, 0, -1, 10, '#FFFFFF', .14);
+  soft(3, 1.2, 5, 6, -6, '#FFFFFF', 2.2);
+  soft(1.2, 6, -4, -7, 6, rim, 1.6);
+  const t = PMG.fromScene(s, .02).texture;
+  s.traverse(n => { n.geometry?.dispose(); n.material?.dispose(); });
+  return t;
+}
+const ENVS = {};
+function envFor(r) { S3.environment = ENVS[r] || (ENVS[r] = studio(RC[r])); }
+
+const comp = new EffectComposer(R3, new THREE.WebGLRenderTarget(W * DPR, H * DPR, { type: THREE.HalfFloatType, samples: PHONE ? 0 : 4 }));
+comp.setPixelRatio(DPR); comp.setSize(W, H);
+comp.addPass(new RenderPass(S3, CAM3));
+/* Scrubs NaN and infinite values out of the scene before bloom: one bad pixel otherwise spreads through the bloom's
+   blur into black blocks that can cover half the screen. With opts.probe they show as magenta instead, for checks. */
+const CLEAN = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uProbe: { value: typeof opts !== 'undefined' && opts.probe ? 1 : 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: 'uniform sampler2D tDiffuse; uniform float uProbe; varying vec2 vUv; bool bad(float x){ return !(x >= -1e4 && x <= 1e4); } void main(){ vec4 c = texture2D(tDiffuse, vUv); if (bad(c.r) || bad(c.g) || bad(c.b) || bad(c.a)) c = uProbe > .5 ? vec4(1., 0., 1., 1.) : vec4(0.); gl_FragColor = max(c, vec4(0.)); }' });
+comp.addPass(CLEAN);
+const SAVE = new SavePass(new THREE.WebGLRenderTarget(W * DPR, H * DPR, { type: THREE.HalfFloatType }));
+comp.addPass(SAVE);
+const BLOOM = new UnrealBloomPass(new THREE.Vector2(W, H), .6, .5, .82);
+comp.addPass(BLOOM);
+/* Bloom on a see-through canvas: keep the scene's own alpha and let the glow add its brightness as alpha. */
+const KEEPA = new ShaderPass({ uniforms: { tDiffuse: { value: null }, tScene: { value: null } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: 'uniform sampler2D tDiffuse, tScene; varying vec2 vUv; void main(){ vec4 a = texture2D(tScene, vUv); vec3 c = texture2D(tDiffuse, vUv).rgb; vec3 g = max(c - a.rgb, 0.); gl_FragColor = vec4(c, clamp(a.a + max(g.r, max(g.g, g.b)), 0., 1.)); }' });
+KEEPA.uniforms.tScene.value = SAVE.renderTarget.texture;
+comp.addPass(KEEPA);
+comp.addPass(new OutputPass());
+
+const PERF = { n: 0, slow: 0 };
+/**
+ * Counts slow frames while 3D is on and lowers the render resolution a step when most of the last 40 were slow.
+ * @param {number} ms how long the last frame took, in real milliseconds
+ */
+function perfSample(ms) {
+  if (!GL.on || FILM || document.hidden) return; PERF.n++; if (ms > 21) PERF.slow++;
+  if (PERF.n < 40) return; const slow = PERF.slow > 16; PERF.n = PERF.slow = 0;
+  if (slow && DPR > 1.26) { DPR = Math.max(1.25, Math.round((DPR - .25) * 100) / 100); R3.setPixelRatio(DPR); R3.setSize(W, H, false); comp.setPixelRatio(DPR); }
+}
+function glOn() { if (!GL.on) { GL.on = true; glc.style.opacity = '1'; } }
+/** Removes every 3D thing of the last moment and frees its GPU memory. */
+/* Shader programs outlive their moment: the first material of each program is kept, never disposed, so a moment
+   played again, or another moment with the same kind of material, never compiles a shader mid-animation. */
+const KEEPM = new Map();
+function keepOrDispose(m) { const k = R3.properties.get(m).currentProgram?.cacheKey; if (k && !KEEPM.has(k)) KEEPM.set(k, m); else m.dispose(); }
+/**
+ * Compiles the shaders of everything under ROOT, hidden objects too, for the composer's render target (so the programs
+ * match what the frame will use). Where the browser compiles in parallel this does not block the page.
+ * Moments await it once their props are built, before anything moves.
+ * @param {number} [id] the moment's run id; throws Stop if the moment was skipped meanwhile
+ * @returns {Promise<void>}
+ */
+async function warm3(id) {
+  let p; R3.setRenderTarget(comp.readBuffer); try { p = R3.compileAsync(ROOT, CAM3, S3); } catch (e) {} R3.setRenderTarget(null);
+  if (p) await Promise.race([p, new Promise(r => setTimeout(r, 2500))]);
+  if (id != null) guard(id);
+}
+function glClear() {
+  LAMPS.forEach(l => { S3.add(l); l.intensity = 0; l.used = false; });
+  ROOT.children.slice().forEach(o => { ROOT.remove(o); o.traverse(n => { n.geometry?.dispose(); [].concat(n.material || []).forEach(m => { for (const k in m) { const v = m[k]; if (v && v.isTexture && !v.keep) v.dispose(); } keepOrDispose(m); }); }); });
+  GL.tick.clear(); CARDS3.clear(); WORLD.b = null; GL.on = false; glc.getAnimations().forEach(a => a.cancel()); glc.style.opacity = '0'; S3.background = null; R3.setRenderTarget(null); R3.clear();
+}
+function glFrame(dt) {
+  if (!GL.on) return;
+  CARDS3.forEach(c => stepCard3(c, dt));
+  GL.tick.forEach(f => f(dt));
+  if (FILM) { if (FILMDRAW) comp.render(); return; }
+  // A new material would compile its shader inside render() and freeze the whole page; compile it in the background
+  // and hold the last 3D frame meanwhile (the page, the 2D effects and the clock keep running).
+  if (WARMING) return;
+  if (needsWarm()) { R3.setRenderTarget(comp.readBuffer); let p; try { p = R3.compileAsync(ROOT, CAM3, S3); } catch (e) {} R3.setRenderTarget(null); if (p) { WARMING = Promise.race([p, new Promise(r => setTimeout(r, 3000))]).finally(() => { WARMING = null; }); return; } }
+  comp.render();
+}
+let WARMING = null;
+/** True when something under ROOT has a material whose shader was never compiled. */
+function needsWarm() {
+  let n = false;
+  ROOT.traverse(o => { if (n || !(o.isMesh || o.isPoints || o.isLine || o.isSprite)) return; for (const m of [].concat(o.material || [])) if (!R3.properties.get(m).currentProgram) { n = true; return; } });
+  return n;
+}
+
+/* Shapes and canvas textures. */
+function rrPath(p, w, h, r, x = -w / 2, y = -h / 2) { p.moveTo(x + r, y); p.lineTo(x + w - r, y); p.quadraticCurveTo(x + w, y, x + w, y + r); p.lineTo(x + w, y + h - r); p.quadraticCurveTo(x + w, y + h, x + w - r, y + h); p.lineTo(x + r, y + h); p.quadraticCurveTo(x, y + h, x, y + h - r); p.lineTo(x, y + r); p.quadraticCurveTo(x, y, x + r, y); return p; }
+/** A flat rounded rectangle whose UVs run 0 to 1 across it (mirrored for a face seen from behind). */
+function rrPlane(w, h, r, flip = false) {
+  const g = new THREE.ShapeGeometry(rrPath(new THREE.Shape(), w, h, r), 12), p = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) { const u = p.getX(i) / w + .5, v = p.getY(i) / h + .5; uv.setXY(i, flip ? 1 - u : u, v); }
+  return g;
+}
+function ctex(cv, srgb = true) { const t = new THREE.CanvasTexture(cv); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = R3.capabilities.getMaxAnisotropy(); return t; }
+/** A canvas for building a texture. CPU-backed, so reading it back (normal maps) and uploading it never stalls on the GPU. */
+function mkcv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d', { willReadFrequently: true }); return c; }
+function rr2(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+const FONT = '"Google Sans Flex", system-ui, sans-serif';
+const PHOTO = new Image(); PHOTO.src = 'photos/camera.jpg';
+const PHOTO_T = new THREE.TextureLoader().load('photos/camera.jpg'); PHOTO_T.colorSpace = THREE.SRGBColorSpace; PHOTO_T.keep = true;
+/** A cut gem in flat facets, for canvases. */
+function gem2d(g, x, y, s, t) {
+  g.save(); g.translate(x - s / 2, y - s / 2); g.scale(s / 48, s / 48);
+  const f = (d, c) => { g.fillStyle = c; g.fill(new Path2D(d)); };
+  f('M24 3 L42 18 L24 45 L6 18 Z', t[3]); f('M6 18 L15 9 L24 3 L33 9 L42 18 Z', t[1]); f('M15 9 L24 18 L33 9 L24 3Z', t[0]);
+  f('M6 18 L24 18 L24 45 Z', t[2]); f('M24 18 L42 18 L24 45 Z', t[4]); f('M15 9 L24 18 L6 18Z', t[2]); f('M33 9 L42 18 L24 18Z', t[3]);
+  g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = .8; g.stroke(new Path2D('M24 3 L42 18 L24 45 L6 18 Z')); g.restore();
+}
+function star2d(g, x, y, r, fill) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * .45 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fillStyle = fill; g.fill(); }
+/** A chip on a canvas; returns its width. */
+function chip2d(g, x, y, text, o = {}) {
+  g.font = `${o.weight || 500} ${o.size || 10}px ${FONT}`; const tw = g.measureText(text).width, pad = o.pad ?? 7, ic = o.icon ? (o.size || 10) + 3 : 0, w = tw + pad * 2 + ic, h = o.h || 18;
+  rr2(g, x, y, w, h, h / 2); g.fillStyle = o.bg || 'rgba(244,242,239,.09)'; g.fill(); if (o.stroke) { g.strokeStyle = o.stroke; g.lineWidth = 1; g.stroke(); }
+  if (o.icon) o.icon(g, x + pad + (o.size || 10) / 2, y + h / 2);
+  g.fillStyle = o.fg || '#CFE0DE'; g.textBaseline = 'middle'; g.fillText(text, x + pad + ic, y + h / 2 + .5); return w;
+}
+
+/* The card. */
+const CW = 2, CH = 2.84, CRAD = .16, CTH = .035;
+const METAL = { 5: ['#FFF3D1', '#E2A23B', '#8A5A14', '#F6CF7A', '#6E4510'], 3: ['#E6F3FA', '#3E8DB5', '#1D4A63', '#86C4E0', '#173A4E'], 1: ['#F1EDE4', '#A39E92', '#5E5A51', '#D4CEC1', '#4A4740'] };
+const GEMT = { teal: ['#F4F2EF', '#CFE7E2', '#A7D3CC', '#6FA7A0', '#3F7A82'], gold: ['#FFF3D1', '#F2C46A', '#E2A23B', '#B07A22', '#8A5A14'], blue: ['#EAF4FA', '#9CCBE3', '#3E8DB5', '#2A6A8C', '#1D4A63'] };
+const GEMR = { 1: 'teal', 3: 'blue', 5: 'gold' };
+/** The card's face as a picture: frame, header, the window the photo floats over, name, facts, and the tags on it. */
+function faceArt(r, tags = [], stars = 0) {
+  const S = 4, cv = mkcv(200 * S, 284 * S), g = cv.getContext('2d'); g.scale(S, S);
+  const C = RC[r], M = METAL[r];
+  rr2(g, 0, 0, 200, 284, 16); const fg = g.createLinearGradient(0, 0, 200, 284); [M[0], M[1], M[2], M[3], M[1], M[4], M[0]].forEach((c, i) => fg.addColorStop(i / 6, c)); g.fillStyle = fg; g.fill();
+  g.save(); rr2(g, 7, 7, 186, 270, 11); g.clip();
+  g.fillStyle = NIGHT; g.fillRect(0, 0, 200, 284);
+  const wash = g.createRadialGradient(100, -10, 0, 100, -10, 210); wash.addColorStop(0, hexA(C, .34)); wash.addColorStop(1, hexA(C, 0)); g.fillStyle = wash; g.fillRect(0, 0, 200, 284);
+  g.strokeStyle = hexA('#A7D3CC', .07); g.lineWidth = .5;
+  for (let k = 0; k < 26; k++) { g.beginPath(); for (let x = 0; x <= 200; x += 2) { const y = 150 + k * 6 + Math.sin(x / 13 + k * .7) * 5 + Math.sin(x / 31 - k) * 3; x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
+  g.restore();
+  g.save(); rr2(g, 7, 7, 186, 270, 11); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.18)'; g.stroke(); g.restore();
+  g.font = `700 12px ${FONT}`; g.textBaseline = 'middle'; g.fillStyle = C; g.fillText(RN[r], 16, 21);
+  for (let i = 0; i < RNUM[r]; i++) star2d(g, 184 - (RNUM[r] - 1 - i) * 13, 21, 5.6, i < stars ? C : 'rgba(244,242,239,.14)');
+  rr2(g, 11, 32, 178, 146, 11); g.fillStyle = '#030D10'; g.fill();
+  const ins = g.createLinearGradient(0, 32, 0, 60); ins.addColorStop(0, 'rgba(0,0,0,.7)'); ins.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = ins; g.fill();
+  g.fillStyle = '#F4F2EF'; g.font = `500 16px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText('Rangefinder camera,', 13, 199); g.fillText('1970s', 13, 218);
+  let x = 12; const camIcon = (g, cx, cy) => { g.strokeStyle = '#CFE0DE'; g.lineWidth = 1.2; rr2(g, cx - 5, cy - 3.5, 10, 7.5, 1.6); g.stroke(); g.beginPath(); g.arc(cx, cy, 2, 0, 7); g.stroke(); };
+  x += chip2d(g, x, 228, 'Camera', { icon: camIcon }) + 4; x += chip2d(g, x, 228, 'No. 024') + 4;
+  chip2d(g, x, 228, '+' + PTS[r], { fg: C, icon: (g, cx, cy) => gem2d(g, cx, cy, 10, GEMT[GEMR[r]]) });
+  x = 12;
+  for (let i = 0; i < tags.length; i++) { const t = tags[i], sp = t.k === 'space', txt = (sp ? '' : '#') + t.label; g.font = `${sp ? 600 : 500} 10px ${FONT}`; const need = g.measureText(txt).width + 14 + (sp ? 13 : 0);
+    if (x + need > 188) { chip2d(g, x, 252, '+' + (tags.length - i), { bg: 'rgba(244,242,239,.14)', fg: '#E8ECEB' }); break; }
+    x += chip2d(g, x, 252, txt, sp ? { bg: '#F4F2EF', fg: '#0E333A', weight: 600, icon: (g, cx, cy) => { g.fillStyle = t.col; g.beginPath(); g.arc(cx, cy, 3, 0, 7); g.fill(); } } : { bg: 'rgba(244,242,239,.14)', fg: '#E8ECEB' }) + 4; }
+  return cv;
+}
+/** Which parts of the face are metal and how rough (green = roughness, blue = metalness), and where the foil is. */
+function faceMaps(r) {
+  const S = 2, a = mkcv(400, 568), b = mkcv(400, 568), ga = a.getContext('2d'), gb = b.getContext('2d'); ga.scale(S, S); gb.scale(S, S);
+  ga.fillStyle = 'rgb(0,60,255)'; ga.fillRect(0, 0, 200, 284); rr2(ga, 7, 7, 186, 270, 11); ga.fillStyle = r >= 5 ? 'rgb(0,95,90)' : 'rgb(0,165,0)'; ga.fill();
+  ga.fillStyle = 'rgb(0,70,230)'; ga.font = `700 12px ${FONT}`; ga.textBaseline = 'middle'; ga.fillText(RN[r], 16, 21);
+  gb.fillStyle = '#000'; gb.fillRect(0, 0, 200, 284);
+  if (r >= 3) { gb.fillStyle = '#FFF'; gb.fillRect(0, 0, 200, 284); rr2(gb, 7, 7, 186, 270, 11); gb.fillStyle = '#000'; gb.fill(); }
+  if (r >= 5) {
+    gb.save(); rr2(gb, 7, 7, 186, 270, 11); gb.clip(); gb.strokeStyle = 'rgba(255,255,255,.55)'; gb.lineWidth = 1.1;
+    for (let k = -30; k < 60; k++) { gb.beginPath(); gb.moveTo(k * 7, 0); gb.lineTo(k * 7 - 160, 284); gb.stroke(); }
+    const rg = gb.createRadialGradient(100, 120, 0, 100, 120, 170); rg.addColorStop(0, 'rgba(255,255,255,.5)'); rg.addColorStop(1, 'rgba(255,255,255,.12)'); gb.fillStyle = rg; gb.fillRect(0, 0, 200, 284);
+    gb.restore(); rr2(gb, 11, 32, 178, 146, 11); gb.fillStyle = '#000'; gb.fill();
+  }
+  return { orm: ctex(a, false), foil: ctex(b, false) };
+}
+/** The back: an engraved rosette round the Inventory gem, in the same frame. */
+function backArt(r) {
+  const S = 4, cv = mkcv(200 * S, 284 * S), g = cv.getContext('2d'); g.scale(S, S); const M = METAL[r];
+  rr2(g, 0, 0, 200, 284, 16); const fg = g.createLinearGradient(200, 0, 0, 284); [M[0], M[1], M[2], M[3], M[1], M[4], M[0]].forEach((c, i) => fg.addColorStop(i / 6, c)); g.fillStyle = fg; g.fill();
+  g.save(); rr2(g, 7, 7, 186, 270, 11); g.clip();
+  const bg = g.createRadialGradient(100, 130, 0, 100, 130, 190); bg.addColorStop(0, '#1E555D'); bg.addColorStop(.7, NIGHT); g.fillStyle = bg; g.fillRect(0, 0, 200, 284);
+  g.translate(100, 130); g.strokeStyle = 'rgba(167,211,204,.22)'; g.lineWidth = .5;
+  for (let k = 0; k < 48; k++) { g.beginPath(); for (let a = 0; a <= 361; a += 3) { const t = a * Math.PI / 180, rr = 52 + 22 * Math.sin(t * 6 + k * .13) + k * .9; a ? g.lineTo(Math.cos(t) * rr, Math.sin(t) * rr) : g.moveTo(Math.cos(t) * rr, Math.sin(t) * rr); } g.stroke(); }
+  for (let k = 0; k < 3; k++) { g.beginPath(); g.arc(0, 0, 44 - k * 4, 0, 7); g.strokeStyle = k ? 'rgba(167,211,204,.35)' : 'rgba(244,242,239,.6)'; g.lineWidth = k ? .6 : 1.2; g.stroke(); }
+  g.font = `500 7px ${FONT}`; g.fillStyle = 'rgba(207,231,226,.85)'; const txt = 'INVENTORY · KEPT FOR YOU · '.toLowerCase().repeat(2);
+  for (let i = 0; i < txt.length; i++) { const a = -Math.PI / 2 + i / txt.length * Math.PI * 2; g.save(); g.rotate(a + Math.PI / 2); g.fillText(txt[i], -2, -33); g.restore(); }
+  gem2d(g, 0, -1, 40, GEMT.teal);
+  g.restore();
+  g.fillStyle = '#CFE7E2'; g.font = `500 14px ${FONT}`; g.textAlign = 'center'; g.fillText('Inventory', 100, 250); g.textAlign = 'left';
+  return cv;
+}
+function backOrm() {
+  const a = mkcv(400, 568), g = a.getContext('2d'); g.scale(2, 2); g.fillStyle = 'rgb(0,60,255)'; g.fillRect(0, 0, 200, 284);
+  rr2(g, 7, 7, 186, 270, 11); g.fillStyle = 'rgb(0,170,0)'; g.fill(); g.save(); g.translate(100, 130); g.strokeStyle = 'rgb(0,70,200)'; g.lineWidth = .7;
+  for (let k = 0; k < 48; k += 2) { g.beginPath(); for (let a = 0; a <= 361; a += 3) { const t = a * Math.PI / 180, rr = 52 + 22 * Math.sin(t * 6 + k * .13) + k * .9; a ? g.lineTo(Math.cos(t) * rr, Math.sin(t) * rr) : g.moveTo(Math.cos(t) * rr, Math.sin(t) * rr); } g.stroke(); }
+  g.beginPath(); g.arc(0, 0, 44, 0, 7); g.lineWidth = 2; g.stroke(); g.restore(); return ctex(a, false);
+}
+/** Glitter and a passing sheen over the foil: each tiny facet has its own tilt and flashes when it catches a light. */
+const SPARK_V = 'varying vec2 vUv; varying vec3 vN; varying vec3 vP; void main(){ vUv = uv; vec4 wp = modelMatrix * vec4(position, 1.); vP = wp.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * wp; }';
+const SPARK_F = `uniform sampler2D uMask; uniform float uAmt, uSheen, uSheenA, uDens; varying vec2 vUv; varying vec3 vN; varying vec3 vP;
+float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+vec3 hue(float h){ return clamp(abs(mod(h * 6. + vec3(0., 4., 2.), 6.) - 3.) - 1., 0., 1.); }
+void main(){
+  float m = texture2D(uMask, vUv).r;
+  vec3 V = normalize(cameraPosition - vP), N = normalize(vN);
+  vec2 gp = vUv * vec2(64., 91.) * uDens; vec2 id = floor(gp); vec2 f = fract(gp) - .5;
+  float r1 = h21(id), r2 = h21(id + 7.13), r3 = h21(id + 3.71);
+  float d = length(f - (vec2(r1, r2) - .5) * .6);
+  vec3 n = normalize(N + vec3((r1 - .5) * 1.3, (r2 - .5) * 1.3, 0.));
+  vec3 L1 = normalize(vec3(-.5, .8, .6)), L2 = normalize(vec3(.7, -.3, .7));
+  float s = pow(max(dot(n, normalize(L1 + V)), 0.), 220.) + pow(max(dot(n, normalize(L2 + V)), 0.), 220.);
+  float spark = s * smoothstep(.2, 0., d) * step(.5, r3);
+  vec3 col = mix(vec3(1.), hue(r3 * 3. + dot(V, vec3(.8, .4, 0.))), .55);
+  float sx = vUv.x * .8 + (1. - vUv.y) * .6 - uSheen; float sw = (exp(-pow(sx * 16., 2.)) * .7 + exp(-pow(sx * 5., 2.)) * .1) * uSheenA;
+  gl_FragColor = vec4(col * spark * 3.2 * m * uAmt + vec3(sw), 1.);
+}`;
+const GLOWT = (() => { const c = mkcv(256, 340), g = c.getContext('2d'); g.filter = 'blur(34px)'; rr2(g, 60, 64, 136, 212, 30); g.fillStyle = '#FFF'; g.fill(); const t = ctex(c); t.keep = true; return t; })();
+
+const CARDS3 = new Set();
+/**
+ * A find as a real card: a metal edge with thickness, a face whose frame is polished metal with thin-film foil,
+ * the photo floating above it in its own bezel, glitter, and a back. Moved by springs so it overshoots and settles.
+ * Position (x, y) is in phone pixels; s.fl is the flip in radians (0 face up, PI face down).
+ */
+function holoCard3(o = {}) {
+  if (FIND_PICK && FINDS[FIND_PICK]) return findCard(FINDS[FIND_PICK], FIND_PICK, o);
+  const r = rarity, M = METAL[r], C = RC[r], look = o.look || cardLook(), L = LOOKS[look] || LOOKS.classic, A = L.art;
+  const c = { r, C, look, x: o.x ?? 180, y: o.y ?? 360, z: o.z ?? 0, tags: [], stars: 0,
+    s: { rx: 0, ry: 0, vrx: 0, vry: 0, fl: o.up ? 0 : Math.PI, vfl: 0, rz: 0, vrz: 0, sc: o.sc ?? 1 }, flipT: o.up ? 0 : Math.PI, tx: 0, ty: 0, k: 120, d: 11, kf: 150, df: 14,
+    idle: false, ptr: null, interactive: false, jit: 0, heat: 0, glowA: 0, glowCol: new THREE.Color(C), sheen: -1, sheenA: 0, vis: 1 };
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); c.root = root; c.body = body;
+  const faceCv = L.face(r), maps = L.maps(r); c.faceCv = faceCv; c.faceT = ctex(faceCv);
+  const hot = new THREE.Color('#FFFFFF').lerp(new THREE.Color(C), .45);
+  const metal = new THREE.MeshStandardMaterial({ color: L.edge ?? M[1], metalness: L.edgeMetal ?? 1, roughness: L.edgeRough ?? .3, envMapIntensity: 1.1 });
+  const bezM = L.bezelCol ? new THREE.MeshStandardMaterial({ color: L.bezelCol, metalness: 1, roughness: .28, envMapIntensity: 1.1 }) : metal;
+  const edge = new THREE.Mesh(new THREE.ExtrudeGeometry(rrPath(new THREE.Shape(), CW, CH, CRAD), { depth: CTH, bevelEnabled: false, curveSegments: 10 }), [new THREE.MeshBasicMaterial({ visible: false }), metal]);
+  edge.position.z = -CTH / 2; body.add(edge);
+  c.front = new THREE.MeshPhysicalMaterial({ map: c.faceT, roughnessMap: maps.orm, metalnessMap: maps.orm, metalness: 1, roughness: 1, envMapIntensity: .9,
+    iridescence: r >= 3 && !L.matte ? 1 : 0, iridescenceMap: maps.foil, iridescenceIOR: 1.7, iridescenceThicknessRange: [180, 720], clearcoat: L.matte ? 0 : .3, clearcoatRoughness: .3, emissive: hot, emissiveIntensity: 0,
+    ...(L.normal === 'brushed' ? { normalMap: brushedNormal(), normalScale: new THREE.Vector2(.35, .35) } : {}) });
+  const face = new THREE.Mesh(rrPlane(CW, CH, CRAD), c.front); face.position.z = CTH / 2 + .0005; body.add(face);
+  const backT = ctex(L.back(r));
+  const bo = L.backOrm ? L.backOrm() : backOrm(); c.backM = new THREE.MeshPhysicalMaterial({ map: backT, roughnessMap: bo, metalnessMap: bo, metalness: L.matte ? 0 : 1, roughness: 1, envMapIntensity: .9, clearcoat: L.matte ? 0 : .3, clearcoatRoughness: .3, emissive: hot, emissiveIntensity: 0 });
+  const back = new THREE.Mesh(rrPlane(CW, CH, CRAD), c.backM); back.rotation.y = Math.PI; back.position.z = -CTH / 2 - .0005; body.add(back);
+  const az = CTH / 2 + (A.bezel ? (A.depth ?? .045) : (A.z ?? .01));
+  if (A.bezel) { const bz = artBezel(A, bezM); bz.position.set(0, A.y, CTH / 2); body.add(bz); }
+  c.artM = new THREE.MeshPhysicalMaterial({ map: photoTex(A.photo), roughness: .55, metalness: 0, clearcoat: L.matte ? 0 : .35, clearcoatRoughness: .32, envMapIntensity: .4, iridescence: r >= 5 && !L.matte ? .45 : 0, iridescenceIOR: 1.5, iridescenceThicknessRange: [200, 500], emissive: hot, emissiveIntensity: 0 });
+  const art = new THREE.Mesh(artGeo(A), c.artM); art.position.set(0, A.y, az); if (A.rot) art.rotation.z = A.rot; body.add(art);
+  if (L.over) { c.overT = ctex(L.over(r)); c.overM = new THREE.MeshStandardMaterial({ map: c.overT, transparent: true, roughness: .5, metalness: 0, envMapIntensity: .3, depthWrite: false, emissive: hot, emissiveIntensity: 0 });
+    const ov = new THREE.Mesh(rrPlane(CW, CH, CRAD), c.overM); ov.position.z = az + .004; body.add(ov); }
+  c.sparkU = { uMask: { value: maps.foil }, uAmt: { value: (r >= 5 ? 1 : r >= 3 ? .7 : 0) * (L.sparkle ?? 1) }, uSheen: { value: -1 }, uSheenA: { value: 0 }, uDens: { value: 1 } };
+  if (r < 3) { const w = mkcv(4, 4); w.getContext('2d').fillStyle = '#FFF'; w.getContext('2d').fillRect(0, 0, 4, 4); c.sparkU.uMask.value = ctex(w, false); }
+  const sp = new THREE.Mesh(rrPlane(CW, CH, CRAD), new THREE.ShaderMaterial({ uniforms: c.sparkU, vertexShader: SPARK_V, fragmentShader: SPARK_F, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  sp.position.z = L.over ? az + .006 : CTH / 2 + .002; body.add(sp);
+  c.glowM = new THREE.MeshBasicMaterial({ map: GLOWT, color: c.glowCol, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(CW * 2.2, CH * 1.75), c.glowM); glow.position.z = -.3; root.add(glow); c.glow = glow;
+  c.mats = [metal, c.front, c.backM, c.artM];
+  c.redraw = () => { const cv = L.face(r, c.tags, c.stars); c.faceCv = cv; c.faceT.image = cv; c.faceT.needsUpdate = true; if (L.over) { c.overT.image = L.over(r, c.tags, c.stars); c.overT.needsUpdate = true; } };
+  ROOT.add(root); CARDS3.add(c); c.root.renderOrder = 2;
+  return c;
+}
+function stepCard3(c, dt) {
+  const s = c.s; let tx = c.tx, ty = c.ty;
+  if (c.ptr && c.interactive) { tx = c.ptr.y * .42; ty = c.ptr.x * .52; }
+  else if (c.idle) { tx = .11 * Math.sin(clock * 1.05 + 1) + .05 * Math.sin(clock * 2.2); ty = .22 * Math.sin(clock * .75) + .07 * Math.sin(clock * 1.7 + 2); }
+  const n = c.free ? 0 : Math.max(1, Math.ceil(dt / .01)), h = dt / Math.max(1, n);
+  for (let i = 0; i < n; i++) {
+    s.vrx += (c.k * (tx - s.rx) - c.d * s.vrx) * h; s.rx += s.vrx * h;
+    s.vry += (c.k * (ty - s.ry) - c.d * s.vry) * h; s.ry += s.vry * h;
+    s.vfl += (c.kf * (c.flipT - s.fl) - c.df * s.vfl) * h; s.fl += s.vfl * h;
+    s.vrz += (90 * ((c.rzT || 0) - s.rz) - 9 * s.vrz) * h; s.rz += s.vrz * h;
+  }
+  const jx = c.jit ? rnd(-c.jit, c.jit) / 100 : 0, jy = c.jit ? rnd(-c.jit, c.jit) / 100 : 0;
+  c.root.position.set(wx(c.x) + jx, wy(c.y) + jy, c.z);
+  c.body.rotation.set(s.rx, s.ry + s.fl, s.rz, 'ZXY');
+  c.root.scale.setScalar(s.sc);
+  c.glow.rotation.set(s.rx * .6, s.ry * .6, s.rz);
+  const e = c.heat * c.heat * .75; c.front.emissiveIntensity = e; c.backM.emissiveIntensity = e; c.artM.emissiveIntensity = e; if (c.overM) c.overM.emissiveIntensity = e;
+  c.glowM.opacity = c.glowA * .5; c.glowM.color.copy(c.glowCol);
+  c.sparkU.uSheen.value = c.sheen; c.sparkU.uSheenA.value = c.sheenA;
+  c.root.visible = c.vis > .01;
+  if (c.tick) c.tick(dt);
+}
+/** A band of light that crosses the face once. */
+function cardSheen3(c) { c.sheen = -.4; c.sheenA = .55; tw(c, { sheen: 1.9 }, 1000, E.inOut).then(() => { c.sheenA = 0; }); }
+function cardFlip3(c, to, k = 260, d = 15) { c.flipT = to; c.kf = k; c.df = d; }
+function cardLive3(c) { c.idle = true; c.interactive = true; c.k = 70; c.d = 9; cardSheen3(c); }
+/** Where a point on the card face (card pixels from its top left) is on the phone, ignoring the small tilt. */
+function cardPt(c, px, py) { const k = c.s.sc; return [c.x + (px - 100) * k, c.y + (py - 142) * k]; }
+async function stampStars3(c, id) {
+  for (let i = 0; i < RNUM[c.r]; i++) {
+    c.stars = i + 1; c.redraw(); await wait(70, id);
+    SFX.play('tick', 1300 + i * 200); const [x, y] = c.starXY ? cardPt(c, ...c.starXY(i, RNUM[c.r])) : cardPt(c, 184 - (RNUM[c.r] - 1 - i) * 13, 21);
+    glints(x, y, c.C, 1, 1); sparks(x, y, c.C, 7, 100, { g: 0, life: .5 }); ring(x, y, c.C, 18, 2, .3); c.s.vrx -= 1.2; await wait(70, id);
+  }
+}
+/** The card's face with the photo in it, as an image for the little card that flies to the backpack. */
+function miniArt(face) {
+  const cv = mkcv(400, 568), g = cv.getContext('2d'); g.drawImage(face, 0, 0, 400, 568);
+  g.save(); g.scale(2, 2); rr2(g, 13, 34, 174, 142, 10); g.clip(); const ia = 600 / 800, w = 174, h = w / ia; g.drawImage(PHOTO, 13, 34 + (142 - h) / 2, w, h); g.restore();
+  return cv.toDataURL('image/png');
+}
+/** Pointer tilt for cards that allow it; the pointer is tested against the card's own area. */
+scr.addEventListener('pointermove', e => {
+  const b = scr.getBoundingClientRect(), z = b.width / 360, x = (e.clientX - b.left) / z, y = (e.clientY - b.top) / z;
+  CARDS3.forEach(c => { if (!c.interactive) return; const k = c.s.sc, u = (x - c.x) / (100 * k), v = (y - c.y) / (142 * k); c.ptr = Math.abs(u) < 1.25 && Math.abs(v) < 1.2 ? { x: Math.max(-1, Math.min(1, u)), y: Math.max(-1, Math.min(1, v)) } : null; });
+});
+scr.addEventListener('pointerleave', () => CARDS3.forEach(c => { c.ptr = null; }));
+function onCard(e) {
+  const b = scr.getBoundingClientRect(), z = b.width / 360, x = (e.clientX - b.left) / z, y = (e.clientY - b.top) / z;
+  for (const c of CARDS3) if (c.vis > .5 && Math.abs(x - c.x) < 100 * c.s.sc && Math.abs(y - c.y) < 142 * c.s.sc) return true; return false;
+}
+GLF = glFrame;
+/* Compile the card's shaders once at load, so the first reveal on a phone does not stall. */
+/* Compile the cards of every rarity and the shared prop materials once at load, so first plays on a phone do not stall. */
+setTimeout(async () => { if (playing) return; const r0 = rarity, W3 = new THREE.Group();
+  try { envFor(5);
+    for (const r of [1, 3, 5]) { rarity = r; const c = holoCard3({ x: 180, y: 380, up: true }); ROOT.remove(c.root); CARDS3.delete(c); W3.add(c.root); }
+    rarity = r0; const box = new THREE.BoxGeometry(.1, .1, .1);
+    [MAT.gold(), MAT.brass(), MAT.steel(), MAT.gunmetal(), MAT.chrome(), MAT.paint('#2D5A61'), MAT.matte('#2D5A61'), MAT.gem('#A7D3CC'), MAT.glass(), MAT.light('#FFFFFF', 2), MAT.add('#FFFFFF', 1), gemMat('#A7D3CC')].forEach(m => W3.add(new THREE.Mesh(box, m)));
+    W3.add(glow3('#FFFFFF', 1, 1), beam3('#FFFFFF', 2, .3, 1));
+    R3.setRenderTarget(comp.readBuffer); const p = R3.compileAsync(W3, CAM3, S3); R3.setRenderTarget(null); await p;
+  } catch (e) { console.warn('warm', e.message); } rarity = r0; }, 400);
+document.fonts.load('600 16px "Google Sans Flex"');

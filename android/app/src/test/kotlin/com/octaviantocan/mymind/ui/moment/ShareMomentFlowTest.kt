@@ -48,7 +48,7 @@ class ShareMomentFlowTest {
 
     private fun show() {
         compose.setPhoneContent(dark = true) {
-            ShareMoment(state, count = { FindCount(Rarity.Rare, 40) }, onDetails = { details += it }, onSky = {}, onClosed = { closed++ }, moment = moment)
+            ShareMoment(state, count = { FindCount(Rarity.Rare, 40) }, onDetails = { details += it }, onSky = {}, onClosed = { closed++ }, moment = moment, web = null)
         }
     }
 

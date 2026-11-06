@@ -1,0 +1,7 @@
+{
+  "name": "inventory-moment-web",
+  "private": true,
+  "description": "Builds the share moment the Android app plays in a WebView (assets/moment).",
+  "scripts": { "build": "python3 build.py" },
+  "devDependencies": { "esbuild": "0.25.10", "three": "0.170.0" }
+}

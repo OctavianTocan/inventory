@@ -1,0 +1,135 @@
+/* Tavi's picks from the card-backs canvas (5 Nov, "M9, M10"): the icon grid and the selection bar, as backs the card
+   turns over to after a reveal. Tags are picked from a list (the find's own already ticked) instead of typed. */
+document.head.appendChild(h(`<style>
+.tagp.pool { background: #0B2227; padding: 12px; color: #F4F2EF; }
+.tagp.pool .ted { gap: 10px; }
+.tagp.pool .sps { display: flex; gap: 5px; flex: none; }
+.tagp.pool .sp { flex: 1 1 auto; height: 34px; padding: 0 6px; border: 0; border-radius: 11px; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12.5px; white-space: nowrap; background: rgba(244,242,239,.05); color: #CFE0DE; cursor: pointer; }
+.tagp.pool .sp[aria-pressed="true"] { background: #F4F2EF; color: #0E333A; font-weight: 600; }
+.tagp.pool .sp i, .tagp.pool .rw .dot i { width: 8px; height: 8px; border-radius: 4px; flex: none; }
+.tagp.pool .srch { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 5px 0 12px; border-radius: 12px; background: rgba(244,242,239,.08); flex: none; }
+.tagp.pool .srch input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #F4F2EF; font-size: 16px; }
+.tagp.pool .srch input::placeholder { color: #8FA9AC; }
+.tagp.pool .srch .mk { height: 30px; padding: 0 12px; border: 0; border-radius: 9px; background: var(--rc); color: #0B2227; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.tagp.pool .grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 78px; gap: 7px; align-content: start; }
+.tagp.pool .tl { position: relative; border: 0; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 0 4px; color: #F4F2EF; font-size: 12.5px; background: rgba(244,242,239,.04); cursor: pointer; }
+.tagp.pool .tl[aria-pressed="true"] { background: rgba(244,242,239,.13); box-shadow: inset 0 0 0 2px var(--rc); }
+.tagp.pool .tl .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(244,242,239,.08); }
+.tagp.pool .tl[aria-pressed="true"] .ic { background: var(--rc); }
+.tagp.pool .tl .ic svg { stroke: #CFE0DE; } .tagp.pool .tl[aria-pressed="true"] .ic svg { stroke: #0B2227; }
+.tagp.pool .tl .nm { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tagp.pool .ckb { position: absolute; top: 7px; right: 7px; width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; box-shadow: inset 0 0 0 1.5px rgba(244,242,239,.3); }
+.tagp.pool [aria-pressed="true"] > .ckb { background: var(--rc); box-shadow: none; }
+.tagp.pool .ckb svg { opacity: 0; } .tagp.pool [aria-pressed="true"] > .ckb svg { opacity: 1; }
+.tagp.pool .save { flex: none; position: relative; overflow: hidden; height: 46px; border: 0; border-radius: 23px; background: #F4F2EF; color: #0E333A; font-size: 15px; font-weight: 600; cursor: pointer; }
+.tagp.pool .save .left, .tagp.pool .bar .left { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background: rgba(14,51,58,.16); }
+.tagp.pool .save span, .tagp.pool .bar .dn span { position: relative; }
+.tagp.pool .pop { animation: pkpop .32s cubic-bezier(.3,1.5,.5,1); }
+@keyframes pkpop { from { transform: scale(.86); } to { transform: none; } }
+
+.tagp.pool.sel { padding: 0; }
+.tagp.pool.sel .ted { gap: 0; position: relative; }
+.tagp.pool.sel .srch { margin: 12px 12px 4px; border-radius: 20px; }
+.tagp.pool.sel .lst { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 76px; }
+.tagp.pool.sel .hd { padding: 10px 16px 3px; font-size: 12px; color: #8FA9AC; }
+.tagp.pool.sel .rw { width: 100%; height: 42px; display: flex; align-items: center; gap: 11px; padding: 0 16px; border: 0; background: transparent; color: #F4F2EF; font-size: 15px; text-align: left; cursor: pointer; }
+.tagp.pool.sel .rw:active { background: rgba(244,242,239,.08); }
+.tagp.pool.sel .rw .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tagp.pool.sel .rw .ckb { position: static; width: 20px; height: 20px; flex: none; }
+.tagp.pool.sel .rw .rad { width: 20px; height: 20px; flex: none; border-radius: 10px; display: grid; place-items: center; box-shadow: inset 0 0 0 1.5px rgba(244,242,239,.38); }
+.tagp.pool.sel .rw[aria-pressed="true"] .rad { box-shadow: inset 0 0 0 2px var(--rc); }
+.tagp.pool.sel .rw .rad i { width: 9px; height: 9px; border-radius: 5px; }
+.tagp.pool.sel .rw[aria-pressed="true"] .rad i { background: var(--rc); }
+.tagp.pool.sel .mkr { color: var(--rc); font-weight: 600; }
+.tagp.pool.sel .bar { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 58px; border-radius: 17px; background: #F4F2EF; color: #0E333A; display: flex; align-items: center; gap: 10px; padding: 0 7px 0 14px; box-shadow: 0 10px 26px rgba(0,0,0,.45); }
+.tagp.pool.sel .bar .ct { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tagp.pool.sel .bar .ct b { font-size: 15px; font-weight: 700; }
+.tagp.pool.sel .bar .ct small { font-size: 12.5px; color: #3E5A5E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tagp.pool.sel .bar .dn { position: relative; overflow: hidden; height: 44px; padding: 0 20px; border: 0; border-radius: 13px; background: #0E333A; color: #F4F2EF; font-size: 15px; font-weight: 600; cursor: pointer; }
+.tagp.pool.sel .bar .dn .left { background: rgba(244,242,239,.2); }
+.tagp.pool.sel .bump { animation: pkbump .26s cubic-bezier(.3,1.5,.5,1); }
+@keyframes pkbump { from { transform: translateY(4px) scale(.97); } to { transform: none; } }
+</style>`));
+
+const POOL = ['film camera', '1970s', 'rangefinder', '35mm', 'analog', 'vintage', 'secondhand', 'photography', 'gear', 'wishlist', 'gift idea'];
+const POOL_ICON = {
+  'film camera': 'M4 8h3l2-2.5h6L17 8h3v11H4zM15.5 13a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z',
+  '1970s': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+  rangefinder: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 3v3M12 18v3M3 12h3M18 12h3',
+  '35mm': 'M5 3h14v18H5zM5 7h14M5 17h14M9 3v4M15 3v4M9 17v4M15 17v4',
+  analog: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 12l4.5-4.5M7 12h1M12 7v1',
+  vintage: 'M7 3h10M7 21h10M8 3v2a4 4 0 0 0 8 0V3M8 21v-2a4 4 0 0 1 8 0v2',
+  secondhand: 'M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4',
+  photography: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM14.3 3.3L9 12.5M20.6 9.5H10M18 18.4l-5.3-9.2M9.7 20.7L15 11.5M3.4 14.5H14M6 5.6l5.3 9.2',
+  gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1',
+  wishlist: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
+  'gift idea': 'M4 10h16v10H4zM3 7h18v3H3zM12 7v13M12 7c-2-4-6-3-5 0M12 7c2-4 6-3 5 0',
+};
+const TAG_ICON = 'M3 12V4h8l10 10-8 8zM7.5 8.5h.01';
+const TICK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0B2227" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const SEARCH = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8FA9AC" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
+
+/**
+ * A back where tags are ticked from a list rather than typed: the find's own tags come ticked, the rest are
+ * suggestions, and search finds one or adds your own. kind 'grid' draws tiles with icons and a Save button; 'bar'
+ * draws rows with a selection bar at the bottom. The Save or Done button drains with the time left.
+ * @param {object} c the card; c.ts holds the space and tags
+ * @param {object} api the tag session (hold, close)
+ * @param {'grid'|'bar'} kind which of the two backs
+ * @returns {HTMLElement} the editor, with ._left the element whose width shows the time left
+ */
+function poolEditor(c, api, kind) {
+  const el = h(`<div class="ted"></div>`), made = [];
+  let q = '', pop = '';
+  const pool = () => made.concat(POOL.filter(t => made.indexOf(t) < 0));
+  const has = t => c.ts.tags.indexOf(t) >= 0;
+  const head = kind === 'grid' ? `<div class="sps"></div>` : '';
+  el.innerHTML = `${head}<label class="srch">${SEARCH}<input placeholder="${kind === 'grid' ? 'Search tags' : 'Search or add tags'}" aria-label="Search or add tags" enterkeyhint="enter" autocomplete="off">${kind === 'grid' ? '<button type="button" class="mk" hidden>Add</button>' : ''}</label>
+    <div class="${kind === 'grid' ? 'grid' : 'lst'}"></div>
+    ${kind === 'grid' ? '<button type="button" class="save"><i class="left"></i><span></span></button>'
+      : '<div class="bar"><span class="ct"><b></b><small></small></span><button type="button" class="dn"><i class="left"></i><span>Done</span></button></div>'}`;
+  const inp = el.querySelector('input'), list = el.querySelector('.grid, .lst'), mk = el.querySelector('.mk'), sps = el.querySelector('.sps');
+  const n = () => c.ts.tags.length, plural = k => k + (k === 1 ? ' tag' : ' tags');
+  const fresh = () => !!q && !pool().some(t => t.toLowerCase() === q.toLowerCase());
+  const shown = () => pool().filter(t => !q || t.toLowerCase().indexOf(q.toLowerCase()) >= 0);
+  const render = () => {
+    if (kind === 'grid') {
+      sps.innerHTML = SPACES.map(s => `<button type="button" class="sp" data-s="${s.label}" aria-pressed="${s === c.ts.space}"><i style="background:${s.col}"></i>${s.label}</button>`).join('');
+      mk.hidden = !fresh();
+      list.innerHTML = shown().map(t => `<button type="button" class="tl${t === pop ? ' pop' : ''}" data-t="${t}" aria-pressed="${has(t)}"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${POOL_ICON[t] || TAG_ICON}"/></svg></span><span class="nm">${t}</span><span class="ckb">${TICK}</span></button>`).join('');
+      el.querySelector('.save span').textContent = 'Save ' + plural(n());
+    } else {
+      list.innerHTML = `<div class="hd">Space</div>${SPACES.map(s => `<button type="button" class="rw" data-s="${s.label}" aria-pressed="${s === c.ts.space}"><span class="rad"><i></i></span><span class="nm">${s.label}</span><span class="dot"><i style="display:block;background:${s.col}"></i></span></button>`).join('')}
+        <div class="hd">Tags</div>${fresh() ? `<button type="button" class="rw mkr" data-make="1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="nm">Add “${esc(q)}”</span></button>` : ''}
+        ${shown().map(t => `<button type="button" class="rw" data-t="${t}" aria-pressed="${has(t)}"><span class="ckb">${TICK}</span><span class="nm">${t}</span></button>`).join('')}`;
+      el.querySelector('.bar b').textContent = n() + (n() === 1 ? ' tag on it' : ' tags on it');
+      el.querySelector('.bar small').textContent = 'in ' + c.ts.space.label;
+    }
+  };
+  const bump = () => { const b = el.querySelector('.bar'); if (b) { b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); } };
+  const changed = () => { api.hold(); applyTags(c); SFX.play('tick', 1500); c.s.vrx -= .5; bump(); };
+  const add = () => { const t = esc(q.trim()).slice(0, 24); if (!t) return; if (pool().indexOf(t) < 0) made.unshift(t); if (!has(t)) c.ts.tags.push(t); q = ''; inp.value = ''; pop = t; render(); changed(); SFX.play('pop'); };
+  render();
+  el.addEventListener('pointerdown', () => api.hold());
+  el.addEventListener('click', e => {
+    e.stopPropagation();
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.classList.contains('save') || b.classList.contains('dn')) { api.close(); return; }
+    if (b.classList.contains('mk') || b.dataset.make) { add(); return; }
+    if (b.dataset.s) { c.ts.space = SPACES.find(s => s.label === b.dataset.s); render(); changed(); return; }
+    if (b.dataset.t) { const t = b.dataset.t; c.ts.tags = has(t) ? c.ts.tags.filter(x => x !== t) : c.ts.tags.concat([t]); pop = t; render(); changed(); }
+  });
+  inp.addEventListener('input', () => { q = inp.value.trim(); pop = ''; api.hold(); render(); });
+  inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  el._left = el.querySelector('.left');
+  return el;
+}
+
+TAGWAYS.push(
+  backWay({ key: 'M9', name: 'Icon grid', skin: 'pool', sc: 1.6, y: 380, pad: 10, timer: true,
+    d: 'Your pick from the card backs. The back is a grid of tag tiles with icons, the find’s own already ticked; tap a tile to tick or untick it, search to find one or add your own, and the spaces sit along the top. Save drains with the time left.',
+    editor: (c, api) => poolEditor(c, api, 'grid') }),
+  backWay({ key: 'M10', name: 'Selection bar', skin: 'pool sel', sc: 1.6, y: 380, pad: 10, timer: true,
+    d: 'Your other pick from the card backs. The back is a plain list: the space as one choice, then every tag with a tick box. A bar along the bottom counts what is on the find and bumps with each change; Done drains with the time left.',
+    editor: (c, api) => poolEditor(c, api, 'bar') }),
+);

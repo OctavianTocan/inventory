@@ -1,0 +1,176 @@
+/* Card looks. Every moment deals its find on its own kind of card: the same facts (rarity and stars top right, name,
+   kind, number, points, tags) laid out on a different object. A look paints the face (and, for full-bleed photos, an
+   overlay above the photo), says which parts are metal or foil, paints the back, and shapes the photo window.
+   Stars always sit at the top right (y 21 on the 200 x 284 face) so the star stamps land on them. */
+const LOOK_DEFAULT = 'classic';
+const cardLook = () => MOMENTS[current]?.look || LOOK_DEFAULT;
+
+/** Name, chips and tags in a block, as on every look. */
+function infoBlock(g, r, tags, o) {
+  const C = RC[r], x0 = o.x ?? 13, al = o.align || 'left', ink = o.ink || '#F4F2EF', sub = o.sub || '#CFE0DE', chipBg = o.chipBg || 'rgba(244,242,239,.09)';
+  g.textAlign = al; g.fillStyle = ink; g.font = `${o.weight || 500} ${o.size || 16}px ${FONT}`; g.textBaseline = 'alphabetic';
+  if (o.shadow) { g.shadowColor = o.shadow; g.shadowBlur = 6; g.shadowOffsetY = 1; }
+  const nx = al === 'center' ? 100 : x0; g.fillText('Rangefinder camera,', nx, o.y); g.fillText('1970s', nx, o.y + (o.size || 16) * 1.2); g.textAlign = 'left'; g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetY = 0;
+  const camIcon = (g, cx, cy) => { g.strokeStyle = sub; g.lineWidth = 1.2; rr2(g, cx - 5, cy - 3.5, 10, 7.5, 1.6); g.stroke(); g.beginPath(); g.arc(cx, cy, 2, 0, 7); g.stroke(); };
+  const items = [['Camera', { icon: camIcon, fg: sub, bg: chipBg, stroke: o.chipStroke }], ['No. 024', { fg: sub, bg: chipBg, stroke: o.chipStroke }], ['+' + PTS[r], { fg: o.ptsFg || C, bg: chipBg, stroke: o.chipStroke, icon: (g, cx, cy) => gem2d(g, cx, cy, 10, GEMT[GEMR[r]]) }]];
+  const cy = o.y + (o.size || 16) * 1.2 + 10;
+  const CS = 11; for (const it of items) Object.assign(it[1], { size: CS, h: 19, pad: 6 });
+  let x = x0; if (al === 'center') { const m = mkcv(10, 10).getContext('2d'); let w = 0; for (const [t, oo] of items) { m.font = `500 ${CS}px ${FONT}`; w += m.measureText(t).width + 12 + (oo.icon ? CS + 3 : 0) + 4; } x = 100 - (w - 4) / 2; }
+  for (const [t, oo] of items) x += chip2d(g, x, cy, t, oo) + 4;
+  x = al === 'center' ? 14 : x0 - 1; const ty = cy + 24;
+  for (let i = 0; i < tags.length; i++) { const t = tags[i], sp = t.k === 'space', txt = (sp ? '' : '#') + t.label; g.font = `${sp ? 600 : 500} 10.5px ${FONT}`; const need = g.measureText(txt).width + 12 + (sp ? 13.5 : 0);
+    if (x + need > 188) { chip2d(g, x, ty, '+' + (tags.length - i), { bg: o.tagBg || 'rgba(244,242,239,.14)', fg: o.tagFg || '#E8ECEB', size: 10.5, pad: 6 }); break; }
+    x += chip2d(g, x, ty, txt, sp ? { bg: o.spaceBg || '#F4F2EF', fg: o.spaceFg || '#0E333A', weight: 600, size: 10.5, pad: 6, icon: (g, cx, cy) => { g.fillStyle = t.col; g.beginPath(); g.arc(cx, cy, 3, 0, 7); g.fill(); } } : { bg: o.tagBg || 'rgba(244,242,239,.14)', fg: o.tagFg || '#E8ECEB', size: 10.5, pad: 6 }) + 4; }
+}
+/** Rarity name at the top left and the stars at the top right. */
+function rarityRow(g, r, stars, o = {}) {
+  const C = RC[r]; g.font = `700 12px ${FONT}`; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = o.label || C; g.fillText(RN[r], o.x ?? 16, 21);
+  for (let i = 0; i < RNUM[r]; i++) star2d(g, (o.sx ?? 184) - (RNUM[r] - 1 - i) * 13, 21, 5.6, i < stars ? (o.on || C) : (o.off || 'rgba(244,242,239,.14)'));
+}
+const faceCanvas = () => { const S = 4, cv = mkcv(200 * S, 284 * S), g = cv.getContext('2d'); g.scale(S, S); return [cv, g]; };
+const mapCanvas = () => { const a = mkcv(400, 568), b = mkcv(400, 568), ga = a.getContext('2d'), gb = b.getContext('2d'); ga.scale(2, 2); gb.scale(2, 2); return [a, b, ga, gb]; };
+/** A metal gradient frame round the whole card. */
+function metalFrame(g, M, inset = 7, rad = 11) { rr2(g, 0, 0, 200, 284, 16); const fg = g.createLinearGradient(0, 0, 200, 284); [M[0], M[1], M[2], M[3], M[1], M[4], M[0]].forEach((c, i) => fg.addColorStop(i / 6, c)); g.fillStyle = fg; g.fill(); }
+/** Arch path: a rectangle whose top is a half circle. */
+function archPath(g, x, y, w, h) { const r = w / 2; g.beginPath(); g.moveTo(x, y + h); g.lineTo(x, y + r); g.arc(x + r, y + r, r, Math.PI, 0); g.lineTo(x + w, y + h); g.closePath(); }
+function archShape(w, h) { const s = new THREE.Shape(), r = w / 2; s.moveTo(-w / 2, -h / 2); s.lineTo(w / 2, -h / 2); s.lineTo(w / 2, h / 2 - r); s.absarc(0, h / 2 - r, r, 0, Math.PI, false); s.lineTo(-w / 2, -h / 2); return s; }
+/** A photo for a window: as it is, or printed in two inks. */
+const PHOTOS = {};
+function photoTex(kind = 'color') {
+  if (kind === 'color' || !PHOTO.complete) return PHOTO_T;
+  if (PHOTOS[kind]) return PHOTOS[kind];
+  const w = 300, h = 400, cv = mkcv(w, h), g = cv.getContext('2d'); g.drawImage(PHOTO, 0, 0, w, h); const d = g.getImageData(0, 0, w, h), a = d.data;
+  const [lo, hi] = kind === 'duo' ? [[6, 26, 30], [214, 236, 230]] : [[40, 26, 14], [246, 232, 204]];
+  for (let i = 0; i < a.length; i += 4) { let l = (a[i] * .3 + a[i + 1] * .59 + a[i + 2] * .11) / 255; l = l * l * (3 - 2 * l); for (let k = 0; k < 3; k++) a[i + k] = lo[k] + (hi[k] - lo[k]) * l; }
+  g.putImageData(d, 0, 0); const t = ctex(cv); t.keep = true; return PHOTOS[kind] = t;
+}
+/** Geometry for a photo window in card units, with UVs that cover it with the photo (cropped, never stretched). */
+function artGeo(A) {
+  const g = A.shape === 'circle' ? new THREE.CircleGeometry(A.w / 2, 64) : A.shape === 'arch' ? new THREE.ShapeGeometry(archShape(A.w, A.h), 24) : rrPlane(A.w, A.h, A.r ?? .1);
+  const p = g.attributes.position, uv = g.attributes.uv, ia = 600 / 800, pa = A.w / A.h, fx = pa > ia ? 1 : pa / ia, fy = pa > ia ? ia / pa : 1;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, .5 + p.getX(i) / A.w * fx, .5 + p.getY(i) / A.h * fy);
+  return g;
+}
+/** A raised rim round the photo window, matching its shape. */
+function artBezel(A, mat) {
+  const k = A.rim ?? .035; let s;
+  if (A.shape === 'circle') { s = new THREE.Shape(); s.absarc(0, 0, A.w / 2 + k, 0, TAU, false); const hole = new THREE.Path(); hole.absarc(0, 0, A.w / 2, 0, TAU, true); s.holes.push(hole); }
+  else if (A.shape === 'arch') { s = archShape(A.w + k * 2, A.h + k * 2); const hp = archShape(A.w, A.h), hole = new THREE.Path(hp.getPoints(48).reverse()); s.holes.push(hole); }
+  else { s = new THREE.Shape(); rrPath(s, A.w + k * 2, A.h + k * 2, (A.r ?? .1) + k * .8); s.holes.push(rrPath(new THREE.Path(), A.w, A.h, A.r ?? .1)); }
+  return new THREE.Mesh(new THREE.ExtrudeGeometry(s, { depth: A.depth ?? .045, bevelEnabled: false, curveSegments: 24 }), mat);
+}
+/** Clips a 2D context to a look's photo window, in face units. */
+function artClip(g, A) { const x = 100 + (-A.w / 2) * 100, y = 142 - (A.y + A.h / 2) * 100, w = A.w * 100, h = A.h * 100; if (A.shape === 'circle') { g.beginPath(); g.arc(100, 142 - A.y * 100, w / 2, 0, 7); } else if (A.shape === 'arch') archPath(g, x, y, w, h); else rr2(g, x, y, w, h, (A.r ?? .1) * 100); return [x, y, w, h]; }
+
+const LOOKS = {
+  /** The first card: a polished metal frame, foil, the photo floating in its own bezel. */
+  classic: {
+    art: { w: 1.74, h: 1.42, y: .37, r: .1, bezel: true },
+    face: (r, tags = [], stars = 0) => faceArt(r, tags, stars), maps: r => faceMaps(r), back: r => backArt(r),
+  },
+  /** Full art: the photo runs to a thin metal edge, the facts sit on a dark scrim at the foot, foil over the photo. */
+  full: {
+    art: { w: 1.88, h: 2.72, y: 0, r: .12, bezel: false, z: .02 }, sparkle: 1.2,
+    face: r => { const [cv, g] = faceCanvas(); metalFrame(g, METAL[r]); rr2(g, 6, 6, 188, 272, 12); g.fillStyle = '#05090B'; g.fill(); return cv; },
+    over: (r, tags = [], stars = 0) => { const [cv, g] = faceCanvas(); g.save(); rr2(g, 6, 6, 188, 272, 12); g.clip();
+      const sc = g.createLinearGradient(0, 128, 0, 284); sc.addColorStop(0, 'rgba(3,10,12,0)'); sc.addColorStop(.3, 'rgba(3,10,12,.78)'); sc.addColorStop(.55, 'rgba(3,10,12,.9)'); sc.addColorStop(1, 'rgba(3,10,12,.96)'); g.fillStyle = sc; g.fillRect(0, 128, 200, 156);
+      const tp = g.createLinearGradient(0, 6, 0, 46); tp.addColorStop(0, 'rgba(3,10,12,.7)'); tp.addColorStop(1, 'rgba(3,10,12,0)'); g.fillStyle = tp; g.fillRect(0, 6, 200, 40); g.restore();
+      rarityRow(g, r, stars); infoBlock(g, r, tags, { y: 204, weight: 600, shadow: 'rgba(0,0,0,.85)' }); g.save(); rr2(g, 6, 6, 188, 272, 12); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.22)'; g.stroke(); g.restore(); return cv; },
+    maps: r => { const [a, b, ga, gb] = mapCanvas(); ga.fillStyle = 'rgb(0,55,255)'; ga.fillRect(0, 0, 200, 284); rr2(ga, 6, 6, 188, 272, 12); ga.fillStyle = 'rgb(0,170,0)'; ga.fill();
+      gb.fillStyle = '#000'; gb.fillRect(0, 0, 200, 284); if (r >= 3) { gb.save(); rr2(gb, 6, 6, 188, 272, 12); gb.clip(); for (let k = -40; k < 70; k++) { gb.strokeStyle = `rgba(255,255,255,${.25 + .25 * Math.sin(k * .7)})`; gb.lineWidth = 2.2; gb.beginPath(); gb.moveTo(k * 6, 0); gb.lineTo(k * 6 - 200, 284); gb.stroke(); } gb.restore(); }
+      return { orm: ctex(a, false), foil: ctex(b, false) }; },
+    back: r => backArt(r),
+  },
+  /** Obsidian and gold: a black card ruled in gold foil, a sunburst over an arched window, the name set in gold. */
+  noir: {
+    art: { w: 1.5, h: 1.36, y: .36, shape: 'arch', bezel: true, rim: .03 }, edge: '#1B1A18', edgeRough: .35, bezelCol: '#E3B866',
+    face: (r, tags = [], stars = 0) => { const [cv, g] = faceCanvas(), C = RC[r], gold = '#E9C277';
+      rr2(g, 0, 0, 200, 284, 16); const bg = g.createLinearGradient(0, 0, 200, 284); bg.addColorStop(0, '#16171A'); bg.addColorStop(.5, '#0B0C0E'); bg.addColorStop(1, '#141416'); g.fillStyle = bg; g.fill();
+      g.strokeStyle = gold; g.lineWidth = 1.2; rr2(g, 7, 7, 186, 270, 10); g.stroke(); g.lineWidth = .5; rr2(g, 11, 11, 178, 262, 8); g.stroke();
+      g.save(); g.beginPath(); g.rect(0, 34, 200, 250); g.clip(); g.translate(100, 113); for (let i = 0; i <= 22; i++) { const a = Math.PI + .25 + i / 22 * (Math.PI - .5); g.globalAlpha = i % 2 ? .35 : .7; g.beginPath(); g.moveTo(Math.cos(a) * 82, Math.sin(a) * 82); g.lineTo(Math.cos(a) * (i % 2 ? 88 : 93), Math.sin(a) * (i % 2 ? 88 : 93)); g.stroke(); } g.restore(); g.globalAlpha = 1;
+      rarityRow(g, r, stars, { label: '#F6D99A', on: C, off: 'rgba(233,194,119,.2)', x: 34, sx: 166 });
+      g.strokeStyle = gold; g.lineWidth = .6; g.beginPath(); g.moveTo(60, 184); g.lineTo(140, 184); g.stroke(); gem2d(g, 100, 184, 8, GEMT.gold);
+      infoBlock(g, r, tags, { y: 202, align: 'center', ink: '#FFEBC6', sub: '#E2CFA5', size: 15, weight: 600, chipBg: 'rgba(233,194,119,.08)', chipStroke: 'rgba(233,194,119,.35)', tagBg: 'rgba(233,194,119,.12)', tagFg: '#F3DDB0', spaceBg: '#E9C277', spaceFg: '#1A1408' }); return cv; },
+    maps: r => { const [a, b, ga, gb] = mapCanvas(); ga.fillStyle = 'rgb(0,120,0)'; ga.fillRect(0, 0, 200, 284);
+      const lines = (g, col) => { g.strokeStyle = col; g.lineWidth = 1.6; rr2(g, 7, 7, 186, 270, 10); g.stroke(); g.lineWidth = 1; rr2(g, 11, 11, 178, 262, 8); g.stroke(); g.save(); g.beginPath(); g.rect(0, 34, 200, 250); g.clip(); g.translate(100, 113); g.lineWidth = 1.4; for (let i = 0; i <= 22; i++) { const a = Math.PI + .25 + i / 22 * (Math.PI - .5); g.beginPath(); g.moveTo(Math.cos(a) * 82, Math.sin(a) * 82); g.lineTo(Math.cos(a) * (i % 2 ? 88 : 93), Math.sin(a) * (i % 2 ? 88 : 93)); g.stroke(); } g.restore(); };
+      lines(ga, 'rgb(0,40,255)'); gb.fillStyle = '#000'; gb.fillRect(0, 0, 200, 284); if (r >= 3) lines(gb, '#FFF'); return { orm: ctex(a, false), foil: ctex(b, false) }; },
+    backOrm: () => flatOrm(.4, .25),
+    back: r => { const [cv, g] = faceCanvas(), gold = '#E9C277'; rr2(g, 0, 0, 200, 284, 16); g.fillStyle = '#0D0E10'; g.fill(); g.strokeStyle = gold; g.lineWidth = 1.2; rr2(g, 7, 7, 186, 270, 10); g.stroke();
+      g.save(); g.translate(100, 142); for (let i = 0; i < 48; i++) { const a = i / 48 * TAU; g.globalAlpha = i % 2 ? .3 : .65; g.lineWidth = .6; g.beginPath(); g.moveTo(Math.cos(a) * 34, Math.sin(a) * 34); g.lineTo(Math.cos(a) * (i % 2 ? 70 : 92), Math.sin(a) * (i % 2 ? 70 : 92)); g.stroke(); }
+      g.globalAlpha = 1; g.lineWidth = 1; g.beginPath(); g.arc(0, 0, 30, 0, 7); g.stroke(); gem2d(g, 0, 0, 34, GEMT.gold); g.restore(); g.fillStyle = gold; g.font = `500 13px ${FONT}`; g.textAlign = 'center'; g.fillText('Inventory', 100, 258); return cv; },
+  },
+  /** Star chart: a night-blue card with a constellation in foil, the photo in a round window ringed in gold. */
+  celestial: {
+    art: { w: 1.26, h: 1.26, y: .44, shape: 'circle', bezel: true, rim: .04 }, edge: '#C9A55A', bezelCol: '#D9B76A',
+    face: (r, tags = [], stars = 0) => { const [cv, g] = faceCanvas(), C = RC[r];
+      rr2(g, 0, 0, 200, 284, 16); const bg = g.createRadialGradient(100, 92, 10, 100, 120, 220); bg.addColorStop(0, '#16305A'); bg.addColorStop(.55, '#0B1A36'); bg.addColorStop(1, '#050C1C'); g.fillStyle = bg; g.fill();
+      const R = mulberry(7); for (let i = 0; i < 140; i++) { g.globalAlpha = .2 + R() * .7; g.fillStyle = '#E8F0FF'; g.beginPath(); g.arc(R() * 200, R() * 284, R() * .9 + .2, 0, 7); g.fill(); } g.globalAlpha = 1;
+      g.save(); g.beginPath(); g.rect(0, 36, 200, 248); g.clip(); g.strokeStyle = 'rgba(233,212,160,.35)'; g.lineWidth = .5; for (const rr of [72, 78]) { g.beginPath(); g.arc(100, 98, rr, 0, 7); g.stroke(); }
+      g.translate(100, 98); for (let i = 0; i < 72; i++) { const a = i / 72 * TAU, l = i % 6 ? 3 : 6; g.beginPath(); g.moveTo(Math.cos(a) * 78, Math.sin(a) * 78); g.lineTo(Math.cos(a) * (78 + l), Math.sin(a) * (78 + l)); g.stroke(); } g.restore();
+      const cons = [[150, 160], [166, 150], [176, 164], [188, 150]]; g.strokeStyle = 'rgba(233,212,160,.55)'; g.lineWidth = .6; g.beginPath(); cons.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); cons.forEach(([x, y]) => star2d(g, x, y, 2.2, '#F3E2B0'));
+      rarityRow(g, r, stars, { label: '#F3E2B0', on: C, off: 'rgba(233,212,160,.22)' });
+      infoBlock(g, r, tags, { y: 194, align: 'center', ink: '#F4F2EF', sub: '#C9D6EA', size: 15, chipBg: 'rgba(201,214,234,.08)', chipStroke: 'rgba(233,212,160,.3)', tagBg: 'rgba(201,214,234,.12)', tagFg: '#E8F0FF' }); return cv; },
+    maps: r => { const [a, b, ga, gb] = mapCanvas(); ga.fillStyle = 'rgb(0,110,0)'; ga.fillRect(0, 0, 200, 284); gb.fillStyle = '#000'; gb.fillRect(0, 0, 200, 284);
+      const fx = (g, col, k) => { g.strokeStyle = col; g.lineWidth = k; g.save(); g.beginPath(); g.rect(0, 36, 200, 248); g.clip(); for (const rr of [72, 78]) { g.beginPath(); g.arc(100, 98, rr, 0, 7); g.stroke(); } g.restore(); const cons = [[150, 160], [166, 150], [176, 164], [188, 150]]; g.beginPath(); cons.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); g.fillStyle = col; cons.forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 2.6, 0, 7); g.fill(); }); };
+      fx(ga, 'rgb(0,50,255)', 1.4); if (r >= 3) { fx(gb, '#FFF', 1.6); const R = mulberry(7); for (let i = 0; i < 140; i++) { gb.fillStyle = '#FFF'; gb.beginPath(); gb.arc(R() * 200, R() * 284, R() * .9 + .5, 0, 7); gb.fill(); R(); } }
+      return { orm: ctex(a, false), foil: ctex(b, false) }; },
+    backOrm: () => flatOrm(.42, .2),
+    back: r => { const [cv, g] = faceCanvas(); rr2(g, 0, 0, 200, 284, 16); const bg = g.createRadialGradient(100, 142, 0, 100, 142, 200); bg.addColorStop(0, '#132A50'); bg.addColorStop(1, '#050C1C'); g.fillStyle = bg; g.fill();
+      const R = mulberry(11); for (let i = 0; i < 220; i++) { g.globalAlpha = .2 + R() * .8; g.fillStyle = '#E8F0FF'; g.beginPath(); g.arc(R() * 200, R() * 284, R() * 1 + .2, 0, 7); g.fill(); } g.globalAlpha = 1;
+      g.strokeStyle = 'rgba(233,212,160,.5)'; g.lineWidth = .7; g.beginPath(); g.arc(100, 142, 58, 0, 7); g.stroke(); g.beginPath(); g.arc(100, 142, 64, 0, 7); g.stroke(); g.save(); g.translate(100, 142); for (let i = 0; i < 8; i++) { g.rotate(TAU / 8); g.beginPath(); g.moveTo(0, -18); g.lineTo(0, -54); g.stroke(); } g.restore();
+      gem2d(g, 100, 142, 30, GEMT.gold); g.strokeStyle = 'rgba(233,212,160,.8)'; rr2(g, 7, 7, 186, 270, 10); g.stroke(); g.fillStyle = '#F3E2B0'; g.font = `500 13px ${FONT}`; g.textAlign = 'center'; g.fillText('Inventory', 100, 250); return cv; },
+  },
+  /** Etched steel: a brushed metal plate with the photo printed in two inks, stamped facts and an enamel band. */
+  steel: {
+    art: { w: 1.72, h: 1.3, y: .44, r: .04, bezel: true, rim: .03, depth: .03, photo: 'duo' }, edge: '#9AA3A6', edgeRough: .32, normal: 'brushed', bezelCol: '#B9C1C3',
+    face: (r, tags = [], stars = 0) => { const [cv, g] = faceCanvas(), C = RC[r];
+      rr2(g, 0, 0, 200, 284, 16); const bg = g.createLinearGradient(0, 0, 200, 284); bg.addColorStop(0, '#9AA2A6'); bg.addColorStop(.5, '#768084'); bg.addColorStop(1, '#8E979B'); g.fillStyle = bg; g.fill();
+      const R = mulberry(3); for (let i = 0; i < 160; i++) { g.strokeStyle = `rgba(${R() < .5 ? '255,255,255' : '40,46,48'},${.02 + R() * .04})`; g.lineWidth = .4; const y = R() * 284; g.beginPath(); g.moveTo(0, y); g.lineTo(200, y + R() * 2 - 1); g.stroke(); }
+      g.fillStyle = C; rr2(g, 0, 8, 200, 26, 0); g.fillRect(0, 8, 200, 26); g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, 33, 200, 1.4);
+      g.font = `700 12px ${FONT}`; g.textBaseline = 'middle'; g.fillStyle = '#0B1416'; g.fillText(RN[r], 16, 21);
+      for (let i = 0; i < RNUM[r]; i++) star2d(g, 184 - (RNUM[r] - 1 - i) * 13, 21, 5.6, i < stars ? '#FFFFFF' : 'rgba(11,20,22,.25)');
+      for (const [x, y] of [[12, 46], [188, 46], [12, 272], [188, 272]]) { const sg = g.createRadialGradient(x - 1, y - 1, 0, x, y, 4); sg.addColorStop(0, '#F2F4F4'); sg.addColorStop(1, '#6C7477'); g.fillStyle = sg; g.beginPath(); g.arc(x, y, 3.6, 0, 7); g.fill(); g.strokeStyle = 'rgba(30,34,36,.6)'; g.lineWidth = .6; g.beginPath(); g.moveTo(x - 2.4, y); g.lineTo(x + 2.4, y); g.stroke(); }
+      { const pg = g.createLinearGradient(0, 184, 0, 276); pg.addColorStop(0, '#E4E9EA'); pg.addColorStop(1, '#D3DADB'); g.fillStyle = pg; rr2(g, 6, 186, 188, 90, 9); g.fill(); g.strokeStyle = 'rgba(19,25,27,.35)'; g.lineWidth = .8; g.stroke(); }
+      infoBlock(g, r, tags, { y: 206, ink: '#0B1012', sub: '#22292C', size: 15, weight: 600, chipBg: 'rgba(19,25,27,.08)', chipStroke: 'rgba(19,25,27,.35)', ptsFg: '#13191B', tagBg: 'rgba(19,25,27,.12)', tagFg: '#13191B', spaceBg: '#13191B', spaceFg: '#E9EEEF' }); return cv; },
+    maps: r => { const [a, b, ga, gb] = mapCanvas(); ga.fillStyle = 'rgb(0,120,115)'; ga.fillRect(0, 0, 200, 284); ga.fillStyle = 'rgb(0,150,40)'; ga.fillRect(0, 8, 200, 26);
+      ga.fillStyle = 'rgb(0,200,0)'; rr2(ga, 6, 186, 188, 90, 9); ga.fill();
+      gb.fillStyle = '#000'; gb.fillRect(0, 0, 200, 284); if (r >= 5) { gb.fillStyle = '#FFF'; gb.fillRect(0, 8, 200, 26); } return { orm: ctex(a, false), foil: ctex(b, false) }; },
+    backOrm: () => flatOrm(.42, .6),
+    back: r => { const [cv, g] = faceCanvas(); rr2(g, 0, 0, 200, 284, 16); const bg = g.createLinearGradient(0, 0, 200, 284); bg.addColorStop(0, '#8E979A'); bg.addColorStop(1, '#6A7376'); g.fillStyle = bg; g.fill();
+      const R = mulberry(5); for (let i = 0; i < 240; i++) { g.strokeStyle = `rgba(${R() < .5 ? '255,255,255' : '40,46,48'},${.04 + R() * .08})`; g.lineWidth = .4; const y = R() * 284; g.beginPath(); g.moveTo(0, y); g.lineTo(200, y); g.stroke(); }
+      g.strokeStyle = 'rgba(20,26,28,.5)'; g.lineWidth = 1; for (let k = 0; k < 9; k++) { g.beginPath(); g.moveTo(30 + k * 17.5, 40); g.lineTo(30 + k * 17.5, 244); g.stroke(); }
+      g.fillStyle = '#AEB6B8'; rr2(g, 52, 106, 96, 72, 8); g.fill(); g.strokeStyle = 'rgba(20,26,28,.6)'; g.stroke(); gem2d(g, 100, 136, 34, GEMT.teal); g.fillStyle = '#1B2326'; g.font = `600 13px ${FONT}`; g.textAlign = 'center'; g.fillText('Inventory', 100, 168); return cv; },
+  },
+  /** Letterpress: a cream card with a bordered print of the photo, inked facts and a wax seal in the rarity colour. */
+  paper: {
+    art: { w: 1.48, h: 1.34, y: .4, r: .015, bezel: false, z: .012, rot: -.025, mount: true }, edge: '#E3D7BC', edgeMetal: 0, edgeRough: .85, sparkle: 0, matte: true,
+    face: (r, tags = [], stars = 0) => { const [cv, g] = faceCanvas(), C = RC[r];
+      rr2(g, 0, 0, 200, 284, 14); g.fillStyle = '#D9CDB3'; g.fill(); const R = mulberry(9);
+      for (let i = 0; i < 500; i++) { g.fillStyle = `rgba(${R() < .5 ? '120,96,60' : '255,252,240'},${.05 + R() * .12})`; g.fillRect(R() * 200, R() * 284, R() * 1.4 + .3, R() * 1.4 + .3); }
+      g.save(); g.translate(100, 142 - 40); g.rotate(-.025); g.fillStyle = '#E6DFD0'; g.shadowColor = 'rgba(60,40,10,.35)'; g.shadowBlur = 6; g.shadowOffsetY = 2; g.fillRect(-81, -74, 162, 148); g.restore();
+      g.font = `600 12px ${FONT}`; g.textBaseline = 'middle'; g.fillStyle = '#5A4630'; g.fillText(RN[r], 16, 21);
+      for (let i = 0; i < RNUM[r]; i++) star2d(g, 184 - (RNUM[r] - 1 - i) * 13, 21, 5.6, i < stars ? C : 'rgba(90,70,48,.2)');
+      const sx = 177, sy = 204, sg = g.createRadialGradient(sx - 4, sy - 4, 1, sx, sy, 15); sg.addColorStop(0, '#FFFFFF'); sg.addColorStop(.25, C); sg.addColorStop(1, hexA('#000000', .55)); g.fillStyle = C; g.beginPath(); for (let i = 0; i < 18; i++) { const a = i / 18 * TAU, rr = 14 + (i % 2 ? 1.5 : 0) * Math.sin(i * 1.7); g.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } g.fill(); g.fillStyle = sg; g.globalAlpha = .55; g.fill(); g.globalAlpha = 1; gem2d(g, sx, sy, 13, GEMT[GEMR[r]]);
+      infoBlock(g, r, tags, { y: 206, ink: '#2E2418', sub: '#5A4630', size: 15, chipBg: 'rgba(90,70,48,.0)', chipStroke: 'rgba(90,70,48,.55)', ptsFg: '#2E2418', tagBg: 'rgba(90,70,48,.12)', tagFg: '#2E2418', spaceBg: '#2E2418', spaceFg: '#EFE6D2' }); return cv; },
+    maps: r => { const [a, b, ga, gb] = mapCanvas(); ga.fillStyle = 'rgb(0,215,0)'; ga.fillRect(0, 0, 200, 284); ga.fillStyle = 'rgb(0,90,0)'; ga.beginPath(); ga.arc(177, 204, 15, 0, 7); ga.fill(); gb.fillStyle = '#000'; gb.fillRect(0, 0, 200, 284); return { orm: ctex(a, false), foil: ctex(b, false) }; },
+    backOrm: () => flatOrm(.85, 0),
+    back: r => { const [cv, g] = faceCanvas(), C = RC[r]; rr2(g, 0, 0, 200, 284, 14); g.fillStyle = '#E9DFC8'; g.fill(); g.strokeStyle = 'rgba(90,70,48,.5)'; g.lineWidth = .8; rr2(g, 10, 10, 180, 264, 8); g.stroke();
+      g.save(); g.translate(100, 142); for (let k = 0; k < 14; k++) { g.rotate(TAU / 14); g.strokeStyle = 'rgba(90,70,48,.35)'; g.beginPath(); g.ellipse(0, -34, 9, 26, 0, 0, 7); g.stroke(); } g.restore();
+      g.fillStyle = C; g.beginPath(); g.arc(100, 142, 17, 0, 7); g.fill(); gem2d(g, 100, 142, 18, GEMT[GEMR[r]]); g.fillStyle = '#5A4630'; g.font = `500 13px ${FONT}`; g.textAlign = 'center'; g.fillText('Inventory', 100, 246); return cv; },
+  },
+};
+/** A uniform roughness/metal map (green = roughness, blue = metalness, 0-1). */
+const FLAT = {};
+function flatOrm(rough, metal) { const k = rough + ',' + metal; if (FLAT[k]) return FLAT[k]; const a = mkcv(4, 4), g = a.getContext('2d'); g.fillStyle = `rgb(0,${Math.round(rough * 255)},${Math.round(metal * 255)})`; g.fillRect(0, 0, 4, 4); const t = ctex(a, false); t.keep = true; return FLAT[k] = t; }
+/** A small seeded random, so a look draws the same stars every time. */
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+/** A brushed-metal normal map for looks that ask for it. */
+let BRUSHED = null;
+function brushedNormal() { if (BRUSHED) return BRUSHED; const cv = mkcv(256, 256), g = cv.getContext('2d'); g.fillStyle = '#808080'; g.fillRect(0, 0, 256, 256); for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '255,255,255' : '0,0,0'},${Math.random() * .25})`; g.fillRect(0, Math.random() * 256, 256, Math.random() * 1.2 + .3); } BRUSHED = normalFromHeight(cv, 1.2); BRUSHED.keep = true; return BRUSHED; }
+/** The small picture of a card that flies to the backpack: face, photo in its window, overlay. */
+function lookMini(look, tags, stars) {
+  const L = LOOKS[look] || LOOKS.classic, r = rarity, face = L.face(r, tags, stars), cv = mkcv(400, 568), g = cv.getContext('2d'); g.drawImage(face, 0, 0, 400, 568);
+  g.save(); g.scale(2, 2); const [x, y, w, h] = artClip(g, L.art); g.clip(); const ia = 600 / 800, pw = Math.max(w, h * ia), ph = pw / ia; g.drawImage(PHOTO, x + (w - pw) / 2, y + (h - ph) / 2, pw, ph); g.restore();
+  if (L.over) g.drawImage(L.over(r, tags, stars), 0, 0, 400, 568);
+  return cv.toDataURL('image/png');
+}

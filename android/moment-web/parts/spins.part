@@ -1,0 +1,91 @@
+/* Reveal spins. Each moment turns its card over in its own way: a spin drives the card's pose directly (its springs
+   paused), fires onFace the instant the face comes round, then hands the card back to its springs face up. */
+const TAU = Math.PI * 2;
+const EX = { expo: p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p), quart: p => 1 - Math.pow(1 - p, 4), back: p => { const c = 1.9; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); }, sine: p => .5 - .5 * Math.cos(Math.PI * p) };
+/** Pauses (on) or resumes (off) a card's pose springs; pausing also ends any tween still moving the card, resuming keeps the pose it was driven to. */
+function cardFree(c, on) { c.free = on; const s = c.s;
+  if (on) { c.jit = 0; for (let i = TW.length - 1; i >= 0; i--) { const w = TW[i]; if (w.o === s || (w.o === c && ('x' in w.to || 'y' in w.to || 'z' in w.to))) { TW.splice(i, 1); w.res(); } } }
+  if (!on) { s.vrx = s.vry = s.vfl = s.vrz = 0; c.flipT = s.fl; } }
+/** Calls f(eased p) every frame for ms of moment time; resolves after the last call with p = 1. */
+function drive(ms, f, ease = E.lin) { const o = { p: 0 }; const stop = every3(() => f(ease(o.p))); return tw(o, { p: 1 }, ms, E.lin).then(() => { stop(); f(ease(1)); }); }
+/** The next face-up flip angle at or after fl, plus whole extra turns. */
+const nextUp = (fl, extra = 0) => Math.ceil((fl + .02) / TAU) * TAU + extra * TAU;
+/** Fires o.onFace once, when the face turns towards the camera after the back has been seen. */
+function faceCheck(c, o, F) { const f = Math.cos(c.s.fl) * Math.cos(c.s.rx); if (f < -.2) o._back = true; if (o._back && !o._faced && f > .3 && (F == null || Math.abs(F - c.s.fl) < 1.3)) { o._faced = true; o.onFace?.(); } }
+/** Thin arcs of light swept round the card while it spins fast, on the layer behind it. */
+function spinTrail(c, ms, col) {
+  return emit(() => { const a = rnd(0, TAU), L = rnd(.5, 1.3); light({ kind: 'arc', bk: 1, x: c.x, y: c.y, rx: 118 * c.s.sc * rnd(1, 1.25), ry: 160 * c.s.sc * rnd(1, 1.2), a0: a, a1: a + L, color: Math.random() < .3 ? '#FFFFFF' : col, w: rnd(1.2, 3), a: rnd(.35, .7), life: rnd(.18, .32) }); }, 40, ms / 1000);
+}
+const lerp = (a, b, p) => a + (b - a) * p;
+/** Where every spin starts from and lands at. */
+function spinFrom(c, o) { const s = c.s; return { x0: c.x, y0: c.y, z0: c.z, sc0: s.sc, fl0: s.fl, rx0: s.rx, ry0: s.ry, rz0: s.rz, X: o.x ?? c.x, Y: o.y ?? c.y, Z: o.z ?? 0, S1: o.sc ?? 1, col: c.C }; }
+
+const SPINS = {
+  /** Wind back, then whip round one and a half turns that brake hard into place. */
+  whip: async (c, o) => { const q = spinFrom(c, o), F = nextUp(q.fl0, 1); SFX.play('suck', .25);
+    await drive(240, p => { c.s.fl = q.fl0 - .55 * p; c.s.sc = q.sc0 * (1 - .06 * p); c.s.rz = q.rz0 + .1 * p; }, E.out);
+    SFX.play('whoosh'); spinTrail(c, 520, q.col);
+    await drive(1000, p => { c.s.fl = lerp(q.fl0 - .55, F, p); c.s.sc = lerp(q.sc0 * .94, q.S1, p); c.s.rz = (q.rz0 + .1) * (1 - p); c.x = lerp(q.x0, q.X, p); c.y = lerp(q.y0, q.Y, p); c.z = lerp(q.z0, q.Z, p); faceCheck(c, o, F); }, EX.expo); },
+  /** Tossed up like a coin: tumbles end over end with a half twist, falls back and lands with a squash. */
+  toss: async (c, o) => { const q = spinFrom(c, o), F = nextUp(q.fl0), R = q.rx0 + 2 * TAU; SFX.play('swoop'); spinTrail(c, 700, q.col);
+    await drive(1050, p => { c.y = lerp(q.y0, q.Y, p) - 150 * 4 * p * (1 - p); c.x = lerp(q.x0, q.X, p); c.z = lerp(q.z0, q.Z, p) + 1.6 * Math.sin(Math.PI * p);
+      c.s.rx = lerp(q.rx0, R, EX.quart(p)); c.s.fl = lerp(q.fl0, F, EX.sine(p)); c.s.sc = lerp(q.sc0, q.S1, p); faceCheck(c, o, F); });
+    c.s.rx = 0; SFX.play('thud'); kick(.2); c.s.sc = q.S1 * .92; tw(c.s, { sc: q.S1 }, 320, EX.back); },
+  /** Drawn in from a vortex: rolls round twice in its own plane while it turns over and grows. */
+  vortex: async (c, o) => { const q = spinFrom(c, o), F = nextUp(q.fl0, 1); SFX.play('riser', .5); spinTrail(c, 900, q.col);
+    await drive(1250, p => { c.s.rz = q.rz0 + 2 * TAU * EX.quart(p); c.s.fl = lerp(q.fl0, F, EX.quart(p)); c.s.sc = lerp(q.sc0 * .45, q.S1, EX.back(p)); c.z = lerp(q.z0 - 2, q.Z, E.out(p)); c.x = lerp(q.x0, q.X, p); c.y = lerp(q.y0, q.Y, p); faceCheck(c, o, F); });
+    c.s.rz = q.rz0; },
+  /** Turned like a page: hinged on its left edge, the free edge swings towards you and over, then it slides back to the middle. */
+  page: async (c, o) => { const q = spinFrom(c, o), h = CW / 2 * q.sc0, pivot = q.x0 - h * 100; SFX.play('paper');
+    await drive(820, p => { const th = -Math.PI * p; c.s.fl = q.fl0 + th; c.x = pivot + h * 100 * Math.cos(th); c.z = q.z0 - h * Math.sin(th) * 1.1; c.s.rz = .05 * Math.sin(Math.PI * p); faceCheck(c, o); }, EX.sine);
+    SFX.play('whoosh', .4);
+    await drive(520, p => { c.x = lerp(pivot - h * 100, q.X, p); c.y = lerp(q.y0, q.Y, p); c.z = lerp(q.z0, q.Z, p); c.s.sc = lerp(q.sc0, q.S1, p); c.s.rz = -.06 * Math.sin(Math.PI * p); }, EX.back); },
+  /** Rushes at you face down, flips at the closest point with a hit-stop, then eases back. */
+  slam: async (c, o) => { const q = spinFrom(c, o), F = nextUp(q.fl0); SFX.play('suck', .3);
+    await drive(300, p => { c.z = lerp(q.z0, q.z0 + 3.4, p); c.s.rx = lerp(q.rx0, -.25, p); c.x = lerp(q.x0, q.X, p); c.y = lerp(q.y0, q.Y, p); }, E.in);
+    SFX.play('whoosh'); await drive(200, p => { c.s.fl = lerp(q.fl0, F, p); faceCheck(c, o, F); }, E.out); hitstop(90);
+    await drive(650, p => { c.z = lerp(q.z0 + 3.4, q.Z, p); c.s.rx = lerp(-.25, 0, p); c.s.sc = lerp(q.sc0, q.S1, p); }, EX.back); },
+  /** Thrown up out of view, falls back, and turns over on the bounce. */
+  drop: async (c, o) => { const q = spinFrom(c, o), F = nextUp(q.fl0); SFX.play('swoop');
+    await drive(320, p => { c.y = lerp(q.y0, -180, p); c.s.rx = lerp(q.rx0, .5, p); }, E.in);
+    c.x = q.X; c.s.sc = q.S1; c.z = q.Z;
+    await drive(420, p => { c.y = lerp(-180, q.Y, p); c.s.rx = lerp(.5, -.15, p); }, E.in2);
+    SFX.play('thud'); kick(.3); hitstop(50);
+    await drive(380, p => { c.y = q.Y - 46 * Math.sin(Math.PI * p); c.s.fl = lerp(q.fl0, F, E.out(p)); c.s.rx = lerp(-.15, .1, p); faceCheck(c, o, F); });
+    await drive(260, p => { c.s.rx = lerp(.1, 0, p); }, EX.back); },
+  /** Two false starts, as if it is about to turn, then one smooth turn and a half. */
+  tease: async (c, o) => { const q = spinFrom(c, o), F = nextUp(q.fl0, 1);
+    for (const [d, k] of [[.6, 0], [-.75, 1]]) { SFX.play('tick', 900 + k * 300); await drive(170, p => { c.s.fl = q.fl0 + d * p; c.s.sc = q.sc0 * (1 + .03 * p); }, E.out); await drive(170, p => { c.s.fl = q.fl0 + d * (1 - p); c.s.sc = q.sc0 * (1.03 - .03 * p); }, E.inOut); }
+    SFX.play('whoosh'); spinTrail(c, 500, q.col);
+    await drive(1100, p => { c.s.fl = lerp(q.fl0, F, p); c.x = lerp(q.x0, q.X, p); c.y = lerp(q.y0, q.Y, p); c.z = lerp(q.z0, q.Z, p); c.s.sc = lerp(q.sc0, q.S1, p); faceCheck(c, o, F); }, EX.quart); },
+  /** Lifts and turns over slowly, swaying, like something carried by air. */
+  float: async (c, o) => { const q = spinFrom(c, o), F = nextUp(q.fl0); SFX.play('shimmer');
+    await drive(1600, p => { c.s.fl = lerp(q.fl0, F, EX.sine(p)); c.y = lerp(q.y0, q.Y, p) - 30 * Math.sin(Math.PI * p); c.x = lerp(q.x0, q.X, p); c.z = lerp(q.z0, q.Z, p) + .6 * Math.sin(Math.PI * p);
+      c.s.rx = .28 * Math.sin(Math.PI * p); c.s.rz = -.12 * Math.sin(TAU * p); c.s.sc = lerp(q.sc0, q.S1, p); faceCheck(c, o, F); }); },
+  /** Caught in a gust: circles in a tightening loop while turning twice, and stops dead in the middle. */
+  spiral: async (c, o) => { const q = spinFrom(c, o), F = nextUp(q.fl0, 1); SFX.play('whoosh'); spinTrail(c, 900, q.col);
+    await drive(1300, p => { const a = p * 3 * Math.PI, r = 1 - EX.quart(p); c.x = q.X + 80 * Math.sin(a) * r + (q.x0 - q.X) * (1 - p); c.y = q.Y - 46 * (1 - Math.cos(a)) * r + (q.y0 - q.Y) * (1 - p);
+      c.s.fl = lerp(q.fl0, F, EX.quart(p)); c.s.rz = .45 * Math.sin(a) * r; c.z = lerp(q.z0, q.Z, p); c.s.sc = lerp(q.sc0, q.S1, p); faceCheck(c, o, F); }); c.s.rz = 0; },
+  /** Shrinks for a beat, then snaps over and up in a fifth of a second and settles. */
+  snap: async (c, o) => { const q = spinFrom(c, o), F = nextUp(q.fl0); SFX.play('suck', .2);
+    await drive(150, p => { c.s.sc = q.sc0 * (1 - .12 * p); c.x = lerp(q.x0, q.X, p); c.y = lerp(q.y0, q.Y, p); }, E.out);
+    SFX.play('whoosh'); await drive(230, p => { c.s.sc = lerp(q.sc0 * .88, q.S1 * 1.2, p); c.s.fl = lerp(q.fl0, F, p); c.z = lerp(q.z0, q.Z + .6, p); faceCheck(c, o, F); }, E.out); hitstop(70);
+    await drive(420, p => { c.s.sc = lerp(q.S1 * 1.2, q.S1, p); c.z = lerp(q.Z + .6, q.Z, p); }, EX.back); },
+};
+
+/**
+ * Turns a face-down card into the find with a spin, and lands the hit (burst behind it, rays, glow, sheen) the moment
+ * its face comes round.
+ * @param {object} c the card from hiddenCard
+ * @param {{spin?: string, x?: number, y?: number, z?: number, sc?: number, rays?: boolean, onFace?: Function}} [o]
+ * @returns {Promise<void>} resolves when the card is face up and back on its springs
+ */
+async function reveal3(c, o = {}) {
+  const name = o.spin || MOMENTS[current]?.spin || 'whip', spin = SPINS[name] || SPINS.whip;
+  cardFree(c, true);
+  const face = () => { const x = o.x ?? c.x, y = o.y ?? c.y; hit(x, y, rarity, { white: false }); c.glowCol.set(c.C); c.glowA = 1.2; tw(c, { glowA: .42 }, 1300, E.out);
+    if (o.rays !== false && rarity >= 3) { const r = raysEl(x, y, c.C, 700); A(r, [{ opacity: 0, transform: 'scale(.4)' }, { opacity: 1, transform: 'scale(1)' }], 700); }
+    later(() => cardSheen3(c), 260); o.onFace?.(); };
+  const so = { ...o, onFace: face }; await spin(c, so); if (!so._faced) face();
+  cardFree(c, false);
+}

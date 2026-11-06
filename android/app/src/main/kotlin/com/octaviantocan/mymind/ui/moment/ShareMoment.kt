@@ -11,8 +11,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import com.octaviantocan.mymind.R
+import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.share.ShareDetails
 import com.octaviantocan.mymind.share.ShareItem
 import com.octaviantocan.mymind.ui.share.SAVED_FADE_MS
@@ -38,6 +40,9 @@ data class FindCount(val rarity: Rarity, val before: Int?)
  * waits [SAVED_FADE_MS] untouched and goes by itself (share-sheet-fades-by-itself). If nothing could be saved the
  * moment fades and the share sheet says why.
  *
+ * The moment is the prototype's own, played by [web]; where the phone cannot play it, the app's own drawing of it
+ * ([moment]) plays instead.
+ *
  * @param state The share's state, filled in as saving goes and as ThyMind reads what was saved.
  * @param count Counts the library for the find; null when it cannot.
  * @param onDetails Called once with the spaces and tags chosen, when the tag step ends.
@@ -52,7 +57,9 @@ fun ShareMoment(
     onSky: (Float) -> Unit,
     onClosed: () -> Unit,
     moment: StarMoment = rememberStarMoment(),
+    web: WebMoment? = rememberWebMoment(),
 ) {
+    val onWeb = web != null && web.status != WebStatus.Failed
     var before by remember { mutableStateOf<Int?>(null) }
     var tagOpen by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf(false) }
@@ -62,21 +69,23 @@ fun ShareMoment(
     LaunchedEffect(Unit) {
         val found = count()
         moment.rarity = found?.rarity ?: Rarity.Common
+        web?.rarity = found?.rarity ?: Rarity.Common
         before = found?.before
     }
     LaunchedEffect(state.phase) {
-        if (state.phase == SavePhase.Failed && !problem) { problem = true; tagOpen = false; moment.abort() }
+        if (state.phase == SavePhase.Failed && !problem) { problem = true; tagOpen = false; moment.abort(); if (onWeb) web?.abort() }
     }
     val closeTags = {
         if (tagOpen) {
             tagOpen = false
             focus.clearFocus()
             latestDetails(state.details())
-            moment.closeTags()
+            if (onWeb) web?.closeTags() else moment.closeTags()
         }
     }
-    LaunchedEffect(moment.phase) {
-        when (moment.phase) {
+    val phase = if (onWeb && web != null) web.phase else moment.phase
+    LaunchedEffect(phase) {
+        when (phase) {
             StarPhase.Settled -> if (!problem && !tagOpen) {
                 // The space ThyMind suggests is already lit; the grid is for changing it (Tavi's pick M9).
                 if (state.spaceIds.isEmpty()) state.suggestion?.let { state.spaceIds = listOf(it.space.id) }
@@ -99,21 +108,32 @@ fun ShareMoment(
     }
     BackHandler {
         when {
-            moment.phase == StarPhase.Playing -> moment.skip()
+            phase == StarPhase.Playing -> if (onWeb) web?.skip() else moment.skip()
             tagOpen -> closeTags()
             else -> latestClosed()
         }
     }
     val find = momentFindOf(state, before?.plus(1))
-    ShootingStar(
-        moment, find, before, saved = state.saved.coerceAtLeast(1), tagOpen = tagOpen,
-        onOutside = closeTags, onSky = onSky,
-    ) { modifier ->
-        TagGrid(state, moment.shownRarity.color, left = { if (counting) left.value else null },
+    val shown = if (onWeb && web != null) web.shownRarity else moment.shownRarity
+    val grid: @Composable (Modifier) -> Unit = { modifier ->
+        TagGrid(state, shown.color, left = { if (counting) left.value else null },
             onTouch = { state.touched = true }, onDone = closeTags, modifier = modifier)
+    }
+    if (onWeb && web != null) {
+        WebShootingStar(
+            web, find, before, saved = state.saved.coerceAtLeast(1), space = chosenSpace(state), tagOpen = tagOpen,
+            chosen = { chosenSpace(state) to (state.foundTags + state.tags).distinctBy { it.lowercase() } },
+            onOutside = closeTags, onSky = onSky, tagStep = grid,
+        )
+    } else {
+        ShootingStar(moment, find, before, saved = state.saved.coerceAtLeast(1), tagOpen = tagOpen, onOutside = closeTags, onSky = onSky, tagStep = grid)
     }
     if (problem) ShareSheet(state, onClose = onClosed)
 }
+
+/** The space the find goes into: the one chosen, else the one ThyMind suggests. */
+private fun chosenSpace(state: ShareSheetState): Space? =
+    state.spaceIds.firstOrNull()?.let { id -> state.spaces.firstOrNull { it.id == id } } ?: state.suggestion?.space
 
 /**
  * @param state The share's state.

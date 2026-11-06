@@ -12,10 +12,21 @@ backpack. When nothing could be saved the moment MUST fade without the backpack
 and the share sheet says why (share-problems-speak-for-thymind). With the
 system's animations turned off the share sheet shows instead. The moment MUST
 NOT show levels or XP, and the backpack MUST NOT be called a basket.
+The moment MUST be the prototype's own moment 03, with all of its animation,
+backgrounds and effects: the app plays the prototype's engine itself
+(android/moment-web) in a see-through WebView, fed the find's title, site,
+number, picture and rarity, and keeps its own sounds, vibrations, blur and tag
+step. A redrawing of it that leaves effects out MUST NOT ship in its place. Where
+that page cannot play (no WebView, a page error, or not ready within 2.5
+seconds) the app's own drawing of the moment SHOULD play instead, so a share
+never waits on it; the fallback and its 2.5 seconds are Claude's choice.
 Source: Tavi, 5 November 2026, 23:09: "Let's make the 03 shooting star one into a
 real thing in the app and build it out fully", moment 03 of the Inventory share
 moment prototype; the tap to skip, the backpack and no levels come from his
-feedback on that prototype the same day.
+feedback on that prototype the same day. Playing the prototype's own engine
+follows Tavi, 6 November 2026, 13:01: "you didn't include most of the detailed
+animations, nor backgrounds, nor effects...it looks like absolute shit in the
+actual app."
 
 @cc [owner:OctavianTocan,label:product;design] share-tag-step-icon-grid
 The tag step after the shooting star MUST be an icon grid on the back of the
@@ -27,10 +38,18 @@ with the spark (share-sheet-shows-thymind-tags), then the user's, then recent
 tags, off. A tap on a tile puts its tag on or takes it off. It MUST go by itself
 as share-sheet-fades-by-itself says, its button showing the time left; a tap
 outside the card or Back closes it at once. The spaces and tags chosen MUST reach
-the saved cards however it closes.
+the saved cards however it closes. A tile's corner marks (the spark and the
+check) MUST sit clear of its edge and of its icon, and its name MUST keep room
+inside the tile on both sides, at the phone's own text size; a grid with more
+rows than fit fades at the bottom rather than cutting a row off. It MUST turn on
+from the edge the card turned to and leave by the other, so the turn carries on
+one way round.
 Source: Tavi's pick of M9 Icon grid on 5 November 2026, 23:27, for the tag step
 that follows the shooting star. Choosing the suggested space from the start is
 the M9 frame of the Inventory canvas; the icon for each tag is Claude's choice.
+The spacing follows Tavi, 6 November 2026, 13:03: "There's not enough margin on
+the side for the small icon, the tags on the card's back don't have proper
+spacing inside"; the 10 dp corner inset and the bottom fade are Claude's choice.
 
 @cc [owner:OctavianTocan,label:product] find-rarity-from-library
 A find's rarity MUST come from the user's own library, never from chance or

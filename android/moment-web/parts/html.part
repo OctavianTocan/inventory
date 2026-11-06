@@ -1,0 +1,92 @@
+<style>
+.cam { position: absolute; inset: 0; transform-origin: 180px 342px; }
+.hud { position: absolute; inset: 0; z-index: 40; pointer-events: none; }
+.over { position: absolute; inset: 0; z-index: 25; pointer-events: none; }
+canvas.fxb { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 15; pointer-events: none; }
+canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; opacity: 0; }
+.strip { display: block; width: 100%; height: auto; background: #0B2227; }
+.shop .page { position: absolute; top: 85px; left: 0; right: 0; bottom: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; cursor: default; }
+.shop .page::-webkit-scrollbar { display: none; }
+.shop .page p { margin: 12px 0 0; font-size: 15px; line-height: 1.5; color: #333; }
+.shop .specs { margin: 14px 0 0; padding: 0; list-style: none; font-family: system-ui, sans-serif; font-size: 13px; color: #555; }
+.shop .specs li { display: flex; justify-content: space-between; padding: 9px 0; border-top: 1px solid #EEE; }
+.shop .more { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 18px 0 24px; font-family: system-ui, sans-serif; font-size: 12px; color: #444; }
+.shop .more div { height: 110px; border-radius: 6px; background: linear-gradient(160deg, #E9E4DA, #CFC7B8); display: flex; align-items: flex-end; padding: 8px; }
+.shop .share { z-index: 3; }
+.tagp { color: #E8ECEB; font-size: 14px; cursor: default; }
+.tagp button, .tagp input, .tagp textarea { font-family: var(--font); }
+.tagp .lbl { font-size: 12px; color: #8FA9AC; margin: 10px 0 6px 2px; }
+.tagp .lbl:first-child { margin-top: 0; }
+.tagp .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tagp .row[hidden] { display: none; }
+.tagp .pick { margin-top: 6px; }
+.tagp .spc, .tagp .pk { height: 36px; padding: 0 10px 0 12px; border-radius: 18px; border: 0; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; font-size: 14px; }
+.tagp .spc { background: #F4F2EF; color: #0E333A; font-weight: 600; }
+.tagp .pk { background: rgba(244,242,239,.08); color: #E8ECEB; box-shadow: inset 0 0 0 1px rgba(167,211,204,.25); padding-right: 14px; }
+.tagp .spc i, .tagp .pk i { width: 9px; height: 9px; border-radius: 50%; }
+.tagp .tg { height: 36px; padding: 0 2px 0 12px; border-radius: 18px; background: rgba(244,242,239,.1); box-shadow: inset 0 0 0 1px rgba(167,211,204,.22); display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.tagp .tg .x { width: 32px; height: 32px; border-radius: 16px; border: 0; background: transparent; color: #9FB3B5; font-size: 19px; line-height: 1; cursor: pointer; display: grid; place-items: center; }
+.tagp .tg .x:hover { background: rgba(244,242,239,.12); color: #F4F2EF; }
+.tagp .add { height: 36px; padding: 0 14px; border-radius: 18px; border: 1.5px dashed rgba(167,211,204,.55); background: transparent; color: #CFE7E2; font-weight: 500; font-size: 14px; cursor: pointer; }
+.tagp .done { height: 46px; width: 100%; border-radius: 23px; border: 0; background: #F4F2EF; color: #0E333A; font-weight: 600; font-size: 15px; position: relative; overflow: hidden; cursor: pointer; }
+.tagp .done .left { position: absolute; top: 0; bottom: 0; right: 0; width: 100%; background: rgba(14,51,58,.14); }
+.tagp .field { height: 36px; border-radius: 12px; background: #12343A; border: 0; outline: 0; color: #F4F2EF; padding: 0 12px; font-size: 15px; box-shadow: inset 0 0 0 1px #2D5A61; }
+.tagp textarea.field { height: auto; width: 100%; padding: 10px 12px; resize: none; line-height: 1.4; }
+.tagp .field:focus { box-shadow: inset 0 0 0 1.5px #A7D3CC; }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="dev"><div class="scr" id="scr" role="img" aria-label="A phone showing a camera shop page. Pressing Play shares it to Inventory and plays the chosen moment.">
+      <div class="cam" id="cam">
+        <div class="shop" id="shop">
+          <div class="url"><div>westbrookcameras.co.uk</div></div>
+          <div class="page" id="page">
+            <img src="photos/camera.jpg" alt="">
+            <div class="body">
+              <div style="font-size:22px">Rangefinder camera, 1970s, serviced</div><div style="margin-top:6px;font-size:18px">£340</div><div class="buy">Add to basket</div>
+              <p>A compact rangefinder from the late seventies, fully serviced in our workshop: new light seals, a cleaned and calibrated rangefinder patch, and a tested shutter at every speed.</p>
+              <p>The 40 mm f/1.7 lens is clear, with no haze or fungus. Comes with a fresh battery and a leather half case.</p>
+              <ul class="specs"><li><span>Lens</span><span>40 mm f/1.7</span></li><li><span>Shutter</span><span>1/8 to 1/500 s</span></li><li><span>Film</span><span>35 mm</span></li><li><span>Condition</span><span>Excellent</span></li><li><span>Warranty</span><span>6 months</span></li></ul>
+              <div style="margin-top:22px;font-size:17px">You might also like</div>
+              <div class="more"><div>Half-frame camera</div><div>Light meter</div><div>Film, 3 rolls</div><div>Lens hood</div></div>
+            </div>
+          </div>
+          <div class="share" id="share"><div class="me"><span><svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 2.5l7.5 7.5L12 21.5 4.5 10z" fill="#F4F2EF"/><path d="M12 2.5l7.5 7.5h-15z" fill="#A7D3CC"/></svg></span>Inventory</div><div><span></span>Messages</div><div><span></span>Mail</div><div><span></span>Notes</div><div><span></span>Copy link</div><div><span></span>Print</div><div><span></span>Drive</div><div><span></span>More</div></div>
+        </div>
+        <div class="layer" id="layer"></div>
+        <canvas class="fxb" id="fxb" width="720" height="1520"></canvas>
+        <canvas class="gl" id="gl"></canvas>
+        <div class="over" id="over"></div>
+        <canvas class="fx" id="fx" width="720" height="1520"></canvas>
+      </div>
+      <div class="hud" id="hud"></div>
+    </div></div>
+
+    <div class="panel">
+      <h1>Inventory share moment</h1>
+      <p class="intro" id="intro"></p>
+      <div class="controls">
+        <button class="pill go" id="play">▶ Play</button>
+        <button class="pill" id="snd" aria-pressed="true">Sound on</button>
+        <button class="pill" id="slow" aria-pressed="false">Slow motion</button>
+        <div class="seg" role="group" aria-label="Rarity" id="rar"></div>
+      </div>
+      <h2 style="margin:18px 0 4px;font-size:15px;font-weight:500">World</h2>
+      <p class="intro" style="margin:0 0 8px">Each moment has its own place to happen in. Pick one here to play any moment in any of the twelve worlds.</p>
+      <div class="wl" role="group" aria-label="World" id="wrl"></div>
+      <div class="vlist" id="vlist"></div>
+      <h2 style="margin:22px 0 4px;font-size:17px;font-weight:500">Tags: C, and twelve takes on it</h2>
+      <p class="intro" style="margin:0 0 10px">The space and the tags are picked for you and already on the find when this opens. You only touch it to change something: tap × to drop a tag, tap the space to move it, Add for your own tag or a note. Left alone it closes after five seconds; a tap anywhere else means done.</p>
+      <div class="controls"><button class="pill go" id="tplay">▶ Tags only</button></div>
+      <div class="vlist" id="tlist"></div>
+      <div class="box" id="notes"></div>
+    </div>
+  </div>
+
+  <section class="refs">
+    <h2>The real reveals, frame by frame</h2>
+    <p>Eight evenly spaced frames from each clip, read left to right. The clips are short ones players posted on Tenor; they are here only as references.</p>
+    <div class="rgrid" id="rgrid"></div>
+  </section>
+</div>

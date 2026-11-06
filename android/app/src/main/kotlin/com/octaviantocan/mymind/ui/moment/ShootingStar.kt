@@ -339,7 +339,7 @@ private fun Backpack(sim: StarSim, units: CardUnits, unit: Float, before: Int?, 
 }
 
 /** The card's width over its height, kept by the tag step's card too. */
-private const val CARD_RATIO = 200f / 284f
+internal const val CARD_RATIO = 200f / 284f
 
 private const val BAG = "M9.5 4.5V3.8a2.5 2.5 0 0 1 5 0v.7M6 9.5a4.5 4.5 0 0 1 4.5-4.5h3A4.5 4.5 0 0 1 18 9.5V19a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2zM6 11.5h12M8.5 15h7v3.5a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1zM12 11.5v1.6"
 

@@ -1,0 +1,463 @@
+/* Finds that are not the usual card (Tavi, 5 Nov: "15 different card ideas that work in all those animations. Maybe
+   some of them don't have to even look like a card"). Each find is a real object built in 3D (a rune stone, a coin,
+   a dog tag, a record...) that the moments handle exactly like the card: it spins in, turns over, takes the stars
+   and the tags, and flies to the backpack. A find is picked with FIND_PICK; '' keeps the moment's own card. */
+let FIND_PICK = '';
+const FP = 100, FS = 4;
+const NAME1 = 'Rangefinder camera', NAME2 = '1970s', NAMEF = 'Rangefinder camera, 1970s';
+
+/** A canvas for a find's face, w x h world units at 100 px a unit (drawn at 4x). */
+function fcv(w, h, s = FS) { const cv = mkcv(Math.round(w * FP * s), Math.round(h * FP * s)), g = cv.getContext('2d'); g.scale(s, s); return [cv, g]; }
+/** Draws the find's photo to cover a box, cropped, never stretched. */
+function cover(g, x, y, w, h, img = PHOTO) { if (!img.complete || !img.naturalWidth) { g.fillStyle = '#6B655C'; g.fillRect(x, y, w, h); return; } const ia = img.naturalWidth / img.naturalHeight, pw = Math.max(w, h * ia), ph = pw / ia; g.drawImage(img, x + (w - pw) / 2, y + (h - ph) / 2, pw, ph); }
+/** The photo printed in two inks, dark to light, as a canvas. */
+const TONED = {};
+function toned(lo, hi) {
+  const k = lo + hi; if (TONED[k]) return TONED[k];
+  const cv = mkcv(300, 400), g = cv.getContext('2d'); if (!PHOTO.complete || !PHOTO.naturalWidth) return cv;
+  g.drawImage(PHOTO, 0, 0, 300, 400); const d = g.getImageData(0, 0, 300, 400), a = d.data, L = parseInt(lo.slice(1), 16), Hh = parseInt(hi.slice(1), 16);
+  const l0 = [L >> 16, (L >> 8) & 255, L & 255], h0 = [Hh >> 16, (Hh >> 8) & 255, Hh & 255];
+  for (let i = 0; i < a.length; i += 4) { let l = (a[i] * .3 + a[i + 1] * .59 + a[i + 2] * .11) / 255; l = l * l * (3 - 2 * l); for (let j = 0; j < 3; j++) a[i + j] = l0[j] + (h0[j] - l0[j]) * l; }
+  g.putImageData(d, 0, 0); cv.complete = true; cv.naturalWidth = 300; cv.naturalHeight = 400; return TONED[k] = cv;
+}
+/** Text in one call: o = { s: size, w: weight, c: colour, a: align, b: baseline, ls: letter spacing, i: italic, mw: max width }.
+    Text wider than mw shrinks to at most 72% of its size, then ends in an ellipsis. */
+function txt(g, s, x, y, o = {}) {
+  let sz = o.s || 12; const font = () => { g.font = `${o.i ? 'italic ' : ''}${o.w || 500} ${sz}px ${FONT}`; };
+  font(); g.letterSpacing = (o.ls || 0) + 'px';
+  if (o.mw && g.measureText(s).width > o.mw) { sz = Math.max(sz * .72, sz * o.mw / g.measureText(s).width); font();
+    if (g.measureText(s).width > o.mw) { let b = s; while (b.length > 1 && g.measureText(b + '…').width > o.mw) b = b.slice(0, -1); s = b.trimEnd() + '…'; } }
+  g.fillStyle = o.c || '#F4F2EF'; g.textAlign = o.a || 'left'; g.textBaseline = o.b || 'alphabetic'; g.fillText(s, x, y); const w = g.measureText(s).width; g.letterSpacing = '0px'; return w; }
+/** The rarity's stars in a row ending at x; lit ones in on, the rest in off. Returns their centres. */
+function starRow(g, r, stars, x, y, s, on, off, gap) { const n = RNUM[r], P = []; for (let i = 0; i < n; i++) { const cx = x - (n - 1 - i) * (gap ?? s * 2.4); star2d(g, cx, y, s, i < stars ? on : off); P.push([cx, y]); } return P; }
+/** Space and tags as one line of text, e.g. "Cameras · film camera · 1970s". */
+const tagText = (tags, sep = ' · ') => tags.map(t => t.label).join(sep);
+/** Text written round a circle, centred on angle a0 (radians, 0 = up), reading clockwise. */
+function arcText(g, s, cx, cy, R, a0, o = {}) {
+  g.font = `${o.w || 600} ${o.s || 11}px ${FONT}`; g.fillStyle = o.c || '#000'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const sp = o.ls ?? 1.5, ws = [...s].map(ch => g.measureText(ch).width + sp), tot = ws.reduce((a, b) => a + b, 0); let a = a0 - tot / R / 2;
+  for (let i = 0; i < ws.length; i++) { const m = a + ws[i] / 2 / R; g.save(); g.translate(cx + Math.sin(m) * R, cy - Math.cos(m) * R); g.rotate(m); g.fillText([...s][i], 0, 0); g.restore(); a += ws[i] / R; }
+}
+/** A height canvas (white = raised) turned into a normal map texture. */
+function normalFrom(hc, k = 3) {
+  const w = hc.width, h = hc.height, src = hc.getContext('2d').getImageData(0, 0, w, h).data, out = mkcv(w, h), og = out.getContext('2d'), od = og.createImageData(w, h), d = od.data;
+  const Hh = (x, y) => src[(Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))) * 4] / 255;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const dx = (Hh(x + 1, y) - Hh(x - 1, y)) * k, dy = (Hh(x, y + 1) - Hh(x, y - 1)) * k, l = Math.hypot(dx, dy, 1), i = (y * w + x) * 4; d[i] = (-dx / l * .5 + .5) * 255; d[i + 1] = (dy / l * .5 + .5) * 255; d[i + 2] = (1 / l * .5 + .5) * 255; d[i + 3] = 255; }
+  og.putImageData(od, 0, 0); return ctex(out, false);
+}
+/** A roughness (G) and metalness (B) map: base everywhere, paint(g) draws the other areas with their own colours. */
+function ormMap(F, base, paint) { const [cv, g] = fcv(F.w, F.h, 2); g.fillStyle = base; g.fillRect(0, 0, F.w * FP, F.h * FP); if (paint) paint(g); return ctex(cv, false); }
+const orm = (rough, metal) => `rgb(0,${Math.round(rough * 255)},${Math.round(metal * 255)})`;
+
+/** The same outline mirrored left to right (so a back cut from it lines up with the front once turned round). */
+function mirrorShape(s, seg) { const m = new THREE.Shape(s.getPoints(seg).map(p => new THREE.Vector2(-p.x, p.y)).reverse()); m.holes = s.holes.map(hh => new THREE.Path(hh.getPoints(seg).map(p => new THREE.Vector2(-p.x, p.y)).reverse())); return m; }
+/** A flat cap cut to an outline, its texture spread over the find's w x h frame; back caps face away and read correctly from behind. */
+function capGeo(shape, w, h, back, seg = 24) {
+  const g = new THREE.ShapeGeometry(back ? mirrorShape(shape, seg) : shape, seg); if (back) g.rotateY(Math.PI);
+  const p = g.attributes.position, uv = g.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, back ? .5 - p.getX(i) / w : .5 + p.getX(i) / w, .5 + p.getY(i) / h); return g;
+}
+/** A flat object of thickness d cut to an outline: an edge, a face and a back, each with its own material. */
+function slab(parent, shape, F, d, m, o = {}) {
+  const seg = o.seg ?? 24, grp = new THREE.Group();
+  const edge = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: false, curveSegments: seg }), [new THREE.MeshBasicMaterial({ visible: false }), m.edge]); edge.position.z = -d / 2;
+  const face = new THREE.Mesh(capGeo(shape, F.w, F.h, false, seg), m.front); face.position.z = d / 2 + .0006;
+  const back = new THREE.Mesh(capGeo(shape, F.w, F.h, true, seg), m.back); back.position.z = -d / 2 - .0006;
+  grp.add(edge, face, back); if (o.z) grp.position.z = o.z; parent.add(grp); return grp;
+}
+/** A rounded rectangle outline centred at (x, y). */
+const rrS = (w, h, r, x = 0, y = 0) => rrPath(new THREE.Shape(), w, h, r, x - w / 2, y - h / 2);
+/** A polygon outline with every corner rounded by r. */
+function roundPoly(pts, r) { const s = new THREE.Shape(), n = pts.length, P = i => pts[(i + n) % n];
+  for (let i = 0; i < n; i++) { const [x, y] = P(i), [ax, ay] = P(i - 1), [bx, by] = P(i + 1), la = Math.hypot(ax - x, ay - y), lb = Math.hypot(bx - x, by - y), k = Math.min(r, la / 2, lb / 2);
+    const p1 = [x + (ax - x) / la * k, y + (ay - y) / la * k], p2 = [x + (bx - x) / lb * k, y + (by - y) / lb * k]; if (i === 0) s.moveTo(...p1); else s.lineTo(...p1); s.quadraticCurveTo(x, y, ...p2); }
+  s.closePath(); return s; }
+/** A disc lying in the face plane (caps facing front and back), with planar UVs over a 2R frame on both caps. */
+function discGeo(R, t, seg = 96) { const g = new THREE.CylinderGeometry(R, R, t, seg, 1); g.rotateX(Math.PI / 2); const p = g.attributes.position, uv = g.attributes.uv, n = g.attributes.normal;
+  for (let i = 0; i < p.count; i++) { const nz = n.getZ(i); if (nz > .5) uv.setXY(i, .5 + p.getX(i) / (2 * R), .5 + p.getY(i) / (2 * R)); else if (nz < -.5) uv.setXY(i, .5 - p.getX(i) / (2 * R), .5 + p.getY(i) / (2 * R)); } return g; }
+/** A physical material that also glows hot during the reveal like the card does. */
+const pm = (hot, o) => new THREE.MeshPhysicalMaterial(Object.assign({ roughness: .6, metalness: 0, envMapIntensity: .85, emissive: hot, emissiveIntensity: 0 }, o));
+/** An additive glow layer (runes, neon) drawn from a canvas, bright enough to bloom. */
+function glowLayer(parent, w, h, cv, k, z) { const t = ctex(cv), m = new THREE.MeshBasicMaterial({ map: t, color: new THREE.Color(k, k, k), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }); const me = new THREE.Mesh(new THREE.PlaneGeometry(w, h), m); me.position.z = z; parent.add(me); return { t, m, me }; }
+/** Pale and dark versions of the rarity colour for print on light and dark stock. */
+const INK = { 1: '#5E5A51', 3: '#1D4A63', 5: '#8A5A14' };
+
+/* The invented rune script: every letter is a stem with two or three marks picked from its code, so a word always
+   reads the same. It is Inventory's own, not any game's alphabet. */
+function runeGlyph(g, ch, x, y, s) {
+  const c = ch.toUpperCase().charCodeAt(0), digit = c >= 48 && c <= 57; let h = (c * 2654435761) >>> 0; const marks = [];
+  for (let b = 0; b < 8 && marks.length < 3; b++) if (h & (1 << ((b * 3 + c) % 8))) marks.push(b);
+  while (marks.length < 2) marks.push((c + marks.length * 3) % 8);
+  const u = s / 22, L = (x0, y0, x1, y1) => { g.moveTo(x + x0 * u, y + y0 * u); g.lineTo(x + x1 * u, y + y1 * u); };
+  g.beginPath();
+  if (digit) { L(-3, 0, -3, 22); L(3, 0, 3, 22); } else L(0, 0, 0, 22);
+  for (const m of marks) {
+    if (m === 0) { g.moveTo(x + 3.2 * u, y - 1 * u); g.arc(x, y - 1 * u, 3.2 * u, 0, TAU); }
+    if (m === 1) L(0, 4, -6, -1); if (m === 2) L(0, 4, 6, -1); if (m === 3) L(-6, 11, 6, 11);
+    if (m === 4) { g.moveTo(x + 7.6 * u, y + 11 * u); g.arc(x + 6 * u, y + 11 * u, 1.6 * u, 0, TAU); }
+    if (m === 5) { g.moveTo(x, y + 22 * u); g.quadraticCurveTo(x - 7 * u, y + 22 * u, x - 6 * u, y + 15 * u); }
+    if (m === 6) { g.moveTo(x, y + 22 * u); g.quadraticCurveTo(x + 7 * u, y + 22 * u, x + 6 * u, y + 15 * u); }
+    if (m === 7) L(-5, 19, 5, 6);
+  }
+  g.stroke();
+}
+function runeWord(g, word, cx, y, s, gap) { const n = word.length, step = s * .62 + gap; let x = cx - (n - 1) * step / 2; for (const ch of word) { if (ch !== ' ') runeGlyph(g, ch, x, y, s); x += step; } }
+
+const FINDS = {
+  rune: { name: 'Rune word', w: 2.1, h: 2.9,
+    d: 'A slab of dark stone with the find written on it in an invented rune script, one line a word, glowing in the rarity colour, the plain words carved small beneath.',
+    lines: [['RANGEFINDER', 'rangefinder', 62], ['CAMERA', 'camera', 128], ['1970S', '1970s', 194]],
+    shape() { return roundPoly([[-1.0, 1.32], [-.5, 1.45], [.4, 1.4], [1.03, 1.18], [1.05, -.92], [.78, -1.43], [-.42, -1.45], [-1.03, -1.08]], .08); },
+    stone(g, w, h, seed) { const rn = mulberry(seed); g.fillStyle = '#34383B'; g.fillRect(0, 0, w, h); for (let i = 0; i < 2600; i++) { const v = rn(); g.fillStyle = v < .5 ? `rgba(255,255,255,${(.02 + rn() * .05).toFixed(3)})` : `rgba(0,0,0,${(.04 + rn() * .08).toFixed(3)})`; g.fillRect(rn() * w, rn() * h, 1 + rn() * 2.2, 1 + rn() * 2.2); } },
+    face(r, tags, stars) { const F = this, [cv, g] = fcv(F.w, F.h); F.stone(g, 210, 290, 7);
+      g.strokeStyle = 'rgba(8,10,11,.85)'; g.lineWidth = 3.4; g.lineCap = 'round'; for (const [w, , y] of F.lines) runeWord(g, w, 105, y - 24, 22, 3.2);
+      for (const [, t, y] of F.lines) txt(g, t, 105, y + 16, { s: 12, w: 600, c: '#C9D0CE', a: 'center', ls: 1.2 });
+      starRow(g, r, stars, 176, 30, 5.6, RC[r], 'rgba(10,12,13,.75)');
+      g.fillStyle = 'rgba(201,208,206,.3)'; g.fillRect(40, 226, 130, 1);
+      txt(g, `${RN[r]} · No. 024 · +${PTS[r]}`, 105, 246, { s: 11.5, w: 600, c: '#C9D0CE', a: 'center', mw: 170 });
+      if (tags.length) txt(g, tagText(tags), 105, 266, { s: 11, c: '#9FA8A6', a: 'center', mw: 166 });
+      return cv; },
+    glow(r) { const F = this, [cv, g] = fcv(F.w, F.h, 2); g.strokeStyle = RC[r]; g.lineCap = 'round'; g.shadowColor = RC[r]; g.shadowBlur = 8; g.lineWidth = 2.2; for (const [w, , y] of F.lines) runeWord(g, w, 105, y - 24, 22, 3.2); return cv; },
+    back(r) { const F = this, [cv, g] = fcv(F.w, F.h); F.stone(g, 210, 290, 11); g.strokeStyle = 'rgba(8,10,11,.8)'; g.lineWidth = 3; g.beginPath(); g.moveTo(105, 110); g.lineTo(135, 140); g.lineTo(105, 190); g.lineTo(75, 140); g.closePath(); g.moveTo(75, 140); g.lineTo(135, 140); g.stroke(); txt(g, 'No. 024', 105, 226, { s: 12, w: 600, c: '#8F9896', a: 'center', ls: 1.5 }); return cv; },
+    height(r) { const F = this, [cv, g] = fcv(F.w, F.h, 2); g.fillStyle = '#B4B4B4'; g.fillRect(0, 0, 210, 290); g.strokeStyle = '#1A1A1A'; g.lineWidth = 3.4; g.lineCap = 'round'; g.filter = 'blur(.8px)'; for (const [w, , y] of F.lines) runeWord(g, w, 105, y - 24, 22, 3.2); g.filter = 'none'; return cv; },
+    starAt: (i, n) => [176 - (n - 1 - i) * 13.4, 30],
+    build(c, body, r, C, hot) { const F = this;
+      c.front = pm(hot, { map: ctex(F.face(r, [], 0)), normalMap: normalFrom(F.height(r), 4), normalScale: new THREE.Vector2(1.2, 1.2), roughness: .82 });
+      c.backM = pm(hot, { map: ctex(F.back(r)), roughness: .85 }); c.artM = pm(hot, { color: '#2E3235', roughness: .9 });
+      slab(body, F.shape(), F, .24, { front: c.front, back: c.backM, edge: c.artM }, { seg: 8 });
+      const gl = glowLayer(body, F.w, F.h, F.glow(r), 1.5, .121); gl.m.opacity = 0; c.extra = [gl.m];
+      c.tick = dt => { const f = Math.cos(c.s.fl) * Math.cos(c.s.rx); if (f > .3) c.lit = Math.min(1, (c.lit || 0) + dt / .7); gl.m.opacity = (c.lit || 0) * (.8 + .2 * Math.sin(clock * 3)); };
+    } },
+
+  polaroid: { name: 'Instant photo', w: 2.0, h: 2.42,
+    d: 'An instant photo that develops in your hand: it comes out grey and the find fades in. Your name for it is written on the strip in pen.',
+    face(r, tags, stars) { const [cv, g] = fcv(this.w, this.h); g.fillStyle = '#F3F1EA'; g.fillRect(0, 0, 200, 242); g.fillStyle = 'rgba(0,0,0,.035)'; for (let i = 0; i < 400; i++) g.fillRect(Math.random() * 200, Math.random() * 242, 1, 1);
+      g.save(); g.beginPath(); g.rect(11, 11, 178, 178); g.clip(); cover(g, 11, 11, 178, 178); g.restore(); g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = .6; g.strokeRect(11, 11, 178, 178);
+      g.save(); g.translate(16, 212); g.rotate(-.025); txt(g, NAMEF, 0, 0, { s: 15, w: 500, i: true, c: '#22336B', mw: 166 }); g.restore();
+      txt(g, tags.length ? tagText(tags, ', ') : `No. 024  +${PTS[r]}`, 18, 231, { s: 10.5, i: true, c: '#3E4F86', mw: 184 - (RNUM[r] - 1) * 11 - 14 - 18 });
+      starRow(g, r, stars, 184, 231, 4.6, RC[r], 'rgba(34,51,107,.18)'); return cv; },
+    back() { const [cv, g] = fcv(this.w, this.h); g.fillStyle = '#2C2A27'; g.fillRect(0, 0, 200, 242); g.fillStyle = '#3A3733'; g.fillRect(0, 196, 200, 46); txt(g, 'Inventory instant film', 100, 222, { s: 10.5, w: 600, c: '#8D877D', a: 'center', ls: 1 }); return cv; },
+    starAt: (i, n) => [184 - (n - 1 - i) * 11, 231],
+    build(c, body, r, C, hot) { const F = this;
+      c.front = pm(hot, { map: ctex(F.face(r, [], 0)), roughness: .78 }); c.backM = pm(hot, { map: ctex(F.back(r)), roughness: .7 }); c.artM = pm(hot, { color: '#ECE9E1', roughness: .85 });
+      slab(body, rrS(F.w, F.h, .03), F, .03, { front: c.front, back: c.backM, edge: c.artM });
+      const dev = new THREE.MeshBasicMaterial({ color: '#3F3A34', transparent: true, opacity: 1, depthWrite: false }), pl = new THREE.Mesh(new THREE.PlaneGeometry(1.78, 1.78), dev); pl.position.set(0, F.h / 2 - .11 - .89, .017); body.add(pl);
+      c.extra = [dev]; c.tick = dt => { const f = Math.cos(c.s.fl) * Math.cos(c.s.rx); if (f > .3) c.dev = Math.min(1, (c.dev || 0) + dt / 2.6); const k = c.dev || 0; dev.opacity = 1 - k * k * (3 - 2 * k); pl.visible = dev.opacity > .01; };
+    } },
+
+  coin: { name: 'Coin', w: 2.12, h: 2.12,
+    d: 'A heavy coin struck with the find: its photo in relief at the centre, the name round the rim, gold, silver or bronze by rarity.',
+    tone: r => ({ 5: ['#5A3A0C', '#F6D68A'], 3: ['#3C4A52', '#E6EEF2'], 1: ['#4A3020', '#D9A77A'] })[r],
+    face(r, tags, stars) { const [lo, hi] = this.tone(r), [cv, g] = fcv(2.12, 2.12); const gr = g.createRadialGradient(80, 70, 10, 106, 106, 110); gr.addColorStop(0, hi); gr.addColorStop(1, lo); g.fillStyle = gr; g.fillRect(0, 0, 212, 212);
+      g.save(); g.beginPath(); g.arc(106, 110, 64, 0, TAU); g.clip(); cover(g, 42, 46, 128, 128, toned(lo, hi)); g.restore();
+      g.strokeStyle = hexA(lo, .7); g.lineWidth = 1.4; g.beginPath(); g.arc(106, 106, 74, 0, TAU); g.stroke(); g.beginPath(); g.arc(106, 106, 100, 0, TAU); g.stroke();
+      arcText(g, 'RANGEFINDER CAMERA', 106, 106, 87, 0, { s: 12, w: 700, c: lo, ls: 2 }); arcText(g, `1970S · ${tags.length ? tags[0].label.toUpperCase() : 'NO. 024'} · +${PTS[r]}`, 106, 106, 87, Math.PI, { s: 10.5, w: 700, c: lo, ls: 1.5 });
+      starRow(g, r, stars, 106 + (RNUM[r] - 1) * 6, 34, 4.4, '#FFFFFF', hexA(lo, .45), 12); return cv; },
+    back(r) { const [lo, hi] = this.tone(r), [cv, g] = fcv(2.12, 2.12); const gr = g.createRadialGradient(130, 70, 10, 106, 106, 110); gr.addColorStop(0, hi); gr.addColorStop(1, lo); g.fillStyle = gr; g.fillRect(0, 0, 212, 212);
+      gem2d(g, 106, 100, 70, [hi, hi, lo, hexA(lo, .8), lo]); arcText(g, 'INVENTORY', 106, 106, 87, 0, { s: 12, w: 700, c: lo, ls: 3 }); arcText(g, 'NO. 024', 106, 106, 87, Math.PI, { s: 11, w: 700, c: lo, ls: 2 }); return cv; },
+    height(r, back) { const [cv, g] = fcv(2.12, 2.12, 2); g.fillStyle = '#555'; g.fillRect(0, 0, 212, 212); g.lineWidth = 7; g.strokeStyle = '#999'; g.beginPath(); g.arc(106, 106, 102, 0, TAU); g.stroke();
+      if (back) { g.fillStyle = '#AAA'; g.beginPath(); g.moveTo(106, 66); g.lineTo(141, 92); g.lineTo(106, 140); g.lineTo(71, 92); g.closePath(); g.fill(); }
+      else { g.save(); g.beginPath(); g.arc(106, 110, 64, 0, TAU); g.clip(); g.filter = 'blur(1.2px) grayscale(1) contrast(.8)'; g.globalAlpha = .75; cover(g, 42, 46, 128, 128); g.restore(); }
+      g.filter = 'none'; g.globalAlpha = 1; arcText(g, back ? 'INVENTORY' : 'RANGEFINDER CAMERA', 106, 106, 87, 0, { s: 12, w: 700, c: '#CCC', ls: back ? 3 : 2 }); return cv; },
+    starAt: (i, n) => [106 + (n - 1) * 6 - (n - 1 - i) * 12, 34],
+    build(c, body, r, C, hot) { const F = this, M = METAL[r];
+      c.front = pm(hot, { map: ctex(F.face(r, [], 0)), normalMap: normalFrom(F.height(r, false), 5), metalness: 1, roughness: .32, envMapIntensity: 1.1 });
+      c.backM = pm(hot, { map: ctex(F.back(r)), normalMap: normalFrom(F.height(r, true), 5), metalness: 1, roughness: .32, envMapIntensity: 1.1 });
+      c.artM = pm(hot, { color: M[1], metalness: 1, roughness: .38 });
+      body.add(new THREE.Mesh(discGeo(1.06, .16), [c.artM, c.front, c.backM]));
+    } },
+
+  stamp: { name: 'Postage stamp', w: 1.86, h: 2.36,
+    d: 'A postage stamp with the find engraved in two inks, its points as the value, and a postmark from the space it went into.',
+    shape() { const w = this.w, h = this.h, R = .045, st = .155, s = new THREE.Shape(); s.moveTo(-w / 2, -h / 2);
+      const edge = (x0, y0, x1, y1) => { const L = Math.hypot(x1 - x0, y1 - y0), n = Math.floor(L / st), ux = (x1 - x0) / L, uy = (y1 - y0) / L, off = (L - (n - 1) * st) / 2;
+        for (let i = 0; i < n; i++) { const cx = x0 + ux * (off + i * st), cy = y0 + uy * (off + i * st); s.lineTo(cx - ux * R, cy - uy * R); s.absarc(cx, cy, R, Math.atan2(-uy, -ux), Math.atan2(uy, ux), true); } s.lineTo(x1, y1); };
+      edge(-w / 2, -h / 2, w / 2, -h / 2); edge(w / 2, -h / 2, w / 2, h / 2); edge(w / 2, h / 2, -w / 2, h / 2); edge(-w / 2, h / 2, -w / 2, -h / 2); return s; },
+    face(r, tags, stars) { const C = RC[r], [cv, g] = fcv(this.w, this.h); g.fillStyle = '#F7F4EC'; g.fillRect(0, 0, 186, 236);
+      const bg = g.createLinearGradient(0, 14, 0, 182); bg.addColorStop(0, hexA(C, .35)); bg.addColorStop(1, hexA(C, .8)); g.fillStyle = bg; g.fillRect(14, 14, 158, 168);
+      g.save(); g.beginPath(); g.rect(22, 34, 142, 130); g.clip(); cover(g, 22, 34, 142, 130, toned(INK[r], '#F7F4EC')); g.restore();
+      txt(g, '+' + PTS[r], 22, 29, { s: 16, w: 700, c: '#FFFFFF' }); starRow(g, r, stars, 162, 23, 4.6, '#FFFFFF', 'rgba(255,255,255,.35)');
+      txt(g, 'INVENTORY', 93, 177, { s: 9.5, w: 700, c: '#FFFFFF', a: 'center', ls: 2.5 });
+      txt(g, NAMEF, 93, 202, { s: 12.5, w: 600, c: '#2A2620', a: 'center', mw: 166 }); txt(g, 'Camera · No. 024', 93, 218, { s: 10.5, c: '#6B6457', a: 'center' });
+      const sp = tags.find(t => t.k === 'space'); g.save(); g.globalAlpha = .55; g.strokeStyle = '#2B2F5A'; g.lineWidth = 1.6; g.beginPath(); g.arc(150, 150, 25, 0, TAU); g.stroke(); g.beginPath(); g.arc(150, 150, 20, 0, TAU); g.stroke();
+      txt(g, '5 NOV', 150, 148, { s: 8, w: 700, c: '#2B2F5A', a: 'center' }); txt(g, (sp ? sp.label : 'KEPT').toUpperCase(), 150, 158, { s: 7, w: 700, c: '#2B2F5A', a: 'center' });
+      for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(40, 132 + i * 8); for (let x = 40; x <= 124; x += 6) g.lineTo(x, 132 + i * 8 + Math.sin(x / 6) * 2.4); g.stroke(); } g.restore(); return cv; },
+    back() { const [cv, g] = fcv(this.w, this.h); g.fillStyle = '#EEEAE0'; g.fillRect(0, 0, 186, 236); g.strokeStyle = 'rgba(0,0,0,.05)'; for (let x = 0; x < 186; x += 8) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 236); g.stroke(); } txt(g, 'Inventory · No. 024', 93, 122, { s: 10, w: 600, c: 'rgba(60,54,44,.4)', a: 'center' }); return cv; },
+    starAt: (i, n) => [162 - (n - 1 - i) * 11, 23],
+    build(c, body, r, C, hot) { const F = this; c.front = pm(hot, { map: ctex(F.face(r, [], 0)), roughness: .72 }); c.backM = pm(hot, { map: ctex(F.back()), roughness: .35, clearcoat: .6, clearcoatRoughness: .3 }); c.artM = pm(hot, { color: '#F1EDE3', roughness: .9 });
+      slab(body, F.shape(), F, .012, { front: c.front, back: c.backM, edge: c.artM }, { seg: 6 }); } },
+
+  dogtag: { name: 'Dog tag', w: 1.5, h: 2.5,
+    d: 'A steel tag on a ball chain with the find stamped into it: name, number, rarity stars. The back says where it is kept and lists the tags.',
+    shape() { const s = rrS(1.5, 2.5, .34), hole = new THREE.Path(); hole.absarc(0, .98, .09, 0, TAU, true); s.holes.push(hole); return s; },
+    lines: r => ['RANGEFINDER', 'CAMERA', '1970S', 'NO 024', RN[r].toUpperCase(), '+' + PTS[r]],
+    blines: tags => ['KEPT IN', (tags.find(t => t.k === 'space')?.label || 'CAMERAS').toUpperCase(), ...tags.filter(t => t.k !== 'space').slice(0, 3).map(t => t.label.toUpperCase())],
+    stampText(g, L, ink) { L.forEach((t, i) => txt(g, t, 18, 66 + i * 23, { s: 14, w: 700, c: ink, ls: 1, mw: 114 })); },
+    face(r, tags, stars) { const [cv, g] = fcv(1.5, 2.5); const gr = g.createLinearGradient(0, 0, 150, 250); gr.addColorStop(0, '#D9DDDF'); gr.addColorStop(.5, '#AEB4B8'); gr.addColorStop(1, '#C9CED1'); g.fillStyle = gr; g.fillRect(0, 0, 150, 250);
+      g.save(); g.translate(.8, .8); this.stampText(g, this.lines(r, tags), 'rgba(255,255,255,.55)'); g.restore(); this.stampText(g, this.lines(r, tags), '#3A4044');
+      starRow(g, r, stars, 128, 214, 5, RC[r], 'rgba(58,64,68,.35)', 13); return cv; },
+    back(r, tags) { const [cv, g] = fcv(1.5, 2.5); g.fillStyle = '#B9BEC1'; g.fillRect(0, 0, 150, 250); const L = this.blines(tags.length ? tags : tagsOf(tagState())); g.save(); g.translate(.8, .8); this.stampText(g, L, 'rgba(255,255,255,.5)'); g.restore(); this.stampText(g, L, '#3A4044'); return cv; },
+    height(r, tags, back) { const [cv, g] = fcv(1.5, 2.5, 2); g.fillStyle = '#6E6E6E'; g.fillRect(0, 0, 150, 250); for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '255,255,255' : '0,0,0'},.05)`; g.fillRect(0, Math.random() * 250, 150, .6); }
+      g.filter = 'blur(.6px)'; this.stampText(g, back ? this.blines(tags.length ? tags : tagsOf(tagState())) : this.lines(r, tags), '#C8C8C8'); g.filter = 'none'; return cv; },
+    starAt: (i, n) => [128 - (n - 1 - i) * 13, 214],
+    build(c, body, r, C, hot) { const F = this;
+      c.front = pm(hot, { map: ctex(F.face(r, [], 0)), normalMap: normalFrom(F.height(r, [], false), 4), metalness: 1, roughness: .36 });
+      c.backM = pm(hot, { map: ctex(F.back(r, [])), normalMap: normalFrom(F.height(r, [], true), 4), metalness: 1, roughness: .36 }); c.artM = pm(hot, { color: '#B4BABE', metalness: 1, roughness: .3 });
+      slab(body, F.shape(), F, .05, { front: c.front, back: c.backM, edge: c.artM }, { seg: 20 });
+      const N = 34, balls = new THREE.InstancedMesh(new THREE.SphereGeometry(.03, 10, 8), c.artM, N), m4 = new THREE.Matrix4();
+      for (let i = 0; i < N; i++) { const t = i / (N - 1), a = Math.PI * (1 - t), x = Math.cos(a) * .26, y = .98 + Math.sin(a) * .95 + (t < .5 ? t : 1 - t) * .1; m4.makeTranslation(x, y, Math.sin(a) * .03); balls.setMatrixAt(i, m4); }
+      body.add(balls); c.redrawBack = tags => { c.backM.map.image = F.back(r, tags); c.backM.map.needsUpdate = true; };
+    } },
+
+  pin: { name: 'Enamel pin', w: 2.4, h: 2.6,
+    d: 'A gold enamel pin cut in the shape of what the find is, its photo showing through the lens, with the name on an enamel banner below.',
+    cam() { return roundPoly([[-1.15, -.42], [1.15, -.42], [1.15, .88], [-.15, .88], [-.15, 1.18], [-.75, 1.18], [-.75, .88], [-1.15, .88]], .16); },
+    ban() { return roundPoly([[-1.0, -1.25], [1.0, -1.25], [.9, -1.0], [1.0, -.75], [-1.0, -.75], [-.9, -1.0]], .04); },
+    face(r, tags, stars) { const C = RC[r], [cv, g] = fcv(2.4, 2.6); g.fillStyle = '#C9A24A'; g.fillRect(0, 0, 240, 260);
+      const toPx = (x, y) => [120 + x * 100, 130 - y * 100]; g.fillStyle = C; rr2(g, ...toPx(-1.08, .81), 216, 116, 12); g.fill(); g.fillStyle = hexA('#FFFFFF', .14); rr2(g, ...toPx(-1.08, .81), 216, 40, 12); g.fill();
+      g.fillStyle = '#2B2F33'; rr2(g, ...toPx(-.68, 1.11), 46, 22, 6); g.fill(); g.fillStyle = '#F2E9D8'; g.beginPath(); g.arc(...toPx(.7, .62), 9, 0, TAU); g.fill();
+      const [lx, ly] = toPx(0, .23); g.fillStyle = '#F2E9D8'; g.beginPath(); g.arc(lx, ly, 52, 0, TAU); g.fill(); g.fillStyle = '#C9A24A'; g.beginPath(); g.arc(lx, ly, 45, 0, TAU); g.fill();
+      g.save(); g.beginPath(); g.arc(lx, ly, 42, 0, TAU); g.clip(); cover(g, lx - 42, ly - 56, 84, 112); g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.ellipse(lx - 14, ly - 16, 18, 10, -.6, 0, TAU); g.fill(); g.restore();
+      g.fillStyle = '#F2E9D8'; g.beginPath(); g.moveTo(...toPx(-.94, -.79)); g.lineTo(...toPx(.94, -.79)); g.lineTo(...toPx(.86, -1.0)); g.lineTo(...toPx(.94, -1.21)); g.lineTo(...toPx(-.94, -1.21)); g.lineTo(...toPx(-.86, -1.0)); g.closePath(); g.fill();
+      txt(g, NAME1, 120, tags.length ? 226 : 235, { s: 14, w: 700, c: '#2B2F33', a: 'center', mw: 170 });
+      starRow(g, r, stars, 199, 103, 5, '#FFF6DC', hexA('#2B2F33', .35), 12.5);
+      if (tags.length) txt(g, tagText(tags), 120, 243, { s: 10, w: 600, c: '#5A4520', a: 'center', mw: 166 }); return cv; },
+    orm(F) { const toPx = (x, y) => [120 + x * 100, 130 - y * 100]; return ormMap(F, orm(.3, 1), g => { g.fillStyle = orm(.22, 0); rr2(g, ...toPx(-1.06, .79), 212, 112, 11); g.fill(); g.beginPath(); g.arc(...toPx(0, .23), 52, 0, TAU); g.fill(); g.fillStyle = orm(.3, 1); g.beginPath(); g.arc(...toPx(0, .23), 45, 0, TAU); g.fill(); g.fillStyle = orm(.15, 0); g.beginPath(); g.arc(...toPx(0, .23), 42, 0, TAU); g.fill(); g.fillStyle = orm(.25, 0); g.fillRect(...toPx(-.92, -.8), 184, 40); }); },
+    back() { const [cv, g] = fcv(2.4, 2.6); g.fillStyle = '#B8923F'; g.fillRect(0, 0, 240, 260); g.strokeStyle = 'rgba(0,0,0,.08)'; for (let i = 0; i < 60; i++) { g.beginPath(); g.arc(120, 100, 6 + i * 3, 0, TAU); g.stroke(); } txt(g, 'Inventory', 120, 108, { s: 13, w: 700, c: 'rgba(70,50,15,.55)', a: 'center', ls: 2 }); return cv; },
+    starAt: (i, n) => [199 - (n - 1 - i) * 12.5, 103],
+    build(c, body, r, C, hot) { const F = this, map = ctex(F.face(r, [], 0)), om = F.orm(F);
+      c.front = pm(hot, { map, roughnessMap: om, metalnessMap: om, metalness: 1, roughness: 1, clearcoat: 1, clearcoatRoughness: .08 });
+      c.backM = pm(hot, { map: ctex(F.back()), metalness: 1, roughness: .38 }); c.artM = pm(hot, { color: '#D9B25A', metalness: 1, roughness: .26 });
+      slab(body, F.cam(), F, .1, { front: c.front, back: c.backM, edge: c.artM }, { seg: 8 }); slab(body, F.ban(), F, .08, { front: c.front, back: c.backM, edge: c.artM }, { seg: 4 });
+      for (const x of [-.6, .6]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, .22, 10), c.artM); p.rotation.x = Math.PI / 2; p.position.set(x, .25, -.15); body.add(p); const k = new THREE.Mesh(new THREE.CylinderGeometry(.11, .11, .05, 20), c.artM); k.rotation.x = Math.PI / 2; k.position.set(x, .25, -.22); body.add(k); }
+    } },
+
+  amber: { name: 'In amber', w: 2.0, h: 2.84,
+    d: 'The find caught in a drop of amber like something very old and very kept, on a brass plate engraved with its name.',
+    face(r, tags, stars) { const [cv, g] = fcv(2.0, 2.84); g.fillStyle = '#9A7A3E'; g.fillRect(0, 0, 200, 284);
+      const toY = y => 142 - y * 100, py = toY(-1.12); const gr = g.createLinearGradient(0, py - 31, 0, py + 31); gr.addColorStop(0, '#E4C987'); gr.addColorStop(.5, '#B8924A'); gr.addColorStop(1, '#8F6E30'); g.fillStyle = gr; rr2(g, 20, py - 31, 160, 62, 8); g.fill();
+      g.strokeStyle = 'rgba(70,48,12,.55)'; g.lineWidth = 1; rr2(g, 25, py - 26, 150, 52, 6); g.stroke();
+      txt(g, NAME1, 100, py - 6, { s: 13.5, w: 700, c: '#3A2808', a: 'center' }); txt(g, tags.length ? tagText(tags) : `1970s · No. 024 · +${PTS[r]}`, 100, py + 11, { s: 10, w: 600, c: '#5A4216', a: 'center', mw: 144 });
+      starRow(g, r, stars, 100 + (RNUM[r] - 1) * 5.5, py + 22, 3.6, RC[r] === '#A39E92' ? '#5A4216' : RC[r], 'rgba(58,40,8,.25)', 11); return cv; },
+    back() { const [cv, g] = fcv(2.0, 2.84); g.fillStyle = '#8F6E30'; g.fillRect(0, 0, 200, 284); txt(g, 'Inventory · No. 024', 100, 142 + 115, { s: 10.5, w: 600, c: '#3A2808', a: 'center' }); return cv; },
+    starAt: (i, n) => [100 + (n - 1) * 5.5 - (n - 1 - i) * 11, 142 + 112 + 22],
+    build(c, body, r, C, hot) { const F = this;
+      c.front = pm(hot, { map: ctex(F.face(r, [], 0)), metalness: 1, roughness: .34 }); c.backM = pm(hot, { map: ctex(F.back()), metalness: 1, roughness: .4 }); const brass = pm(hot, { color: '#B8924A', metalness: 1, roughness: .3 });
+      slab(body, rrS(1.6, .62, .08, 0, -1.12), F, .08, { front: c.front, back: c.backM, edge: brass });
+      const inner = new THREE.Group(); inner.position.y = .3; body.add(inner);
+      c.artM = pm(hot, { map: PHOTO_T, color: '#FFD7A0', roughness: .7 }); const ph = new THREE.Mesh(new THREE.CircleGeometry(.62, 48), c.artM); ph.scale.y = 1.25; ph.position.z = .02; inner.add(ph);
+      const shell = new THREE.MeshPhysicalMaterial({ color: '#E08A1E', transparent: true, opacity: .5, roughness: .06, metalness: 0, clearcoat: 1, clearcoatRoughness: .04, envMapIntensity: 1.3, depthWrite: false, emissive: '#7A3A05', emissiveIntensity: .25, side: THREE.DoubleSide });
+      const drop = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), shell); drop.scale.set(.9, 1.1, .36); drop.renderOrder = 3; inner.add(drop);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), new THREE.MeshBasicMaterial({ color: '#FF9A30', transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false })); core.scale.set(.7, .9, .2); inner.add(core);
+      c.extra = [shell, brass]; c.mats2 = [brass];
+    } },
+
+  scroll: { name: 'Scroll', w: 1.9, h: 2.7,
+    d: 'A scroll that unrolls when it turns to you: the find drawn in sepia ink, its name lettered under it and red ink stars, sealed in wax on the back.',
+    face(r, tags, stars) { const [cv, g] = fcv(1.9, 2.7); const gr = g.createRadialGradient(95, 135, 20, 95, 135, 160); gr.addColorStop(0, '#F1E5C8'); gr.addColorStop(1, '#D9C59A'); g.fillStyle = gr; g.fillRect(0, 0, 190, 270);
+      const rn = mulberry(3); for (let i = 0; i < 30; i++) { g.fillStyle = `rgba(120,80,30,${(.02 + rn() * .04).toFixed(3)})`; g.beginPath(); g.arc(rn() * 190, rn() * 270, 4 + rn() * 18, 0, TAU); g.fill(); }
+      g.save(); g.beginPath(); g.ellipse(95, 102, 66, 74, 0, 0, TAU); g.clip(); g.globalCompositeOperation = 'multiply'; cover(g, 29, 28, 132, 148, toned('#3A220C', '#F1E5C8')); g.restore();
+      g.strokeStyle = 'rgba(58,34,12,.55)'; g.lineWidth = 1; g.beginPath(); g.ellipse(95, 102, 68, 76, 0, 0, TAU); g.stroke();
+      txt(g, NAME1, 95, 202, { s: 16, w: 600, i: true, c: '#3A220C', a: 'center' }); txt(g, `${NAME2} · No. 024 · +${PTS[r]}`, 95, 219, { s: 11, i: true, c: '#5A3A18', a: 'center' });
+      if (tags.length) txt(g, 'Filed under ' + tagText(tags, ', '), 95, 236, { s: 10, i: true, c: '#5A3A18', a: 'center', mw: 164 });
+      starRow(g, r, stars, 95 + (RNUM[r] - 1) * 6.5, 252, 4.8, '#A8322A', 'rgba(168,50,42,.18)', 13); return cv; },
+    back() { const [cv, g] = fcv(1.9, 2.7); g.fillStyle = '#D6C193'; g.fillRect(0, 0, 190, 270); g.fillStyle = 'rgba(120,80,30,.05)'; for (let y = 0; y < 270; y += 5) g.fillRect(0, y, 190, 1); return cv; },
+    starAt: (i, n) => [95 + (n - 1) * 6.5 - (n - 1 - i) * 13, 252],
+    build(c, body, r, C, hot) { const F = this;
+      c.front = pm(hot, { map: ctex(F.face(r, [], 0)), roughness: .88 }); c.backM = pm(hot, { map: ctex(F.back()), roughness: .9 }); c.artM = pm(hot, { color: '#D9C59A', roughness: .9 });
+      const sheet = slab(body, rrS(1.8, 2.3, .01), F, .006, { front: c.front, back: c.backM, edge: c.artM });
+      const wood = pm(hot, { color: '#6B4423', roughness: .55, clearcoat: .4 }), brass = pm(hot, { color: '#C9A24A', metalness: 1, roughness: .3 });
+      const roller = () => { const g = new THREE.Group(), rod = new THREE.Mesh(new THREE.CylinderGeometry(.075, .075, 1.9, 24), wood); rod.rotation.z = Math.PI / 2; g.add(rod); for (const x of [-1, 1]) { const k = new THREE.Mesh(new THREE.SphereGeometry(.095, 16, 12), brass); k.position.x = x * 1.0; g.add(k); } body.add(g); return g; };
+      const top = roller(), bot = roller();
+      const seal = new THREE.Mesh(new THREE.CylinderGeometry(.22, .23, .04, 32), pm(hot, { color: '#8E1F1A', roughness: .45, clearcoat: .5 })); seal.rotation.x = Math.PI / 2; seal.position.set(0, -.3, -.03); body.add(seal);
+      c.extra = [wood, brass, seal.material];
+      const set = k => { const e = k * k * (3 - 2 * k), s = .05 + .95 * e; sheet.scale.y = s; top.position.y = 1.15 * s + .07; bot.position.y = -1.15 * s - .07; seal.visible = k > .8; };
+      c.roll = 0; set(0);
+      c.tick = dt => { const f = Math.cos(c.s.fl) * Math.cos(c.s.rx); if (f > .25 && c.roll < 1) { c.roll = Math.min(1, c.roll + dt / .8); set(c.roll); } };
+    } },
+
+  record: { name: 'Record', w: 2.2, h: 2.9,
+    d: 'A record in its sleeve: the find is the cover, the record slides out as it turns to you, and the back of the sleeve lists the tags as tracks.',
+    face(r, tags, stars) { const C = RC[r], [cv, g] = fcv(2.2, 2.9); const y0 = 70; g.save(); g.beginPath(); g.rect(0, y0, 220, 220); g.clip(); cover(g, 0, y0, 220, 220); const sc = g.createLinearGradient(0, y0 + 120, 0, y0 + 220); sc.addColorStop(0, 'rgba(8,10,12,0)'); sc.addColorStop(1, 'rgba(8,10,12,.85)'); g.fillStyle = sc; g.fillRect(0, y0 + 120, 220, 100); g.restore();
+      g.fillStyle = C; g.fillRect(0, y0, 220, 7); txt(g, 'INVENTORY RECORDS', 12, y0 + 24, { s: 9.5, w: 700, c: '#FFFFFF', ls: 2 }); starRow(g, r, stars, 206, y0 + 20, 4.6, C, 'rgba(255,255,255,.3)');
+      txt(g, NAME1, 12, y0 + 186, { s: 18, w: 700, c: '#FFFFFF' }); txt(g, `${NAME2} · No. 024 · +${PTS[r]}`, 12, y0 + 205, { s: 11, w: 500, c: '#E6E2DA' }); return cv; },
+    back(r, tags) { const C = RC[r], [cv, g] = fcv(2.2, 2.9); const y0 = 70; g.fillStyle = '#EDE8DD'; g.fillRect(0, y0, 220, 220); g.fillStyle = C; g.fillRect(0, y0, 220, 7);
+      txt(g, NAME1, 14, y0 + 30, { s: 14, w: 700, c: '#24211B' }); const T = (tags.length ? tags : tagsOf(tagState())); T.forEach((t, i) => { txt(g, (i < 3 ? 'A' + (i + 1) : 'B' + (i - 2)), 14, y0 + 58 + i * 20, { s: 11, w: 700, c: C === '#A39E92' ? '#5E5A51' : C }); txt(g, t.k === 'space' ? 'Kept in ' + t.label : t.label, 40, y0 + 58 + i * 20, { s: 12, c: '#24211B', mw: 166 }); });
+      txt(g, `INV-024 · +${PTS[r]}`, 14, y0 + 206, { s: 10, w: 600, c: '#6B6457', ls: 1 }); return cv; },
+    label(r) { const C = RC[r], [cv, g] = fcv(2.04, 2.04, 2); g.fillStyle = '#0D0E10'; g.fillRect(0, 0, 204, 204); g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = .6; for (let k = 40; k < 100; k += 2.2) { g.beginPath(); g.arc(102, 102, k, 0, TAU); g.stroke(); }
+      g.fillStyle = C; g.beginPath(); g.arc(102, 102, 34, 0, TAU); g.fill(); txt(g, 'INVENTORY', 102, 90, { s: 7, w: 700, c: '#FFFFFF', a: 'center', ls: 1.5 }); txt(g, 'No. 024', 102, 122, { s: 7, w: 600, c: '#FFFFFF', a: 'center' }); g.fillStyle = '#0D0E10'; g.beginPath(); g.arc(102, 102, 3, 0, TAU); g.fill(); return cv; },
+    starAt: (i, n) => [206 - (n - 1 - i) * 11, 70 + 20],
+    build(c, body, r, C, hot) { const F = this;
+      c.front = pm(hot, { map: ctex(F.face(r, [], 0)), roughness: .62 }); c.backM = pm(hot, { map: ctex(F.back(r, [])), roughness: .7 }); c.artM = pm(hot, { color: '#D8D2C4', roughness: .8 });
+      slab(body, rrS(2.2, 2.2, .02, 0, -.35), F, .03, { front: c.front, back: c.backM, edge: c.artM });
+      const lt = ctex(F.label(r)), vin = pm(hot, { map: lt, roughness: .25, clearcoat: 1, clearcoatRoughness: .15 }), side = pm(hot, { color: '#0D0E10', roughness: .3 });
+      const disc = new THREE.Mesh(discGeo(1.02, .012), [side, vin, vin]); disc.position.set(0, -.35, 0); body.add(disc); c.extra = [vin, side];
+      c.slide = 0; c.tick = dt => { const f = Math.cos(c.s.fl) * Math.cos(c.s.rx); if (f > .3 && c.slide < 1) c.slide = Math.min(1, c.slide + dt / .9); const k = c.slide, e = 1 - Math.pow(1 - k, 3); disc.position.y = -.35 + .78 * e; disc.rotation.z = -e * 2.4; };
+      c.redrawBack = tags => { c.backM.map.image = F.back(r, tags); c.backM.map.needsUpdate = true; };
+    } },
+
+  book: { name: 'Book', w: 1.9, h: 2.62,
+    d: 'A small clothbound book: the find tipped in on the cover, the title stamped in gold, the space and tags as the blurb on the back.',
+    face(r, tags, stars) { const C = RC[r], M = METAL[r], [cv, g] = fcv(1.9, 2.62); g.fillStyle = r >= 5 ? '#2B2433' : r >= 3 ? '#1F3442' : '#3B3A36'; g.fillRect(0, 0, 190, 262); g.fillStyle = 'rgba(255,255,255,.035)'; for (let y = 0; y < 262; y += 2) g.fillRect(0, y, 190, .7);
+      g.strokeStyle = M[3]; g.lineWidth = 1.2; g.strokeRect(10, 10, 170, 242); g.fillStyle = '#F4F0E6'; g.fillRect(36, 36, 118, 118); g.save(); g.beginPath(); g.rect(41, 41, 108, 108); g.clip(); cover(g, 41, 41, 108, 108); g.restore();
+      txt(g, NAME1, 95, 186, { s: 17, w: 700, c: M[3], a: 'center' }); txt(g, NAME2, 95, 206, { s: 13, w: 600, c: M[3], a: 'center' });
+      starRow(g, r, stars, 95 + (RNUM[r] - 1) * 6.5, 226, 4.8, M[3], 'rgba(255,255,255,.12)', 13); txt(g, 'Inventory · No. 024', 95, 244, { s: 9.5, w: 600, c: hexA(M[3], .7), a: 'center', ls: 1 }); return cv; },
+    gold(r) { const [cv, g] = fcv(1.9, 2.62, 2); g.fillStyle = orm(.85, 0); g.fillRect(0, 0, 190, 262); g.strokeStyle = orm(.35, .7); g.lineWidth = 1.4; g.strokeRect(10, 10, 170, 242); const k = orm(.35, .7); txt(g, NAME1, 95, 186, { s: 17, w: 700, c: k, a: 'center' }); txt(g, NAME2, 95, 206, { s: 13, w: 600, c: k, a: 'center' }); return ctex(cv, false); },
+    back(r, tags) { const [cv, g] = fcv(1.9, 2.62); g.fillStyle = r >= 5 ? '#2B2433' : r >= 3 ? '#1F3442' : '#3B3A36'; g.fillRect(0, 0, 190, 262); const T = tags.length ? tags : tagsOf(tagState()), sp = T.find(t => t.k === 'space');
+      txt(g, 'Kept in ' + (sp ? sp.label : 'Cameras') + '.', 20, 60, { s: 14, w: 600, c: '#E8E2D4' }); T.filter(t => t.k !== 'space').slice(0, 5).forEach((t, i) => txt(g, '— ' + t.label, 20, 88 + i * 20, { s: 12.5, i: true, c: '#CFC8B8', mw: 150 }));
+      txt(g, `+${PTS[r]} points`, 20, 200, { s: 12, w: 600, c: RC[r] }); for (let i = 0; i < 28; i++) g.fillStyle = '#E8E2D4', g.fillRect(120 + i * 2, 214, i % 3 ? 1 : 1.6, 26); return cv; },
+    spine(r) { const M = METAL[r], [cv, g] = fcv(.38, 2.62); g.fillStyle = r >= 5 ? '#241E2B' : r >= 3 ? '#1A2C38' : '#33322E'; g.fillRect(0, 0, 38, 262); g.save(); g.translate(19, 131); g.rotate(Math.PI / 2); txt(g, NAMEF, 0, 0, { s: 11.5, w: 700, c: M[3], a: 'center', b: 'middle' }); g.restore(); return cv; },
+    pages(v) { const [cv, g] = fcv(v ? .38 : 1.9, v ? 1.9 : .38, 2); g.fillStyle = '#EFE8D6'; g.fillRect(0, 0, 400, 400); g.fillStyle = 'rgba(120,100,70,.18)'; for (let k = 0; k < 38; k += 1.6) v ? g.fillRect(k, 0, .5, 400) : g.fillRect(0, k, 400, .5); return cv; },
+    starAt: (i, n) => [95 + (n - 1) * 6.5 - (n - 1 - i) * 13 - 0, 226],
+    build(c, body, r, C, hot) { const F = this, gm = F.gold(r);
+      c.front = pm(hot, { map: ctex(F.face(r, [], 0)), roughnessMap: gm, metalnessMap: gm, metalness: 1, roughness: 1 }); c.backM = pm(hot, { map: ctex(F.back(r, [])), roughness: .85 }); c.artM = pm(hot, { map: ctex(F.spine(r)), roughness: .85 });
+      const pg = pm(hot, { map: ctex(F.pages(true)), roughness: .9 }), pg2 = pm(hot, { map: ctex(F.pages(false)), roughness: .9 });
+      body.add(new THREE.Mesh(new THREE.BoxGeometry(1.9, 2.62, .38), [pg, c.artM, pg2, pg2, c.front, c.backM])); c.extra = [pg, pg2];
+      c.redrawBack = tags => { c.backM.map.image = F.back(r, tags); c.backM.map.needsUpdate = true; };
+    } },
+
+  tape: { name: 'Cassette', w: 2.6, h: 1.64,
+    d: 'A cassette with the find written on its label in marker, the reels turning in the window. Side B carries the tags.',
+    label(r, tags, stars, side) { const C = RC[r], [cv, g] = fcv(2.6, 1.64); g.fillStyle = '#23272A'; g.fillRect(0, 0, 260, 164); g.fillStyle = '#F2EEE4'; rr2(g, 16, 12, 228, 112, 6); g.fill(); g.fillStyle = C; g.fillRect(16, 30, 228, 6);
+      txt(g, side, 26, 27, { s: 12, w: 700, c: '#23272A' }); txt(g, side === 'A' ? NAMEF : tagText(tags.length ? tags : tagsOf(tagState())), 44, 27, { s: 12.5, w: 600, i: true, c: '#22336B', mw: 192 });
+      g.fillStyle = '#2E3336'; rr2(g, 70, 52, 120, 46, 23); g.fill(); g.fillStyle = '#5A3A22'; for (const x of [100, 160]) { g.beginPath(); g.arc(x, 75, 16, 0, TAU); g.fill(); } g.fillStyle = '#F2EEE4'; for (const x of [100, 160]) { g.beginPath(); g.arc(x, 75, 7, 0, TAU); g.fill(); }
+      if (side === 'A') { txt(g, `No. 024 · +${PTS[r]}`, 26, 116, { s: 10.5, w: 600, c: '#6B6457' }); starRow(g, r, stars, 234, 112, 4.4, C, 'rgba(35,39,42,.2)'); }
+      g.fillStyle = '#1B1E20'; g.beginPath(); g.moveTo(60, 164); g.lineTo(76, 134); g.lineTo(184, 134); g.lineTo(200, 164); g.fill(); for (const x of [8, 252]) { g.fillStyle = '#3A3F42'; g.beginPath(); g.arc(x, 8, 3, 0, TAU); g.fill(); } return cv; },
+    starAt: (i, n) => [234 - (n - 1 - i) * 10.6, 112],
+    build(c, body, r, C, hot) { const F = this;
+      c.front = pm(hot, { map: ctex(F.label(r, [], 0, 'A')), roughness: .55 }); c.backM = pm(hot, { map: ctex(F.label(r, [], 0, 'B')), roughness: .55 }); c.artM = pm(hot, { color: '#23272A', roughness: .45 });
+      body.add(new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.64, .22), [c.artM, c.artM, c.artM, c.artM, c.front, c.backM]));
+      const hub = pm(hot, { color: '#F2EEE4', roughness: .5 }), hubs = [-.3, .3].map(x => { const h = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, .24, 6), hub); h.rotation.x = Math.PI / 2; h.position.set(x, .07, 0); body.add(h); return h; });
+      c.extra = [hub]; c.tick = dt => { for (const h of hubs) h.rotation.y += dt * 2.4; };
+      c.redrawBack = tags => { c.backM.map.image = F.label(r, tags, 0, 'B'); c.backM.map.needsUpdate = true; };
+    } },
+
+  neon: { name: 'Neon sign', w: 2.5, h: 1.9,
+    d: 'A neon sign of the find’s name that flickers on as it turns to you, on a dark metal plate. The stars light up one tube at a time.',
+    plate(r) { const [cv, g] = fcv(2.5, 1.9); g.fillStyle = '#181C1E'; g.fillRect(0, 0, 250, 190); g.fillStyle = 'rgba(255,255,255,.025)'; for (let y = 0; y < 190; y += 1.5) g.fillRect(0, y, 250, .6);
+      for (const [x, y] of [[12, 12], [238, 12], [12, 178], [238, 178]]) { g.fillStyle = '#3B4246'; g.beginPath(); g.arc(x, y, 4, 0, TAU); g.fill(); }
+      g.strokeStyle = 'rgba(200,210,214,.18)'; g.lineWidth = 2.4; g.lineCap = 'round'; this.tubes(g, r, 5, true); return cv; },
+    tubes(g, r, stars, off) { g.font = `italic 700 34px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.lineJoin = 'round';
+      g.strokeText('Rangefinder', 125, 84); g.font = `italic 700 30px ${FONT}`; g.strokeText('camera', 125, 124);
+      g.font = `600 13px ${FONT}`; g.strokeText(`1970s · No. 024 · +${PTS[r]}`, 125, 160); if (!off) starRow(g, r, stars, 125 + (RNUM[r] - 1) * 8, 36, 7, g.strokeStyle, 'rgba(0,0,0,0)', 16); },
+    glow(r, stars) { const C = RC[r], [cv, g] = fcv(2.5, 1.9, 2), core = new THREE.Color(C).lerp(new THREE.Color('#FFFFFF'), .55).getStyle();
+      g.lineCap = 'round'; g.shadowColor = C; g.shadowBlur = 14; g.strokeStyle = C; g.lineWidth = 4.2; this.tubes(g, r, 0, false);
+      g.shadowBlur = 4; g.strokeStyle = core; g.lineWidth = 1.6; this.tubes(g, r, 0, false);
+      g.shadowBlur = 10; g.shadowColor = C; for (let i = 0; i < Math.min(stars, RNUM[r]); i++) star2d(g, 125 + (RNUM[r] - 1) * 8 - (RNUM[r] - 1 - i) * 16, 36, 7, core); return cv; },
+    back(r, tags) { const [cv, g] = fcv(2.5, 1.9); g.fillStyle = '#202528'; g.fillRect(0, 0, 250, 190); g.fillStyle = '#E9E4D8'; rr2(g, 30, 120, 190, 44, 4); g.fill(); txt(g, 'Inventory signs · No. 024', 40, 138, { s: 10.5, w: 600, c: '#3A3F42' }); txt(g, tagText(tags.length ? tags : tagsOf(tagState())), 40, 155, { s: 10.5, c: '#3A3F42', mw: 172 }); return cv; },
+    starAt: (i, n) => [125 + (n - 1) * 8 - (n - 1 - i) * 16, 36],
+    build(c, body, r, C, hot) { const F = this;
+      c.front = pm(hot, { map: ctex(F.plate(r)), roughness: .55, metalness: .4 }); c.backM = pm(hot, { map: ctex(F.back(r, [])), roughness: .6 }); c.artM = pm(hot, { color: '#15191B', roughness: .5, metalness: .5 });
+      slab(body, rrS(2.5, 1.9, .06), F, .08, { front: c.front, back: c.backM, edge: c.artM });
+      const box = new THREE.Mesh(new THREE.BoxGeometry(.7, .32, .16), c.artM); box.position.set(.5, .45, -.12); body.add(box);
+      const gl = glowLayer(body, 2.5, 1.9, F.glow(r, 0), 1.35, .07); c.extra = [gl.m]; c.glowT = gl.t; gl.m.opacity = 0;
+      c.tick = dt => { const f = Math.cos(c.s.fl) * Math.cos(c.s.rx); if (f > .3) c.on = (c.on || 0) + dt; const t = c.on || 0; gl.m.opacity = t <= 0 ? 0 : t < .5 ? (Math.sin(t * 90) > .2 ? .9 : .15) : (.94 + .06 * Math.sin(clock * 40) * (Math.random() < .02 ? 1 : 0)); };
+      c.redrawGlow = stars => { gl.t.image = F.glow(r, stars); gl.t.needsUpdate = true; };
+    } },
+
+  voxel: { name: 'Pixel item', w: 2.0, h: 2.84,
+    d: 'The find rebuilt out of little blocks like a game item, floating over its item box: name in the rarity colour, stars and points.',
+    COLS: 20, ROWS: 22,
+    tip(r, tags, stars) { const C = RC[r], [cv, g] = fcv(2.0, 2.84); const y0 = 142 + 85 - 36; g.fillStyle = '#0E1416'; rr2(g, 6, y0, 188, 72, 8); g.fill(); g.strokeStyle = C; g.lineWidth = 2; rr2(g, 7, y0 + 1, 186, 70, 7); g.stroke();
+      txt(g, NAME1, 16, y0 + 22, { s: 14.5, w: 700, c: C === '#A39E92' ? '#E8E4DA' : C }); txt(g, tags.length ? tagText(tags) : `Camera · 1970s · No. 024`, 16, y0 + 40, { s: 10.5, c: '#B8C4C2', mw: 168 });
+      txt(g, `+${PTS[r]}`, 16, y0 + 60, { s: 12, w: 700, c: '#E2A23B' }); starRow(g, r, stars, 182, y0 + 56, 4.6, C, 'rgba(255,255,255,.15)'); return cv; },
+    starAt: (i, n) => [182 - (n - 1 - i) * 11, 142 + 85 - 36 + 56],
+    build(c, body, r, C, hot) { const F = this, N = F.COLS * F.ROWS;
+      const tp = ctex(F.tip(r, [], 0)); c.front = pm(hot, { map: tp, roughness: .5 }); c.backM = pm(hot, { color: '#0E1416', roughness: .5 });
+      const edge = pm(hot, { color: C, roughness: .4, metalness: .3 }); slab(body, rrS(1.88, .72, .08, 0, -.85), F, .06, { front: c.front, back: c.backM, edge });
+      c.artM = new THREE.MeshStandardMaterial({ roughness: .55, metalness: 0, emissive: hot, emissiveIntensity: 0 });
+      const vm = new THREE.InstancedMesh(new THREE.BoxGeometry(.078, .078, .078), c.artM, N), m4 = new THREE.Matrix4(), col = new THREE.Color();
+      const sm = mkcv(F.COLS, F.ROWS), sg = sm.getContext('2d'); if (PHOTO.complete && PHOTO.naturalWidth) sg.drawImage(PHOTO, 0, 0, F.COLS, F.ROWS); const d = sg.getImageData(0, 0, F.COLS, F.ROWS).data;
+      for (let j = 0, k = 0; j < F.ROWS; j++) for (let i = 0; i < F.COLS; i++, k++) { const R = d[k * 4] / 255, G = d[k * 4 + 1] / 255, B = d[k * 4 + 2] / 255, l = R * .3 + G * .59 + B * .11;
+        m4.makeTranslation((i - (F.COLS - 1) / 2) * .086, .42 + ((F.ROWS - 1) / 2 - j) * .086, (l - .4) * .12); vm.setMatrixAt(k, m4); col.setRGB(R, G, B, THREE.SRGBColorSpace); vm.setColorAt(k, col); }
+      body.add(vm); c.extra = [edge];
+      c.tick = dt => { vm.position.y = Math.sin(clock * 2) * .025; };
+    } },
+
+  film: { name: 'Film strip', w: 1.3, h: 2.96,
+    d: 'A strip of 35 mm film with the find on the middle frame, the frames before and after it dimmer, edge print down the side and a tape label for the tags.',
+    shape() { const s = rrS(1.3, 2.96, .02); for (let k = 0; k < 9; k++) for (const x of [-.56, .56]) s.holes.push(rrPath(new THREE.Path(), .085, .12, .02, x - .0425, -1.36 + k * .34 - .06)); return s; },
+    face(r, tags, stars) { const C = RC[r], [cv, g] = fcv(1.3, 2.96); g.fillStyle = '#3A2414'; g.fillRect(0, 0, 130, 296);
+      const fr = (cy, a) => { g.save(); g.beginPath(); g.rect(17, cy - 46, 96, 92); g.clip(); cover(g, 17, cy - 60 + (a ? 0 : 6), 96, 120); if (a) { g.fillStyle = `rgba(20,12,6,${a})`; g.fillRect(17, cy - 46, 96, 92); } g.restore(); };
+      fr(148 - 100, .55); fr(148, 0); fr(148 + 100, .55);
+      g.save(); g.translate(9, 148); g.rotate(-Math.PI / 2); txt(g, 'INVENTORY 400   23   ▸24   25', 0, 3, { s: 6.5, w: 700, c: '#E9A23B', a: 'center', b: 'middle', ls: 1 }); g.restore();
+      g.save(); g.translate(121, 148); g.rotate(Math.PI / 2); txt(g, 'RANGEFINDER CAMERA 1970S · No. 024', 0, 3, { s: 6.5, w: 700, c: '#E9A23B', a: 'center', b: 'middle', ls: 1 }); g.restore();
+      g.fillStyle = '#F2EEE4'; g.save(); g.translate(65, 262); g.rotate(-.04); rr2(g, -46, -11, 92, 22, 2); g.fill(); txt(g, tags.length ? tagText(tags) : `+${PTS[r]} · ${RN[r]}`, 0, 4, { s: 8.5, w: 600, i: true, c: '#22336B', a: 'center', mw: 86 }); g.restore();
+      starRow(g, r, stars, 65 + (RNUM[r] - 1) * 6, 92, 4, C, 'rgba(233,162,59,.25)', 12); return cv; },
+    back() { const [cv, g] = fcv(1.3, 2.96); g.fillStyle = '#2A1A0E'; g.fillRect(0, 0, 130, 296); g.fillStyle = 'rgba(0,0,0,.25)'; for (const cy of [48, 148, 248]) g.fillRect(17, cy - 46, 96, 92); return cv; },
+    starAt: (i, n) => [65 + (n - 1) * 6 - (n - 1 - i) * 12, 92],
+    build(c, body, r, C, hot) { const F = this; c.front = pm(hot, { map: ctex(F.face(r, [], 0)), roughness: .3, clearcoat: .7, clearcoatRoughness: .2 }); c.backM = pm(hot, { map: ctex(F.back()), roughness: .55 }); c.artM = pm(hot, { color: '#3A2414', roughness: .4 });
+      slab(body, F.shape(), F, .01, { front: c.front, back: c.backM, edge: c.artM }, { seg: 4 }); } },
+
+  astro: { name: 'Star disc', w: 2.2, h: 2.2,
+    d: 'A brass star disc: the find in a window of night sky at its centre, its name engraved round the scale, and an open-work rete of star pointers turning over it.',
+    face(r, tags, stars) { const C = RC[r], [cv, g] = fcv(2.2, 2.2); const gr = g.createRadialGradient(80, 70, 10, 110, 110, 115); gr.addColorStop(0, '#E9C877'); gr.addColorStop(1, '#8A6424'); g.fillStyle = gr; g.fillRect(0, 0, 220, 220);
+      g.save(); g.beginPath(); g.arc(110, 110, 58, 0, TAU); g.clip(); g.fillStyle = '#0B1B33'; g.fillRect(0, 0, 220, 220); g.globalAlpha = .9; g.globalCompositeOperation = 'screen'; cover(g, 52, 42, 116, 140, toned('#0B1B33', '#CFE0FF')); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+      const rn = mulberry(5); g.fillStyle = '#FFFFFF'; for (let i = 0; i < 60; i++) { g.globalAlpha = .3 + rn() * .6; g.fillRect(52 + rn() * 116, 52 + rn() * 116, 1, 1); } g.restore(); g.globalAlpha = 1;
+      g.strokeStyle = 'rgba(60,40,10,.75)'; g.lineWidth = 1; for (const R of [60, 72, 98, 104]) { g.beginPath(); g.arc(110, 110, R, 0, TAU); g.stroke(); }
+      for (let k = 0; k < 72; k++) { const a = k / 72 * TAU, l = k % 6 ? 4 : 7; g.beginPath(); g.moveTo(110 + Math.sin(a) * 104, 110 - Math.cos(a) * 104); g.lineTo(110 + Math.sin(a) * (104 - l), 110 - Math.cos(a) * (104 - l)); g.stroke(); }
+      arcText(g, 'RANGEFINDER CAMERA · 1970S', 110, 110, 85, 0, { s: 11, w: 700, c: '#3A2608', ls: 1.6 }); arcText(g, tags.length ? tagText(tags.slice(0, 3)).toUpperCase() : `NO. 024 · +${PTS[r]}`, 110, 110, 85, Math.PI, { s: 9.5, w: 700, c: '#3A2608', ls: 1.2 });
+      starRow(g, r, stars, 110 + (RNUM[r] - 1) * 6, 66, 3.8, C === '#A39E92' ? '#FFFFFF' : C, 'rgba(255,255,255,.25)', 12); return cv; },
+    back() { const [cv, g] = fcv(2.2, 2.2); g.fillStyle = '#9C7430'; g.fillRect(0, 0, 220, 220); const rn = mulberry(9), P = []; for (let i = 0; i < 40; i++) { const a = rn() * TAU, R = rn() * 92; P.push([110 + Math.sin(a) * R, 110 - Math.cos(a) * R]); }
+      g.strokeStyle = 'rgba(50,32,8,.55)'; g.lineWidth = .8; for (let i = 1; i < 12; i++) { g.beginPath(); g.moveTo(...P[i - 1]); g.lineTo(...P[i]); g.stroke(); } g.fillStyle = 'rgba(50,32,8,.7)'; for (const p of P) { g.beginPath(); g.arc(p[0], p[1], 1.6, 0, TAU); g.fill(); }
+      txt(g, 'Inventory · No. 024', 110, 200, { s: 10, w: 700, c: 'rgba(50,32,8,.75)', a: 'center' }); return cv; },
+    starAt: (i, n) => [110 + (n - 1) * 6 - (n - 1 - i) * 12, 66],
+    build(c, body, r, C, hot) { const F = this;
+      c.front = pm(hot, { map: ctex(F.face(r, [], 0)), metalness: .85, roughness: .38 }); c.backM = pm(hot, { map: ctex(F.back()), metalness: 1, roughness: .4 }); c.artM = pm(hot, { color: '#B88A3A', metalness: 1, roughness: .3 });
+      body.add(new THREE.Mesh(discGeo(1.1, .07), [c.artM, c.front, c.backM]));
+      const s = new THREE.Shape(); s.absarc(0, 0, 1.08, 0, TAU, false); const h = new THREE.Path(); h.absarc(0, 0, 1.0, 0, TAU, true); s.holes.push(h);
+      const ring2 = new THREE.Shape(); ring2.absarc(.12, .18, .52, 0, TAU, false); const h2 = new THREE.Path(); h2.absarc(.12, .18, .47, 0, TAU, true); ring2.holes.push(h2);
+      const rete = new THREE.Group(), gold = pm(hot, { color: METAL[5][1], metalness: 1, roughness: .22 });
+      rete.add(new THREE.Mesh(new THREE.ExtrudeGeometry([s, ring2], { depth: .025, bevelEnabled: false, curveSegments: 48 }), gold));
+      for (let k = 0; k < 5; k++) { const a = k / 5 * TAU + .3, p = new THREE.Shape(); p.moveTo(-.04, 0); p.quadraticCurveTo(0, .1, .02, .34); p.quadraticCurveTo(.03, .1, .04, 0); p.closePath(); const m = new THREE.Mesh(new THREE.ExtrudeGeometry(p, { depth: .02, bevelEnabled: false }), gold); m.position.set(Math.sin(a) * .66, Math.cos(a) * .66, 0); m.rotation.z = -a + Math.PI; rete.add(m); }
+      rete.position.z = .04; body.add(rete); c.extra = [gold]; c.tick = dt => { rete.rotation.z += dt * .12; };
+    } },
+};
+const FIND_KEYS = Object.keys(FINDS);
+
+/** How much a find is scaled so it stays inside the space a card takes (2 x 2.84 units, a little wider allowed). */
+const findFit = F => Math.min(1, 2.15 / F.w, 2.95 / F.h);
+/** The outlines a find is cut to, for clipping its flat picture; null for a plain rectangle. */
+const findShapes = F => F.shape ? [F.shape()] : F.cam ? [F.cam(), F.ban()] : null;
+/** The shadow and corners of a find's flat picture: a drop shadow that follows its outline. */
+const miniShadow = (fm, C) => fm.round ? `border-radius:50%;box-shadow:0 0 22px ${hexA(C, .5)}, 0 10px 24px rgba(0,0,0,.35)` : `filter:drop-shadow(0 0 12px ${hexA(C, .55)}) drop-shadow(0 8px 12px rgba(0,0,0,.35))`;
+/** Builds the picked find with the same handles the moments use on a card. */
+function findCard(F, key, o = {}) {
+  const r = rarity, C = RC[r];
+  const c = { r, C, look: 'find:' + key, find: F, x: o.x ?? 180, y: o.y ?? 360, z: o.z ?? 0, tags: [], stars: 0,
+    s: { rx: 0, ry: 0, vrx: 0, vry: 0, fl: o.up ? 0 : Math.PI, vfl: 0, rz: 0, vrz: 0, sc: o.sc ?? 1 }, flipT: o.up ? 0 : Math.PI, tx: 0, ty: 0, k: 120, d: 11, kf: 150, df: 14,
+    idle: false, ptr: null, interactive: false, jit: 0, heat: 0, glowA: 0, glowCol: new THREE.Color(C), sheen: -1, sheenA: 0, vis: 1 };
+  const root = new THREE.Group(), body = new THREE.Group(), inner = new THREE.Group(); root.add(body); body.add(inner); c.root = root; c.body = body; c.key = key;
+  const fit = findFit(F); inner.scale.setScalar(fit); c.fit = fit;
+  const hot = new THREE.Color('#FFFFFF').lerp(new THREE.Color(C), .45);
+  F.build(c, inner, r, C, hot);
+  c.sparkU = { uSheen: { value: -1 }, uSheenA: { value: 0 } };
+  c.glowM = new THREE.MeshBasicMaterial({ map: GLOWT, color: c.glowCol, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(F.w * fit * 1.5, F.h * fit * 1.35), c.glowM); glow.position.z = -.3; root.add(glow); c.glow = glow;
+  c.mats = [c.front, c.backM, c.artM, ...(c.extra || [])];
+  c.faceCv = F.face ? F.face(r, [], 0) : null;
+  c.redraw = () => {
+    if (F.face) { const cv = F.face(r, c.tags, c.stars); c.faceCv = cv; c.front.map.image = cv; c.front.map.needsUpdate = true; }
+    else if (F.label) { const cv = F.label(r, c.tags, c.stars, 'A'); c.faceCv = cv; c.front.map.image = cv; c.front.map.needsUpdate = true; }
+    else if (F.tip) { const cv = F.tip(r, c.tags, c.stars); c.faceCv = cv; c.front.map.image = cv; c.front.map.needsUpdate = true; }
+    if (c.redrawBack && c.tags.length) c.redrawBack(c.tags); if (c.redrawGlow) c.redrawGlow(c.stars);
+  };
+  c.starXY = (i, n) => { const [px, py] = F.starAt(i, n); return [100 + (px - F.w * 50) * fit, 142 + (py - F.h * 50) * fit]; };
+  ROOT.add(root); CARDS3.add(c); c.root.renderOrder = 2;
+  return c;
+}
+/** The picked find as a flat picture for the flight to the backpack: { src, w, h } in phone pixels at scale 1. */
+function findMini(key, tags, stars) {
+  const F = FINDS[key], r = rarity; let cv;
+  if (key === 'neon') { [cv] = fcv(F.w, F.h, 2); const g = cv.getContext('2d'); g.drawImage(F.plate(r), 0, 0, F.w * FP, F.h * FP); g.globalCompositeOperation = 'lighter'; g.drawImage(F.glow(r, stars), 0, 0, F.w * FP, F.h * FP); }
+  else if (key === 'rune') { [cv] = fcv(F.w, F.h, 2); const g = cv.getContext('2d'); g.drawImage(F.face(r, tags, stars), 0, 0, F.w * FP, F.h * FP); g.globalCompositeOperation = 'lighter'; g.drawImage(F.glow(r), 0, 0, F.w * FP, F.h * FP); }
+  else if (key === 'voxel') { [cv] = fcv(F.w, F.h, 2); const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; const sm = mkcv(F.COLS, F.ROWS); if (PHOTO.complete) sm.getContext('2d').drawImage(PHOTO, 0, 0, F.COLS, F.ROWS); g.drawImage(sm, 100 - F.COLS * 4.3, 142 - 42 - F.ROWS * 4.3, F.COLS * 8.6, F.ROWS * 8.6); g.imageSmoothingEnabled = true; g.drawImage(F.tip(r, tags, stars), 0, 0, F.w * FP, F.h * FP); }
+  else if (key === 'amber') { [cv] = fcv(F.w, F.h, 2); const g = cv.getContext('2d'); g.save(); g.beginPath(); g.ellipse(100, 112, 90, 110, 0, 0, TAU); g.clip(); cover(g, 10, 2, 180, 220); g.fillStyle = 'rgba(224,138,30,.45)'; g.fillRect(0, 0, 200, 230); g.restore(); const f = F.face(r, tags, stars); g.save(); g.beginPath(); g.rect(20, 222, 160, 62); g.clip(); g.drawImage(f, 0, 0, 200, 284); g.restore(); }
+  else if (key === 'tape') cv = F.label(r, tags, stars, 'A');
+  else if (key === 'record') { [cv] = fcv(F.w, F.h, 2); const g = cv.getContext('2d'); g.save(); g.beginPath(); g.arc(110, 102, 102, 0, TAU); g.clip(); g.drawImage(F.label(r), 8, 0, 204, 204); g.restore(); g.drawImage(F.face(r, tags, stars), 0, 0, F.w * FP, F.h * FP); }
+  else cv = F.face(r, tags, stars);
+  const sh = findShapes(F);
+  if (sh) { const [o, g] = fcv(F.w, F.h, 2), px = p => [F.w * 50 + p.x * FP, F.h * 50 - p.y * FP];
+    g.beginPath(); for (const s of sh) { for (const path of [s, ...s.holes]) { path.getPoints(24).forEach((p, i) => i ? g.lineTo(...px(p)) : g.moveTo(...px(p))); g.closePath(); } }
+    g.clip('evenodd'); g.drawImage(cv, 0, 0, F.w * FP, F.h * FP); cv = o; }
+  return { src: cv.toDataURL('image/png'), w: F.w * FP, h: F.h * FP, round: key === 'coin' || key === 'astro' };
+}

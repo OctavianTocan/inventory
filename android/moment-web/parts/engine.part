@@ -1,0 +1,261 @@
+const RC = { 1: '#A39E92', 3: '#3E8DB5', 5: '#E2A23B' };
+const RN = { 1: 'Common', 3: 'Rare', 5: 'Legendary' };
+const RNUM = { 1: 1, 3: 3, 5: 5 };
+const PTS = { 1: 10, 3: 40, 5: 80 };
+/** The colours a build-up climbs through before the reveal: rarer finds take more steps. */
+const TEASE = { 1: ['#FFFFFF'], 3: ['#FFFFFF', '#3E8DB5'], 5: ['#FFFFFF', '#3E8DB5', '#E2A23B'] };
+const NIGHT = '#0B2227', PANEL = '#12343A', PAPER = '#F4F2EF';
+const W = 360, H = 760;
+let GLF = null;
+/** Film mode (?film): moment time only moves when window.__film steps it, so a slow headless browser can still record every frame. */
+const FILM = /[?&]film/.test(location.search);
+let FILMDRAW = true;
+let rarity = 5, slow = 1, sound = !FILM, current = 0, run = 0, rate = 1, ts = 1, skipping = false, playing = false, panelClose = null;
+const scr = document.getElementById('scr'), cam = document.getElementById('cam'), layer = document.getElementById('layer'), hud = document.getElementById('hud'), shop = document.getElementById('shop'), over = document.getElementById('over');
+/* The screen never scrolls: focusing a field (or a phone keyboard opening) would otherwise slide the whole scene up. */
+scr.addEventListener('scroll', () => { if (scr.scrollTop || scr.scrollLeft) { scr.scrollTop = 0; scr.scrollLeft = 0; } });
+const rnd = (a, b) => a + Math.random() * (b - a);
+/** Moment speed: skipping raises rate, a hit-stop drops ts to 0 for a few frames. */
+const spd = () => rate * ts;
+/** Our own list too: a delayed animation paused by a hit-stop drops out of document.getAnimations(). */
+let ANIMS = [];
+function applySpeed() { if (FILM) return; ANIMS = ANIMS.filter(a => a.playState !== 'finished' || a.effect?.getComputedTiming().iterations === Infinity); new Set([...document.getAnimations(), ...ANIMS]).forEach(a => { a.playbackRate = spd(); }); }
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, a)).toFixed(3)})`; }
+
+/* Sound: stand-ins made with Web Audio, through a compressor and a small room. */
+let ac = null, bus = null;
+function audio() {
+  if (!ac) {
+    try {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(ac.destination);
+      const out = ac.createGain(); out.gain.value = .6; out.connect(comp);
+      bus = ac.createGain(); bus.connect(out);
+      const rev = ac.createConvolver(); const len = ac.sampleRate * 2.4, ir = ac.createBuffer(2, len, ac.sampleRate);
+      for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+      rev.buffer = ir; const wet = ac.createGain(); wet.gain.value = .3; bus.connect(rev); rev.connect(wet); wet.connect(out);
+    } catch (e) { ac = null; }
+  }
+  if (ac && ac.state === 'suspended') ac.resume();
+  return ac;
+}
+let NB = null;
+function noiseBuf() { const b = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+const SFX = {
+  /** Sounds a moment adds for itself: SFX.extra.name = (t, S, arg, bell) => { ... } using SFX.tone and SFX.noise. */
+  extra: {},
+  tone(f, t0, dur, type = 'sine', vol = .3, f2, att = .008) {
+    const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + att); g.gain.exponentialRampToValueAtTime(.0008, t0 + dur); o.connect(g); g.connect(bus); o.start(t0); o.stop(t0 + dur + .05);
+  },
+  noise(t0, dur, f1, f2, vol = .3, q = 1.2, att = .3, type = 'bandpass') {
+    NB = NB || noiseBuf(); const s = ac.createBufferSource(); s.buffer = NB; const bp = ac.createBiquadFilter(); bp.type = type; bp.Q.value = q; bp.frequency.setValueAtTime(f1, t0); bp.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    const g = ac.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + dur * att); g.gain.exponentialRampToValueAtTime(.0008, t0 + dur); s.connect(bp); bp.connect(g); g.connect(bus); s.start(t0, Math.random()); s.stop(t0 + dur + .05);
+  },
+  play(name, arg) {
+    if (!sound || skipping || !audio()) return; const t = ac.currentTime + .005, S = slow;
+    const bell = (f, at, v = .16, d = 1.4) => { SFX.tone(f, at, d * S, 'sine', v); SFX.tone(f * 2.01, at, d * .5 * S, 'sine', v * .35); SFX.tone(f * 3.98, at, d * .25 * S, 'sine', v * .12); };
+    switch (name) {
+      case 'whoosh': SFX.noise(t, .5 * S, 300, 2600, .2, .9); break;
+      case 'swoop': SFX.noise(t, .38 * S, 2600, 500, .17, 1.1); break;
+      case 'riser': { const d = (arg || 1) * S; SFX.noise(t, d, 250, 6500, .2, 4, .92); SFX.tone(110, t, d, 'sawtooth', .03, 440, d * .9); SFX.tone(111.5, t, d, 'sawtooth', .03, 446, d * .9); break; }
+      case 'suck': { NB = NB || noiseBuf(); const d = (arg || .35) * S, s = ac.createBufferSource(); s.buffer = NB; const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.setValueAtTime(800, t); f.frequency.exponentialRampToValueAtTime(5000, t + d);
+        const g = ac.createGain(); g.gain.setValueAtTime(.0008, t); g.gain.exponentialRampToValueAtTime(.32, t + d); g.gain.linearRampToValueAtTime(0, t + d + .02); s.connect(f); f.connect(g); g.connect(bus); s.start(t); s.stop(t + d + .05); break; }
+      case 'boom': { const p = arg ?? 1; SFX.tone(72, t, (1 + .6 * p) * S, 'sine', .5 + .3 * p, 26, .004); SFX.tone(150, t, .25 * S, 'triangle', .22 * p, 55, .002); SFX.noise(t, (.7 + .5 * p) * S, 2200, 90, .3 + .25 * p, .5, .01); break; }
+      case 'crack': SFX.noise(t, .1 * S, 5000, 2500, .5, .6, .02, 'highpass'); SFX.noise(t, .2 * S, 1800, 900, .25, .8, .02); break;
+      case 'step': { const i = arg || 0, f = [392, 523.3, 659.3, 784][i] || 784; bell(f, t, .13, 1.1); SFX.tone(f / 4, t, .5 * S, 'sine', .22, f / 4.4, .01); SFX.noise(t, .3 * S, 1200, 5000, .1, 1, .05); break; }
+      case 'thud': SFX.tone(110, t, .35 * S, 'sine', .55, 38, .004); SFX.noise(t, .14 * S, 900, 250, .35, .7, .02); break;
+      case 'clunk': { const v = arg ?? 1; SFX.tone(95, t, .4 * S, 'sine', .55 * v, 40, .003); SFX.tone(330, t, .22 * S, 'triangle', .1 * v); SFX.tone(487, t, .16 * S, 'triangle', .07 * v); SFX.noise(t, .18 * S, 700, 200, .35 * v, .6, .02); break; }
+      case 'stamp': SFX.tone(90, t, .35 * S, 'sine', .65, 32, .003); SFX.noise(t, .09 * S, 3200, 1200, .45, .8, .02); SFX.noise(t + .02, .3 * S, 600, 180, .28, .6, .05); break;
+      case 'paper': SFX.noise(t, .32 * S, 1800, 5200, .14, .6); break;
+      case 'tear': for (let i = 0; i < 16; i++) SFX.noise(t + i * .026 * S, .02 * S, rnd(2000, 6000), rnd(2000, 6000), .22, 2, .1); SFX.noise(t, .45 * S, 2500, 6000, .08, .8); break;
+      case 'meteor': { const d = (arg || 1.4) * S; SFX.noise(t, d, 5000, 500, .22, 1.4, .6); SFX.tone(1400, t, d, 'sine', .05, 260, d * .6); break; }
+      case 'ting': { const f = [1318.5, 1760, 2349.3][arg || 0]; bell(f, t, .14, 1.2); SFX.noise(t, .25 * S, 6000, 9000, .08, 3, .05); break; }
+      case 'zap': { const o = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter(); o.type = 'square'; f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = .7; const d = .26 * S;
+        for (let k = 0; k < d; k += .014) o.frequency.setValueAtTime(rnd(60, 900), t + k); g.gain.setValueAtTime(.09, t); g.gain.exponentialRampToValueAtTime(.001, t + d); o.connect(f); f.connect(g); g.connect(bus); o.start(t); o.stop(t + d + .02); SFX.noise(t, .12 * S, 7000, 3000, .14, 1, .02, 'highpass'); break; }
+      case 'holo': { const d = (arg || 1) * S; const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain(), l = ac.createOscillator(), lg = ac.createGain(); o.type = 'sawtooth'; o.frequency.value = 110; f.type = 'lowpass'; f.frequency.value = 900; l.frequency.value = 17; lg.gain.value = .04;
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.06, t + .1); g.gain.linearRampToValueAtTime(0, t + d); l.connect(lg); lg.connect(g.gain); o.connect(f); f.connect(g); g.connect(bus); o.start(t); l.start(t); o.stop(t + d + .05); l.stop(t + d + .05); break; }
+      case 'shimmer': for (let i = 0; i < 14; i++) SFX.tone(rnd(2500, 6500), t + rnd(0, 1.2) * S, .5 * S, 'sine', .035); break;
+      case 'tick': SFX.tone(arg || 1400, t, .07 * S, 'triangle', .14); break;
+      case 'pop': SFX.tone(520, t, .14 * S, 'sine', .3, 1200); SFX.noise(t, .08 * S, 2500, 4000, .12, 2); break;
+      case 'chime': {
+        const r = arg || 1; const notes = r >= 5 ? [523.3, 659.3, 784, 1046.5, 1318.5, 1568] : r >= 3 ? [587.3, 880, 1174.7] : [659.3, 987.8];
+        notes.forEach((f, i) => bell(f, t + i * .07 * S, r >= 5 ? .14 : .16, r >= 5 ? 2.4 : 1.3));
+        if (r >= 5) { SFX.tone(130.8, t, 2 * S, 'sine', .2); SFX.tone(196, t, 2 * S, 'sine', .08); }
+        break; }
+      case 'hum': SFX.tone(110, t, (arg || 1.2) * S, 'sine', .14); SFX.tone(165, t, (arg || 1.2) * S, 'sine', .08); break;
+      default: SFX.extra[name]?.(t, S, arg, bell);
+    }
+  },
+};
+
+/* Light, sparks and smoke on a canvas inside the camera, so they move with it. */
+/* Two layers: the back one sits under the 3D canvas, so rings, blooms, flares and bursts read as light behind the
+   card and props instead of crossing them; the front one carries sparks and anything meant to pass in front. */
+const cv = document.getElementById('fx'), cxF = cv.getContext('2d'), cxB = document.getElementById('fxb').getContext('2d'); cxF.scale(2, 2); cxB.scale(2, 2);
+let cx = cxF;
+const BACKK = { bloom: 1, flare: 1, rays: 1, arc: 1 };
+let P = [], FX = [], RINGS = [], FLASH = [], EMIT = [], TW = [], last = performance.now(), clock = 0, trauma = 0;
+const SPR = {};
+/** A soft round light sprite: white core into the colour into nothing. */
+function sprite(color) {
+  if (SPR[color]) return SPR[color];
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.16, hexA(color, .95)); gr.addColorStop(.42, hexA(color, .32)); gr.addColorStop(1, hexA(color, 0)); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return SPR[color] = c;
+}
+let PUFF = null;
+function puff() { if (PUFF) return PUFF; const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(210,214,208,.8)'); gr.addColorStop(.5, 'rgba(190,196,190,.35)'); gr.addColorStop(1, 'rgba(180,186,180,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return PUFF = c; }
+function star4(x, y, r) { cx.beginPath(); cx.moveTo(x, y - r); cx.quadraticCurveTo(x, y, x + r, y); cx.quadraticCurveTo(x, y, x, y + r); cx.quadraticCurveTo(x, y, x - r, y); cx.quadraticCurveTo(x, y, x, y - r); cx.fill(); }
+const E = { out: p => 1 - Math.pow(1 - p, 3), in: p => p * p * p, inOut: p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2, lin: p => p, in2: p => p * p };
+/** Tweens numbers on a canvas object in moment time (respects slow motion, skipping and hit-stop). */
+function tw(o, to, ms, ease = E.out) { return new Promise(res => { const from = {}; for (const k in to) from[k] = o[k]; TW.push({ o, from, to, d: ms / 1000, t: 0, ease, res }); }); }
+function emit(fn, perSec, dur) { const e = { fn, rate: perSec, dur, t: 0, acc: 0, dead: false }; EMIT.push(e); return e; }
+function light(o) { const L = Object.assign({ a: 1, t: 0, dead: false }, o); FX.push(L); return L; }
+function fadeLight(L, ms = 300) { if (!L) return; tw(L, { a: 0 }, ms, E.lin).then(() => { L.dead = true; }); }
+function ring(x, y, color, max = 180, w = 6, dur = .55, delay = 0, front = false) { RINGS.push({ x, y, color, max, w, dur, t: -delay, front }); }
+function flash(alpha = .9, dur = .25, color = '#FFFFFF') { FLASH.push({ alpha, dur, color, t: 0 }); }
+function kick(t) { trauma = Math.min(1, trauma + t); }
+
+function sparks(x, y, color, n, sp, o = {}) {
+  for (let i = 0; i < n; i++) { const a = o.dir != null ? o.dir + rnd(-o.spread, o.spread) : rnd(0, Math.PI * 2), v = rnd(sp * .3, sp);
+    P.push({ k: 'spark', bk: o.bk, x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(.35, .9) * (o.life || 1), t: 0, size: rnd(.9, o.size || 2.2), color: Math.random() < (o.white ?? .35) ? '#FFFFFF' : color, g: o.g ?? 300, drag: o.drag ?? 2.4 }); }
+}
+function glints(x, y, color, n, R, o = {}) { for (let i = 0; i < n; i++) P.push({ k: 'glint', bk: o.bk, x: x + rnd(-R, R), y: y + rnd(-R, R) * (o.ry ?? 1), vx: 0, vy: o.vy || 0, life: rnd(.5, 1.1) * (o.life || 1), t: -rnd(0, o.delay || 0), size: rnd(1, o.size || 2.2), color, g: 0, drag: 0, ph: rnd(0, 6) }); }
+function smoke(x, y, n, o = {}) { for (let i = 0; i < n; i++) { const s = o.side ? (i % 2 ? 1 : -1) : rnd(-1, 1); P.push({ k: 'smoke', x: x + rnd(-(o.w || 20), o.w || 20), y: y + rnd(-6, 6), vx: s * rnd(o.sp * .4 || 20, o.sp || 60), vy: -rnd(5, o.up || 40), life: rnd(.7, 1.3), t: 0, size: rnd(26, o.size || 56), a: o.a || .3, g: 0, drag: 2.6 }); } }
+function shards(x, y, colors, n, sp) { for (let i = 0; i < n; i++) { const a = rnd(-Math.PI * .95, -Math.PI * .05), v = rnd(sp * .3, sp); P.push({ k: 'shard', x: x + rnd(-80, 80), y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(.6, 1.1), t: 0, size: rnd(1.6, 3.6), color: colors[i % colors.length], g: 700, drag: 1.4, rot: rnd(0, 6), vr: rnd(-14, 14) }); } }
+function ink(x, y, color, n, sp) { for (let i = 0; i < n; i++) { const a = rnd(0, Math.PI * 2), v = rnd(sp * .2, sp); P.push({ k: 'ink', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(.5, .9), t: 0, size: rnd(1.4, 4.2), color, g: 0, drag: 8 }); } }
+function embers(x0, x1, y0, y1, colors, perSec, dur) { return emit(() => P.push({ k: 'ember', x: rnd(x0, x1), y: rnd(y0, y1), vx: rnd(-10, 10), vy: rnd(-75, -25), life: rnd(1.4, 2.8), t: 0, size: rnd(.7, 1.7), color: colors[Math.random() * colors.length | 0], g: -4, drag: .3, wob: rnd(1, 3), ph: rnd(0, 6) }), perSec, dur); }
+/** Motes pulled in from a circle towards a point: light gathering before a reveal. */
+function implode(x, y, colorFn, R, perSec, dur) { return emit(() => { const a = rnd(0, 7), r = rnd(R * .7, R), life = rnd(.35, .6); P.push({ k: 'mote', inward: 1, x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, vx: -Math.cos(a) * r / life, vy: -Math.sin(a) * r / life, life, t: 0, size: rnd(.8, 1.6), color: colorFn(), g: 0, drag: 0 }); }, perSec, dur); }
+function zig(x1, y1, x2, y2, depth) {
+  let pts = [[x1, y1], [x2, y2]], off = Math.hypot(x2 - x1, y2 - y1) * .22;
+  for (let d = 0; d < depth; d++) { const n = []; for (let i = 0; i < pts.length - 1; i++) { const [a, b] = pts[i], [c, e] = pts[i + 1]; n.push(pts[i]); const nx = -(e - b), ny = c - a, l = Math.hypot(nx, ny) || 1, o = rnd(-off, off); n.push([(a + c) / 2 + nx / l * o, (b + e) / 2 + ny / l * o]); } n.push(pts[pts.length - 1]); pts = n; off *= .55; }
+  return pts;
+}
+function poly(pts) { cx.beginPath(); cx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) cx.lineTo(pts[i][0], pts[i][1]); cx.stroke(); }
+
+function drawLight(L, dt) {
+  if (L.life) { L.t += dt; if (L.t >= L.life) return false; }
+  if ('x' in L && !(Number.isFinite(L.x) && Number.isFinite(L.y))) return true;
+  const k = L.life ? 1 - L.t / L.life : 1;
+  switch (L.kind) {
+    case 'glow': { cx.globalAlpha = L.a * k; const s = L.r * 2; cx.drawImage(sprite(L.color), L.x - s / 2, L.y - s / 2 * (L.sy || 1), s, s * (L.sy || 1)); break; }
+    case 'rays': {
+      L.rot = (L.rot || 0) + (L.spin || 0) * dt; const n = L.n || 14, from = L.from ?? -Math.PI, to = L.to ?? Math.PI;
+      if (!L.j) L.j = Array.from({ length: n }, () => [rnd(.55, 1), rnd(-.5, .5), rnd(2, 7), rnd(0, 6)]);
+      cx.globalAlpha = 1;
+      for (let i = 0; i < n; i++) { const [lm, jit, f, ph] = L.j[i], ang = from + (to - from) * (i + .5 + jit * .5) / n + L.rot, len = L.len * lm, fl = (.6 + .4 * Math.sin(clock * f + ph)) * L.a * k;
+        const g = cx.createRadialGradient(L.x, L.y, 0, L.x, L.y, len); g.addColorStop(0, hexA(L.color, .6 * fl)); g.addColorStop(.3, hexA(L.color, .28 * fl)); g.addColorStop(1, hexA(L.color, 0)); cx.fillStyle = g;
+        const w = (L.w || .08) * (.6 + .4 * lm); cx.beginPath(); cx.moveTo(L.x, L.y); cx.lineTo(L.x + Math.cos(ang - w) * len, L.y + Math.sin(ang - w) * len); cx.lineTo(L.x + Math.cos(ang + w) * len, L.y + Math.sin(ang + w) * len); cx.closePath(); cx.fill(); }
+      break; }
+    case 'pillar': {
+      if (L.w < 1 || L.h < 1) break; const fl = L.a * (.86 + .14 * Math.sin(clock * 31)) * k; const g = cx.createLinearGradient(L.x - L.w / 2, 0, L.x + L.w / 2, 0);
+      g.addColorStop(0, hexA(L.color, 0)); g.addColorStop(.28, hexA(L.color, .3 * fl)); g.addColorStop(.45, hexA('#FFFFFF', .85 * fl)); g.addColorStop(.55, hexA('#FFFFFF', .85 * fl)); g.addColorStop(.72, hexA(L.color, .3 * fl)); g.addColorStop(1, hexA(L.color, 0)); cx.fillStyle = g;
+      const seg = 16; for (let i = 0; i < seg; i++) { cx.globalAlpha = Math.pow(1 - i / seg, 1.2); cx.fillRect(L.x - L.w / 2, L.y - L.h * (i + 1) / seg, L.w, L.h / seg + .6); }
+      cx.globalAlpha = fl; const s = L.w * 2.8; cx.drawImage(sprite(L.color), L.x - s / 2, L.y - s * .18, s, s * .36); break; }
+    case 'flare': { cx.globalAlpha = L.a * k; const sp = sprite(L.color); cx.drawImage(sp, L.x - L.len, L.y - L.th, L.len * 2, L.th * 2); cx.drawImage(sprite('#FFFFFF'), L.x - L.len * .55, L.y - L.th * .3, L.len * 1.1, L.th * .6); const s = L.core || 70; cx.drawImage(sp, L.x - s / 2, L.y - s / 2, s, s); break; }
+    case 'bolt': { if (!L.pts || Math.random() < .45) L.pts = zig(L.x1, L.y1, L.x2, L.y2, 5); const a = L.a * k * (Math.random() < .2 ? .3 : 1); cx.lineJoin = 'round'; cx.globalAlpha = a * .45; cx.strokeStyle = L.color; cx.lineWidth = 4.5; poly(L.pts); cx.globalAlpha = a; cx.strokeStyle = '#FFFFFF'; cx.lineWidth = 1.2; poly(L.pts); break; }
+    case 'comet': {
+      if (L.follow) { if (!L.follow.isConnected) return false; const [x, y] = center(L.follow); L.x = x; L.y = y; }
+      L.trail.push([L.x, L.y]); while (L.trail.length > (L.n || 24)) L.trail.shift(); const T = L.trail, n = T.length; cx.lineCap = 'round';
+      for (let i = 1; i < n; i++) { const q = i / n; cx.globalAlpha = Math.pow(q, 1.6) * L.a; cx.strokeStyle = L.color; cx.lineWidth = L.w * q * 2.4; cx.beginPath(); cx.moveTo(T[i - 1][0], T[i - 1][1]); cx.lineTo(T[i][0], T[i][1]); cx.stroke(); }
+      for (let i = 1; i < n; i++) { const q = i / n; cx.globalAlpha = q * q * L.a; cx.strokeStyle = '#FFFFFF'; cx.lineWidth = L.w * q * .7; cx.beginPath(); cx.moveTo(T[i - 1][0], T[i - 1][1]); cx.lineTo(T[i][0], T[i][1]); cx.stroke(); }
+      cx.globalAlpha = L.a; const s = L.w * 14; cx.drawImage(sprite(L.color), L.x - s / 2, L.y - s / 2, s, s); cx.fillStyle = '#FFFFFF'; star4(L.x, L.y, L.w * 3.2 * (.85 + .15 * Math.sin(clock * 40))); break; }
+    case 'crack': {
+      if (!L.br) { L.br = []; for (let i = 0; i < L.n; i++) { const a = -Math.PI / 2 + (i / L.n) * Math.PI * 2 + rnd(-.3, .3), len = rnd(.55, 1) * L.R; L.br.push(zig(L.x + rnd(-5, 5), L.y + rnd(-5, 5), L.x + Math.cos(a) * len, L.y + Math.sin(a) * len * 1.1, 4)); } }
+      const p = Math.max(0, Math.min(1, L.p ?? 1)); cx.lineJoin = 'round'; cx.lineCap = 'round';
+      for (const pts of L.br) { const m = Math.max(2, Math.ceil(pts.length * p)), sub = pts.slice(0, m); cx.globalAlpha = L.a * .45; cx.strokeStyle = L.color; cx.lineWidth = 5; poly(sub); cx.globalAlpha = L.a; cx.strokeStyle = '#FFFFFF'; cx.lineWidth = 1.2; poly(sub); }
+      break; }
+    case 'arc': { cx.globalAlpha = L.a * k; cx.strokeStyle = L.color; cx.lineCap = 'round'; cx.lineWidth = L.w * (.4 + .6 * k); cx.beginPath(); cx.ellipse(L.x, L.y, L.rx, L.ry, 0, L.a0, L.a1); cx.stroke(); break; }
+    case 'bloom': { const p = 1 - k, a = L.a * k * k, R = L.R * (.6 + .4 * p); const g = cx.createRadialGradient(L.x, L.y, 0, L.x, L.y, R); g.addColorStop(0, hexA('#FFFFFF', a)); g.addColorStop(.25, hexA(L.color, a * .75)); g.addColorStop(1, hexA(L.color, 0)); cx.globalAlpha = 1; cx.fillStyle = g; cx.fillRect(0, 0, W, H); break; }
+  }
+  return !L.dead;
+}
+function upd(p, dt) { p.t += dt; if (p.t < 0) return true; if (p.t >= p.life) return false; const d = Math.exp(-p.drag * dt); p.vx *= d; p.vy *= d; p.vy += p.g * dt; if (p.wob) p.vx += Math.sin(clock * p.wob + p.ph) * 24 * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.vr) p.rot += p.vr * dt; return true; }
+const NORMAL = { smoke: 1, shard: 1, ink: 1 };
+function drawP(p) {
+  if (p.t < 0) return; const k = 1 - p.t / p.life;
+  switch (p.k) {
+    case 'spark': { const sp = Math.hypot(p.vx, p.vy) || 1, L = Math.min(36, sp * .045 + 1.5); cx.globalAlpha = Math.min(1, k * 1.6); cx.strokeStyle = p.color; cx.lineCap = 'round'; cx.lineWidth = p.size * (.4 + .6 * k);
+      cx.beginPath(); cx.moveTo(p.x - p.vx / sp * L, p.y - p.vy / sp * L); cx.lineTo(p.x, p.y); cx.stroke(); cx.globalAlpha *= .55; const s = p.size * 5; cx.drawImage(sprite(p.color), p.x - s / 2, p.y - s / 2, s, s); break; }
+    case 'mote': case 'ember': { const a = p.inward ? Math.min(1, (1 - k) * 1.6) : Math.min(1, k * 1.5), fl = p.k === 'ember' ? .55 + .45 * Math.sin(clock * 11 + p.ph) : 1; cx.globalAlpha = a * fl; const s = p.size * 6; cx.drawImage(sprite(p.color), p.x - s / 2, p.y - s / 2, s, s); break; }
+    case 'glint': { const tw0 = Math.max(0, Math.sin(Math.PI * p.t / p.life)), a = tw0 * (.75 + .25 * Math.sin(clock * 22 + p.ph)); cx.globalAlpha = a; cx.fillStyle = '#FFFFFF'; star4(p.x, p.y, p.size * 3.4 * a + .4); const s = p.size * 9 * a; cx.drawImage(sprite(p.color), p.x - s / 2, p.y - s / 2, s, s); break; }
+    case 'smoke': { const s = p.size * (1 + (1 - k) * 2); cx.globalAlpha = p.a * k; cx.drawImage(puff(), p.x - s / 2, p.y - s / 2, s, s); break; }
+    case 'shard': { cx.globalAlpha = Math.min(1, k * 2); cx.fillStyle = p.color; cx.save(); cx.translate(p.x, p.y); cx.rotate(p.rot); cx.scale(Math.cos(p.rot * 1.7), 1); cx.fillRect(-p.size, -p.size * .6, p.size * 2, p.size * 1.2); cx.restore(); break; }
+    case 'ink': { cx.globalAlpha = Math.min(1, k * 2.5); cx.fillStyle = p.color; cx.beginPath(); cx.arc(p.x, p.y, p.size * (.6 + .4 * k), 0, 7); cx.fill(); break; }
+  }
+}
+const nz = t => Math.sin(t) * .5 + Math.sin(t * 2.13 + 1.3) * .3 + Math.sin(t * 4.7 + .4) * .2;
+/** Things that run once a frame on real time: waits, timers, the tag countdown. fn(ms) returns false to stop. */
+const TICKS = new Set();
+function onFrame(fn) { TICKS.add(fn); }
+/** setTimeout on frame time, so film mode steps it too. */
+function later(fn, ms) { onFrame(r => { ms -= r; if (ms <= 0) { fn(); return false; } }); }
+function frame(now) { const real = Math.min(.05, (now - last) / 1000); perfSample(now - last); last = now; step(real); requestAnimationFrame(frame); }
+function step(real) {
+  const dt = real / slow * spd(); clock += dt;
+  for (const f of [...TICKS]) if (f(real * 1000) === false) TICKS.delete(f);
+  if (FILM) { ANIMS = ANIMS.filter(a => { if (a.playState === 'idle' || a.playState === 'finished') return false; a.currentTime = (a.currentTime || 0) + real * 1000 * spd(); const end = a.effect.getComputedTiming().endTime; if (a.currentTime >= end) { a.finish(); return false; } return true; }); }
+  for (let i = TW.length - 1; i >= 0; i--) { const w = TW[i]; w.t += dt; const p = Math.min(1, w.t / w.d), e = w.ease(p); for (const k in w.to) w.o[k] = w.from[k] + (w.to[k] - w.from[k]) * e; if (p >= 1) { TW.splice(i, 1); w.res(); } }
+  EMIT = EMIT.filter(e => { if (e.dead) return false; e.t += dt; e.acc += dt * e.rate; while (e.acc > 1) { e.fn(); e.acc--; } return e.t < e.dur; });
+  trauma = Math.max(0, trauma - dt * 1.5); const s = trauma * trauma;
+  cam.style.translate = s > .001 ? `${(16 * s * nz(clock * 34)).toFixed(2)}px ${(16 * s * nz(clock * 31 + 7)).toFixed(2)}px` : '';
+  cam.style.rotate = s > .001 ? `${(2.4 * s * nz(clock * 23 + 3)).toFixed(3)}deg` : '';
+  const both = f => { f(cxB); f(cxF); };
+  both(c => { c.clearRect(0, 0, W, H); c.globalCompositeOperation = 'source-over'; });
+  P = P.filter(p => { const alive = upd(p, dt); if (alive && NORMAL[p.k]) { cx = p.bk ? cxB : cxF; drawP(p); } return alive; });
+  both(c => { c.globalCompositeOperation = 'lighter'; });
+  FX = FX.filter(L => { cx = (L.bk ?? BACKK[L.kind]) ? cxB : cxF; return drawLight(L, dt); });
+  RINGS = RINGS.filter(r => { r.t += dt; if (r.t < 0) return true; const p = r.t / r.dur; if (p >= 1) return false; const e = 1 - Math.pow(1 - p, 3), R = 6 + e * r.max; cx = r.front ? cxF : cxB;
+    cx.strokeStyle = r.color; cx.globalAlpha = (1 - p) * .35; cx.lineWidth = r.w * 3 * (1 - p) + 1; cx.beginPath(); cx.arc(r.x, r.y, R, 0, 7); cx.stroke();
+    cx.globalAlpha = (1 - p) * .95; cx.lineWidth = r.w * (1 - p) + .6; cx.beginPath(); cx.arc(r.x, r.y, R, 0, 7); cx.stroke();
+    cx.strokeStyle = '#FFFFFF'; cx.globalAlpha = (1 - p) * .7; cx.lineWidth = Math.max(.6, r.w * .3 * (1 - p)); cx.beginPath(); cx.arc(r.x, r.y, R, 0, 7); cx.stroke(); return true; });
+  for (const p of P) if (!NORMAL[p.k]) { cx = p.bk ? cxB : cxF; drawP(p); }
+  both(c => { c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; }); cx = cxF;
+  FLASH = FLASH.filter(f => { f.t += dt; const p = f.t / f.dur; if (p >= 1) return false; cx.globalAlpha = f.alpha * (1 - p) * (1 - p); cx.fillStyle = f.color; cx.fillRect(0, 0, W, H); return true; });
+  cx.globalAlpha = 1;
+  if (GLF) GLF(dt);
+}
+/* Each step ends at a task boundary so promise chains (waits, finished animations) run before the next one. */
+if (FILM) window.__film = async (ms, n = 1, draw = true) => { for (let i = 0; i < n; i++) { FILMDRAW = draw && i === n - 1; step(ms / 1000); await new Promise(r => setTimeout(r, 0)); } };
+else requestAnimationFrame(frame);
+
+/* Timeline helpers; a newer run stops an older one, a skip speeds moment time up. */
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+class Stop extends Error {}
+function guard(id) { if (id !== run) throw new Stop(); }
+/** Waits ms of moment time: shorter while skipping, paused during a hit-stop. */
+const wait = (ms, id) => new Promise((res, rej) => { let left = ms * slow;
+  onFrame(r => { if (id !== run) { rej(new Stop()); return false; } left -= r * spd(); if (left <= 0) { res(); return false; } }); });
+/** Freezes everything for a few frames on a hit, the way fighting games do. */
+function hitstop(ms) { if (skipping) return; ts = 0; applySpeed(); const id = run; later(() => { ts = 1; if (id === run) applySpeed(); }, ms * slow); }
+function A(el, kf, ms, opt = {}) { const a = el.animate(kf, { duration: ms * slow, fill: 'forwards', easing: opt.ease || 'cubic-bezier(.2,.8,.2,1)', delay: (opt.delay || 0) * slow, iterations: opt.iter || 1, direction: opt.dir || 'normal' }); if (FILM) a.pause(); else a.playbackRate = spd(); ANIMS.push(a); return a; }
+function h(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+function add(html, before) { const e = h(html); before ? layer.insertBefore(e, before) : layer.appendChild(e); return e; }
+/** Adds above the 3D layer (titles, points), still inside the camera. */
+function addOver(html) { const e = h(html); over.appendChild(e); return e; }
+function addHud(html) { const e = h(html); hud.appendChild(e); return e; }
+/** Centre of an element in camera space (where the canvas draws), undoing the camera's push. */
+function center(el) {
+  const a = el.getBoundingClientRect(), b = scr.getBoundingClientRect(), z = b.width / 360; let x = (a.left + a.width / 2 - b.left) / z, y = (a.top + a.height / 2 - b.top) / z;
+  if (cam.contains(el)) { const t = getComputedStyle(cam).transform; if (t && t !== 'none') { const p = new DOMMatrix(t).inverse().transformPoint(new DOMPoint(x - 180, y - 342)); x = p.x + 180; y = p.y + 342; } }
+  return [x, y];
+}
+/** Moves the camera to a zoom (and lift) from wherever it is now. */
+function camTo(s, ms, y = 0, ease = 'cubic-bezier(.3,.7,.3,1)') { const from = getComputedStyle(cam).transform; cam.getAnimations().forEach(a => { a.commitStyles?.(); a.cancel(); }); return A(cam, [{ transform: from === 'none' ? 'none' : from }, { transform: `translateY(${y}px) scale(${s})` }], ms, { ease }); }
+function dimShop(on, ms = 480) { const a = { filter: 'none', transform: 'none' }, b = { filter: 'blur(5px) brightness(.42) saturate(.7)', transform: 'scale(.95)' }; return A(shop, on ? [a, b] : [b, a], ms); }
+function backdrop(css) { const b = add(`<div style="position:absolute;inset:0;background:${css};opacity:0"></div>`); A(b, [{ opacity: 0 }, { opacity: 1 }], 420); return b; }
+function out(el, ms = 300) { if (el) A(el, [{ opacity: getComputedStyle(el).opacity }, { opacity: 0 }], ms); }
+const gem = (c, s = 18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" style="display:block"><path d="M12 2l7.5 8L12 22 4.5 10z" fill="${c}"/><path d="M12 2l7.5 8h-15z" fill="#fff" opacity=".4"/></svg>`;
+const starSvg = (c, s) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" style="display:block"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" fill="${c}"/></svg>`;
+/** Light rays behind something, two layers turning against each other. */
+function raysEl(x, y, color, size = 640, before) {
+  const r = add(`<div style="position:absolute;left:${x}px;top:${y}px;width:${size}px;height:${size}px;margin:${-size / 2}px 0 0 ${-size / 2}px;opacity:0;mix-blend-mode:screen">
+    <div class="ra" style="position:absolute;inset:0;border-radius:50%;background:repeating-conic-gradient(from 0deg, transparent 0deg 8deg, ${hexA(color, .3)} 10deg 13deg, transparent 15deg 24deg);-webkit-mask:radial-gradient(closest-side, transparent 14%, #000 26%, transparent 100%);mask:radial-gradient(closest-side, transparent 14%, #000 26%, transparent 100%)"></div>
+    <div class="rb" style="position:absolute;inset:0;border-radius:50%;background:repeating-conic-gradient(from 6deg, transparent 0deg 13deg, rgba(255,255,255,.14) 15deg 17deg, transparent 19deg 31deg);-webkit-mask:radial-gradient(closest-side, transparent 12%, #000 22%, transparent 90%);mask:radial-gradient(closest-side, transparent 12%, #000 22%, transparent 90%)"></div>
+    <div style="position:absolute;inset:28%;border-radius:50%;background:radial-gradient(${hexA(color, .6)}, transparent 70%)"></div></div>`, before);
+  A(r.querySelector('.ra'), [{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], 26000, { iter: Infinity, ease: 'linear' });
+  A(r.querySelector('.rb'), [{ transform: 'rotate(0)' }, { transform: 'rotate(-360deg)' }], 34000, { iter: Infinity, ease: 'linear' });
+  return r;
+}
+

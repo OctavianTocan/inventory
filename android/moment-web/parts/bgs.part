@@ -1,0 +1,166 @@
+
+/* Worlds: twelve full-screen places a moment can happen in, so no two moments sit in the same empty room. Each is one
+   fragment shader with the same uniforms: uT time, uA fade, uC the accent (a moment tweens it to the find's colour),
+   uK energy (about .3 at rest, 2 to 3 on the hit). */
+const WGL = `uniform float uT, uA, uK, uSat, uBr; uniform vec3 uC; varying vec2 vUv; ${GLSL_NOISE}
+vec2 scr(){ return vec2((vUv.x - .5) / .64 + .5, (vUv.y - .5) / .665 + .5); }
+float stars(vec2 q, float n, float t){ vec2 g = q * vec2(n * .474, n), id = floor(g); float h = h21(id); vec2 f = fract(g) - .5 - (vec2(h, h21(id + 3.1)) - .5) * .7;
+  return smoothstep(.09, 0., length(f)) * step(.84, h) * (.55 + .45 * sin(t * (1. + h * 2.) + h * 50.)) * (h - .84) * 6.; }
+vec3 vor(vec2 p){ vec2 n = floor(p), f = fract(p); float d1 = 8., d2 = 8., id = 0.;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 g = vec2(float(i), float(j)), o = vec2(h21(n + g), h21(n + g + 19.7)); vec2 r = g + o - f; float d = dot(r, r);
+    if (d < d1) { d2 = d1; d1 = d; id = h21(n + g + 7.7); } else if (d < d2) d2 = d; }
+  return vec3(sqrt(d1), sqrt(d2), id); }
+float glowAt(vec2 q){ vec2 d = (q - vec2(.5, .51)) * vec2(.474, 1.); return exp(-dot(d, d) * 14.); }
+`;
+const WEND = `col += uC * glowAt(q) * max(uK - .3, 0.) * .22; col = mix(vec3(dot(col, vec3(.3, .55, .15))), col, uSat) * uBr; gl_FragColor = vec4(col * uA, uA); }`;
+const WENDB = `col *= .72 / max(.72, max(col.r, max(col.g, col.b))); ` + WEND.replace('* uBr;', '* uBr; col *= .72 / max(.72, max(col.r, max(col.g, col.b)));');
+const BGS = {
+  aurora: { name: 'Aurora', c: '#4FE3A2', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    vec3 col = mix(vec3(.012, .02, .05), vec3(.02, .035, .1), q.y) + vec3(.0, .03, .05) * smoothstep(.55, .2, q.y);
+    col += vec3(.8, .86, 1.) * (stars(q, 150., uT) + stars(q + 3.3, 70., uT * .7)) * smoothstep(.3, .65, q.y);
+    float x = p.x * 3., e = .75 + .35 * uK; vec3 acc = uC;
+    for (int i = 0; i < 3; i++) { float fi = float(i);
+      float yc = .44 + .09 * fi + .05 * sin(x * 2.1 + uT * .22 + fi * 1.7) + .06 * (fbm(vec2(x * 1.2 + fi * 3., uT * .07)) - .5);
+      float dy = q.y - yc, cur = smoothstep(-.012, .01, dy) * exp(-max(dy, 0.) * (7. - fi * 1.6));
+      float rays = .45 + .55 * vn(vec2(x * 16. + fi * 5. + uT * .3, uT * .5)) * vn(vec2(x * 5. - uT * .1, fi));
+      vec3 ac = mix(vec3(.12, 1., .5), vec3(.6, .32, 1.), clamp(fi * .4 + dy * 5., 0., 1.)); ac = mix(ac, acc, clamp(uK - .4, 0., 1.) * .5);
+      col += ac * cur * rays * (.7 - fi * .16) * e + ac * exp(-abs(dy) * 30.) * .12 * e; }
+    float r1 = .25 + .07 * fbm(vec2(p.x * 5. + 2., 1.)) + .05 * (1. - abs(p.x * 2.)), r2 = .17 + .06 * fbm(vec2(p.x * 8., 4.)) - .03 * p.x;
+    vec3 far = vec3(.04, .07, .11) + vec3(.06, .16, .14) * smoothstep(r1 - .05, r1, q.y) * .6, near = vec3(.015, .025, .04);
+    col = mix(col, far, step(q.y, r1)); col = mix(col, near + vec3(.05, .12, .1) * smoothstep(r2 - .03, r2, q.y) * .5, step(q.y, r2));
+    col += vec3(.06, .14, .12) * exp(-abs(q.y - r1) * 40.) * .4 * e; ${WEND}` },
+  dawn: { name: 'Golden hour', c: '#FFB45C', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    vec3 col = mix(vec3(1., .62, .36), vec3(.98, .8, .58), smoothstep(.3, .62, q.y)); col = mix(col, vec3(.42, .6, .86), smoothstep(.6, 1., q.y));
+    vec2 sp = (q - vec2(.5, .36)) * vec2(.474, 1.); float sd = length(sp);
+    col += vec3(1., .85, .6) * (smoothstep(.045, .04, sd) * 1.2 + exp(-sd * 9.) * .55 + exp(-sd * 3.) * .2) * (.8 + .2 * uK);
+    float hi = fbm(vec2(p.x * 3. + uT * .02, q.y * 14.)); col = mix(col, vec3(1., .92, .82), smoothstep(.55, .75, hi) * smoothstep(.62, .8, q.y) * .5);
+    for (int i = 0; i < 3; i++) { float fi = float(i), top = .34 - fi * .09;
+      float n = fbm(vec2(p.x * (3. + fi) + uT * (.03 + fi * .01) + fi * 7., fi)); float h = top + n * .08;
+      float b = fbm(vec2(p.x * 9. + fi * 3. + uT * .02, q.y * 9. + fi)); float m = smoothstep(h + .01, h - .03, q.y + (b - .5) * .03);
+      vec3 cc = mix(vec3(1., .78, .6), vec3(.95, .55, .45), fi * .35) * (1. - fi * .12); float rim = exp(-(h - q.y) * 30.) * (1. - fi * .3);
+      col = mix(col, cc * (.7 + .3 * b) + vec3(1., .85, .6) * rim * .5, m); }
+    ${WENDB}` },
+  lagoon: { name: 'Lagoon', c: '#5FE0D2', frag: `${WGL}
+    float cau(vec2 p0, float t){ vec2 p = mod(p0 * 6.28318, 6.28318) - 250.; vec2 i = p; float c = 1.; for (int n = 0; n < 4; n++) { float tt = t * (1. - 3.5 / float(n + 1)); i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x)); c += 1. / length(vec2(p.x / (sin(i.x + tt) / .005), p.y / (cos(i.y + tt) / .005))); } c /= 4.; c = 1.17 - pow(c, 1.4); return clamp(pow(abs(c), 8.), 0., 1.); }
+    void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    vec3 sand = vec3(.93, .86, .68) * (.85 + .15 * fbm(p * 30.)), deep = vec3(.03, .42, .5), shallow = vec3(.2, .78, .76);
+    float d = smoothstep(.0, 1., q.y * .8 + .1 * fbm(p * 3.)); vec3 col = mix(mix(sand, shallow, .55), mix(shallow, deep, .6), d);
+    float c = cau(p * 2.2 + vec2(0., uT * .01), uT * .35 + 23.); col += vec3(.9, 1., .95) * c * (.35 + .1 * uK) * (1. - d * .5);
+    float rip = fbm(p * vec2(6., 3.) + vec2(uT * .1, -uT * .05)); col *= .9 + .2 * rip;
+    float ray = pow(max(0., vn(vec2(p.x * 7. + p.y * 2. + uT * .1, 1.)) - .2), 2.) * smoothstep(.2, 1., q.y); col += vec3(.7, 1., .95) * ray * .25;
+    col += vec3(1.) * stars(q + vec2(0., uT * .01), 40., uT * 3.) * .5; ${WENDB}` },
+  dunes: { name: 'Dunes', c: '#FF8A4C', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    vec3 col = mix(vec3(1., .5, .25), vec3(.85, .3, .38), smoothstep(.35, .62, q.y)); col = mix(col, vec3(.2, .12, .32), smoothstep(.6, 1., q.y));
+    col += vec3(1.) * stars(q, 120., uT) * smoothstep(.75, .95, q.y) * .7;
+    vec2 sp = (q - vec2(.5, .45)) * vec2(.474, 1.); float sd = length(sp); col += vec3(1., .75, .45) * (smoothstep(.07, .065, sd) * .9 + exp(-sd * 7.) * .5) * (.8 + .2 * uK);
+    col = mix(col, col * vec3(.9, .7, .8), smoothstep(.5, .7, fbm(vec2(p.x * 2. + uT * .02, q.y * 12.))) * smoothstep(.45, .65, q.y) * .6);
+    for (int i = 0; i < 4; i++) { float fi = float(i), base = .4 - fi * .085;
+      float h = base + .05 * sin(p.x * (5. + fi * 2.) + fi * 2.) + .03 * sin(p.x * (11. + fi) - fi) + .02 * (fbm(vec2(p.x * 4. + fi * 9., 1.)) - .5);
+      float sl = .05 * (5. + fi * 2.) * cos(p.x * (5. + fi * 2.) + fi * 2.) + .03 * (11. + fi) * cos(p.x * (11. + fi) - fi); float lit = smoothstep(-.35, .35, -sl) * .8 + .2 * smoothstep(.05, .0, h - q.y);
+      vec3 dc = mix(vec3(.45, .16, .2), vec3(1., .58, .32), lit) * (1. - fi * .16) * (1. - .25 * smoothstep(0., .2, h - q.y));
+      dc = mix(dc, col, .35 - fi * .1); float m = smoothstep(h + .002, h - .002, q.y); col = mix(col, dc + vec3(1., .7, .4) * exp(-(h - q.y) * 60.) * .25, m); }
+    ${WENDB}` },
+  neon: { name: 'Neon rain', c: '#FF4FD8', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    vec3 col = mix(vec3(.02, .01, .05), vec3(.1, .03, .14), q.y);
+    for (int k = 0; k < 3; k++) { float fk = float(k), sz = 9. - fk * 2.5; vec2 g = q * vec2(sz * .474, sz) + vec2(fk * 3.1, -uT * .01 * (fk + 1.)); vec2 id = floor(g); vec2 f = fract(g) - .5; float h = h21(id + fk * 11.);
+      vec3 bc = h < .33 ? vec3(1., .2, .8) : h < .66 ? vec3(.2, .85, 1.) : vec3(1., .65, .2); float r = .18 + .2 * h21(id + 5.); vec2 o = (vec2(h21(id + 1.), h21(id + 2.)) - .5) * .5;
+      float d = length(f - o); col += bc * (smoothstep(r, r * (.75 - fk * .2), d) * .7 + exp(-d * d / (r * r) * 2.) * .3) * step(.5, h21(id + 9.)) * (.32 - fk * .06) * (.8 + .2 * sin(uT * 2. + h * 30.)) * smoothstep(.18, .5, q.y); }
+    float bid = floor(p.x * 14. + 7.), bh = .1 + .2 * h21(vec2(bid, 2.)) + .08 * step(.8, h21(vec2(bid, 5.))); float inb = step(q.y, bh);
+    vec2 wg = vec2(p.x * 14. * 6., q.y * 90.); float win = step(.35, fract(wg.x)) * step(.4, fract(wg.y)) * step(.62, h21(floor(wg) + bid)) * (.6 + .4 * sin(uT * .5 + h21(floor(wg)) * 20.));
+    vec3 wc = h21(floor(wg) + 3.) < .5 ? vec3(1., .75, .4) : vec3(.4, .9, 1.);
+    col = mix(col, vec3(.01, .006, .02) + wc * win * .5 + vec3(.25, .05, .3) * smoothstep(bh - .05, bh, q.y) * .3, inb); col += vec3(.6, .15, .7) * exp(-max(q.y - bh, 0.) * 60.) * (1. - inb) * .12;
+    vec2 rg = vec2(p.x * 160., q.y * 7. + uT * 2.4); float rid = floor(rg.x); float rf = fract(rg.y + h21(vec2(rid, 1.)) * 10.); col += vec3(.6, .7, .9) * smoothstep(.04, 0., abs(fract(rg.x) - .5) - .02) * smoothstep(.0, .05, rf) * smoothstep(.25, .05, rf) * step(.86, h21(vec2(rid, 3.))) * .35;
+    ${WEND}` },
+  forest: { name: 'Forest light', c: '#C8F07A', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    vec3 col = mix(vec3(.01, .04, .02), vec3(.05, .14, .07), q.y); col = mix(col, vec3(.1, .2, .1), smoothstep(.0, .25, q.y) * smoothstep(.45, .2, q.y) * .5);
+    vec2 lp = vec2(-.35, 1.15); vec2 dv = p - (lp - vec2(.5, .5)) * vec2(.474, 1.); float a = atan(dv.x, -dv.y);
+    float rays = pow(vn(vec2(a * 22., uT * .15)), 3.) * smoothstep(1.4, .2, length(dv)) * (.55 + .45 * vn(vec2(a * 6. - uT * .08, 2.)));
+    col += vec3(.85, 1., .6) * rays * (.5 + .12 * uK);
+    float can = fbm(p * vec2(16., 12.) + vec2(uT * .01, 0.)) + (q.y - .8) * 1.4 + .12 * sin(p.x * 30.); float leaf = smoothstep(.46, .56, can); col = mix(col, vec3(.006, .02, .01) + vec3(.05, .12, .04) * fbm(p * 40.) * (1. - leaf * .7), leaf);
+    float trunk = smoothstep(.02, .0, abs(p.x + .17 + .02 * sin(q.y * 6.)) - .025) + smoothstep(.02, .0, abs(p.x - .2 - .015 * sin(q.y * 5. + 1.)) - .035); col = mix(col, vec3(.01, .02, .012), clamp(trunk, 0., 1.) * .85);
+    vec2 mq = q + vec2(sin(uT * .3 + q.y * 9.) * .01, -uT * .008); col += vec3(1., .95, .6) * stars(mq, 60., uT * 2.) * .9 * (.3 + rays * 3.);
+    col += vec3(.2, .35, .22) * smoothstep(.3, .0, q.y) * (.5 + .5 * fbm(p * 4. + vec2(uT * .05, 0.))) * .5; ${WEND}` },
+  forge: { name: 'Forge', c: '#FF6A1F', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    float hz = .42, z = 1. / max(hz - q.y, .012); vec2 fp = vec2(p.x * z * .9, z * .35 + uT * .0);
+    float n = fbm(p * 7.); vec3 col = mix(vec3(.03, .018, .015), vec3(.1, .06, .05), fbm(p * vec2(4., 2.) + vec2(0., uT * .03)));
+    col += vec3(.8, .25, .05) * exp(-abs(q.y - hz) * 9.) * .35 * (.85 + .2 * uK);
+    if (q.y < hz) { vec3 v = vor(fp); float edge = v.y - v.x, fog = smoothstep(.0, .12, hz - q.y), pulse = .7 + .3 * sin(uT * 1.6 + v.z * 20.);
+      vec3 rock = mix(vec3(.04, .025, .02), vec3(.13, .08, .06), fbm(fp * 2.)) * (.6 + .4 * smoothstep(.0, .3, edge));
+      vec3 lava = mix(vec3(1., .25, .02), vec3(1., .78, .3), smoothstep(.05, .0, edge)) * smoothstep(.09, .0, edge) * pulse * (.85 + .2 * uK);
+      col = mix(col, rock + lava * fog, fog) + vec3(1., .35, .06) * (1. - fog) * .25; }
+    for (int k = 0; k < 2; k++) { float fk = float(k); vec2 eq = q + vec2(.02 * sin(uT * .9 + q.y * 12. + fk), -uT * (.05 + fk * .03)); col += vec3(1., .55, .15) * stars(eq + fk * 2.7, 55. + fk * 30., uT * 4.) * 1.3 * smoothstep(1., .3, q.y); }
+    float sm = fbm(p * vec2(3., 2.) + vec2(uT * .04, -uT * .08)); col += vec3(.3, .14, .08) * smoothstep(.45, .8, sm) * smoothstep(.4, .9, q.y) * .35; ${WEND}` },
+  crystal: { name: 'Geode', c: '#B58CFF', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - vec2(.5, .51)) * vec2(.474, 1.);
+    float r = length(p), a = atan(p.y, p.x); vec3 col = vec3(.03, .01, .05) + vec3(.35, .18, .55) * exp(-r * r * 10.) * (.7 + .25 * uK);
+    for (int k = 0; k < 3; k++) { float fk = float(k), N = 15. + fk * 8., sa = 6.28318 / N; float aa = a + fk * .37 + .02 * sin(uT * .2 + fk); float sec = floor(aa / sa), f = fract(aa / sa) - .5;
+      float h = h21(vec2(sec, fk)), R0 = .62 - fk * .08, L = .16 + .18 * h, tip = R0 - L; float w = .55 * (r - tip) / L; float inside = step(tip, r) * step(abs(f), w);
+      vec3 cc = mix(vec3(.22, .08, .42), vec3(.62, .4, .95), .35 + .5 * h) * (f < 0. ? 1.15 : .55) * (.55 + .45 * smoothstep(R0, tip, r)) * (1. - fk * .18);
+      cc += vec3(.9, .8, 1.) * smoothstep(.04, .0, abs(f - w * (f < 0. ? -1. : 1.) * .98) * r) * .25 + vec3(.95, .9, 1.) * smoothstep(.03, .0, abs(f) * r) * smoothstep(tip + .08, tip, r) * .3;
+      cc += vec3(1.) * pow(max(0., sin(h * 60. + uT * .6)), 40.) * smoothstep(tip + .05, tip, r) * .6;
+      col = mix(col, cc, inside); }
+    col += vec3(.95, .9, 1.) * stars(q, 110., uT * 3.) * smoothstep(.1, .3, r) * .6; col *= 1. - smoothstep(.45, .95, r) * .6; ${WEND}` },
+  sakura: { name: 'Blossom dusk', c: '#FF8FB8', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    vec3 col = mix(vec3(1., .72, .7), vec3(.86, .58, .78), smoothstep(.25, .6, q.y)); col = mix(col, vec3(.42, .36, .66), smoothstep(.6, 1., q.y));
+    float cl = fbm(vec2(p.x * 3. + uT * .015, q.y * 6.)); col = mix(col, vec3(1., .85, .88), smoothstep(.55, .78, cl) * .35);
+    for (int k = 0; k < 2; k++) { float fk = float(k), sz = 7. + fk * 4.; vec2 g = q * vec2(sz * .474, sz) + vec2(fk * 2.3 + uT * .006, uT * .004); vec2 id = floor(g), f = fract(g) - .5; float h = h21(id + fk * 7.);
+      float d = length(f - (vec2(h21(id + 1.), h21(id + 2.)) - .5) * .5); float r = .2 + .15 * h; col = mix(col, mix(vec3(1., .93, .96), vec3(1., .7, .85), h), smoothstep(r, r * .4, d) * step(.4, h) * (.45 - fk * .15) * smoothstep(.45, .9, q.y)); }
+    float br = abs(q.y - (.93 - .25 * pow(max(q.x - .0, 0.), 1.5) + .02 * sin(q.x * 18.))) - .006 * (1.3 - q.x); float twig = abs(q.y - (.86 - .4 * (q.x - .25) + .015 * sin(q.x * 30.))) - .003;
+    col = mix(col, vec3(.2, .1, .14), smoothstep(.004, .0, br) * step(q.x, .9)); col = mix(col, vec3(.22, .11, .15), smoothstep(.003, .0, twig) * step(.25, q.x) * step(q.x, .55));
+    for (int k = 0; k < 2; k++) { float fk = float(k); vec2 pq = q + vec2(uT * .02 + sin(uT * .7 + q.y * 7. + fk) * .015, uT * (.035 + fk * .02)); vec2 g = pq * vec2(14. * .474, 14.) + fk * 5.; vec2 id = floor(g), f = fract(g) - .5; float h = h21(id);
+      float ang = uT * (1. + h * 2.) + h * 6.; mat2 m = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)); vec2 pf = m * (f - (vec2(h, h21(id + 4.)) - .5) * .5); col = mix(col, vec3(1., .8, .88), smoothstep(.06, .03, length(pf * vec2(1., 2.))) * step(.72, h) * .9); }
+    col += vec3(1., .9, .7) * exp(-length((q - vec2(.5, .3)) * vec2(.474, 1.)) * 5.) * .25; ${WENDB}` },
+  storm: { name: 'Thunderhead', c: '#9FC3FF', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    float t = uT * .05; vec2 w = vec2(fbm(p * 2.5 + vec2(t, 0.)), fbm(p * 2.5 + vec2(3.1, -t)));
+    float c1 = fbm(p * vec2(3., 4.) + w * 1.6 + vec2(t * 2., 0.)), c2 = fbm(p * vec2(6., 8.) - w + vec2(-t * 3., t));
+    vec3 col = mix(vec3(.05, .06, .09), vec3(.4, .44, .55), smoothstep(.25, .85, c1)); col = mix(col, vec3(.55, .58, .68), smoothstep(.5, .8, c2) * .5 * c1); col += vec3(.25, .3, .4) * smoothstep(.62, .75, c1) * (1. - c2) * .5;
+    float fl = pow(max(0., sin(uT * 1.1) * sin(uT * 2.7 + 1.) * sin(uT * .6 + 2.)), 4.) * 9. + max(0., uK - .3) * .5 + .15;
+    vec2 lp = vec2(.12 * sin(floor(uT * .4) * 3.7), .2); float ld = length(p - lp);
+    col += vec3(.6, .7, 1.) * c1 * c1 * exp(-ld * 3.) * fl * .5 + vec3(.5, .6, .9) * c2 * exp(-ld * 6.) * fl * .25;
+    vec2 rg = vec2(p.x * 90. + q.y * 8., q.y * 4. + uT * 3.); float rid = floor(rg.x), rf = fract(rg.y + h21(vec2(rid, 1.)) * 9.); col += vec3(.5, .6, .75) * step(.82, h21(vec2(rid, 3.))) * smoothstep(.2, .0, rf) * smoothstep(.06, 0., abs(fract(rg.x) - .5) - .03) * .12;
+    float bx = p.x - lp.x - .03 * (fbm(vec2(q.y * 18., floor(uT * .4))) - .5) * 3.; float bolt = smoothstep(.004, .0, abs(bx)) * step(q.y, .95) * step(lp.y + .5, q.y) * step(.6, fl); col += vec3(.85, .9, 1.) * bolt * fl * .3 + vec3(.4, .5, .9) * exp(-abs(bx) * 60.) * step(lp.y + .5, q.y) * step(.6, fl) * .2;
+    col *= 1. - smoothstep(.3, .9, length(p * vec2(1.6, .9))) * .45; ${WEND}` },
+  velvet: { name: 'Velvet stage', c: '#FF4D5E', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    vec3 col = mix(vec3(.02, .008, .01), vec3(.07, .02, .03), q.y);
+    vec2 sd = p - vec2(0., .58); float cone = smoothstep(.02, -.02, abs(sd.x) - (.03 + (.58 - p.y) * .2)) * smoothstep(-.6, .5, p.y);
+    col += vec3(1., .9, .75) * cone * (.12 + .06 * vn(vec2(p.x * 20., uT * .3))) * (.9 + .2 * uK);
+    float pool = exp(-pow(length((p - vec2(0., -.32)) * vec2(1., 3.2)) * 5., 2.)); col += vec3(1., .8, .6) * pool * .35;
+    col += vec3(.9, .85, .8) * stars(q + vec2(sin(uT * .2) * .02, uT * .004), 70., uT) * cone * 3.;
+    float open = .17 + .02 * sin(uT * .3); float side = abs(p.x); float sway = .006 * sin(uT * .8 + q.y * 3.);
+    float pl = sin((side + sway) * 95. + fbm(vec2(side * 6., q.y * 2.)) * 2.); float fold = .5 + .5 * pl; float cur = smoothstep(open - .01, open + .01, side + (1. - q.y) * .05 * (1. - q.y));
+    vec3 vc = vec3(.5, .04, .08) * (.25 + .9 * pow(fold, 2.)) + vec3(1., .5, .5) * pow(fold, 18.) * .25; vc *= .65 + .35 * smoothstep(0., .9, q.y);
+    col = mix(col, vc, cur);
+    float val = .9 - .025 * cos(p.x * 40.) ; float vm = smoothstep(val - .005, val + .005, q.y); vec3 vcol = vec3(.45, .03, .07) * (.5 + .5 * fbm(vec2(p.x * 30., q.y * 3.))) + vec3(1., .75, .3) * smoothstep(.006, .0, abs(q.y - val - .006)) * .6;
+    col = mix(col, vcol, vm); col += vec3(1., .6, .5) * exp(-abs(side - open) * 120.) * .15 * (1. - cur); ${WEND}` },
+  nebula: { name: 'Nebula', c: '#FF7BD5', frag: `${WGL} void main(){ vec2 q = scr(), p = (q - .5) * vec2(.474, 1.);
+    float t = uT * .01; vec2 w = vec2(fbm(p * 3. + t), fbm(p * 3. + 5.2 - t)); float n1 = fbm(p * 2.2 + w * 1.8 + t), n2 = fbm(p * 4. - w * 1.2 + 9.);
+    vec3 col = vec3(.008, .006, .02) + vec3(.02, .015, .05) * q.y;
+    float band = exp(-pow((p.y - p.x * 1.1 - .02) * 3.2, 2.));
+    col += mix(vec3(.75, .15, .65), vec3(1., .5, .22), smoothstep(.3, .8, n2)) * pow(n1, 2.2) * 2.4 * (.35 + band);
+    col += vec3(.12, .55, .8) * pow(n2, 2.6) * 1. * (1. - band * .5);
+    col *= 1. - smoothstep(.55, .8, fbm(p * 7. + w * 2.)) * band * .7;
+    col += vec3(1., .95, .9) * band * .1 * n1;
+    col += vec3(.85, .9, 1.) * (stars(q, 220., uT) * .8 + stars(q + 1.7, 110., uT * .7) + stars(q + 4.1, 45., uT * .5) * 1.4) * (.6 + band);
+    ${WEND}` },
+};
+const BGKEYS = Object.keys(BGS);
+/** Which world the viewer picked on the page ('' = each moment's own). */
+let worldPick = '';
+/** The world a moment plays in: the viewer's pick, else the moment's own key, else none. */
+const worldKey = () => worldPick || MOMENTS[current]?.bg || '';
+/**
+ * The moment's backdrop. With a world (picked, or the moment's own bg key) it is that world's shader, opaque, with the
+ * moment's uniforms kept (uC starts at the world's accent); without one it is the moment's own shader (own may be null).
+ * Returns the backdrop mesh (null when there is neither); its u.uA still starts at 0 for the moment to fade in.
+ */
+function world(own, uniforms = {}, o = {}) {
+  const k = worldKey(), W = BGS[k];
+  if (!W) return own ? backdrop3(own, uniforms, o) : null;
+  const b = backdrop3(W.frag, { uK: { value: .35 }, ...uniforms, uC: { value: new THREE.Color(W.c) }, uSat: { value: 1 }, uBr: { value: 1 } }, { opaque: true }); WORLD.b = b; return b;
+}
+const WORLD = { b: null };
+/** For a moment whose backdrop is on the page: puts the world (if any) over it and fades it in. */
+function worldIn(ms = 700) { const b = world(null); if (b) tw(b.u.uA, { value: 1 }, ms); return b; }
+/** Drains (sat 0) or restores (sat 1) the world's colour, with a brightness factor. */
+function worldSat(sat, br = 1, ms = 600) { const b = WORLD.b; if (!b) return; tw(b.u.uSat, { value: sat }, ms); tw(b.u.uBr, { value: br }, ms); }
+/** Washes the world in a colour for a moment (the stage's tint, for worlds). */
+function worldTint(col, a = .3, ms = 300) { const b = WORLD.b; if (!b) return; const c = new THREE.Color(col); tw(b.u.uC.value, { r: c.r, g: c.g, b: c.b }, ms); b.u.uK.value = Math.max(b.u.uK.value, .35 + a * 6); tw(b.u.uK, { value: .35 + a * 3 }, ms * 4); }

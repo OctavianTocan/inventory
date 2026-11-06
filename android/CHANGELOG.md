@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.85 (96), 2026-11-06
+The shooting star now plays in full.
+
+### Changed
+- The shooting star after a share now plays exactly as it was designed: the drifting nebulae and hills, the constellation, the star's trail and flares as it changes colour, the white-out, and a real 3D card with its light, stars and points, then the flight into the backpack.
+- The tag grid on the card's back has more room: the spark and the check sit clear of each tile's edge and icon, tag names no longer touch the sides, and a longer list fades at the bottom instead of cutting a row in half.
+
 ## 0.6.84 (95), 2026-11-06
 Everything you keep is now your inventory.
 
