@@ -9,6 +9,8 @@ import com.octaviantocan.mymind.data.Session
 import com.octaviantocan.mymind.data.TokenStore
 import com.octaviantocan.mymind.ui.settings.SettingsViewModel
 import com.octaviantocan.mymind.ui.settings.agentDates
+import com.octaviantocan.mymind.ui.settings.aiSetupSteps
+import com.octaviantocan.mymind.ui.settings.mcpServerUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -102,6 +104,17 @@ class ConnectedAgentsTest {
         assertEquals("Connected 1 Sep · used today", agentDates(agent, today))
         assertEquals("Connected yesterday", agentDates(agent.copy(connected = at(today.minusDays(1)), used = at(today.minusDays(1))), today))
         assertEquals("Connected 3 Dec 2025 · used yesterday", agentDates(agent.copy(connected = at(LocalDate.of(2025, 12, 3)), used = at(today.minusDays(1))), today))
+    }
+
+    @Test
+    fun setupStepsNameTheMcpAddressAndBothApps() {
+        val url = mcpServerUrl("https://mymind.octaviantocan.com/")
+        assertEquals("https://mymind.octaviantocan.com/mcp", url)
+        val steps = aiSetupSteps(url)
+        assertTrue(steps.contains("https://chatgpt.com/plugins"))
+        assertTrue(steps.contains("Add custom MCP server"))
+        assertTrue(steps.contains("https://claude.ai/settings/connectors"))
+        assertEquals(2, Regex(Regex.escape(url)).findAll(steps).count())
     }
 }
 

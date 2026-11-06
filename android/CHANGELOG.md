@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.87 (98), 2026-11-06
+Add Inventory to ChatGPT or Claude from the app.
+
+### Added
+- Profile, Connected agents now has Add to ChatGPT and Add to Claude. Each copies Inventory's address and opens the page where that app adds it, so you only paste and sign in with Google.
+- Send the steps sends both apps' steps to another device, because ChatGPT adds Inventory on the web, which is easiest on a computer.
+
 ## 0.6.86 (97), 2026-11-06
 Give an AI a link to a whole space.
 

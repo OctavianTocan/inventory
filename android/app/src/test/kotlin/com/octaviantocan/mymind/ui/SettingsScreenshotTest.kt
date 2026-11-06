@@ -128,6 +128,9 @@ class SettingsScreenshotTest {
         compose.onNodeWithText("Claude").performClick()
         compose.mainClock.advanceTimeByFrame()
         compose.onNodeWithText("Tap to remove").assertExists()
+        compose.onNodeWithText("Add to ChatGPT").assertExists()
+        compose.onNodeWithText("Add to Claude").assertExists()
+        compose.onNodeWithText("Send the steps").assertExists()
         compose.onRoot().captureRoboImage("screenshots/settings_agents.png")
         compose.runOnIdle { assertEquals(emptyList<String>(), removed) }
         compose.onNodeWithText("Claude").performClick()
