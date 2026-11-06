@@ -544,6 +544,43 @@ Source: Tavi, 6 November 2026 ("We should also have a link thing to share a spac
 a card, directly"). Its place under Add to this space and copying rather than sharing are
 Claude's choices, not yet confirmed by Tavi.
 
+@cc [owner:OctavianTocan,label:product;motion] choose-finds-by-sweeping
+Holding a find in the All gallery or in search results and then sliding, without
+lifting, MUST choose every find from the held one to the one under the finger, in the
+gallery's own order, so whole rows fill as the finger goes down, as a photo gallery
+does; sliding back MUST drop the finds it passes again, and finds chosen before the
+slide stay chosen. While the finger rests near the gallery's top or bottom edge the
+gallery MUST scroll on and the run grow with it. A find held and let go without sliding
+MUST open its card menu, as holding always did, but only on letting go. While any find
+is chosen, a tap on a find MUST add it or drop it instead of opening it, a chosen find
+MUST show a ring and the gold spark, the others an empty circle, and Back MUST empty the
+backpack before it does anything else. Holding and sliding is the only way to start
+choosing: the card menu MUST NOT gain a Choose row. A tap, a scroll and a pinch MUST
+behave as they did with nothing chosen. A Space's gallery does not sweep: there,
+holding and dragging a card belongs to reordering.
+Source: Tavi's pick of 02 Sweep only on the Choose many finds canvas, 6 November 2026,
+14:49 ("02 only"), after asking at 14:39 that the sweep "works like Google Photos, and
+selects rows as you drag down, not just what you drag over". Leaving Spaces to
+reordering was agreed with the reorder thread the same day and is Claude's choice; so
+are the edge distance and the scrolling speed.
+
+@cc [owner:OctavianTocan,label:product;design] backpack-acts-on-many
+While finds are chosen, a bar over the bottom bar MUST say how many are in the
+backpack and offer Tag, Space and a way to empty it. Tag MUST open a sheet showing each
+tag as on all, on some ("3 of 6", a half-filled dot) or on none of the chosen finds; a
+tap marks a tag, and Done MUST put every marked tag on every chosen find that lacks it.
+Taking tags off MUST be its own mode of that sheet, so a stray tap never removes a tag;
+it offers only tags some chosen find has, and takes each marked one off every find that
+has it. Space MUST put every chosen find that is not in the picked space into it. Each
+of these MUST show at once from the phone's copy, keep the finds chosen so another
+action can follow, and offer one Undo for 8 seconds that takes back exactly what it
+changed: a tag a find already had MUST NOT come off on Undo. Finds that could not be
+changed MUST be counted in the bar's words.
+Source: the pack bar and tag sheet of frame 01 on the Choose many finds canvas, which
+Tavi's pick of 02 (6 November 2026, 14:49) builds on, and the EGM review's brief in
+project files `multi-select-tagging/concepts_brief.md`. The 8 seconds and the wording
+are Claude's choice and not yet confirmed.
+
 @cc [owner:OctavianTocan,label:product;design;motion] spaces-keep-your-own-card-order
 A space that is not smart MUST keep the order its person gives its cards, on the server, so
 every phone and the AI agents see it, and All MUST NOT be reorderable: it keeps the order it

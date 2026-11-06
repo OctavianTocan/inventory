@@ -75,6 +75,8 @@ import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.Placeable
@@ -172,6 +174,8 @@ private data class MosaicLoadPosition(val count: Int, val last: Int, val total: 
  * @param header Scrolls above the cards, such as the page title.
  * @param tiles Draws and shapes the cards; library cards by default.
  * @param label What the gallery is called to accessibility services.
+ * @param choice Where hold-and-slide gathers finds; null leaves holding to open the card menu at once. While it holds
+ * finds, a tap adds or drops a find instead of opening it, and a held find opens its menu when let go without sliding.
  * @param onMoveCard Called when a held card is dragged to a new place and let go, with the card and the card it now
  *   follows (null when it is now first); null leaves the cards' order alone. While it is set, holding a card and
  *   letting go without moving opens [onLongPressCard] on release, and holding then dragging moves the card in the grid
@@ -190,6 +194,7 @@ internal fun LibraryMosaic(
     header: (@Composable () -> Unit)? = null,
     tiles: MosaicTiles = GalleryMosaicTiles,
     label: String = "Card gallery",
+    choice: CardChoice? = null,
     onMoveCard: ((Card, String?) -> Unit)? = null,
 ) {
     val colors = LibraryStyle.colors
@@ -212,6 +217,7 @@ internal fun LibraryMosaic(
     val latestFeed by rememberUpdatedState(feed)
     val latestMore by rememberUpdatedState(onLoadMore)
     val headerItems = if (header == null) 0 else 1
+    val haptics = LocalHapticFeedback.current
     // The cards in the order a drag has put them, until the feed brings that order back; null shows the feed's order.
     var arranged by remember { mutableStateOf<List<Card>?>(null) }
     // The card being dragged, where the finger is, and where in the card's tile the finger took hold of it.
@@ -436,6 +442,20 @@ internal fun LibraryMosaic(
         val hopLatest by rememberUpdatedState<() -> Unit> { hop() }
         val alignLatest by rememberUpdatedState<() -> Unit> { alignAnchor() }
         val settleLatest by rememberUpdatedState<(Float) -> Unit> { speed -> settle(speed) }
+        /** The index of the card whose tile is under [point] of the gallery, or null over a gap or the header. */
+        fun cardAt(point: Offset): Int? {
+            if (layouts.level(1).cells.isEmpty()) return null
+            val drawn = frame()
+            val at = point - Offset(margin, 0f)
+            return drawn.window(height).firstOrNull { drawn.cell(it).contains(at) }
+        }
+        val sweepLatest by rememberUpdatedState(SweepTarget(
+            cards = { layouts.cards },
+            cardAt = { point -> cardAt(point) },
+            enabled = { !mosaic.isPinching && mosaic.reel == 0f && mosaic.position == mosaic.columns.toFloat() },
+            scrollBy = { delta -> state.scrollBy(delta) },
+            onHold = onLongPressCard,
+        ))
         /** In reels at rest, how far a fling at [velocity] must scroll to land on a page's top; null elsewhere. */
         fun reelFling(velocity: Float): Float? {
             if (!mosaic.inReels || mosaic.position != 1f || mosaic.isPinching || layouts.page <= 0f || layouts.cards.isEmpty()) return null
@@ -617,6 +637,7 @@ internal fun LibraryMosaic(
                     mosaic.cancelPinch()
                 }
             }
+            .then(if (choice == null) Modifier else Modifier.choiceSweep(choice, { sweepLatest }, scope, haptics))
             .then(if (onMoveCard == null) Modifier else Modifier.pointerInput(mosaic, state) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -708,7 +729,7 @@ internal fun LibraryMosaic(
                 }) {
                     // Its own composable, so the cards coming into view recompose only the cards, not the whole gallery.
                     MosaicBody(layouts, mosaic, height, margin, { frame() }, { anchor?.cardId?.let(layouts.byId::get) },
-                        { state.isScrollInProgress }, onOpenCard, onLongPressCard,
+                        { state.isScrollInProgress }, onOpenCard, onLongPressCard, choice,
                         lifted = { liftedId?.let { MosaicLift(it, finger - grab) } }, onMoveCard = onMoveCard)
                 }
             }
@@ -724,7 +745,7 @@ internal fun LibraryMosaic(
 @Composable
 private fun MosaicBody(
     layouts: MosaicLayouts, mosaic: MosaicState, height: Float, margin: Float, frame: () -> MosaicFrame, focal: () -> Int?,
-    scrolling: () -> Boolean, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
+    scrolling: () -> Boolean, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?, choice: CardChoice?,
     lifted: () -> MosaicLift? = { null }, onMoveCard: ((Card, String?) -> Unit)? = null,
 ) {
     val latestFrame by rememberUpdatedState(frame)
@@ -758,7 +779,7 @@ private fun MosaicBody(
         ProjectedMosaicCards(layouts, mosaic, composed, focalIndex, shape, prefetch.unders.filterTo(HashSet()) { it in window },
             // At rest in reels every page shows at once; on the way there each waits until it is readied.
             if (tilesShown) prefetch.pages.filterTo(HashSet()) { it in pages } else pages.toSet(),
-            tilesShown, if (tilesShown) emptySet() else prefetch.tiles, currentFrame, margin, Modifier.fillMaxSize().testTag("mosaic-projection"), onOpenCard, onLongPressCard, lifted, onMoveCard)
+            tilesShown, if (tilesShown) emptySet() else prefetch.tiles, currentFrame, margin, Modifier.fillMaxSize().testTag("mosaic-projection"), onOpenCard, onLongPressCard, choice, lifted, onMoveCard)
     }
 }
 
@@ -1009,9 +1030,14 @@ private fun mosaicSlots(index: Int, shape: MosaicShape?, unders: Set<Int>, tile:
 private fun ProjectedMosaicCards(
     layouts: MosaicLayouts, mosaic: MosaicState, indices: List<Int>, focal: Int?, shape: MosaicShape?, unders: Set<Int>, pages: Set<Int>, tiles: Boolean,
     readied: Set<Int>, frame: () -> MosaicFrame, left: Float, modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
+    choice: CardChoice?,
     lifted: () -> MosaicLift? = { null }, onMoveCard: ((Card, String?) -> Unit)? = null,
 ) {
     val latestMove by rememberUpdatedState(onMoveCard)
+    // With a choice the sweep takes holds, and a tap while finds are chosen adds or drops one. The gallery's own hold
+    // takes a card that can move, and opens its menu on release.
+    val tap = { card: Card -> if (choice?.active == true) choice.toggle(card) else onOpenCard(card) }
+    val hold = onLongPressCard.takeIf { choice == null && onMoveCard == null }
     val slots = indices.flatMap { mosaicSlots(it, shape, unders, tiles || it in readied, it in pages) }
     val density = LocalDensity.current
     val corner = with(density) { layouts.tiles.corner.toPx() }
@@ -1048,10 +1074,10 @@ private fun ProjectedMosaicCards(
                                 latestMove?.invoke(moved, after)
                             } else Modifier, propagateMinConstraints = true) {
                                 layouts.tiles.Tile(card,
-                                    onClick = { if (!mosaic.isPinching) onOpenCard(card) },
-                                    // The gallery's own hold takes a card that can move, and opens its menu on release.
-                                    onLongClick = if (onMoveCard != null) null else onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
+                                    onClick = { if (!mosaic.isPinching) tap(card) },
+                                    onLongClick = hold?.let { press -> { if (!mosaic.isPinching) press(card) } },
                                     enabled = true, imageRequestSizePx = imageSize, modifier = tile)
+                                if (choice != null) ChoiceMark(choice, card.id, layouts.tiles.corner)
                             }
                         }
                     }

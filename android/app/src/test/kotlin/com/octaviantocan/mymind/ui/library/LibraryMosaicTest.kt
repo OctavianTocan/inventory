@@ -884,6 +884,46 @@ class LibraryMosaicTest {
     }
 
     @Test
+    fun holdingAndSlidingChoosesEveryFindUpToTheFingerAndHoldingAloneStillOpensTheMenu() {
+        val opened = mutableListOf<String>()
+        val held = mutableListOf<String>()
+        val choice = CardChoice()
+        compose.setContent {
+            MymindTheme(dark = true) {
+                LibraryMosaic(FeedState(cards, endReached = true), {}, { opened += it.id }, mosaic = MosaicState(3),
+                    onLongPressCard = { held += it.id }, choice = choice)
+            }
+        }
+        val from = compose.onNodeWithContentDescription("Photo 1").fetchSemanticsNode().boundsInRoot.center
+        val to = compose.onNodeWithContentDescription("Photo 5").fetchSemanticsNode().boundsInRoot.center
+        compose.onNodeWithContentDescription("Card gallery").performTouchInput {
+            down(from)
+            advanceEventTime(700)
+            moveTo(Offset((from.x + to.x) / 2, (from.y + to.y) / 2), delayMillis = 50)
+            moveTo(to, delayMillis = 50)
+            up()
+        }
+        compose.waitForIdle()
+        // Rows fill in the gallery's order, not only the finds the finger crossed.
+        assertEquals((1..5).map { "m$it" }, choice.cards.map { it.id })
+        assertEquals(emptyList<String>(), held)
+        assertEquals(emptyList<String>(), opened)
+
+        // A tap while finds are chosen adds or drops one rather than opening it.
+        compose.onNodeWithContentDescription("Photo 2").performClick()
+        compose.onNodeWithContentDescription("Photo 9").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf("m1", "m3", "m4", "m5", "m9"), choice.cards.map { it.id })
+        assertEquals(emptyList<String>(), opened)
+
+        // Held and let go without sliding, a find opens its menu, on letting go.
+        compose.onNodeWithContentDescription("Photo 7").performTouchInput { longClick(durationMillis = 700) }
+        compose.waitForIdle()
+        assertEquals(listOf("m7"), held)
+        assertEquals(listOf("m1", "m3", "m4", "m5", "m9"), choice.cards.map { it.id })
+    }
+
+    @Test
     fun inASpaceAHeldCardDraggedOverAnotherTakesItsPlaceAndAHoldLetGoOpensTheMenu() {
         val opened = mutableListOf<String>()
         val held = mutableListOf<String>()

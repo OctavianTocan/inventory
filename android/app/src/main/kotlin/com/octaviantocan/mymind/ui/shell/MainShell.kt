@@ -99,6 +99,16 @@ import com.octaviantocan.mymind.ui.errors.ApiErrorDialog
 import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.library.pinned
 import com.octaviantocan.mymind.ui.library.EverythingScreen
+import com.octaviantocan.mymind.ui.library.CardChoice
+import com.octaviantocan.mymind.ui.library.ChoicePackBar
+import com.octaviantocan.mymind.ui.library.ChoiceSpaceSheet
+import com.octaviantocan.mymind.ui.library.ChoiceTagSheet
+import com.octaviantocan.mymind.ui.library.ChoiceUndoBar
+import com.octaviantocan.mymind.ui.library.ManyChange
+import com.octaviantocan.mymind.ui.library.UNDO_MANY_MS
+import com.octaviantocan.mymind.ui.library.findsLabel
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.layout.fillMaxWidth
 import com.octaviantocan.mymind.ui.library.GalleryControls
 import com.octaviantocan.mymind.ui.library.LibraryViewModel
 import com.octaviantocan.mymind.ui.menu.NewSpaceSheet
@@ -220,6 +230,10 @@ fun MainShell(
     var newSpaceError by remember { mutableStateOf<String?>(null) }
     val openNewSpace = { newSpaceError = null; newSpaceOpen = true }
     var failure by remember { mutableStateOf<ApiFailure?>(null) }
+    // The finds gathered by holding and sliding, kept across pages until emptied.
+    val choice = remember { CardChoice() }
+    var packSheet by remember { mutableStateOf<PackSheet?>(null) }
+    var manyDone by remember { mutableStateOf<Pair<String, ManyChange>?>(null) }
     var deleteHold by remember { mutableFloatStateOf(0f) }
     // The reader a delete closed, to open again on Undo.
     var undoReopens by remember { mutableStateOf<OpenedCard?>(null) }
@@ -251,6 +265,9 @@ fun MainShell(
     LaunchedEffect(page, openSpace?.id) { Track.event("screen", screen = if (openSpace != null) "space" else screenName(page)) }
     val photoLoader = if (account.photoUrl != null) rememberPublicAccountPhotoLoader() else null
     BackHandler(enabled = opened == null && !menuOpen && searching, onBack = closeSearch)
+    // Registered after the search's, so Back empties the backpack before it leaves the search.
+    BackHandler(enabled = opened == null && !menuOpen && choice.active) { choice.clear() }
+    LaunchedEffect(manyDone) { if (manyDone != null) { delay(UNDO_MANY_MS); manyDone = null } }
     val sheetState = key(menuOpen, menuFor?.card?.id) { rememberCardMenuPosition() }
     val motion = rememberSheetMotionEnabled()
     val scope = rememberCoroutineScope()
@@ -457,6 +474,26 @@ fun MainShell(
                 onDismiss = viewModel.uploads::dismiss,
                 modifier = Modifier.align(Alignment.BottomCenter).widthIn(max = ReadableWidth),
             )
+            if (choice.active && opened == null) {
+                ChoicePackBar(choice.count,
+                    onTag = { viewModel.loadTagChoices(); packSheet = PackSheet.Tags },
+                    onSpace = { if (!spaces.loaded) viewModel.loadSpaces(); packSheet = PackSheet.Spaces },
+                    onClose = { choice.clear() },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = UPLOAD_STRIP_BOTTOM)
+                        .widthIn(max = ReadableWidth - 32.dp).fillMaxWidth())
+            }
+            manyDone?.let { (text, change) ->
+                key(change) {
+                    ChoiceUndoBar(text,
+                        onUndo = {
+                            manyDone = null
+                            scope.launch { choice.refresh(viewModel.undoMany(change)) }
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                            .padding(start = 16.dp, end = 16.dp, bottom = UPLOAD_STRIP_BOTTOM + if (choice.active) PACK_BAR_HEIGHT else 0.dp)
+                            .widthIn(max = ReadableWidth - 32.dp).fillMaxWidth())
+                }
+            }
             pendingDelete?.let { card ->
                 key(card.id) {
                     UndoDeleteBar(
@@ -480,6 +517,7 @@ fun MainShell(
                     onOpenSettings = { profileOpen = true },
                     onAdd = { adding = AddTarget(null) },
                     onLongPressCard = { openMenu(it, null) },
+                    choice = choice,
                     searching = true,
                     photoUrl = account.photoUrl,
                     openedLately = recent.toList(),
@@ -496,6 +534,7 @@ fun MainShell(
                     onOpenSettings = { profileOpen = true },
                     onAdd = { adding = AddTarget(null) },
                     onLongPressCard = { openMenu(it, null) },
+                    choice = choice,
                     photoUrl = account.photoUrl,
                     photoLoader = photoLoader,
                 )
@@ -748,6 +787,29 @@ fun MainShell(
             onClose = { adding = null },
         )
     }
+    when (packSheet) {
+        PackSheet.Tags -> ChoiceTagSheet(choice.cards, tagChoices.recent + tagChoices.all,
+            onDone = { put, takeOff ->
+                packSheet = null
+                if (put.isNotEmpty() || takeOff.isNotEmpty()) scope.launch {
+                    val change = viewModel.tagMany(choice.cards, put, takeOff)
+                    choice.refresh(change.cards)
+                    manyDone = manyText(if (put.isNotEmpty()) "Tagged" else "Took tags off", change) to change
+                }
+            },
+            onDismiss = { packSheet = null })
+        PackSheet.Spaces -> ChoiceSpaceSheet(choice.count, spaces.spaces,
+            onPick = { space ->
+                packSheet = null
+                scope.launch {
+                    val change = viewModel.putManyInSpace(choice.cards, space)
+                    choice.refresh(change.cards)
+                    manyDone = manyText("Put", change, " in ${space.name ?: "the space"}") to change
+                }
+            },
+            onDismiss = { packSheet = null })
+        null -> Unit
+    }
     if (profileOpen) ProfileSheetHost(settingsViewModel, updates, onClose = { profileOpen = false }, ai = ai, feedback = feedback, photoLoader = photoLoader,
         pageScheme = scheme)
     if (newSpaceOpen) {
@@ -896,6 +958,24 @@ internal fun NothingOpen(modifier: Modifier = Modifier) {
 }
 
 private const val NOTHING_OPEN = "A card you open shows here."
+
+/** Which of the backpack's sheets is open. */
+private enum class PackSheet { Tags, Spaces }
+
+/** How much higher a batch's Undo sits while the backpack's bar is showing under it. */
+private val PACK_BAR_HEIGHT = 80.dp
+
+/**
+ * What a batch's Undo bar says: "Tagged 12 finds", with how many could not be changed when some could not.
+ *
+ * @param verb What was done.
+ * @param change What the batch changed.
+ * @param after Words after the count, such as " in Travel".
+ */
+private fun manyText(verb: String, change: ManyChange, after: String = ""): String {
+    val text = "$verb ${findsLabel(change.chosen - change.failed)}$after"
+    return if (change.failed == 0) text else "$text, ${change.failed} could not be changed"
+}
 
 /**
  * Steps the page back behind a reader's sheet as far as [recede] says: smaller, its top [top] px plus a little below the

@@ -74,6 +74,8 @@ enum class SearchType(val type: String, val label: String, val slug: String) {
  *
  * @param openedLately Cards opened lately, latest first, which the opened search page offers again.
  * @param cardOpen True while a card is open over the page, which then covers the sky.
+ * @param choice Where holding a find and sliding gathers finds, in the gallery and in search results; null leaves holding
+ * to open the card menu.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -90,6 +92,7 @@ fun EverythingScreen(
     photoLoader: ImageLoader? = null,
     openedLately: List<Card> = emptyList(),
     cardOpen: Boolean = false,
+    choice: CardChoice? = null,
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
     val pinned by viewModel.pinned.state.collectAsStateWithLifecycle()
@@ -132,7 +135,7 @@ fun EverythingScreen(
             }
         },
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
-        onLongPressCard = onLongPressCard,
+        onLongPressCard = onLongPressCard, choice = choice,
         photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, ai = rank,
         onAiTag = { tag -> viewModel.search.choose(Suggestion("tag", tag, "tag:$tag")); focusManager.clearFocus() },
         onOpenSpace = { focusManager.clearFocus(); onOpenSpace(it) },
@@ -188,6 +191,7 @@ fun EverythingContent(
     onRefresh: () -> Unit = {},
     onRefreshResults: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
+    choice: CardChoice? = null,
     photoUrl: String? = null,
     mosaic: MosaicState = rememberMosaicState(reels = true),
     resultsState: LazyListState = rememberLazyListState(),
@@ -209,7 +213,7 @@ fun EverythingContent(
             searching && searchResults != null -> {
                 PullRefresh(searchResults.refreshing, onRefreshResults, Modifier.fillMaxSize().glassSource(resultsBackdrop)) {
                     LibraryMosaic(searchResults, onLoadMoreResults, onOpenCard, state = resultsState, mosaic = mosaic,
-                        onLongPressCard = onLongPressCard, header = {
+                        onLongPressCard = onLongPressCard, choice = choice, header = {
                             ResultsTitle(filter.takeIf { dock.query.isBlank() }, searchResults)
                             // With words typed and nothing found, the dock above the bar says what to try instead.
                             val docked = dock.query.isNotBlank() && searchResults.endReached && searchResults.error == null
@@ -225,7 +229,7 @@ fun EverythingContent(
             else -> Box(Modifier.fillMaxSize()) {
                 PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop), top = GALLERY_CONTROLS_HEIGHT) {
                     LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
-                        onLongPressCard = onLongPressCard, header = {
+                        onLongPressCard = onLongPressCard, choice = choice, header = {
                             GalleryTitle("Your inventory")
                             GalleryHighlights(pinned, onOpenCard, onLoadMore = onLoadMorePinned, onLongPressCard = onLongPressCard)
                             BackTodayBand(backToday, { card, at -> onUncover(card); flight.launch(at) }, onOpenCard, onLongPressCard = onLongPressCard)

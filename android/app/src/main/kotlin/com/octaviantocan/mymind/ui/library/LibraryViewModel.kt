@@ -70,6 +70,25 @@ data class SpacesState(
 )
 
 /**
+ * What one action on many chosen cards changed, so one Undo can take it all back.
+ *
+ * @property chosen How many cards were chosen.
+ * @property cards The cards it changed, as they are after it.
+ * @property added Card ids with the id of a tag put on each.
+ * @property removed Card ids with the name of a tag taken off each.
+ * @property spaceId The space the cards were put in, or null.
+ * @property failed How many cards could not be changed.
+ */
+data class ManyChange(
+    val chosen: Int,
+    val cards: List<Card>,
+    val added: List<Pair<String, String>> = emptyList(),
+    val removed: List<Pair<String, String>> = emptyList(),
+    val spaceId: String? = null,
+    val failed: Int = 0,
+)
+
+/**
  * Tags the Add tags page offers.
  *
  * @property all Every tag of the library.
@@ -610,6 +629,97 @@ class LibraryViewModel(
                 latest = if (cards.isNotEmpty()) state.latest + (spaceId to cards) else state.latest - spaceId,
             )
         }
+    }
+
+    /**
+     * Puts tags on many cards and takes others off them, all through the phone's copy, so they show at once and reach
+     * the server when it can be reached. A card that already has a tag to put on, or lacks one to take off, is left as
+     * it is, so an Undo never takes away a tag a card had before.
+     *
+     * @param cards The chosen cards.
+     * @param put Tag names to put on every card that lacks them.
+     * @param takeOff Tag names to take off every card that has them, without regard to case.
+     * @return What changed, for [undoMany]; cards that failed keep their tags and are counted in [ManyChange.failed].
+     */
+    suspend fun tagMany(cards: List<Card>, put: List<String>, takeOff: List<String>): ManyChange {
+        val putNames = put.map(String::trim).filter(String::isNotEmpty).distinctBy(String::lowercase)
+        val offNames = takeOff.map { it.trim().lowercase() }.toSet()
+        val added = mutableListOf<Pair<String, String>>()
+        val removed = mutableListOf<Pair<String, String>>()
+        val updated = mutableListOf<Card>()
+        var failed = 0
+        for (card in cards) {
+            var tags = card.tags.orEmpty()
+            var broke = false
+            for (tag in tags.filter { it.name?.trim()?.lowercase() in offNames }) {
+                val id = tag.id ?: continue
+                when (library.removeTag(id)) {
+                    is ApiResult.Ok -> { tags = tags.filterNot { it.id == id }; removed += card.id to (tag.name ?: "") }
+                    is ApiResult.Failed -> broke = true
+                }
+            }
+            val have = tags.mapNotNullTo(HashSet()) { it.name?.trim()?.lowercase() }
+            for (name in putNames.filter { it.lowercase() !in have }) {
+                when (val answer = library.addTag(card.id, name)) {
+                    is ApiResult.Ok -> { tags = tags + answer.value; answer.value.id?.let { added += card.id to it } }
+                    is ApiResult.Failed -> broke = true
+                }
+            }
+            if (broke) failed++
+            if (tags != card.tags.orEmpty()) card.copy(tags = tags).also { replaceEverywhere(it); updated += it }
+        }
+        Track.event("action", detail = "TagMany", results = cards.size)
+        return ManyChange(cards.size, updated, added = added, removed = removed, failed = failed)
+    }
+
+    /**
+     * Puts many cards into a space; cards already in it stay where they are.
+     *
+     * @param cards The chosen cards.
+     * @param space The space to put them in.
+     * @return What changed, for [undoMany].
+     */
+    suspend fun putManyInSpace(cards: List<Card>, space: Space): ManyChange {
+        val updated = mutableListOf<Card>()
+        var failed = 0
+        for (card in cards.filter { space.id !in it.spaces.orEmpty() }) {
+            when (library.addToSpace(space.id, card.id)) {
+                is ApiResult.Ok -> card.copy(spaces = card.spaces.orEmpty() + space.id).also { replaceEverywhere(it); updated += it }
+                is ApiResult.Failed -> failed++
+            }
+        }
+        if (updated.isNotEmpty()) {
+            spaceFeeds.remove(space.id)
+            refreshSpace(space.id)
+        }
+        Track.event("action", detail = "SpaceMany", results = cards.size)
+        return ManyChange(cards.size, updated, spaceId = space.id.takeIf { updated.isNotEmpty() }, failed = failed)
+    }
+
+    /**
+     * Takes back what [tagMany] or [putManyInSpace] did: the tags it put on come off, the tags it took off go back on,
+     * and the cards it put in a space come out again.
+     *
+     * @param change What the batch changed.
+     * @return The cards as they are after the undo.
+     */
+    suspend fun undoMany(change: ManyChange): List<Card> {
+        val restored = mutableListOf<Card>()
+        for (card in change.cards) {
+            var tags = card.tags.orEmpty()
+            for ((_, tagId) in change.added.filter { it.first == card.id }) {
+                if (library.removeTag(tagId) is ApiResult.Ok) tags = tags.filterNot { it.id == tagId }
+            }
+            for ((_, name) in change.removed.filter { it.first == card.id }) {
+                (library.addTag(card.id, name) as? ApiResult.Ok)?.value?.let { tags = tags + it }
+            }
+            var spaces = card.spaces.orEmpty()
+            change.spaceId?.let { spaceId -> if (library.removeFromSpace(spaceId, card.id) is ApiResult.Ok) spaces = spaces - spaceId }
+            card.copy(tags = tags, spaces = spaces).also { replaceEverywhere(it); restored += it }
+        }
+        change.spaceId?.let { spaceFeeds.remove(it); refreshSpace(it) }
+        Track.event("action", detail = "UndoMany", results = change.cards.size)
+        return restored
     }
 
     private fun refreshSpace(spaceId: String) {

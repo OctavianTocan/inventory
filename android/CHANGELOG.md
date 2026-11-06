@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.95 (106), 2026-11-06
+Gather many finds at once and tag them together.
+
+### Added
+- Hold a find and slide down, without lifting: every find from that one to your finger goes into your backpack, row by row, as in a photo gallery. Slide back to drop some again. Near the top or bottom of the screen the gallery keeps scrolling. This works in your inventory and in search results.
+- While finds are in your backpack, a tap adds or drops one, and the bar at the bottom offers Tag and Space. Tag shows which tags all, some or none of them have, puts the ones you tap on every find, and has its own Take off mode. Space puts them all in one space. Each time, Undo takes back exactly what changed.
+
+### Changed
+- Holding a find and letting go without sliding still opens its options, now when you let go.
+
 ## 0.6.94 (105), 2026-11-06
 Codex now signs in with OpenAI's Sign in with ChatGPT.
 
