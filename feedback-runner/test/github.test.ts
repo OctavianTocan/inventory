@@ -51,6 +51,21 @@ describe("GitHub calls", () => {
     expect(await recorded({ [path]: [422, { message: "expected head sha didn't match current head ref." }] }).github.updateBranch(5, "h")).toBe("stale");
   });
 
+  it("marks a pull request for review and reads Tavi's answer from its state and labels", async () => {
+    const marked = recorded({ "POST /labels": [422, { message: "Validation Failed" }], "POST /issues/5/labels": [200, [{ name: "needs-review" }]] });
+    await marked.github.markForReview(5, "needs-review", "approved");
+    expect(marked.sent.map((s) => [s.method, s.url.replace(BASE, ""), s.body])).toEqual([
+      ["POST", "/labels", { name: "approved", color: "0e8a16", description: "Lets the feedback runner merge this pull request" }],
+      ["POST", "/issues/5/labels", { labels: ["needs-review"] }],
+    ]);
+    const pull = (body: object) => recorded({ "GET /pulls/5": [200, { state: "open", merged: false, labels: [], ...body }] }).github.review(5, "approved");
+    expect(await pull({ labels: [{ name: "needs-review" }] })).toEqual({ result: "waiting" });
+    expect(await pull({ labels: [{ name: "needs-review" }, { name: "approved" }] })).toEqual({ result: "approved" });
+    expect(await pull({ state: "closed" })).toEqual({ result: "closed" });
+    expect(await pull({ state: "closed", merged: true, merge_commit_sha: "m9" })).toEqual({ result: "merged", sha: "m9" });
+    expect(await recorded({}).github.review(5, "approved")).toEqual({ result: "waiting" });
+  });
+
   it("squash-merges at an exact head and reports main moving", async () => {
     const merged = recorded({ "PUT /pulls/5/merge": [200, { merged: true, sha: "m1" }] });
     expect(await merged.github.squash(5, "h", "Feedback: x (#5)", "Feedback-Id: abc")).toEqual({ sha: "m1" });

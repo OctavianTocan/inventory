@@ -1,5 +1,6 @@
 // FeedbackJob: one Durable Object per feedback id (docs/feedback.md). It owns the job's record and state machine, runs
-// its rounds (sign-in checkout, sandbox, checkin), watches CI, and merges when the desk gives it the merge turn. An
+// its rounds (sign-in checkout, sandbox, checkin), watches CI, waits for Tavi's review, and merges when the desk gives
+// it the merge turn. An
 // alarm drives every step, so nothing waits inside a request.
 import { DurableObject } from "cloudflare:workers";
 
@@ -18,6 +19,8 @@ const ROUND_LIMIT_MS = 48 * 60_000;
 const JOB_LIMIT_MS = 10 * 60 * 60_000;
 /** How long to wait for the `Android release` run after a merge. */
 const RELEASE_WAIT_MS = 60 * 60_000;
+/** How often a job waiting for review asks GitHub about it. */
+const REVIEW_POLL_MS = 5 * 60_000;
 /** How long GitHub may take to finish an update-branch. */
 const UPDATE_WAIT_MS = 10 * 60_000;
 
@@ -55,6 +58,8 @@ export interface JobRecord {
   stage: MergeStage;
   stageAt: number | null;
   mergeSha: string | null;
+  /** When Tavi approved the merge; the job's time limit counts from here after review (missing on older jobs). */
+  approvedAt?: number | null;
   /** Links Tavi's record keeps: the last failed check and the release run. */
   ciLog: string | null;
   checkedOut: boolean;
@@ -136,7 +141,9 @@ export class FeedbackJob extends DurableObject<Env> {
 
   /** One step of the job; returns how long until the next. */
   async #tick(job: JobRecord): Promise<number> {
-    if (Date.now() - job.createdAt > JOB_LIMIT_MS && job.progress.state !== "working") {
+    // Review has no time limit; after it, the limit counts again from the approval.
+    const since = job.approvedAt ?? job.createdAt;
+    if (Date.now() - since > JOB_LIMIT_MS && job.progress.state !== "working" && job.progress.state !== "review") {
       await this.#move(job, { type: "stop", reason: "too_long" });
       return 0;
     }
@@ -148,6 +155,8 @@ export class FeedbackJob extends DurableObject<Env> {
         return this.#watchRound(job);
       case "testing":
         return this.#watchChecks(job);
+      case "review":
+        return this.#watchReview(job);
       case "merging":
         return this.#merge(job);
       default:
@@ -208,18 +217,19 @@ export class FeedbackJob extends DurableObject<Env> {
       job.bumped = result.bumped ?? job.bumped;
       if (result.head) job.head = result.head;
     }
+    const hadPull = Boolean(job.pr);
     await this.#move(job, { type: "round_done", outcome });
+    // New commits after an approval need a new one.
+    if (job.progress.state === "testing" && hadPull) await this.#github.removeLabel(job.pr!, this.#approveLabel()).catch(() => {});
     if (job.progress.state === "testing" && !job.pr) {
       job.pr = await this.#github.openPull(`feedback/${job.id}`, `Feedback: ${job.summary || "a change from feedback"}`, this.#pullBody(job));
       await this.#save(job);
       log("pr_opened", job, { pr: job.pr });
     }
     if (job.progress.state === "testing" && job.next.kind === "conflict") {
-      // A merge round brought main in; go straight back to the queue.
+      // A merge round brought main in and changed the code, so it goes back to Tavi's review.
       await this.#move(job, { type: "ci", result: "green" });
-      job.stage = "waiting";
-      await this.#save(job);
-      await this.#desk().enqueueMerge(job.id);
+      await this.#askReview(job);
     }
     return 2 * 60_000;
   }
@@ -251,13 +261,44 @@ export class FeedbackJob extends DurableObject<Env> {
     log("ci_result", job, { result: checks.result, head: job.head });
     if (checks.result === "green") {
       await this.#move(job, { type: "ci", result: "green" });
-      job.stage = "waiting";
-      await this.#save(job);
-      await this.#desk().enqueueMerge(job.id);
-      return 60_000;
+      await this.#askReview(job);
+      return REVIEW_POLL_MS;
     }
     await this.#red(job, checks.name, checks.jobUrl, checks.jobId);
     return 0;
+  }
+
+  /** Labels a green pull request for Tavi's review (Tavi, 6 Nov 2026: feedback is not merged without it). */
+  async #askReview(job: JobRecord): Promise<void> {
+    await this.#github.markForReview(job.pr!, this.#reviewLabel(), this.#approveLabel()).catch(() => {});
+    log("review_requested", job, { pr: job.pr });
+  }
+
+  /**
+   * Waits for Tavi: the approve label sends the job to the merge queue, a hand merge goes on to the release check,
+   * and closing the pull request ends the job.
+   */
+  async #watchReview(job: JobRecord): Promise<number> {
+    const review = await this.#github.review(job.pr!, this.#approveLabel());
+    if (review.result === "waiting") return REVIEW_POLL_MS;
+    log("reviewed", job, { result: review.result });
+    if (review.result === "closed") {
+      await this.#move(job, { type: "declined" });
+      return 0;
+    }
+    job.approvedAt = Date.now();
+    await this.#move(job, { type: "approved" });
+    await this.#github.removeLabel(job.pr!, this.#reviewLabel()).catch(() => {});
+    if (review.result === "merged") {
+      job.mergeSha = review.sha;
+      await this.#move(job, { type: "merged", android: Boolean(job.bumped) });
+      if (job.progress.state === "merging") return this.#stage(job, "release", 2 * 60_000);
+      return 0;
+    }
+    job.stage = "waiting";
+    await this.#save(job);
+    await this.#desk().enqueueMerge(job.id);
+    return 60_000;
   }
 
   /** A failed check: the next round fixes it, or the job ends when the rounds are spent. */
@@ -402,7 +443,15 @@ export class FeedbackJob extends DurableObject<Env> {
 
   #pullBody(job: JobRecord): string {
     const quoted = job.text.split("\n").map((line) => `> ${line}`).join("\n");
-    return `Feedback from ${job.name}, sent from Inventory:\n\n${quoted}\n\n${job.description ?? ""}\n\nMade by ${job.engine === "claude" ? "Claude Code" : "Codex"} (${job.model}, ${job.effort}) on the sender's own plan. The runner merges it when CI is green (docs/feedback.md).\n\nFeedback-Id: ${job.id}`;
+    return `Feedback from ${job.name}, sent from Inventory:\n\n${quoted}\n\n${job.description ?? ""}\n\nMade by ${job.engine === "claude" ? "Claude Code" : "Codex"} (${job.model}, ${job.effort}) on the sender's own plan. When CI is green the runner labels it \`${this.#reviewLabel()}\` and waits: add the \`${this.#approveLabel()}\` label to let it merge (it brings main in and renumbers the CHANGELOG entry first), or close it to turn the feedback down (docs/feedback.md, Review).\n\nFeedback-Id: ${job.id}`;
+  }
+
+  #reviewLabel(): string {
+    return this.env.REVIEW_LABEL || "needs-review";
+  }
+
+  #approveLabel(): string {
+    return this.env.APPROVE_LABEL || "approved";
   }
 
   #required(): string[] {

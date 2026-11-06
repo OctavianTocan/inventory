@@ -37,6 +37,14 @@ describe("FeedbackDesk", () => {
     expect(await object.submit(send())).toEqual({ ok: false, error: "You already have feedback in progress." });
   });
 
+  it("lets a sender whose last job waits for Tavi's review send another", async () => {
+    const { object } = desk();
+    const first = await object.submit(send());
+    if (!first.ok) throw new Error(first.error);
+    object.update({ id: first.id, email: "", state: "review", engine: "claude", model: "opus", effort: "medium", pr: 1, rounds: 1, reason: null, created_at: 0, finished_at: null, ci_log: null });
+    expect((await object.submit(send())).ok).toBe(true);
+  });
+
   it("refuses a client_id someone else used", async () => {
     const { object } = desk();
     await object.submit(send("ana@example.com", "shared-client-id"));

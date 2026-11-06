@@ -53,7 +53,8 @@ export class FeedbackDesk extends DurableObject<Env> {
     if (same) return same.email === send.email ? { ok: true, id: same.id, state: same.state } : { ok: false, error: "That send was already used." };
     if (this.paused()) return { ok: false, error: "Feedback is paused for now." };
     const finals = [...FINAL].map((state) => `'${state}'`).join(",");
-    const active = this.#sql.exec(`SELECT COUNT(*) AS n FROM jobs WHERE email = ? AND state NOT IN (${finals})`, send.email).one().n as number;
+    // A job waiting for Tavi's review does not hold up the sender's next one.
+    const active = this.#sql.exec(`SELECT COUNT(*) AS n FROM jobs WHERE email = ? AND state NOT IN (${finals}, 'review')`, send.email).one().n as number;
     if (active > 0) return { ok: false, error: "You already have feedback in progress." };
     const day = new Date(now);
     const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate());

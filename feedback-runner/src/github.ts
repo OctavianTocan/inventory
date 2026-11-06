@@ -151,6 +151,41 @@ export class GitHub {
     throw new Error(`merging answered ${answer.status}: ${answer.body?.message ?? ""}`);
   }
 
+  /**
+   * Marks a pull request for review: adds `label` to it and makes sure `approve` exists, so it can be picked in
+   * GitHub's label menu. Both calls are allowed to fail (GitHub creates a missing label when it is added).
+   *
+   * @param pr the pull request
+   * @param label the label that asks for review
+   * @param approve the label that approves the merge
+   */
+  async markForReview(pr: number, label: string, approve: string): Promise<void> {
+    await this.call("POST", "/repo/labels", { name: approve, color: "0e8a16", description: "Lets the feedback runner merge this pull request" });
+    await this.call("POST", `/repo/issues/${pr}/labels`, { labels: [label] });
+  }
+
+  /** Takes a label off a pull request; a label it does not have is fine. */
+  async removeLabel(pr: number, label: string): Promise<void> {
+    await this.call("DELETE", `/repo/issues/${pr}/labels/${encodeURIComponent(label)}`);
+  }
+
+  /**
+   * Where Tavi's review of a pull request stands.
+   *
+   * @param pr the pull request
+   * @param approve the label that approves the merge
+   * @returns `merged` with the merge commit when it was merged by hand, `closed` when closed without merging,
+   *   `approved` when it is open and carries `approve`, otherwise `waiting`
+   */
+  async review(pr: number, approve: string): Promise<{ result: "merged"; sha: string } | { result: "closed" } | { result: "approved" } | { result: "waiting" }> {
+    const answer = await this.call("GET", `/repo/pulls/${pr}`);
+    if (answer.status !== 200) return { result: "waiting" };
+    if (answer.body.merged) return { result: "merged", sha: answer.body.merge_commit_sha };
+    if (answer.body.state === "closed") return { result: "closed" };
+    const labels: { name: string }[] = answer.body.labels ?? [];
+    return labels.some((l) => l.name === approve) ? { result: "approved" } : { result: "waiting" };
+  }
+
   /** Whether main is behind nothing a branch has: `true` when the branch already contains main's head. */
   async containsMain(branch: string): Promise<boolean> {
     const answer = await this.call("GET", `/repo/compare/${branch}...main`);

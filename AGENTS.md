@@ -140,7 +140,8 @@ output format and a length cap.
 
 ## Feedback agents
 
-Feedback sent from the app is implemented by an agent in a sandbox and merged on green CI (`docs/feedback.md`). In
+Feedback sent from the app is implemented by an agent in a sandbox and merged on green CI once Tavi approves it
+(`docs/feedback.md`, Review). In
 that work, do not change version numbers or `android/CHANGELOG.md`; the feedback runner does that.
 
 ## External services

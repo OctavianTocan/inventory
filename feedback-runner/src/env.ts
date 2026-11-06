@@ -17,6 +17,10 @@ export interface Env {
   GITHUB_TOKEN: string;
   /** Comma-separated check names a change must pass; default `android,rust`. */
   REQUIRED_CHECKS?: string;
+  /** The label that marks a green feedback pull request for Tavi's review; default `needs-review`. */
+  REVIEW_LABEL?: string;
+  /** The label Tavi adds to let the runner merge a reviewed pull request; default `approved`. */
+  APPROVE_LABEL?: string;
   /** The container instance type for rounds; default `standard-1`. */
   SANDBOX_INSTANCE?: string;
 }

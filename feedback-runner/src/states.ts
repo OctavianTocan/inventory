@@ -6,6 +6,7 @@ export type State =
   | "working"
   | "testing"
   | "fixing"
+  | "review"
   | "merging"
   | "shipped"
   | "merged_server"
@@ -16,7 +17,7 @@ export type State =
 export type Engine = "claude" | "codex";
 
 /** Why a job failed; each has the sentence the sender sees after "Couldn't ship this: ". */
-export type Reason = "tests" | "plan_limit" | "signin" | "too_long" | "main_moved" | "stopped" | "error";
+export type Reason = "tests" | "plan_limit" | "signin" | "too_long" | "main_moved" | "stopped" | "declined" | "error";
 
 export const FINAL: ReadonlySet<State> = new Set(["shipped", "merged_server", "merged_not_released", "no_change", "failed"]);
 
@@ -37,6 +38,8 @@ export type Event =
   | { type: "round_start" }
   | { type: "round_done"; outcome: "pushed" | "no_commits" | "plan_limit" | "signin" | "timeout" | "error" }
   | { type: "ci"; result: "green" | "red" }
+  | { type: "approved" }
+  | { type: "declined" }
   | { type: "conflict" }
   | { type: "main_moved" }
   | { type: "merged"; android: boolean }
@@ -79,7 +82,12 @@ export function step(job: Progress, event: Event): Progress {
       }
     case "testing":
       if (event.type !== "ci") return job;
-      return event.result === "green" ? { ...job, state: "merging" } : another("tests");
+      // Green CI waits for Tavi's review instead of merging (Tavi, 6 Nov 2026).
+      return event.result === "green" ? { ...job, state: "review" } : another("tests");
+    case "review":
+      if (event.type === "approved") return { ...job, state: "merging" };
+      if (event.type === "declined") return fail("declined");
+      return job;
     case "merging":
       switch (event.type) {
         case "ci":
@@ -117,6 +125,8 @@ export function reasonText(reason: Reason, engine: Engine): string {
       return "the app changed too often to merge.";
     case "stopped":
       return "stopped by Tavi.";
+    case "declined":
+      return "Tavi decided not to ship it.";
     default:
       return "something went wrong on our side.";
   }
@@ -141,6 +151,8 @@ export function describe(job: Progress, engine: Engine, summary: string | null, 
       return { title: "Testing your change", detail: summary };
     case "fixing":
       return { title: "Fixing a failed test", detail: summary };
+    case "review":
+      return { title: "Waiting for Tavi's review", detail: summary };
     case "merging":
       return { title: "Getting ready to ship", detail: summary };
     case "shipped":
