@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.101 (112), 2026-11-06
+Sharing no longer picks a space for you.
+
+### Changed
+- When you share something into Inventory, it no longer goes into a space by itself. The suggested space still comes first in the row on the card's back; tap it, or any other, to keep the find there.
+
 ## 0.6.99 (110), 2026-11-06
 Your sky: finds you can see whole, and a new constellation after each one you finish.
 

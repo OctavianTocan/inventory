@@ -86,11 +86,8 @@ fun ShareMoment(
     val phase = if (onWeb && web != null) web.phase else moment.phase
     LaunchedEffect(phase) {
         when (phase) {
-            StarPhase.Settled -> if (!problem && !tagOpen) {
-                // The space ThyMind suggests is already lit; the grid is for changing it (Tavi's pick M9).
-                if (state.spaceIds.isEmpty()) state.suggestion?.let { state.spaceIds = listOf(it.space.id) }
-                tagOpen = true
-            }
+            // No space is chosen for the user; the suggested one only comes first in the row (Tavi, 6 Nov 2026).
+            StarPhase.Settled -> if (!problem && !tagOpen) tagOpen = true
             StarPhase.Done -> if (!problem) latestClosed()
             else -> Unit
         }
@@ -131,9 +128,9 @@ fun ShareMoment(
     if (problem) ShareSheet(state, onClose = onClosed)
 }
 
-/** The space the find goes into: the one chosen, else the one ThyMind suggests. */
+/** The space the user chose for the find, or null; a suggestion alone never puts it in one. */
 private fun chosenSpace(state: ShareSheetState): Space? =
-    state.spaceIds.firstOrNull()?.let { id -> state.spaces.firstOrNull { it.id == id } } ?: state.suggestion?.space
+    state.spaceIds.firstOrNull()?.let { id -> state.spaces.firstOrNull { it.id == id } }
 
 /**
  * @param state The share's state.

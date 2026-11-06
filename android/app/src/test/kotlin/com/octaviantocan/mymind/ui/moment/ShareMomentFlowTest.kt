@@ -66,14 +66,14 @@ class ShareMomentFlowTest {
     }
 
     @Test
-    fun leftAloneTheGridGoesByItselfWithTheSuggestedSpace() {
+    fun leftAloneTheGridGoesByItselfWithoutPickingASpace() {
         show()
         untilTheGridShows()
         assertEquals(Rarity.Rare, moment.shownRarity)
         pass(SAVED_FADE_MS - 600)
         assertTrue("It still waits", details.isEmpty())
         pass(1_400)
-        assertEquals(listOf(ShareDetails(spaceIds = setOf("s1"))), details)
+        assertEquals("A suggested space is never chosen for the user", listOf(ShareDetails()), details)
         assertEquals(0, closed)
         pass(4_000)
         assertEquals("It closes once the find is in the backpack", 1, closed)
@@ -88,9 +88,19 @@ class ShareMomentFlowTest {
         assertTrue("A touch stops the wait", details.isEmpty())
         compose.onNodeWithText("Save 1 tag").performClick()
         pass(100)
-        assertEquals(listOf(ShareDetails(tags = listOf("35mm"), spaceIds = setOf("s1"))), details)
+        assertEquals(listOf(ShareDetails(tags = listOf("35mm"))), details)
         pass(4_000)
         assertEquals(1, closed)
+    }
+
+    @Test
+    fun aSpaceIsKeptOnlyWhenTapped() {
+        show()
+        untilTheGridShows()
+        compose.onNodeWithText("Cameras").performClick()
+        compose.onNodeWithText("Done").performClick()
+        pass(100)
+        assertEquals(listOf(ShareDetails(spaceIds = setOf("s1"))), details)
     }
 
     @Test

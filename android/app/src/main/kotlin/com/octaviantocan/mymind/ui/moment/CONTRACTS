@@ -31,8 +31,9 @@ actual app."
 @cc [owner:OctavianTocan,label:product;design] share-tag-step-icon-grid
 The tag step after the shooting star MUST be an icon grid on the back of the
 find's card, grown to fill the screen at the card's shape. It shows the spaces
-as a row of chips, one chosen at a time, with the space Inventory suggests already
-chosen; a Search tags field that can add a new tag; and a grid of tiles, each a
+as a row of chips, one chosen at a time, with the space Inventory suggests first
+but not chosen: a find MUST NOT go into any space the user did not tap, however
+the step closes; a Search tags field that can add a new tag; and a grid of tiles, each a
 line icon, the tag's name and a check: Inventory's own tags first, on and marked
 with the spark (share-sheet-shows-thymind-tags), then the user's, then recent
 tags, off. A tap on a tile puts its tag on or takes it off. It MUST go by itself
@@ -45,8 +46,10 @@ rows than fit fades at the bottom rather than cutting a row off. It MUST turn on
 from the edge the card turned to and leave by the other, so the turn carries on
 one way round.
 Source: Tavi's pick of M9 Icon grid on 5 November 2026, 23:27, for the tag step
-that follows the shooting star. Choosing the suggested space from the start is
-the M9 frame of the Inventory canvas; the icon for each tag is Claude's choice.
+that follows the shooting star; the icon for each tag is Claude's choice. The M9
+frame chose the suggested space from the start; Tavi turned that off on 6 November
+2026, 22:14: "Make it so the share doesn't always put my stuff in "Always
+Relevant" space. That's super annoying. It shouldn't auto choose a space."
 The spacing follows Tavi, 6 November 2026, 13:03: "There's not enough margin on
 the side for the small icon, the tags on the card's back don't have proper
 spacing inside"; the 10 dp corner inset and the bottom fade are Claude's choice.
