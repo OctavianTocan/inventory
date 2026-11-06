@@ -85,6 +85,7 @@ class SheetInk(
  * @property sheet Pully's sheet paper and controls.
  * @property sheetInk Other colours on sheets.
  * @property dots The theme in four colours for the picker: its screen, accent, success and error.
+ * @property backdrop What is painted behind the gallery instead of [LibraryColors.background], or null for that colour.
  */
 @Immutable
 class ThemePalette(
@@ -94,6 +95,7 @@ class ThemePalette(
     val sheet: CardSheetColors,
     val sheetInk: SheetInk,
     val dots: List<Color>,
+    val backdrop: Backdrop? = null,
 ) {
     /** True when this look is dark. */
     val dark: Boolean get() = colors.dark
@@ -105,9 +107,10 @@ class ThemePalette(
          * Pully's teal would be. The splash keeps ThyMind's own colours, as Pully's launch screen does.
          *
          * @param r One look of a theme.
+         * @param backdrop What is painted behind the gallery, or null for [ThemeRoles.base].
          * @return That look as ThyMind's palettes.
          */
-        fun of(r: ThemeRoles): ThemePalette {
+        fun of(r: ThemeRoles, backdrop: Backdrop? = null): ThemePalette {
             val splash = if (r.dark) MymindDarkColors else MymindLightColors
             val secondary = lerp(r.text, r.muted, 0.5f)
             val colors = MymindColors(
@@ -133,7 +136,7 @@ class ThemePalette(
             val sheet = CardSheetColors(r.paper, r.raised, r.text, r.grabber, r.scrim,
                 r.text.copy(alpha = if (r.dark) 0.12f else 0.1f), r.shadow)
             val ink = SheetInk(r.muted, r.border, r.accent, r.accentWash, r.accentWashInk, r.error, r.sunken)
-            return ThemePalette(colors, page, library, sheet, ink, listOf(r.base, r.accent, r.success, r.error))
+            return ThemePalette(colors, page, library, sheet, ink, listOf(r.base, r.accent, r.success, r.error), backdrop)
         }
     }
 }
@@ -189,8 +192,9 @@ private val ThyMindDark = ThemePalette(
 )
 
 /**
- * Every theme the app can be drawn in: ThyMind's own colours first, the default, then Pully's own palette, then the
- * themes Pully converted from OpenCode's ([OpenCodeThemes]).
+ * Every theme the app can be drawn in: ThyMind's own colours first, the default, then Pully's own palette, then
+ * ThyMind's gradient and doodle themes ([BackdropThemes]), then the themes Pully converted from OpenCode's
+ * ([OpenCodeThemes]).
  */
 object ColorThemes {
     /** The id of ThyMind's own colours. */
@@ -202,8 +206,8 @@ object ColorThemes {
     /** Pully's own palette. */
     val Pully = ColorTheme("pully", "Pully", PullyLight, PullyDark)
 
-    /** Every theme, in the picker's order. */
-    val all: List<ColorTheme> = listOf(ThyMind, Pully) + OpenCodeThemes
+    /** Every theme, in the picker's order: ThyMind's, Pully's, ThyMind's gradients and doodles, then OpenCode's. */
+    val all: List<ColorTheme> = listOf(ThyMind, Pully) + BackdropThemes + OpenCodeThemes
 
     /**
      * @param id A stored theme id, or null.

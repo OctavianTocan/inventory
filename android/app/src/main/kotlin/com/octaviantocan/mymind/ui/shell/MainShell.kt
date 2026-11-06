@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui.shell
 
+import com.octaviantocan.mymind.ui.theme.themeBackground
 import android.content.ClipData
 import android.content.Intent
 import android.provider.MediaStore
@@ -804,7 +805,7 @@ fun ShellFrame(
         val shape = rememberWindowShape()
         val library: @Composable BoxScope.() -> Unit = {
             PageTheme(scheme) {
-                Box(Modifier.fillMaxSize().statusBarsPadding().background(LibraryStyle.colors.background)) {
+                Box(Modifier.fillMaxSize().themeBackground(LibraryStyle.colors.background).statusBarsPadding()) {
                     // Sideways, the page sits in a readable column with the page colour either side (Pully's rule 207).
                     Box(if (shape == WindowShape.Sideways) Modifier.fillMaxHeight().readableWidth() else Modifier.fillMaxSize()) { page() }
                 }

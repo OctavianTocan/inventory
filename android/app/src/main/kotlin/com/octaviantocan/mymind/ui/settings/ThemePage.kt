@@ -1,6 +1,9 @@
 package com.octaviantocan.mymind.ui.settings
 
 import androidx.compose.foundation.background
+import com.octaviantocan.mymind.ui.theme.backdropBehind
+import com.octaviantocan.mymind.ui.theme.Backdrop
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -79,7 +82,7 @@ internal fun ColumnScope.ThemePage(prefs: ThemePrefs) {
         shown.forEachIndexed { index, theme ->
             if (index > 0) SheetRowDivider(start = 16.dp)
             SheetRow(null, theme.name, { scope.applyColorTheme(prefs, theme, motion) }, role = Role.RadioButton) {
-                ThemeDots(theme.palette(dark).dots)
+                ThemeDots(theme.palette(dark).dots, backdrop = theme.palette(dark).backdrop)
                 Tick(theme.id == prefs.id)
             }
         }
@@ -102,14 +105,20 @@ internal fun CoroutineScope.applyColorTheme(prefs: ThemePrefs, theme: ColorTheme
     launch { ThemeWipe.run(fromRight = to > from, motion = motion, changes = true) { prefs.choose(theme) } }
 }
 
-/** A theme in four dots: its screen, its accent, success and error. The screen's dot is ringed so it shows on any row. */
+/**
+ * A theme in four dots: its screen, its accent, success and error. The screen's dot is ringed so it shows on any row;
+ * for a theme with a backdrop it is a little wider and shows the gradient and the doodles themselves.
+ */
 @Composable
-internal fun ThemeDots(dots: List<Color>, modifier: Modifier = Modifier) {
+internal fun ThemeDots(dots: List<Color>, modifier: Modifier = Modifier, backdrop: Backdrop? = null) {
     val ring = menuColors().rowText.copy(alpha = 0.2f)
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         dots.forEachIndexed { index, color ->
-            Box(Modifier.size(14.dp).background(color, CircleShape)
-                .then(if (index == 0) Modifier.border(1.dp, ring, CircleShape) else Modifier))
+            val screen = index == 0
+            val shape = if (screen && backdrop != null) RoundedCornerShape(7.dp) else CircleShape
+            Box(Modifier.size(if (screen && backdrop != null) 28.dp else 14.dp, 14.dp).clip(shape)
+                .then(if (screen && backdrop != null) Modifier.backdropBehind(backdrop) else Modifier.background(color))
+                .then(if (screen) Modifier.border(1.dp, ring, shape) else Modifier))
         }
     }
 }

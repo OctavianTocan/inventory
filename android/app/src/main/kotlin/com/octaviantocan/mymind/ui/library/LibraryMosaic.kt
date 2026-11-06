@@ -108,6 +108,7 @@ import com.octaviantocan.mymind.ui.shell.LoadingSpinner
 import com.octaviantocan.mymind.ui.shell.LocalShellImmersion
 import com.octaviantocan.mymind.ui.shell.LocalSidePagesAtRest
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
+import com.octaviantocan.mymind.ui.theme.MymindTheme
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
@@ -181,6 +182,7 @@ internal fun LibraryMosaic(
     label: String = "Card gallery",
 ) {
     val colors = LibraryStyle.colors
+    val backdropShown = MymindTheme.palette.backdrop != null
     val density = LocalDensity.current
     val moving = rememberSheetMotionEnabled()
     val pagesAtRest = LocalSidePagesAtRest.current
@@ -578,7 +580,10 @@ internal fun LibraryMosaic(
                     val bottom = visible.firstOrNull { it.key == "gallery-footer" }?.offset?.toFloat() ?: size.height
                     shape = MosaicBodyShape(top, bottom)
                     clip = true
-                }.drawBehind { drawRect(lerpColor(colors.background, REEL_PAPER, mosaic.reel)) }.drawWithContent {
+                }.drawBehind {
+                    // A theme's backdrop shows through between the cards; reels still darken to their own paper.
+                    drawRect(if (backdropShown) REEL_PAPER.copy(alpha = mosaic.reel) else lerpColor(colors.background, REEL_PAPER, mosaic.reel))
+                }.drawWithContent {
                     val side = margin * (1f - mosaic.reel)
                     clipRect(left = side, right = size.width - side) { this@drawWithContent.drawContent() }
                 }) {

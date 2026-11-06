@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui.library
 
+import com.octaviantocan.mymind.ui.theme.themeBackground
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
@@ -180,7 +181,7 @@ fun SpaceListContent(
     onNewSpace: () -> Unit = {},
 ) {
     val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
-    Box(modifier.fillMaxSize().background(LibraryStyle.colors.background)) {
+    Box(modifier.fillMaxSize().themeBackground(LibraryStyle.colors.background, backdrop = false)) {
         when {
             state.spaces.isEmpty() && state.error != null -> WebErrorScreen(onRetry = onRetry)
             state.spaces.isEmpty() && !state.loaded -> PageSpinner()
@@ -275,7 +276,7 @@ fun SpaceContent(
     val mosaic = rememberMosaicState(reels = true)
     val scroll = rememberLazyListState()
     val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
-    Box(modifier.fillMaxSize().background(LibraryStyle.colors.background)) {
+    Box(modifier.fillMaxSize().themeBackground(LibraryStyle.colors.background, backdrop = false)) {
         if (feed.empty) {
             PageSpinner()
         } else {

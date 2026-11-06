@@ -116,3 +116,15 @@ theme, and the splash keeps ThyMind's own colours. ThyMind's own theme MUST draw
 as the app did before themes.
 Source: Tavi, 5 November 2026 (as `profile-theme-picks-pullys-themes`); pulls.review
 `theme-changes-colours-only` at 9a44869.
+
+@cc [owner:OctavianTocan,label:product;design] profile-theme-backdrops
+Besides Pully's themes, the Theme page MUST offer ThyMind's own backdrop themes, after
+Pully's palette: some paint a gradient behind the gallery and the Spaces page, and some
+paint faint line doodles over it in the manner of a Telegram or WhatsApp chat wallpaper.
+The doodles MUST be ThyMind's own drawings, not copied from any app, and MUST stay faint
+enough that the cards read first. The backdrop MUST stay still behind the whole window,
+status bar included, while the cards scroll and the pages swipe; tiles, sheets and opened
+cards keep solid colours. In the picker such a theme's first dot MUST show its backdrop.
+Source: Tavi, 5 November 2026 ("Let's make some themes for this app that also use
+gradients, and some that use doodles that you draw on the background in the style of
+Telegram or WhatsApp. And we add these to the themes we already have").

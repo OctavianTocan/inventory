@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.78 (89), 2026-11-06
+New themes that paint the gallery with gradients and doodles.
+
+### Added
+- Profile > Theme has eight new themes after Pully's. Sunrise, Ocean, Lavender and Aurora paint the gallery and Spaces with a soft gradient. Notebook, Garden, Night Sky and Postcard add faint doodles over it, like a chat wallpaper, drawn for ThyMind: books, notes and ideas; leaves and flowers; stars and moons; letters, places and photos. The wallpaper stays still while your cards scroll over it, and each theme has a light and a dark look except Aurora and Night Sky, which are always dark.
+
 ## 0.6.77 (88), 2026-11-06
 Small changes under the hood.
 

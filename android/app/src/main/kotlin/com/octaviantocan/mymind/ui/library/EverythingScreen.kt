@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui.library
 
+import com.octaviantocan.mymind.ui.theme.themeBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -203,7 +204,7 @@ fun EverythingContent(
     val resultsBackdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
     val flight = rememberStarFlight()
     val sky = rememberSkyOpening()
-    Box(modifier.fillMaxSize().background(colors.background)) {
+    Box(modifier.fillMaxSize().themeBackground(colors.background, backdrop = false)) {
         when {
             searching && searchResults != null -> {
                 PullRefresh(searchResults.refreshing, onRefreshResults, Modifier.fillMaxSize().glassSource(resultsBackdrop)) {

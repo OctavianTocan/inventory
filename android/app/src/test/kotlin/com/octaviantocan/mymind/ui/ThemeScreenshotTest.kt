@@ -102,6 +102,52 @@ class ThemeScreenshotTest {
     }
 
     @Test
+    fun backdropSunriseLight() = backdrop("sunrise", dark = false)
+
+    @Test
+    fun backdropSunriseDark() = backdrop("sunrise", dark = true)
+
+    @Test
+    fun backdropOceanDark() = backdrop("ocean", dark = true)
+
+    @Test
+    fun backdropAuroraLight() = backdrop("aurora", dark = false)
+
+    @Test
+    fun backdropNotebookLight() = backdrop("notebook", dark = false)
+
+    @Test
+    fun backdropNotebookDark() = backdrop("notebook", dark = true)
+
+    @Test
+    fun backdropGardenLight() = backdrop("garden", dark = false)
+
+    @Test
+    fun backdropNightSkyDark() = backdrop("night-sky", dark = true)
+
+    @Test
+    fun backdropPostcardLight() = backdrop("postcard", dark = false)
+
+    private fun backdrop(id: String, dark: Boolean) {
+        val prefs = prefs().apply { choose(ColorThemes.of(id)) }
+        compose.setPhoneContent(dark) {
+            MymindTheme(dark = dark, theme = prefs.theme) {
+                ShellFrame(Tab.Everything, onSelectTab = {}, scheme = if (dark) PageScheme.Dark else PageScheme.Light) { SampleEverything() }
+            }
+        }
+        compose.mainClock.advanceTimeBy(SETTLE_MS)
+        compose.onRoot().captureRoboImage("screenshots/theme_${id}_${if (dark) "dark" else "light"}.png")
+    }
+
+    @Test
+    fun theBackdropThemesInThePicker() {
+        page(dark = false, prefs())
+        compose.onNodeWithContentDescription(FIND_A_THEME).performTextInput("o")
+        compose.mainClock.advanceTimeBy(SETTLE_MS)
+        compose.onRoot().captureRoboImage("screenshots/theme_page_backdrops.png")
+    }
+
+    @Test
     fun pullyThemeLight() {
         val prefs = prefs().apply { choose(ColorThemes.Pully) }
         page(dark = false, prefs)

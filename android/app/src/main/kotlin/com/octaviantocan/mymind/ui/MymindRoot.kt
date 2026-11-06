@@ -1,5 +1,7 @@
 package com.octaviantocan.mymind.ui
 
+import androidx.compose.ui.graphics.Color
+import com.octaviantocan.mymind.ui.theme.themeBackground
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -55,7 +57,7 @@ private const val HUB_SYNC_GAP_MS = 1_000L
 fun MymindRoot(container: AppContainer) {
     MymindTheme(dark = container.themePrefs.chromeDark(isSystemInDarkTheme()), theme = container.themePrefs.theme) {
         CompositionLocalProvider(LocalThemePrefs provides container.themePrefs) {
-            Surface(Modifier.fillMaxSize().themeWipe(), color = MymindTheme.colors.page) {
+            Surface(Modifier.fillMaxSize().themeWipe().themeBackground(MymindTheme.colors.page), color = Color.Transparent) {
                 val session by container.session.state.collectAsStateWithLifecycle()
                 val online by container.connectivity.online.collectAsStateWithLifecycle(container.connectivity.isOnline())
                 val signIn = viewModel { SignInViewModel(container.repository) }
