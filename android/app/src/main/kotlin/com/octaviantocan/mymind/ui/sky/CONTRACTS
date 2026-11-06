@@ -143,8 +143,9 @@ on a star? Why are the cards not using the condense effect?"
 
 @cc [owner:OctavianTocan,label:product;motion] sky-finishing-one-brings-the-next
 Once the last star of the middle constellation lights, it MUST complete and take its
-place among the finished ones, and MUST NOT come back to the middle: the phone counts it
-finished at once, as the server does, even before the visit that finished it is sent.
+place among the finished ones, and MUST NOT come back to the middle by itself (the person
+can bring it back, sky-finished-constellations-come-back): the phone counts it finished at
+once, as the server does, even before the visit that finished it is sent.
 The sky MUST then send that visit and ask the server again, and the next constellation
 the server forms MUST gather in the middle out of its vortex while the sky shows. When
 the server has none to form (no save from the last two weeks with old finds near it),
@@ -153,3 +154,20 @@ Source: Tavi, 6 November 2026, 21:50: "once I finished a constellation it played
 animation and then proceeded to just snap back to the constellation itself. No new one
 generated. That's bad"; and 5 November 2026, 17:02: "Once you complete one, another AI
 gives you a new one".
+
+@cc [owner:OctavianTocan,label:product;motion] sky-finished-constellations-come-back
+The person MUST be able to go back to every finished constellation. A tap on one in its
+place MUST bring it forward to the middle, at full size with its figure drawn in light, its
+name gold over it and its line under the name, while the one forming steps back and fades.
+Swiping sideways across the sky MUST move between constellations: right goes back through
+the finished ones, newest first, down to the oldest, including those too old to have a
+place, which come in from the side; left comes forward again to the one forming. While
+the finger is down, the middle constellation follows it. A finished one in the middle MUST
+work as the forming one does: a tap on a star moves in on it and condenses its find, and
+a swipe travels between its stars. A tap on empty sky, or Back, MUST send it to its place
+and bring the forming one forward again. Going back MUST NOT light, finish or change
+anything, and a new constellation from the server waits until the person is back.
+Accessibility MUST offer each finished constellation by its name.
+Source: Tavi, 6 November 2026, 22:09: "Also, not being able to go back to previous
+constellations sucks. Fix." The tap, the sideways swipe and which way goes back in time
+are Claude's choice, not yet confirmed by Tavi.

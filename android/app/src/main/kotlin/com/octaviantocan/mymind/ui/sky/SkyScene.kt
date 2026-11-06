@@ -184,6 +184,13 @@ internal class SkyScene {
 
     val cons = ArrayList<ConState>()
     var active: ConState? = null
+
+    /** A finished constellation the person has brought back to the middle, or null while the one forming is there. */
+    var visiting by mutableStateOf<ConState?>(null)
+        private set
+
+    /** The constellation in the middle, whose stars a tap moves in on: one brought back, else the one forming. */
+    val middle: ConState? get() = visiting ?: active
     val loose = ArrayList<LooseStar>()
 
     /** The constellation's name under it: [labelName] typed to [labelTyped] characters, gold once [labelDone]. */
@@ -275,7 +282,7 @@ internal class SkyScene {
             sparkY[i] += sparkVy[i] * step
             sparkVy[i] -= 140f * step
         }
-        if (!busy) pendingPlan?.let { pendingPlan = null; show(it) }
+        if (!busy && visiting == null) pendingPlan?.let { pendingPlan = null; show(it) }
         val spin = (focusTx * fz + dragX) * 0.0001f
         if (abs(spin - domeSpin) > 0.00002f) domeSpin = spin
         frames.intValue++
@@ -298,10 +305,11 @@ internal class SkyScene {
 
     /**
      * Shows [next]: the constellation in the middle, the finished ones in their places and the loose stars. Waits while
-     * a sequence runs. A new constellation in the middle forms out of a vortex while the sky shows.
+     * a sequence runs or a finished one has been brought back. A new constellation in the middle forms out of a vortex
+     * while the sky shows.
      */
     fun show(next: SkyPlan) {
-        if (busy) {
+        if (busy || visiting != null) {
             pendingPlan = next
             return
         }
@@ -312,16 +320,8 @@ internal class SkyScene {
         next.slots.takeLast(SLOTS.size).forEachIndexed { index, spec ->
             keep += spec.id
             val con = conFor(spec)
-            val (sx, sy, sz) = SLOTS[index]
-            con.x = sx
-            con.y = sy
-            con.z = sz
-            con.scale = SLOT_SCALE
-            con.dim = 0.5f
-            con.figOp = 1f
-            con.figDraw = 1f
-            con.stars.forEach { it.lit = true; it.vis = 1f }
-            con.lines.forEach { it.lit = 1f; it.draw = 1f }
+            con.moveTo(placeSpot(SLOTS[index]))
+            finishedLook(con)
         }
         val center = next.center
         val previous = active
@@ -363,6 +363,14 @@ internal class SkyScene {
 
     private fun conFor(spec: ConPlan): ConState = cons.firstOrNull { it.id == spec.id && it.cards == spec.cards }
         ?: ConState(spec.id, figureOf(spec.figure), spec.name, spec.cards, spec.done).also { made -> cons.removeAll { it.id == spec.id }; cons += made }
+
+    // A finished constellation's look: every star lit, every line drawn, its figure drawn in light.
+    private fun finishedLook(con: ConState) {
+        con.figOp = 1f
+        con.figDraw = 1f
+        con.stars.forEach { it.lit = true; it.vis = 1f }
+        con.lines.forEach { it.lit = 1f; it.draw = 1f }
+    }
 
     private fun looseFor(id: String, t0: Float): LooseStar {
         val r = Random(id.hashCode())
@@ -434,6 +442,7 @@ internal class SkyScene {
             val l0 = look
             if (speed < 0f) time.tween(2.6f * l0, Ease.io) { look = l0 * (1f - it) }
             else carryOn(l0, speed) { look = l0 * (1f - it) }
+            visiting?.let { settleVisit(it) }
             lookingUp = false
             busy = false
         }
@@ -451,10 +460,14 @@ internal class SkyScene {
         time.tween(dur, { t -> (-2f * t + 3f) * t * t + start * ((t - 2f) * t + 1f) * t }, fn)
     }
 
-    /** Back: from a star to the sky, from the sky to the page. */
+    /** Back: from a star to the sky, from a finished constellation brought back to the one forming, from the sky to the page. */
     fun back() {
         if (busy) return
-        if (focusedCon != null) unfocus() else lookDown()
+        when {
+            focusedCon != null -> unfocus()
+            visiting != null -> leave()
+            else -> lookDown()
+        }
     }
 
     // Lighting stars.
@@ -695,6 +708,135 @@ internal class SkyScene {
         time.tween(0.9f, Ease.lin) { p -> labelTyped = kotlin.math.ceil(p * name.length).toInt() }
     }
 
+    // Going back to finished constellations.
+
+    /** Where finished constellation [index] of the sky's (oldest first) has its place, or null for an older one. */
+    private fun placeOf(index: Int): Triple<Float, Float, Float>? =
+        if (index < 0) null else SLOTS.getOrNull(index - max(0, plan.slots.size - SLOTS.size))
+
+    /** Which finished constellation of the sky's, oldest first, [con] is, or -1. */
+    fun finishedIndex(con: ConState): Int = plan.slots.indexOfFirst { it.id == con.id }
+
+    /** The finished constellations the sky holds, oldest first. */
+    val finished: List<ConPlan> get() = plan.slots
+
+    /**
+     * Brings finished constellation [index] of the sky's (oldest first) forward to the middle, its name gold over it,
+     * while the one forming steps back. One with no place of its own comes in from the side [from], -1 left or 1 right,
+     * and one already brought back leaves the other way or to its place. Its stars then work as the middle one's do;
+     * nothing lights or changes.
+     */
+    fun visit(index: Int, from: Float = 0f) {
+        if (busy || !skyOn || focusedCon != null) return
+        val spec = plan.slots.getOrNull(index) ?: return
+        val leaving = visiting
+        if (leaving?.id == spec.id) return
+        busy = true
+        val known = cons.any { it.id == spec.id && it.cards == spec.cards }
+        val con = conFor(spec)
+        finishedLook(con)
+        if (!known) con.moveTo(offSpot(if (from == 0f) 1f else from))
+        val start = spotOf(con)
+        val leaveFrom = leaving?.let(::spotOf)
+        val leaveTo = leaving?.let { placeOf(finishedIndex(it))?.let(::placeSpot) ?: offSpot(if (from == 0f) -1f else -from) }
+        val forming = active
+        val formingFrom = forming?.let(::spotOf)
+        visiting = con
+        launch {
+            val o = labelOp
+            tweenLater(0.35f, Ease.io) { labelOp = o * (1f - it) }
+            time.tween(VISIT_TIME, Ease.io) { p ->
+                con.moveBetween(start, MIDDLE, p)
+                if (leaving != null) leaving.moveBetween(leaveFrom!!, leaveTo!!, p)
+                if (forming != null) forming.moveBetween(formingFrom!!, STEPPED_BACK, p)
+            }
+            if (leaving != null && placeOf(finishedIndex(leaving)) == null) cons.remove(leaving)
+            arrive(con)
+            labelDone = 1f
+            typeLabel(con.name)
+            busy = false
+        }
+    }
+
+    /**
+     * Sends the finished constellation brought back to its place, or out to the side [exit] when it has none, and
+     * brings the one forming forward again.
+     */
+    fun leave(exit: Float = 0f) {
+        if (busy || focusedCon != null) return
+        val con = visiting ?: return
+        busy = true
+        val start = spotOf(con)
+        val end = placeOf(finishedIndex(con))?.let(::placeSpot) ?: offSpot(if (exit == 0f) -1f else exit)
+        val forming = active
+        val formingFrom = forming?.let(::spotOf)
+        launch {
+            val o = labelOp
+            tweenLater(0.35f, Ease.io) { labelOp = o * (1f - it) }
+            time.tween(VISIT_TIME, Ease.io) { p ->
+                con.moveBetween(start, end, p)
+                if (forming != null) forming.moveBetween(formingFrom!!, MIDDLE, p)
+            }
+            settleVisit(con)
+            if (forming != null) typeLabel(forming.name)
+            busy = false
+        }
+    }
+
+    /**
+     * Moves [step] constellations along from the one in the middle: back (-1) through every finished one, newest first,
+     * or forward (1) to the one forming. A swipe sideways across the sky does this; at either end the sky settles back.
+     */
+    fun browse(step: Int) {
+        if (busy || !skyOn || focusedCon != null) return
+        val n = plan.slots.size
+        val at = visiting?.let(::finishedIndex)?.takeIf { it >= 0 } ?: n
+        val to = at + step
+        when {
+            to < 0 || to > n || to == at -> settleSlide()
+            to == n -> leave(exit = -step.toFloat())
+            else -> visit(to, from = step.toFloat())
+        }
+    }
+
+    // Lands the middle constellation back where it sits after a sideways drag that went nowhere.
+    private fun settleSlide() {
+        val con = middle ?: return
+        val x0 = con.x
+        if (x0 == 0f) return
+        tweenLater(0.35f, Ease.out) { con.x = x0 * (1f - it) }
+    }
+
+    // Puts a constellation brought back in its place at once, or takes it away when it has none, and the one forming
+    // back in the middle, with its name.
+    private fun settleVisit(con: ConState) {
+        val place = placeOf(finishedIndex(con))
+        if (place != null) con.moveTo(placeSpot(place)) else cons.remove(con)
+        visiting = null
+        active?.moveTo(MIDDLE)
+        labelDone = 0f
+        labelOp = 1f
+        labelName = active?.name.orEmpty()
+        labelTyped = labelName.length
+    }
+
+    // A constellation arriving in the middle: a pulse along its lines and its stars brightening.
+    private fun arrive(con: ConState) {
+        bloomKick = max(bloomKick, 0.3f)
+        con.stars.forEach { it.pop = 0.7f; it.popT = time.now }
+        launch {
+            time.tween(0.7f, Ease.lin) { p -> con.lines.forEach { line -> line.surge = if (line.from == line.a) p else 1f - p } }
+            con.lines.forEach { it.surge = -1f }
+        }
+    }
+
+    private suspend fun typeLabel(name: String) {
+        labelName = name
+        labelTyped = 0
+        labelOp = 1f
+        time.tween(0.7f, Ease.lin) { p -> labelTyped = kotlin.math.ceil(p * name.length).toInt() }
+    }
+
     // Focusing on a star.
 
     private fun targetFor(con: ConState, i: Int): Pair<Float, Float> {
@@ -705,7 +847,7 @@ internal class SkyScene {
     /** Moves the camera in on star [i] of the middle constellation and shows its find. */
     fun focusStar(i: Int) {
         if (busy) return
-        val con = active ?: return
+        val con = middle ?: return
         if (focusedCon != null) {
             if (focusedIndex != i) glide(i)
             return
@@ -929,6 +1071,7 @@ internal class SkyScene {
     private var velocityY = 0f
     private var swipeY = 0f
     private var moved = false
+    private var sideways = false
     private var down = false
 
     /** A finger went down at [x], [y] screen units, at [t] milliseconds. */
@@ -953,7 +1096,10 @@ internal class SkyScene {
         velocityX = dx / dtm * 1000f
         velocityY = dy / dtm * 1000f
         swipeY = if (moved) 0.6f * velocityY + 0.4f * swipeY else velocityY
-        if (!moved && hypot(x - downX, y - downY) > 7f) moved = true
+        if (!moved && hypot(x - downX, y - downY) > 7f) {
+            moved = true
+            sideways = abs(x - downX) > abs(y - downY)
+        }
         if (moved && !busy) {
             if (focusedCon != null) {
                 val tx = x - downX
@@ -962,6 +1108,8 @@ internal class SkyScene {
                 dragY = -ty * PXW * 0.55f
                 viewDx = tx * 0.9f
                 viewDy = ty * 0.6f
+            } else if (sideways) {
+                middle?.x = ((x - downX) * SLIDE_FOLLOW).coerceIn(-SLIDE_MAX, SLIDE_MAX)
             } else {
                 upPull = max(0f, upPull - dy)
                 look = 1f - min(0.4f, upPull / PULL_SPAN)
@@ -973,9 +1121,10 @@ internal class SkyScene {
     }
 
     /**
-     * The finger lifted; [hitStar] finds which star of the middle constellation is under a point, or -1.
+     * The finger lifted; [hitStar] finds which star of the middle constellation is under a point, or -1, and [hitCon]
+     * which finished constellation in its place, as its index among the sky's oldest first, or -1.
      */
-    fun pointerUp(x: Float, y: Float, w: Float, hitStar: (Float, Float) -> Int) {
+    fun pointerUp(x: Float, y: Float, w: Float, hitStar: (Float, Float) -> Int, hitCon: (Float, Float) -> Int = { _, _ -> -1 }) {
         if (!down) return
         down = false
         if (upPull > 0f) {
@@ -1011,7 +1160,11 @@ internal class SkyScene {
             }
             return
         }
-        if (moved) return
+        if (moved) {
+            val tx = x - downX
+            if (sideways && (abs(tx) > 60f || abs(velocityX) > 700f)) browse(if (tx > 0f) -1 else 1) else if (sideways) settleSlide()
+            return
+        }
         if (con != null && inView(x, y, w)) {
             openFromSky()
             return
@@ -1021,7 +1174,12 @@ internal class SkyScene {
             focusStar(hit)
             return
         }
-        if (con != null) unfocus()
+        if (con != null) {
+            unfocus()
+            return
+        }
+        val place = hitCon(x, y)
+        if (place >= 0) visit(place) else if (visiting != null) leave()
     }
 
     private fun inView(x: Float, y: Float, w: Float): Boolean {
@@ -1109,6 +1267,13 @@ internal class SkyScene {
         /** The most seconds the camera takes to finish looking up or down once a finger lets go. */
         const val CARRY_ON = 1.3f
         const val CONDENSE_GRID = 110
+
+        /** How far the middle constellation follows a finger swiping sideways, and the most it moves, in units. */
+        const val SLIDE_FOLLOW = 0.5f
+        const val SLIDE_MAX = 150f
+
+        /** Seconds a finished constellation takes to come forward to the middle or go back to its place. */
+        const val VISIT_TIME = 1.1f
 
         /** The prototype's find, a square this many units across; the points keep its density. */
         const val FIND_SIDE = 470f
@@ -1269,3 +1434,29 @@ internal fun figureStrokes(art: String): List<android.graphics.Path> {
 
 /** A star's own phase for its twinkle, the same each time for the same find. */
 internal fun seedOf(id: String): Float = (id.hashCode() and 0xffff) / 65535f * 6.28f
+
+/** Where a constellation sits on the slide, how big and how bright, for moving it from one place to another. */
+internal class Spot(val x: Float, val y: Float, val z: Float, val scale: Float, val dim: Float)
+
+/** The middle of the sky, where the constellation the person looks at sits. */
+private val MIDDLE = Spot(0f, Proto.CY, 0f, 1f, 1f)
+
+/** Where the constellation forming waits, back and faded out, while a finished one is brought back. */
+private val STEPPED_BACK = Spot(0f, Proto.CY, -320f, 0.8f, 0f)
+
+private fun placeSpot(place: Triple<Float, Float, Float>) = Spot(place.first, place.second, place.third, SkyScene.SLOT_SCALE, 0.5f)
+
+// Off to one side, -1 left or 1 right, where an old constellation with no place comes in from and goes back to.
+private fun offSpot(side: Float) = Spot(side * 430f, Proto.CY, -260f, SkyScene.SLOT_SCALE, 0f)
+
+private fun spotOf(con: ConState) = Spot(con.x, con.y, con.z, con.scale, con.dim)
+
+private fun ConState.moveTo(spot: Spot) = moveBetween(spot, spot, 1f)
+
+private fun ConState.moveBetween(a: Spot, b: Spot, p: Float) {
+    x = mix(a.x, b.x, p)
+    y = mix(a.y, b.y, p)
+    z = mix(a.z, b.z, p)
+    scale = mix(a.scale, b.scale, p)
+    dim = mix(a.dim, b.dim, p)
+}

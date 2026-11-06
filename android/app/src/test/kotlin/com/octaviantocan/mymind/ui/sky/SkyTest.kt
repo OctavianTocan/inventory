@@ -320,6 +320,106 @@ class SkyTest {
         assertEquals(5L, sky.scene.active?.id)
     }
 
+    @Test
+    fun aTappedFinishedConstellationComesBackToTheMiddleAndBackReturnsItToItsPlace() {
+        val sky = SkyState()
+        compose.setPhoneContent(true) {
+            Box(Modifier.fillMaxSize()) {
+                SkyBackdrop(sky, skyPlan(SKY, SKY.stars.map { it.id }.toSet(), emptySet()), FINDS, paused = false, onOpenFind = {}, onSeen = {}, onLookUp = {})
+                SkyOverlay(sky)
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        sky.lookUp()
+        compose.mainClock.advanceTimeBy(3000)
+        val scene = sky.scene
+
+        // The Dreamer finished last; a tap on it in its place brings it forward, its name gold, the Voyager stepping back.
+        val size = compose.onRoot().fetchSemanticsNode().size
+        val (x, y) = sky.painter.finishedPoint(scene, 1, size.width.toFloat(), size.height.toFloat())!!
+        compose.onRoot().performTouchInput { click(Offset(x, y)) }
+        compose.mainClock.advanceTimeBy(2400)
+        assertEquals(3L, scene.middle?.id)
+        assertEquals("The Dreamer", scene.labelName)
+        assertEquals(1f, scene.labelDone)
+        assertEquals(1f, scene.middle!!.scale, 0.001f)
+        assertEquals(0f, scene.active!!.dim, 0.001f)
+        compose.onRoot().captureRoboImage("screenshots/sky_11_finished_one_back.png")
+
+        // Its stars work as the middle one's: a tap moves in on a find, and nothing lights.
+        val (sx, sy) = assertNotNullPoint(sky, 2)
+        compose.onRoot().performTouchInput { click(Offset(sx, sy)) }
+        compose.mainClock.advanceTimeBy(3200)
+        assertEquals("e2", scene.focusedCard)
+
+        // Back moves out to the whole sky, then sends the Dreamer to its place and brings the Voyager forward again.
+        compose.runOnIdle { scene.back() }
+        compose.mainClock.advanceTimeBy(1500)
+        assertEquals(null, scene.focusedCard)
+        compose.runOnIdle { scene.back() }
+        compose.mainClock.advanceTimeBy(2400)
+        assertEquals(null, scene.visiting)
+        assertEquals(1L, scene.middle?.id)
+        assertEquals("The Voyager", scene.labelName)
+        assertEquals(0f, scene.labelDone)
+        assertEquals(1f, scene.active!!.dim, 0.001f)
+        assertEquals(SkyScene.SLOT_SCALE, scene.cons.first { it.id == 3L }.scale, 0.001f)
+        assertTrue("still in the sky", sky.lookingUp)
+    }
+
+    @Test
+    fun aSwipeSidewaysGoesBackThroughEveryFinishedConstellationAndForwardAgain() {
+        // Eight finished, two more than have places in the sky.
+        val figures = listOf("cup", "book", "mountain", "lantern", "camera", "harp", "tree", "house")
+        val done = figures.mapIndexed { k, figure ->
+            val cards = (0 until 6).map { "o${k}_$it" }
+            Constellation(10L + k, figure, "Old $k", cards[0], cards, lit = cards, completed = "2026-10-${10 + k}T10:00:00Z")
+        }
+        var today by mutableStateOf(SKY.copy(done = done))
+        val sky = SkyState()
+        compose.setPhoneContent(true) {
+            Box(Modifier.fillMaxSize()) {
+                SkyBackdrop(sky, skyPlan(today, today.stars.map { it.id }.toSet(), emptySet()), FINDS, paused = false, onOpenFind = {}, onSeen = {}, onLookUp = {})
+                SkyOverlay(sky)
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        sky.lookUp()
+        compose.mainClock.advanceTimeBy(3000)
+        val scene = sky.scene
+        assertEquals(7, scene.cons.size)
+        fun swipe(dx: Float) {
+            compose.onRoot().performTouchInput {
+                down(Offset(centerX, centerY))
+                repeat(10) { moveBy(Offset(dx, 0f)); advanceEventTime(16) }
+                up()
+            }
+            compose.mainClock.advanceTimeBy(2400)
+        }
+
+        // Right goes back in time: the newest finished first, down to the oldest, which had no place and came in.
+        swipe(30f)
+        assertEquals(17L, scene.middle?.id)
+        // A new plan waits while one is brought back.
+        today = today.copy(active = Constellation(5, "coin", "The Coin", "n0", ids("n"), lit = listOf("n0")))
+        repeat(7) { swipe(30f) }
+        assertEquals(10L, scene.middle?.id)
+        assertEquals("Old 0", scene.labelName)
+        assertEquals(1L, scene.active?.id)
+        compose.onRoot().captureRoboImage("screenshots/sky_12_oldest_one_back.png")
+        swipe(30f)
+        assertEquals("at the oldest it stays", 10L, scene.middle?.id)
+        assertEquals(0f, scene.middle!!.x, 0.001f)
+
+        // Left comes forward again, to the one forming; the old ones with no place leave the sky.
+        repeat(8) { swipe(-30f) }
+        assertEquals(null, scene.visiting)
+        assertTrue(scene.cons.none { it.id == 10L || it.id == 11L })
+        // Then the plan that waited shows: the server's next constellation gathers in the middle.
+        compose.mainClock.advanceTimeBy(6000)
+        assertEquals(5L, scene.middle?.id)
+    }
+
     private fun assertNotNullPoint(sky: SkyState, i: Int): Pair<Float, Float> {
         val size = compose.onRoot().fetchSemanticsNode().size
         val point = sky.painter.starPoint(sky.scene, i, size.width.toFloat(), size.height.toFloat())

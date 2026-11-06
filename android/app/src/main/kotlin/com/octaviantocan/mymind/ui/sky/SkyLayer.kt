@@ -307,7 +307,7 @@ fun SkyBackdrop(
                     drawText(gold, topLeft = Offset(x, place.second), alpha = shown)
                 }
                 drawText(measured, topLeft = Offset(x, place.second), alpha = shown)
-                val words = scene.active?.figure?.id?.let(::aboutOf).orEmpty()
+                val words = scene.middle?.figure?.id?.let(::aboutOf).orEmpty()
                 if (words.isNotEmpty() && scene.labelTyped >= scene.labelName.length) {
                     val line = measurer.measure(words, about.copy(color = Color(237, 232, 220).copy(alpha = 0.5f), shadow = dark), constraints = Constraints.fixedWidth(width))
                     drawText(line, topLeft = Offset(x, place.second + measured.size.height + 2.dp.toPx()), alpha = shown)
@@ -379,6 +379,8 @@ fun BoxScope.SkyOverlay(sky: SkyState, modifier: Modifier = Modifier) {
     val skyOn by animateFloatAsState(if (scene.skyOn) 1f else 0f, tween(800), label = "sky title")
     val mem by animateFloatAsState(if (scene.memOn) 1f else 0f, tween(500), label = "find title")
     val rise by animateFloatAsState(if (scene.memOn) 0f else 1f, tween(800, easing = CubicBezierEasing(0.2f, 1f, 0.3f, 1f)), label = "find rise")
+    // Read here so what accessibility offers changes as a finished constellation comes back and goes.
+    val visiting = scene.visiting
     Box(
         modifier.fillMaxSize()
             .pointerInput(scene) {
@@ -403,14 +405,20 @@ fun BoxScope.SkyOverlay(sky: SkyState, modifier: Modifier = Modifier) {
                     } finally {
                         if (!ended) {
                             ended = true
-                            scene.pointerUp(x / u, y / u, size.width / u) { sx, sy -> sky.painter.starAt(scene, sx * u, sy * u, size.width.toFloat(), size.height.toFloat()) }
+                            val w = size.width.toFloat()
+                            val h = size.height.toFloat()
+                            scene.pointerUp(
+                                x / u, y / u, w / u,
+                                hitStar = { sx, sy -> sky.painter.starAt(scene, sx * u, sy * u, w, h) },
+                                hitCon = { sx, sy -> sky.painter.finishedAt(scene, sx * u, sy * u, w, h) },
+                            )
                         }
                     }
                 }
             }
             .semantics {
                 contentDescription = "Your sky"
-                customActions = skyActions(scene)
+                customActions = skyActions(scene, visiting)
             },
     ) {
         Box(Modifier.fillMaxWidth().padding(start = 20.dp, top = 12.dp).height(44.dp).graphicsLayer { alpha = skyOn }, contentAlignment = Alignment.CenterStart) {
@@ -427,10 +435,10 @@ fun BoxScope.SkyOverlay(sky: SkyState, modifier: Modifier = Modifier) {
     }
 }
 
-// What accessibility offers in the sky: each star of the middle constellation by its find, and while one shows, open it,
-// the next and previous stars, and back out.
-private fun skyActions(scene: SkyScene): List<CustomAccessibilityAction> {
-    val con = scene.active
+// What accessibility offers in the sky: each star of the middle constellation by its find, each finished constellation
+// to bring back, and while a star's find shows, open it, the next and previous stars, and back out.
+private fun skyActions(scene: SkyScene, visiting: ConState?): List<CustomAccessibilityAction> {
+    val con = scene.middle
     val focused = scene.focusedCard
     val actions = ArrayList<CustomAccessibilityAction>()
     if (con != null && focused != null) {
@@ -445,7 +453,11 @@ private fun skyActions(scene: SkyScene): List<CustomAccessibilityAction> {
             val lit = if (star.lit) "a lit star" else "a dark star"
             actions += CustomAccessibilityAction("${scene.title(star.id).ifEmpty { "A find" }}, $lit") { scene.focusStar(i); true }
         }
-        actions += CustomAccessibilityAction("Back to your library") { scene.back(); true }
+        scene.finished.forEachIndexed { index, done ->
+            if (done.id != visiting?.id) actions += CustomAccessibilityAction("${done.name}, finished") { scene.visit(index); true }
+        }
+        val back = if (visiting != null) "Back to ${scene.active?.name ?: "the whole sky"}" else "Back to your library"
+        actions += CustomAccessibilityAction(back) { scene.back(); true }
     }
     return actions
 }

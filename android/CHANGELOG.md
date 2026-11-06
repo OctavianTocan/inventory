@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.102 (113), 2026-11-06
+Your sky: go back to every constellation you finished.
+
+### Added
+- Tap a finished constellation to bring it back to the middle, with its name in gold, and tap its stars to see their finds again. Swipe right across the sky to go back through every one you finished, oldest last, and left to come forward again. Tap empty sky, or go back, to return it to its place.
+
 ## 0.6.101 (112), 2026-11-06
 Sharing no longer picks a space for you.
 

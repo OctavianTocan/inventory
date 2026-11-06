@@ -110,7 +110,7 @@ internal class SkyPainter {
     /** Which star of the middle constellation is under [x], [y] pixels of a sky [width] by [height], or -1. */
     fun starAt(scene: SkyScene, x: Float, y: Float, width: Float, height: Float): Int {
         val p = camera(scene, width, height)
-        val con = scene.active ?: return -1
+        val con = scene.middle ?: return -1
         var best = -1
         var bestDistance = Float.MAX_VALUE
         for (i in con.stars.indices) {
@@ -131,15 +131,50 @@ internal class SkyPainter {
     /** Where star [i] of the middle constellation shows on a sky [width] by [height], in pixels; null out of sight. */
     fun starPoint(scene: SkyScene, i: Int, width: Float, height: Float): Pair<Float, Float>? {
         val p = camera(scene, width, height)
-        val con = scene.active ?: return null
+        val con = scene.middle ?: return null
         if (i !in con.stars.indices || !p.projectSlide(con.x + con.px[i] * con.scale, con.y + con.py[i] * con.scale, con.z, at)) return null
+        return at.x to at.y
+    }
+
+    /**
+     * Which finished constellation in its place is under [x], [y] pixels of a sky [width] by [height], as its index
+     * among the sky's finished ones, oldest first, or -1. Its figure's whole box counts, so a small one is easy to hit.
+     */
+    fun finishedAt(scene: SkyScene, x: Float, y: Float, width: Float, height: Float): Int {
+        val p = camera(scene, width, height)
+        var best = -1
+        var bestDistance = Float.MAX_VALUE
+        for (con in scene.cons) {
+            if (con === scene.middle || con === scene.active || con.dim < 0.2f) continue
+            val index = scene.finishedIndex(con)
+            if (index < 0 || !p.projectSlide(con.x, con.y, con.z, at)) continue
+            val cx = at.x
+            val cy = at.y
+            val rx = max(Proto.SX * 1.15f * con.scale * at.s, HIT_UNITS * 2f * p.unit)
+            val ry = max(Proto.SY * 1.15f * con.scale * at.s, HIT_UNITS * 2f * p.unit)
+            val dx = (x - cx) / rx
+            val dy = (y - cy) / ry
+            val d = dx * dx + dy * dy
+            if (d < 1f && d < bestDistance) {
+                bestDistance = d
+                best = index
+            }
+        }
+        return best
+    }
+
+    /** Where the middle of finished constellation [index] (oldest first) shows, in pixels; null when it has no place. */
+    fun finishedPoint(scene: SkyScene, index: Int, width: Float, height: Float): Pair<Float, Float>? {
+        val p = camera(scene, width, height)
+        val con = scene.cons.firstOrNull { it !== scene.middle && scene.finishedIndex(it) == index } ?: return null
+        if (!p.projectSlide(con.x, con.y, con.z, at)) return null
         return at.x to at.y
     }
 
     /** Where the middle constellation's name sits: centred on x, its top at y, in pixels; null while out of sight. */
     fun labelAt(scene: SkyScene): Pair<Float, Float>? {
         val p = projector ?: return null
-        val con = scene.active ?: return null
+        val con = scene.middle ?: return null
         if (!p.projectSlide(con.x, con.y + (-Proto.SY * 1.05f - 34f) * con.scale, con.z, at)) return null
         return at.x to at.y
     }
@@ -221,10 +256,10 @@ internal class SkyPainter {
         }
     }
 
-    private fun conOp(scene: SkyScene, con: ConState): Float = if (con === scene.active) 1f else 1f - scene.fz * 0.8f
+    private fun conOp(scene: SkyScene, con: ConState): Float = if (con === scene.middle) 1f else 1f - scene.fz * 0.8f
 
     private fun drawFigure(canvas: Canvas, p: SkyProjector, scene: SkyScene, con: ConState, so: Float) {
-        val op = so * con.figOp * (if (con === scene.active) 0.6f else 0.2f) * con.dim * conOp(scene, con)
+        val op = so * con.figOp * (if (con === scene.middle) 0.6f else 0.2f) * con.dim * conOp(scene, con)
         if (op <= 0.003f || con.figDraw <= 0f) return
         val res = if (con.scale < 0.5f && con.figDraw >= 1f) 384 else 1024
         if (con.figBitmap == null || con.figRes != res || con.figShown != con.figDraw) renderFigure(con, res)
@@ -276,7 +311,7 @@ internal class SkyPainter {
     }
 
     private fun drawLines(canvas: Canvas, p: SkyProjector, scene: SkyScene, con: ConState, so: Float, now: Float) {
-        val isActive = con === scene.active
+        val isActive = con === scene.middle
         val fzD = if (isActive) scene.fz else 0f
         val fi = if (isActive && scene.focusedCon === con) scene.focusedIndex else -1
         val base = so * con.lineVis * con.dim * conOp(scene, con)
@@ -363,7 +398,7 @@ internal class SkyPainter {
     }
 
     private fun drawStars(canvas: Canvas, p: SkyProjector, scene: SkyScene, con: ConState, so: Float, now: Float) {
-        val isActive = con === scene.active
+        val isActive = con === scene.middle
         val fz = scene.fz
         val fzD = if (isActive) fz else 0f
         val fi = if (isActive && scene.focusedCon === con) scene.focusedIndex else -1
