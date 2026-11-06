@@ -36,6 +36,9 @@ const LABELS: [(&str, &str); 17] = [
     ("RedditPost", "Reddit Posts"),
     ("SubstackNote", "Substack Notes"),
 ];
+/// What a card whose title, tags or space names match the whole query gains in the app's search, so it ranks above
+/// every card found only in its other text or by meaning.
+const NAMED_TIER: f64 = 1000.0;
 const TEXT_FIELDS: [&str; 9] = ["title", "description", "summary", "text", "body", "prose", "note", "ocr", "url"];
 const JS_SPACE: &str = r"[\t\n\x{b}\x{c}\r \x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}]";
 const DAY_NS: i128 = 86_400_000_000_000;
@@ -157,6 +160,23 @@ fn fts_term(term: &Term) -> Option<String> {
         other => format!("{other} : "),
     };
     Some(format!("{column}\"{}\"{}", term.value.replace('"', "\"\""), if term.prefix { "*" } else { "" }))
+}
+
+// Whether a space's name holds the term's words in a row, compared as whole lowercase words (the last as a prefix
+// for `word*`), as the search index compares words.
+fn name_has(name: &str, term: &Term) -> bool {
+    let split = |value: &str| -> Vec<String> {
+        value.split(|c: char| !c.is_alphanumeric()).filter(|word| !word.is_empty()).map(str::to_lowercase).collect()
+    };
+    let (name, wanted) = (split(name), split(&term.value));
+    if wanted.is_empty() || wanted.len() > name.len() {
+        return false;
+    }
+    name.windows(wanted.len()).any(|window| {
+        window.iter().zip(&wanted).enumerate().all(|(index, (word, want))| {
+            if term.prefix && index == wanted.len() - 1 { word.starts_with(want.as_str()) } else { word == want }
+        })
+    })
 }
 
 fn date_value(value: &str) -> Option<i128> {
@@ -347,6 +367,49 @@ impl Search {
         Ok(rows.iter().map(|row| (row.text("id").unwrap_or("").to_owned(), (1.0 - row.number("rank").unwrap_or(0.0)) * term.boost)).collect())
     }
 
+    // Cards the whole query matches when each free word is looked for only in a card's title, its tags and the names
+    // of the spaces it is in; field terms and excluded words count as in `matches`.
+    fn named_matches(&self, parsed: &Parsed, rows: &[Row]) -> Result<Scores> {
+        let all: Scores = rows.iter().map(|row| (row.id.clone(), 1.0)).collect();
+        let spaces = self.store.db().query("SELECT id, name FROM spaces WHERE user_id = ?", &[self.user.as_str().into()])?;
+        evaluate(
+            &parsed.tree,
+            &parsed.terms,
+            &all,
+            &mut |term, negative| {
+                if negative || !term.field.is_empty() {
+                    return if !term.field.is_empty() && !TEXT_FIELDS.contains(&term.field.as_str()) { self.predicate(term) } else { self.text_matches(term) };
+                }
+                let mut found = self.named_text_matches(term)?;
+                for space in spaces.iter().filter(|space| name_has(space.text("name").unwrap_or(""), term)) {
+                    for member in self.store.db().query(
+                        &format!("SELECT c.id FROM space_cards s JOIN cards c ON c.id = s.card_id WHERE s.space_id = ? AND s.excluded = 0 AND {}", visible()),
+                        &[space.text("id").unwrap_or("").into(), self.user.as_str().into()],
+                    )? {
+                        found.entry(member.text("id").unwrap_or("").to_owned()).or_insert(1.0);
+                    }
+                }
+                Ok(found)
+            },
+            false,
+        )
+    }
+
+    // `text_matches` limited to the title and tags columns.
+    fn named_text_matches(&self, term: &Term) -> Result<Scores> {
+        let Some(expression) = fts_term(term) else { return Ok(Scores::new()) };
+        let rows = self.store.db().query(
+            &format!(
+                "SELECT d.id, bm25(search_fts, 4, 2, 1, 4, 1, 2, 2, 2) AS rank
+          FROM search_fts JOIN search_documents d ON d.rowid = search_fts.rowid
+          JOIN cards c ON c.id = d.id WHERE search_fts MATCH ? AND {}",
+                visible()
+            ),
+            &[format!("{{title tags}} : ({expression})").as_str().into(), self.user.as_str().into()],
+        )?;
+        Ok(rows.iter().map(|row| (row.text("id").unwrap_or("").to_owned(), (1.0 - row.number("rank").unwrap_or(0.0)) * term.boost)).collect())
+    }
+
     fn matches(&self, parsed: &crate::search_query::Parsed, rows: &[Row], candidates: bool) -> Result<Scores> {
         let all: Scores = rows.iter().map(|row| (row.id.clone(), 1.0)).collect();
         evaluate(
@@ -432,7 +495,9 @@ impl Search {
 
     /// The app's search: words, plus cards close in meaning to the query's free words. A card that matches a word
     /// gains `boost` times its similarity; a card that matches none joins only above `floor`, at most `take` of them.
-    /// Query embeddings are cached, so paging asks Gemini once per query.
+    /// Query embeddings are cached, so paging asks Gemini once per query. Cards that match the query by their title,
+    /// tags or the names of the spaces they are in come first, a card in a space named by the query even when the
+    /// word is nowhere in the card.
     ///
     /// # Arguments
     /// * `q` - Query text in mymind's syntax; `similar:<id>` delegates to [`Search::related`].
@@ -497,6 +562,12 @@ impl Search {
                     joined += 1;
                 }
                 scores.insert(found.id, current.unwrap_or(0.0) + boost * found.score);
+            }
+        }
+        if join.is_some() && !words.is_empty() {
+            for (id, strong) in self.named_matches(&parsed, &rows)? {
+                let current = scores.get(&id).copied().unwrap_or(strong);
+                scores.insert(id, current + NAMED_TIER);
             }
         }
         Ok(Self::result(started, parsed.query, Self::ordered(&scores, &rows, options.get("sortBy"))))

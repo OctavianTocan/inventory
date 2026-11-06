@@ -179,3 +179,38 @@ fn the_app_asks_for_meaning_with_semantic_1() {
     assert_eq!(cards("/app/v1/search?q=quiet%20design&semantic=1&limit=2"), vec![library.word.clone(), library.close.clone()]);
     assert_eq!(library.calls.get(), 1);
 }
+
+#[test]
+fn title_tags_and_space_names_rank_above_the_words_in_a_card() {
+    let library = library();
+    let db = library.store.db();
+    let writer = Writer::new(library.store.clone(), |_, _| {}).unwrap();
+    let card = |title: &str, text: &str| -> String {
+        let created = writer.run(|writer| writer.create(&obj! { "title" => title, "prose" => doc(text) }.into(), &Value::Undefined)).unwrap();
+        created.get("body").get("id").as_str().unwrap().to_owned()
+    };
+    let in_text = card("Long essay", "I was reading this on the train, and reading it again later");
+    let titled = card("Reading nook", "a chair by the window");
+    let tagged = card("Bookshelf", "oak and brass");
+    let in_space = card("Moby Dick", "call me Ishmael");
+    let elsewhere = card("Moby Dick audiobook", "a whale of a tale");
+    db.execute("INSERT INTO annotations (id, user_id, card_id, name, flags, position) VALUES ('tag-1', 'hybrid-user', ?, 'reading', 8, 0)", &[tagged.as_str().into()])
+        .unwrap();
+    db.execute("INSERT INTO spaces (id, user_id, name, color, position, created) VALUES ('space-1', 'hybrid-user', 'To Reading', 'red', 0, '2026-11-06')", &[]).unwrap();
+    db.execute("INSERT INTO spaces (id, user_id, name, color, position, created) VALUES ('space-2', 'hybrid-user', 'Readings', 'blue', 1, '2026-11-06')", &[]).unwrap();
+    db.execute("INSERT INTO space_cards (space_id, card_id, user_id, rank, score) VALUES ('space-1', ?, 'hybrid-user', 0, 1)", &[in_space.as_str().into()]).unwrap();
+    db.execute("INSERT INTO space_cards (space_id, card_id, user_id, rank, score) VALUES ('space-2', ?, 'hybrid-user', 0, 1)", &[elsewhere.as_str().into()]).unwrap();
+
+    let found = ids(block_on(library.search.hybrid("reading", &Hybrid::default())).unwrap());
+    assert_eq!(found.len(), 4, "{found:?}");
+    let named: std::collections::HashSet<_> = found[..3].iter().cloned().collect();
+    assert_eq!(named, [titled.clone(), tagged.clone(), in_space.clone()].into_iter().collect());
+    assert_eq!(found[3], in_text);
+
+    let prefixed = ids(block_on(library.search.hybrid("reading*", &Hybrid::default())).unwrap());
+    assert!(prefixed.contains(&elsewhere), "{prefixed:?}");
+    let filtered = ids(block_on(library.search.hybrid("reading -title:moby", &Hybrid::default())).unwrap());
+    assert!(!filtered.contains(&in_space), "{filtered:?}");
+    let words_only = ids(block_on(library.search.search("reading", &obj! {}.into())).unwrap());
+    assert!(!words_only.contains(&in_space), "the web search is unchanged: {words_only:?}");
+}

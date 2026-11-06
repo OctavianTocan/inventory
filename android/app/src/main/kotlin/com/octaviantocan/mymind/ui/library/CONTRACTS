@@ -457,6 +457,18 @@ not change keep their place.
 Source: Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
 "ThyMind: a Zero-style sync engine", step 5.
 
+@cc [owner:OctavianTocan,label:product] search-puts-named-cards-first
+The app's search (`Search::hybrid`, `/app/v1/search?semantic=1`) MUST list the cards whose
+title, tags or space names match the whole search before every card found only in the rest
+of its text (description, summary, article body, note, words read from its picture, link)
+or by meaning. A card in a space whose name matches the search MUST be found even when the
+word is nowhere in the card. Space names are compared as whole words, the last as a prefix
+for `word*`. Field terms and excluded words still filter these cards. The web library's
+search is unchanged.
+Source: Tavi, 6 November 2026, after searching "reading" in a second person's library
+brought up many cards neither tagged that nor in a space with that name; "Go for it" to
+Claude's suggestion to rank tag, space and title hits first and make space names searchable.
+
 @cc [owner:OctavianTocan,label:product] search-ranks-with-claude-or-codex-on-submit
 Typing in search MUST keep answering at once from words and meaning, with no AI call.
 Pressing search on the keyboard with the chosen engine signed in MUST keep those matches

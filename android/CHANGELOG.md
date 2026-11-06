@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.92 (103), 2026-11-06
+Search shows what you named first.
+
+### Changed
+- Searching now lists the cards whose title, tags or space match your words first, before cards that only mention them somewhere in their text. A card in a space called Reading now turns up when you search "reading", even if the word is nowhere in the card.
+
 ## 0.6.91 (102), 2026-11-06
 The search button looks like Google Photos' AI search.
 
