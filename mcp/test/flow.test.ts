@@ -19,7 +19,7 @@ async function s256(value: string): Promise<string> {
   return Buffer.from(digest).toString("base64url");
 }
 
-function setup(options: { refuse?: boolean } = {}) {
+function setup(options: { refuse?: boolean; owner?: string } = {}) {
   const library = fakeLibrary("app-token-1", options);
   const waits: Promise<unknown>[] = [];
   const env = {
@@ -30,6 +30,7 @@ function setup(options: { refuse?: boolean } = {}) {
     GOOGLE_CLIENT_SECRET: "google-secret",
     GOOGLE_AUTH_URL: "https://google.example/auth",
     GOOGLE_TOKEN_URL: "https://google.example/token",
+    ...(options.owner === undefined ? {} : { OWNER_EMAIL: options.owner }),
   } as unknown as Env;
   const ctx = { waitUntil: (promise: Promise<unknown>) => waits.push(promise), passThroughOnException() {}, props: {} } as unknown as ExecutionContext;
   const call = (input: string | Request, init?: RequestInit) => worker.fetch(new Request(typeof input === "string" ? new URL(input, ORIGIN) : input, init), env, ctx);
@@ -210,6 +211,38 @@ describe("connecting an AI app", () => {
     // Every library request so far was a read on the allowed list, carrying the app token.
     const reads = library.calls.filter((found) => !found.path.startsWith("/app/v1/auth/"));
     expect(reads.every((found) => found.method === "GET" && found.authorization === "Bearer app-token-1")).toBe(true);
+  });
+
+  it("lists the usage analytics tools to the owner only", async () => {
+    const owner = setup({ owner: " Tavi@OctavianTocan.com " });
+    const signedIn = await connect(owner.call);
+    const client = await mcp(owner.call, (await tokens(owner.call, signedIn.client_id, signedIn.back)).access_token);
+    const { tools } = await client.listTools();
+    expect(tools.map((tool) => tool.name).slice(-2)).toEqual(["thymind_analytics_query", "thymind_analytics_daily"]);
+    expect(tools.find((tool) => tool.name === "thymind_analytics_query")!.description).toContain("SUM(_sample_interval)");
+
+    const query = await client.callTool({ name: "thymind_analytics_query", arguments: { sql: "SELECT blob1 AS event, SUM(_sample_interval) AS n FROM thymind_events GROUP BY event" } });
+    const text = (query.content as Array<{ text: string }>)[0]!.text;
+    expect(text).toContain("<saved-content>");
+    expect(text).toContain('"event": "search"');
+    const sent = owner.library.calls.find((found) => found.path === "/app/v1/analytics/query")!;
+    expect(sent.body).toEqual({ sql: "SELECT blob1 AS event, SUM(_sample_interval) AS n FROM thymind_events GROUP BY event" });
+    expect(sent.userAgent).toBe("ThyMind-MCP");
+
+    const refused = await client.callTool({ name: "thymind_analytics_query", arguments: { sql: "DROP TABLE x" } });
+    expect(refused.isError).toBe(true);
+    expect((refused.content as Array<{ text: string }>)[0]!.text).toBe("Only one SELECT question is allowed.");
+
+    const daily = await client.callTool({ name: "thymind_analytics_daily", arguments: { since: "2026-11-01" } });
+    expect((daily.content as Array<{ text: string }>)[0]!.text).toContain("google:tavi@octaviantocan.com");
+    expect(new URLSearchParams(owner.library.calls.find((found) => found.path === "/app/v1/analytics/daily")!.search).get("since")).toBe("2026-11-01");
+
+    for (const other of [setup({ owner: "someone@octaviantocan.com" }), setup()]) {
+      const connected = await connect(other.call);
+      const otherClient = await mcp(other.call, (await tokens(other.call, connected.client_id, connected.back)).access_token);
+      const names = (await otherClient.listTools()).tools.map((tool) => tool.name);
+      expect(names.some((name) => name.startsWith("thymind_analytics"))).toBe(false);
+    }
   });
 
   it("changes cards when the person allowed changes", async () => {

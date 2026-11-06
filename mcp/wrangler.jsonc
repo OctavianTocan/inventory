@@ -16,7 +16,8 @@
   "vars": {
     "PUBLIC_URL": "https://mymind.octaviantocan.com"
   },
-  // Secrets (wrangler secret put): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, the `mymind` Worker's own web client.
+  // Secrets (wrangler secret put): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, the `mymind` Worker's own web client;
+  // OWNER_EMAIL, the one account that gets the usage analytics tools (docs/analytics.md).
   "services": [{ "binding": "LIBRARY_API", "service": "mymind" }],
   // Create with `npx wrangler kv namespace create OAUTH_KV` and paste its id here before the first deploy.
   "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "5da66adf66e34d5daa4e08c2cad6c2c9" }],

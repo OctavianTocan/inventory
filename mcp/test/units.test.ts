@@ -16,6 +16,8 @@ describe("allowed library requests", () => {
     expect(allowed("GET", "/media/abc/shot.png;512x512-t.jpg")).toBe(true);
     expect(allowed("POST", "/app/v1/push")).toBe(true);
     expect(allowed("POST", "/objects/00000002NoteAAAAAAAAAA/restore")).toBe(true);
+    expect(allowed("POST", "/app/v1/analytics/query")).toBe(true);
+    expect(allowed("GET", "/app/v1/analytics/daily")).toBe(true);
   });
 
   it("refuses everything else", () => {
@@ -42,6 +44,9 @@ describe("allowed library requests", () => {
       ["POST", "/media/x.jpg"],
       ["GET", "/objects/abc"],
       ["PATCH", "/users/me"],
+      ["GET", "/app/v1/analytics/query"],
+      ["POST", "/app/v1/analytics/daily"],
+      ["GET", "/app/v1/analytics/other"],
     ]) {
       expect(allowed(method!, path!), `${method} ${path}`).toBe(false);
     }

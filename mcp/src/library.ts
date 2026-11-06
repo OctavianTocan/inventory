@@ -34,6 +34,9 @@ export const ALLOWED: ReadonlyArray<readonly [string, RegExp]> = [
   ["GET", /^\/media\/[^?#]+$/],
   ["POST", /^\/app\/v1\/push$/],
   ["POST", new RegExp(`^/objects/${ID}/restore$`)],
+  // The owner's analytics (`docs/analytics.md`); the `mymind` Worker answers 404 to every other account.
+  ["POST", /^\/app\/v1\/analytics\/query$/],
+  ["GET", /^\/app\/v1\/analytics\/daily$/],
 ];
 
 /**
@@ -147,7 +150,32 @@ export class Library {
     await this.send("POST", `/objects/${id}/restore`, {});
   }
 
-  private async send(method: string, path: string, query: Record<string, string | number | undefined>, body?: unknown): Promise<Response> {
+  /**
+   * Ask the owner's usage analytics one SQL question.
+   *
+   * @param sql One `SELECT` over `thymind_events`.
+   * @returns The kept rows, how many the answer had and whether some were dropped.
+   * @throws LibraryError with the Worker's own words for a refused question, or as for `json`.
+   */
+  async analyticsQuery(sql: string): Promise<{ rows: unknown[]; total: number; cut: boolean }> {
+    const response = await this.send("POST", "/app/v1/analytics/query", {}, { sql }, true);
+    return (await response.json()) as { rows: unknown[]; total: number; cut: boolean };
+  }
+
+  /**
+   * The kept daily totals of every library.
+   *
+   * @param since First UTC day, `YYYY-MM-DD`.
+   * @param library Only this library, when given.
+   * @returns One row per library per day, newest first.
+   * @throws LibraryError as for `json`.
+   */
+  async analyticsDaily(since: string, library?: string): Promise<{ days: unknown[] }> {
+    const response = await this.send("GET", "/app/v1/analytics/daily", { since, library });
+    return (await response.json()) as { days: unknown[] };
+  }
+
+  private async send(method: string, path: string, query: Record<string, string | number | undefined>, body?: unknown, ownWords = false): Promise<Response> {
     if (!allowed(method, path)) {
       throw new LibraryError(0, "This request is not one Inventory's MCP server makes.");
     }
@@ -161,13 +189,23 @@ export class Library {
     }
     const response = await this.binding.fetch(url.toString(), {
       method,
-      headers: { authorization: `Bearer ${this.appToken}`, accept: "application/json", ...(body === undefined ? {} : { "content-type": "application/json" }) },
+      headers: {
+        authorization: `Bearer ${this.appToken}`,
+        accept: "application/json",
+        // Names this server's requests in the library's usage analytics (client "mcp").
+        "user-agent": "ThyMind-MCP",
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
       redirect: "manual",
     });
     if (response.ok) return response;
     if (response.status === 401) {
       throw new LibraryError(401, "Inventory signed this connection out. Ask the person to connect Inventory again.", true);
+    }
+    if (ownWords && response.status !== 404) {
+      const problem = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new LibraryError(response.status, problem.error ?? `Inventory did not answer (${response.status}).`);
     }
     if (response.status === 404) throw new LibraryError(404, "Not found: the card or space does not exist.");
     if (response.status === 400) {

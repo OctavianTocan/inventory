@@ -5,6 +5,7 @@ use std::borrow::Cow;
 
 use mm_js::{Object, Value, json, number, obj, text as js_text};
 
+use crate::analytics;
 use crate::app_api::prose_text;
 use crate::runtime;
 use crate::sky;
@@ -195,11 +196,22 @@ pub fn push(store: &Store, writer: &Writer, body: &Value) -> Result<Pushed> {
         if id <= last {
             continue;
         }
-        match writer.run(|writer| {
+        let outcome = writer.run(|writer| {
             let made = apply(store, writer, name, args)?;
             record(&**db, client, id)?;
             Ok(made)
-        }) {
+        });
+        let card = match &outcome {
+            Ok(Some(Made::Card { id, .. })) => id.clone(),
+            _ => args.get("cardId").as_str().unwrap_or_default().to_owned(),
+        };
+        let status = match &outcome {
+            Ok(_) => 200.0,
+            Err(error) if refused(error) => 409.0,
+            Err(_) => 500.0,
+        };
+        store.record(analytics::Event { status, ..analytics::Event::named("change").detail(name).card(&card) });
+        match outcome {
             Ok(Some(Made::Tag(tag))) => {
                 tags.insert(id.to_string(), tag);
             }

@@ -438,6 +438,11 @@ impl Api {
         })
     }
 
+    /// The library's store, where the host installs its analytics sink (`Store::set_analytics`).
+    pub fn store(&self) -> &Rc<Store> {
+        &self.store
+    }
+
     /// The enrichment queue, for tests and shutdown to drain.
     pub fn jobs(&self) -> &Enrichment {
         &self.jobs

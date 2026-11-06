@@ -29,6 +29,9 @@ const KNOWN: &[&str] = &[
     "STORE_READONLY",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
+    "ANALYTICS",
+    "ANALYTICS_ACCOUNT_ID",
+    "ANALYTICS_TOKEN",
 ];
 
 thread_local! {

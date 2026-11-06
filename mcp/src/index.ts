@@ -41,7 +41,8 @@ const api = {
       resource: new URL(`${env.PUBLIC_URL}/mcp`),
       ...(ctx.auth.expiresAt !== undefined ? { expiresAt: ctx.auth.expiresAt } : {}),
     };
-    return createMcpHandler(() => createServer(library, onSignedOut)).fetch(request, { authInfo });
+    const owner = Boolean(env.OWNER_EMAIL?.trim()) && ctx.props.email.trim().toLowerCase() === env.OWNER_EMAIL!.trim().toLowerCase();
+    return createMcpHandler(() => createServer(library, onSignedOut, owner)).fetch(request, { authInfo });
   },
 };
 

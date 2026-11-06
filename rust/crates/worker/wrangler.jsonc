@@ -51,6 +51,12 @@
     }
   ],
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "mymind" }],
+  // Usage analytics (docs/analytics.md): every event goes to this Analytics Engine dataset, created on its first write.
+  // `ANALYTICS=off` stops the writes. Owner questions need the secrets ANALYTICS_ACCOUNT_ID and ANALYTICS_TOKEN (an
+  // API token with Account Analytics: Read).
+  "analytics_engine_datasets": [{ "binding": "EVENTS", "dataset": "thymind_events" }],
+  // The day's totals for every library, kept in the Auth object with no end date (docs/analytics.md).
+  "triggers": { "crons": ["30 23 * * *"] },
   "limits": { "cpu_ms": 300000 },
   "observability": { "enabled": true }
 }

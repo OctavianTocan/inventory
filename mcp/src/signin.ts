@@ -26,6 +26,8 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_AUTH_URL?: string;
   GOOGLE_TOKEN_URL?: string;
+  /** The owner's email (secret), the one account that gets the usage analytics tools. Unset lists them to nobody. */
+  OWNER_EMAIL?: string;
 }
 
 /** What each grant carries, encrypted by the OAuth library with the token itself. */

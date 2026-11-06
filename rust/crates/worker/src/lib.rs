@@ -3,6 +3,7 @@
 //! Claude Code and Codex (`/app/v1/ai/`) run in each account's own `AgentHome` container. Feedback (`/app/v1/feedback`)
 //! is checked here and passed to the feedback runner Worker (docs/feedback.md).
 
+mod analytics;
 mod auth_object;
 mod bucket_r2;
 mod fetch;
@@ -326,7 +327,16 @@ async fn route(request: web_sys::Request, env: Env) -> Result<Reply> {
         gate_headers.remove("content-length");
         gate_headers.remove("transfer-encoding");
     }
+    let started = js_sys::Date::now();
+    let client = mm_core::analytics::client_of(headers.get("user-agent").unwrap_or_default());
     let gate = send(&auth_stub(&env)?, forward(url.as_str(), &method, &gate_headers, if with_body { request.body() } else { None })?).await?;
+    if with_body {
+        let named = mm_core::analytics::Event::named("signin").detail(url.path());
+        let event = mm_core::analytics::Event { client: client.to_owned(), status: f64::from(gate.status), duration_ms: js_sys::Date::now() - started, ..named };
+        let email = gate.headers.get("x-mymind-email").unwrap_or_default().to_owned();
+        let library = gate.headers.get("x-mymind-library").unwrap_or_default().to_owned();
+        analytics::write(&env, &event, &mm_core::analytics::Origin { library, email, ..Default::default() });
+    }
     let Some(library) = gate.headers.get("x-mymind-library").map(str::to_owned) else {
         let listing = url.path() == "/download" || url.path() == "/download/";
         if listing && gate.status == 401 {
@@ -344,15 +354,43 @@ async fn route(request: web_sys::Request, env: Env) -> Result<Reply> {
     headers.set("x-mymind-credential", gate.headers.get("x-mymind-credential").unwrap_or_default());
     headers.set("x-mymind-email", gate.headers.get("x-mymind-email").unwrap_or_default());
     headers.set("x-mymind-sub", gate.headers.get("x-mymind-sub").unwrap_or_default());
+    let email = gate.headers.get("x-mymind-email").unwrap_or_default().to_owned();
+    if analytics::serves(url.path()) {
+        return analytics::answer(&request, &env, &url, &email).await.map(Reply::Built);
+    }
     let stub = env.durable_object("LIBRARY").map_err(worker_error)?.get_by_name(&library).map_err(worker_error)?;
-    if mm_ai::serves(url.path()) {
-        return ai(&request, &env, &url, &headers, stub).await.map(Reply::Built);
+    let reply = if mm_ai::serves(url.path()) {
+        ai(&request, &env, &url, &headers, stub).await.map(Reply::Built)?
+    } else if mm_feedback::serves(url.path()) {
+        feedback(&request, &env, &url, &headers).await.map(Reply::Built)?
+    } else {
+        let forwarded = forward(url.as_str(), &method, &headers, request.body())?;
+        Reply::Passed(stub.fetch_with_request(worker::Request::from(forwarded)).await.map_err(worker_error)?)
+    };
+    if let Some(route) = mm_core::analytics::route_of(url.path()) {
+        let status = match &reply {
+            Reply::Built(response) => response.status,
+            Reply::Passed(response) => response.status_code(),
+        };
+        let named = mm_core::analytics::Event::named("request").detail(&format!("{method} {route}"));
+        let event = mm_core::analytics::Event { client: client.to_owned(), status: f64::from(status), duration_ms: js_sys::Date::now() - started, ..named };
+        analytics::write(&env, &event, &mm_core::analytics::Origin { library, email, ..Default::default() });
     }
-    if mm_feedback::serves(url.path()) {
-        return feedback(&request, &env, &url, &headers).await.map(Reply::Built);
+    Ok(reply)
+}
+
+/// Keep the day's totals for every library (`docs/analytics.md`), on the cron trigger in `wrangler.jsonc`.
+///
+/// # Arguments
+/// * `event` - The trigger, whose time names the day.
+/// * `env` - The Worker's bindings.
+/// * `_context` - Unused.
+#[event(scheduled)]
+pub async fn scheduled(event: worker::ScheduledEvent, env: Env, _context: worker::ScheduleContext) {
+    runtime::configure(&env);
+    if let Err(error) = analytics::daily_totals(&env, event.schedule()).await {
+        analytics::log_failure(&error);
     }
-    let forwarded = forward(url.as_str(), &method, &headers, request.body())?;
-    Ok(Reply::Passed(stub.fetch_with_request(worker::Request::from(forwarded)).await.map_err(worker_error)?))
 }
 
 /// Names the AI kit's volumes and containers before any object answers, since an `AgentHome` checks logins against them.

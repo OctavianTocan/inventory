@@ -2,6 +2,7 @@
 //! Worker (`mm-worker`) each implement.
 
 pub mod ai;
+pub mod analytics;
 pub mod ai_tags;
 pub mod api;
 pub mod app_api;

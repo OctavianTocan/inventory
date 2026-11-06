@@ -436,6 +436,12 @@ impl AppApi {
                         self.search.search(&q, &Value::Object(Object::new())).await?
                     };
                     let ids: Vec<String> = found.matches.into_iter().map(|found| found.id).collect();
+                    let semantic = if search_param(url, "semantic").as_deref() == Some("1") { "meaning" } else { "words" };
+                    let offset = search_param(url, "cursor").unwrap_or_default();
+                    if offset.is_empty() || offset == "0" {
+                        let event = crate::analytics::Event::named("search").detail(semantic);
+                        self.store.record(crate::analytics::Event { words: q.clone(), results: ids.len() as f64, ..event });
+                    }
                     self.offset_page(url, &self.store.cards_by_ids(&ids, None)?)?
                 }
             },

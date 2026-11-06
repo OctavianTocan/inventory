@@ -43,6 +43,7 @@ export interface Call {
   path: string;
   search: string;
   authorization: string | null;
+  userAgent?: string | null;
   body?: unknown;
 }
 
@@ -91,7 +92,7 @@ export function fakeLibrary(token = "app-token-1", options: { refuse?: boolean }
       const request = new Request(input, init);
       const url = new URL(request.url);
       const body = request.method === "POST" ? await request.json().catch(() => undefined) : undefined;
-      calls.push({ method: request.method, path: url.pathname, search: url.search, authorization: request.headers.get("authorization"), body });
+      calls.push({ method: request.method, path: url.pathname, search: url.search, authorization: request.headers.get("authorization"), userAgent: request.headers.get("user-agent"), body });
       if (url.pathname === "/app/v1/auth/nonce") {
         const nonce = `nonce-${state.nonces.size + 1}`;
         state.nonces.add(nonce);
@@ -125,6 +126,14 @@ export function fakeLibrary(token = "app-token-1", options: { refuse?: boolean }
           }
         }
         return Response.json({ lastChangeId: changes.at(-1)?.id ?? 0, refused, tagIds, cardIds });
+      }
+      if (url.pathname === "/app/v1/analytics/query" && request.method === "POST") {
+        const { sql } = body as { sql: string };
+        if (!/^select/i.test(sql)) return Response.json({ error: "Only one SELECT question is allowed." }, { status: 400 });
+        return Response.json({ columns: ["event", "n"], total: 1, cut: false, rows: [{ event: "search", n: 3 }] });
+      }
+      if (url.pathname === "/app/v1/analytics/daily") {
+        return Response.json({ days: [{ day: "2026-11-05", library: "u-tavi", account: "google:tavi@octaviantocan.com", totals: { cards: 2 } }] });
       }
       const restore = /^\/objects\/([^/]+)\/restore$/.exec(url.pathname);
       if (restore && request.method === "POST") return known(restore[1]) ? Response.json({}) : Response.json({ error: "not-found" }, { status: 404 });

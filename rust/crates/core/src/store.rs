@@ -464,6 +464,7 @@ pub struct Store {
     db: Rc<dyn Sql>,
     default_user: RefCell<Option<String>>,
     counters: RefCell<HashMap<String, i128>>,
+    analytics: RefCell<Option<crate::analytics::Sink>>,
 }
 
 impl Store {
@@ -477,7 +478,26 @@ impl Store {
     pub fn new(db: Rc<dyn Sql>) -> Result<Self> {
         db.exec_batch(SCHEMA)?;
         install_search(&*db)?;
-        Ok(Self { db, default_user: RefCell::new(None), counters: RefCell::new(HashMap::new()) })
+        Ok(Self { db, default_user: RefCell::new(None), counters: RefCell::new(HashMap::new()), analytics: RefCell::new(None) })
+    }
+
+    /// Send this library's usage events to `sink` from now on, or stop with `None` (`docs/analytics.md`).
+    ///
+    /// # Arguments
+    /// * `sink` - Called once for every event the library records.
+    pub fn set_analytics(&self, sink: Option<crate::analytics::Sink>) {
+        *self.analytics.borrow_mut() = sink;
+    }
+
+    /// Record one usage event through the installed sink; nothing happens without one, so the native server and
+    /// tests record nothing.
+    ///
+    /// # Arguments
+    /// * `event` - What happened.
+    pub fn record(&self, event: crate::analytics::Event) {
+        if let Some(sink) = self.analytics.borrow().as_ref() {
+            sink(&event);
+        }
     }
 
     /// The SQL handle writers use (`store.db`).

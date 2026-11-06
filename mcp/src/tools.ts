@@ -5,6 +5,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+import { registerAnalytics } from "./analytics";
 import { type Card, type CardDetail, type CardResult, type Space, cardDetail, cardResult, detailMarkdown, picturePath, resultsMarkdown } from "./cards";
 import { Library, LibraryError } from "./library";
 import { VIEW_HTML, VIEW_MIME, VIEW_URI } from "./view";
@@ -81,9 +82,10 @@ function answer<T extends Record<string, unknown>>(data: T, markdown: string, fo
  * @param library The person's library.
  * @param onSignedOut Called when the library says the app token no longer works, so the grant can be revoked and
  *   the client asked to connect again.
+ * @param owner True when the signed-in account is `OWNER_EMAIL`, which adds the usage analytics tools.
  * @returns A server with Inventory's tools registered in a fixed order.
  */
-export function createServer(library: Library, onSignedOut: () => void): McpServer {
+export function createServer(library: Library, onSignedOut: () => void, owner = false): McpServer {
   const server = new McpServer({ name: "thymind", title: "Inventory", version: "1.0.0" }, { instructions: INSTRUCTIONS });
 
   let names: Promise<Map<string, string>> | undefined;
@@ -237,6 +239,7 @@ export function createServer(library: Library, onSignedOut: () => void): McpServ
   );
 
   registerWrites(server, library, spaceNames, (error) => failure(error, onSignedOut));
+  if (owner) registerAnalytics(server, library, (error) => failure(error, onSignedOut));
 
   return server;
 }

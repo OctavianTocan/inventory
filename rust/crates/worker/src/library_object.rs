@@ -184,6 +184,7 @@ impl Inner {
                 Ok(Value::Object(digests))
             }
             "counts" => Ok(obj! { "library" => library, "tables" => self.tables()? }.into()),
+            "totals" => mm_core::analytics::library_totals(&**db),
             _ => Err(Error::status(404, "Unknown import step")),
         }
     }
@@ -295,6 +296,7 @@ impl Library {
         self.prepare_member(request, library)?;
         let site = self.inner.site(library).await?;
         let mut incoming = request_from(request)?;
+        self.watch(&site, request, library);
         if incoming.pathname() == "/app/v1/changes" {
             site.api().jobs().hash_pictures(PICTURES_PER_SYNC);
             site.api().jobs().name_notes(NOTES_PER_SYNC);
@@ -308,6 +310,19 @@ impl Library {
                 Ok(Response::send(500, text, &Headers::new()))
             }
         }
+    }
+
+    // Send the library's usage events (pushed changes, searches) to Analytics Engine as this request's. A library
+    // answers one person, so only the client can be wrong when two requests interleave, and it is the latest one's.
+    fn watch(&self, site: &Hosted, request: &web_sys::Request, library: &str) {
+        let header = |name: &str| request.headers().get(name).ok().flatten().unwrap_or_default();
+        let origin = mm_core::analytics::Origin { library: library.to_owned(), email: header("x-mymind-email"), ..Default::default() };
+        let client = mm_core::analytics::client_of(&header("user-agent"));
+        let env = self.inner.env.clone();
+        site.api().store().set_analytics(Some(Box::new(move |event| {
+            let event = mm_core::analytics::Event { client: client.to_owned(), ..event.clone() };
+            crate::analytics::write(&env, &event, &origin);
+        })));
     }
 
     // Insert the user row of a library created at first sign-in. An imported library, and any library that already

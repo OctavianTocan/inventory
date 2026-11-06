@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use mm_core::analytics;
 use mm_core::auth::{Auth as Gate, AuthOptions};
 use mm_core::auth_store::{Identity, library_for_session, library_of, list_users, set_library};
 use mm_core::http::{Body, Headers, Response};
@@ -104,6 +105,20 @@ async fn internal(db: &Rc<DoSql>, gate: &Gate, call: &str, request: &web_sys::Re
                 }
             }
             json_response(&Value::Array(live))
+        }
+        "putDaily" => {
+            let given = json::parse(&String::from_utf8_lossy(&body(request)?.bytes().await?))?;
+            let day = given.get("day").as_str().unwrap_or_default().to_owned();
+            for row in given.get("rows").as_array().into_iter().flatten() {
+                let (library, account) = (row.get("library").as_str().unwrap_or_default(), row.get("account").as_str().unwrap_or_default());
+                analytics::put_daily(&**db, &day, library, account, row.get("totals"))?;
+            }
+            Ok(Response::new(204, Headers::new(), Body::Empty))
+        }
+        "daily" => {
+            let given = json::parse(&String::from_utf8_lossy(&body(request)?.bytes().await?))?;
+            let (since, library) = (given.get("since").as_str().unwrap_or_default(), given.get("library").as_str().unwrap_or_default());
+            json_response(&analytics::daily(&**db, since, library)?)
         }
         other => Err(Error::status(404, format!("Unknown call {other}"))),
     }
