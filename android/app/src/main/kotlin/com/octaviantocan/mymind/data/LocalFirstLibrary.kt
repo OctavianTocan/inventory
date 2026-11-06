@@ -126,6 +126,13 @@ class LocalFirstLibrary(
         return ApiResult.Ok(Unit)
     }
 
+    // Only the push takes a move, so it always waits in the outbox, which shows it in the copy at once.
+    override suspend fun moveInSpace(spaceId: String, cardId: String, afterId: String?): ApiResult<Unit> {
+        if (!outbox.queue(Edit.MoveInSpace(cardId, spaceId, afterId))) return ApiResult.Failed(ApiFailure.Server(0))
+        sync.start(afterCurrent = true)
+        return ApiResult.Ok(Unit)
+    }
+
     // A copy kept up to date: whole, and the server still has the changes feed that feeds it.
     private suspend fun wholeCopy() = sync.available && copy.complete()
 

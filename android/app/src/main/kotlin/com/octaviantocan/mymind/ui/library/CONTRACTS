@@ -543,3 +543,20 @@ only and MUST open nothing except through the person's own connected agent.
 Source: Tavi, 6 November 2026 ("We should also have a link thing to share a space, not just
 a card, directly"). Its place under Add to this space and copying rather than sharing are
 Claude's choices, not yet confirmed by Tavi.
+
+@cc [owner:OctavianTocan,label:product;design;motion] spaces-keep-your-own-card-order
+A space that is not smart MUST keep the order its person gives its cards, on the server, so
+every phone and the AI agents see it, and All MUST NOT be reorderable: it keeps the order it
+has. Reordering MUST happen in the space's own grid, the cards in the shape they are in, never
+in a different look first: holding a card and dragging it lifts its tile under the finger, the
+other cards make way as it passes over them, the grid scrolls when it is held at an edge, and
+it stays where it is let go. Holding a card and letting go without moving MUST still open its
+menu. A move MUST be one change, the card and the card it now follows (none for the first
+place), that the phone shows at once and sends through the push when it can, so it works
+offline (gallery-keeps-offline-changes).
+Source: Tavi, 6 November 2026 ("people should be able to reorder the cards inside of a space.
+Not inside of the 'All' view, but in spaces yes"; then, of a separate list of rows, "No.
+Reordering should happen in the shape they're in. No turning it into a different look
+first"). Hold-and-drag in a space, with hold-and-slide choosing kept to All and search, was
+agreed with the multi-select work; leaving smart spaces out is Claude's choice, not yet
+confirmed by Tavi.

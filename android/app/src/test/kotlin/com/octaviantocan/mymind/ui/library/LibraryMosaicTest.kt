@@ -23,6 +23,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -880,6 +881,42 @@ class LibraryMosaicTest {
         compose.onNodeWithContentDescription("Photo 2").performTouchInput { longClick() }
         assertEquals(listOf("m1"), opened)
         assertEquals(listOf("m2"), held)
+    }
+
+    @Test
+    fun inASpaceAHeldCardDraggedOverAnotherTakesItsPlaceAndAHoldLetGoOpensTheMenu() {
+        val opened = mutableListOf<String>()
+        val held = mutableListOf<String>()
+        val moves = mutableListOf<Pair<String, String?>>()
+        compose.setContent {
+            MymindTheme(dark = true) {
+                LibraryMosaic(FeedState(cards, endReached = true), {}, { opened += it.id }, mosaic = MosaicState(3),
+                    onLongPressCard = { held += it.id }, onMoveCard = { card, after -> moves += card.id to after })
+            }
+        }
+        compose.onNodeWithContentDescription("Photo 2").performTouchInput { longClick() }
+        compose.waitForIdle()
+        assertEquals("a hold let go without moving opens the menu", listOf("m2"), held)
+        assertTrue(moves.isEmpty())
+
+        val from = compose.onNodeWithContentDescription("Photo 1").fetchSemanticsNode().boundsInRoot.center
+        val to = compose.onNodeWithContentDescription("Photo 3").fetchSemanticsNode().boundsInRoot.center
+        compose.onRoot().performTouchInput {
+            down(from)
+            advanceEventTime(viewConfiguration.longPressTimeoutMillis + 100)
+            moveBy(Offset(1f, 0f))
+        }
+        compose.waitForIdle()
+        compose.onRoot().performTouchInput {
+            repeat(12) { step -> moveTo(from + (to - from) * ((step + 1) / 12f)) }
+            up()
+        }
+        compose.waitForIdle()
+        assertEquals(listOf("m1" to "m3"), moves)
+        assertEquals("dragging opens nothing", listOf("m2"), held)
+        assertTrue(opened.isEmpty())
+        compose.onNodeWithContentDescription("Photo 4").performClick()
+        assertEquals("a tap still opens the card", listOf("m4"), opened)
     }
 
     @Test

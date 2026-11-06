@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
@@ -129,6 +130,25 @@ class LibraryScreenshotTest(private val dark: Boolean) {
             SpaceContent(space, FeedState(LibrarySamples.grid, endReached = true), onBack = {}, onLoadMore = {}, onOpenCard = {}, onAdd = {})
         }
         capture("S07_space_open")
+    }
+
+    @Test
+    fun spaceCardDragged() {
+        val space = LibrarySamples.spaces.spaces.first()
+        shell(Tab.Spaces) {
+            SpaceContent(space, FeedState(LibrarySamples.grid, endReached = true), onBack = {}, onLoadMore = {}, onOpenCard = {}, onAdd = {},
+                onMoveCard = { _, _ -> })
+        }
+        compose.onRoot().performTouchInput {
+            val from = androidx.compose.ui.geometry.Offset(width * 0.27f, height * 0.3f)
+            down(from)
+            advanceEventTime(viewConfiguration.longPressTimeoutMillis + 100)
+            moveBy(androidx.compose.ui.geometry.Offset(1f, 0f))
+        }
+        compose.onRoot().performTouchInput {
+            repeat(10) { moveBy(androidx.compose.ui.geometry.Offset(width * 0.045f, height * 0.018f)) }
+        }
+        capture("S07_space_card_dragged")
     }
 
     @Test

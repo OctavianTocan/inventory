@@ -319,6 +319,21 @@ class LibraryViewModel(
     fun upload(files: List<UploadFile>, spaceId: String?) = uploads.add(files, spaceId)
 
     /**
+     * Moves a card to a new place in a space's own order; the space's list shows it once the phone's copy has it.
+     *
+     * @param spaceId The open space.
+     * @param cardId The card dropped in its new place.
+     * @param afterId The card it now follows, or null for the first place.
+     */
+    fun moveInSpace(spaceId: String, cardId: String, afterId: String?) {
+        Track.event("action", screen = "space", card = cardId, detail = "MoveInSpace")
+        viewModelScope.launch {
+            val moved = library.moveInSpace(spaceId, cardId, afterId)
+            if (changes == null || moved is ApiResult.Failed) spaceFeed(spaceId).reread()
+        }
+    }
+
+    /**
      * @param spaceId Space to list.
      * @return The space's cards, read on first use and kept while this view model lives.
      */

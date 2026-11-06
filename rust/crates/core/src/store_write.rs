@@ -1108,6 +1108,43 @@ impl Writer {
         Ok(Value::Object(Object::new()))
     }
 
+    /// Move a card to a new place in a space's own order, the order an opened space shows its cards in.
+    ///
+    /// The space's cards are numbered again from 0 in their new order, excluded ones keeping their place among them, so
+    /// ranks stay whole numbers; only the cards whose number changed are written.
+    ///
+    /// # Arguments
+    /// * `space_id` - Space id.
+    /// * `id` - Card id; it must be in the space.
+    /// * `after` - The card it now follows, or `None` to make it the space's first card.
+    ///
+    /// # Returns
+    /// An empty object.
+    ///
+    /// # Errors
+    /// Status 404 `Space not found`, or `Card not found` when the card or the card it follows is not in the space;
+    /// the database's error.
+    pub fn move_in_space(&self, space_id: &str, id: &str, after: Option<&str>) -> Result<Value> {
+        self.space(space_id)?;
+        let db = self.store.db();
+        let rows = db.query("SELECT card_id, rank FROM space_cards WHERE space_id = ? ORDER BY rank, rowid", &[space_id.into()])?;
+        let mut order: Vec<(String, f64)> = rows.iter().map(|row| (row.text("card_id").unwrap_or("").to_owned(), row.number("rank").unwrap_or(0.0))).collect();
+        let from = order.iter().position(|(card, _)| card == id).ok_or_else(|| fail(404, "Card not found"))?;
+        let moved = order.remove(from);
+        let to = match after {
+            None => 0,
+            Some(after) => order.iter().position(|(card, _)| card == after).ok_or_else(|| fail(404, "Card not found"))? + 1,
+        };
+        order.insert(to, moved);
+        for (rank, (card, old)) in order.iter().enumerate() {
+            if *old != rank as f64 {
+                db.execute("UPDATE space_cards SET rank = ? WHERE space_id = ? AND card_id = ?", &[(rank as f64).into(), space_id.into(), card.as_str().into()])?;
+            }
+        }
+        self.store_space(space_id, "space:updated", 1)?;
+        Ok(Value::Object(Object::new()))
+    }
+
     /// Retain a smart-space exclusion (`exclude`).
     ///
     /// # Arguments

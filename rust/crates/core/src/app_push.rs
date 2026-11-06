@@ -128,6 +128,13 @@ fn apply(store: &Store, writer: &Writer, name: &str, args: &Value) -> Result<Opt
         "add-to-space" | "remove-from-space" => {
             writer.membership(text(args, "spaceId")?, &card(&**db, args)?, name == "remove-from-space")?;
         }
+        "move-in-space" => {
+            let after = match args.get("afterId") {
+                after if after.is_nullish() => None,
+                after => Some(card(&**db, &obj! { "cardId" => after.clone() }.into())?.into_owned()),
+            };
+            writer.move_in_space(text(args, "spaceId")?, &card(&**db, args)?, after.as_deref())?;
+        }
         "create-space" => {
             let id = text(args, "spaceId")?;
             if !phone_id(id) {
@@ -162,7 +169,9 @@ fn refused(error: &Error) -> bool {
 /// and listed in `refused`; the phone takes the server's version. Names: `pin` (`cardId`, `pinned`), `trash`
 /// (`cardId`), `rotate` (`cardId`, `rotation`, the picture's clockwise turn in degrees, as [`Writer::patch`] keeps
 /// it), `note` (`cardId`, `text`, one paragraph per line), `add-tag` (`cardId`, `name`), `remove-tag`
-/// (`tagId`), `add-to-space` and `remove-from-space` (`cardId`, `spaceId`), `create-space` (`spaceId`, 32 lowercase
+/// (`tagId`), `add-to-space` and `remove-from-space` (`cardId`, `spaceId`), `move-in-space` (`cardId`, `spaceId`,
+/// `afterId`, the card it now follows or absent for the first place, as [`Writer::move_in_space`] does), `create-space`
+/// (`spaceId`, 32 lowercase
 /// hex digits the phone made, `name`, `color`), `delete-space` (`spaceId`), `create-card` (`cardId` made the same
 /// way, `content`, `source`, `note`) and `visit` (`cardId`, a find opened from Back today or the sky, as
 /// [`sky::visit`] records it).

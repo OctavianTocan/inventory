@@ -390,6 +390,7 @@ class LibraryCopy(context: Context, private val session: Session, private val io
             }
             is Edit.CreateCard -> if (cardIn(db, edit.cardId) == null) keep(db, edit.placeholder())
             is Edit.Visit -> {}
+            is Edit.MoveInSpace -> showMove(db, edit)
             else -> showOnCard(db, edit)
         }
     }
@@ -402,6 +403,24 @@ class LibraryCopy(context: Context, private val session: Session, private val io
         keep(db, if (joins) edited.copy(spaceRanks = edited.spaceRanks.orEmpty() + (edit.spaceId to nextRank(db, edit.spaceId))) else edited)
     }
 
+    // Moves a card within its space as the server does: the space's cards in their order, the card taken out and put
+    // back after the one it follows, then every card numbered again from 0. Nothing moves when either card is not there.
+    private fun showMove(db: SQLiteDatabase, edit: Edit.MoveInSpace) {
+        val members = db.rawQuery("SELECT card FROM cards WHERE spaces LIKE ?", arrayOf("%,${edit.spaceId},%")).use { rows ->
+            buildList { while (rows.moveToNext()) add(decode(rows.getString(0))) }
+        }.filter { edit.spaceId in it.spaces.orEmpty() }.sortedBy { it.spaceRanks?.get(edit.spaceId) ?: Double.MAX_VALUE }.toMutableList()
+        val from = members.indexOfFirst { it.id == edit.cardId }
+        if (from < 0) return
+        val moved = members.removeAt(from)
+        val to = edit.afterId?.let { after -> members.indexOfFirst { it.id == after }.takeIf { it >= 0 }?.plus(1) ?: return } ?: 0
+        members.add(to, moved)
+        members.forEachIndexed { rank, card ->
+            if (card.spaceRanks?.get(edit.spaceId) != rank.toDouble()) {
+                keep(db, card.copy(spaceRanks = card.spaceRanks.orEmpty() + (edit.spaceId to rank.toDouble())))
+            }
+        }
+    }
+
     // The place after the last card of a space, by the places the copy's cards carry.
     private fun nextRank(db: SQLiteDatabase, spaceId: String): Double =
         db.rawQuery("SELECT card FROM cards WHERE spaces LIKE ?", arrayOf("%,$spaceId,%")).use { rows ->
@@ -412,7 +431,8 @@ class LibraryCopy(context: Context, private val session: Session, private val io
     // things again, since the answer may have started the copy over or brought the cards of a deleted space.
     private fun showQueued(db: SQLiteDatabase, ids: Set<String>) {
         queuedIn(db).forEach { (_, edit) ->
-            if (edit.cardId in ids || edit is Edit.CreateSpace || edit is Edit.DeleteSpace || edit is Edit.CreateCard) show(db, edit)
+            if (edit.cardId in ids || edit is Edit.CreateSpace || edit is Edit.DeleteSpace || edit is Edit.CreateCard ||
+                edit is Edit.MoveInSpace) show(db, edit)
         }
     }
 

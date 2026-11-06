@@ -216,4 +216,14 @@ interface Library {
      * @return Success once recorded or queued; a library that keeps no sky does nothing.
      */
     suspend fun visit(cardId: String): ApiResult<Unit> = ApiResult.Ok(Unit)
+
+    /**
+     * Moves a card to a new place in a space's own order, the order the opened space shows its cards in.
+     *
+     * @param spaceId The space; never All, which keeps its own order.
+     * @param cardId The card, which is in the space.
+     * @param afterId The card it now follows, or null to make it the space's first card.
+     * @return Success once moved or queued; a library that cannot keep a space's order fails with [ApiFailure.Invalid].
+     */
+    suspend fun moveInSpace(spaceId: String, cardId: String, afterId: String?): ApiResult<Unit> = ApiResult.Failed(ApiFailure.Invalid)
 }

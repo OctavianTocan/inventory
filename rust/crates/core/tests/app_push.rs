@@ -1,5 +1,6 @@
 //! The app's push (`POST /app/v1/push`) over a synthetic library: changes applied in order and once, changes the
-//! library turns down, one record per phone, spaces and cards made on the phone, and malformed pushes.
+//! library turns down, one record per phone, spaces and cards made on the phone, cards moved within a space, and
+//! malformed pushes.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -250,4 +251,37 @@ fn a_picture_turned_on_the_phone_stays_turned_and_a_full_turn_takes_it_off() {
 
     send(&library, "phone-a", vec![change(5.0, "rotate", obj! { "cardId" => first, "rotation" => 360.0 }.into())]).unwrap();
     assert!(card(&library, first).get("rotation").is_nullish(), "an upright picture sends no rotation");
+}
+
+fn ranks(library: &Library, ids: &[&str], space: &str) -> Vec<f64> {
+    ids.iter().map(|id| card(library, id).get("spaceRanks").get(space).as_f64().unwrap()).collect()
+}
+
+#[test]
+fn a_card_moved_in_a_space_takes_its_new_place_and_the_space_is_numbered_again() {
+    let library = library();
+    let third = library.writer.run(|writer| writer.create(&obj! { "title" => "Third" }.into(), &Value::Undefined)).unwrap().get("body").get("id").as_str().unwrap().to_owned();
+    let ids = [library.ids[0].as_str(), library.ids[1].as_str(), third.as_str()];
+    let space = library.writer.run(|writer| writer.create_space(&obj! { "name" => "Reading" }.into())).unwrap().get("id").as_str().unwrap().to_owned();
+    for id in ids {
+        library.writer.run(|writer| writer.membership(&space, id, false)).unwrap();
+    }
+    assert_eq!(ranks(&library, &ids, &space), vec![0.0, 1.0, 2.0]);
+
+    let answer = send(
+        &library,
+        "phone-a",
+        vec![
+            change(1.0, "move-in-space", obj! { "cardId" => ids[2], "spaceId" => space.as_str() }.into()),
+            change(2.0, "move-in-space", obj! { "cardId" => ids[0], "spaceId" => space.as_str(), "afterId" => ids[1] }.into()),
+            change(3.0, "move-in-space", obj! { "cardId" => ids[0], "spaceId" => space.as_str(), "afterId" => "gone" }.into()),
+            change(4.0, "move-in-space", obj! { "cardId" => "gone", "spaceId" => space.as_str() }.into()),
+        ],
+    )
+    .unwrap();
+    assert_eq!(numbers(answer.get("refused")), vec![3.0, 4.0], "a card that is not in the space is turned down");
+    // Third first, then Second, then First.
+    assert_eq!(ranks(&library, &ids, &space), vec![2.0, 1.0, 0.0]);
+    let listed: Vec<String> = library.store.space(&space).unwrap().unwrap().objects.into_iter().map(|object| object.id).collect();
+    assert_eq!(listed, vec![ids[2], ids[1], ids[0]]);
 }

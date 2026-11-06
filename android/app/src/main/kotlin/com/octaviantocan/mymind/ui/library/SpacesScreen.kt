@@ -164,6 +164,7 @@ fun SpacesScreen(
             modifier = modifier,
             onRefresh = { viewModel.refreshSpaceFeed(openSpace.id) },
             onLongPressCard = onLongPressCard?.let { press -> { card: Card -> press(card, openSpace.id) } },
+            onMoveCard = if (openSpace.smart == true) null else { card, after -> viewModel.moveInSpace(openSpace.id, card.id, after) },
         )
     }
 }
@@ -298,6 +299,8 @@ private class SpaceMosaicTiles(private val spaces: Map<String, Space>, private v
  * @param onRename Called with the trimmed new name when a rename is saved in the options; null leaves it out.
  * @param onRefresh Called when the mosaic is pulled down to refresh.
  * @param onLongPressCard Called with a long-pressed card, or null to ignore long presses.
+ * @param onMoveCard Called when a held card is dragged to a new place in the grid and let go, with the card and the
+ *   card it now follows (null when first); null leaves the space's order alone.
  */
 @Composable
 fun SpaceContent(
@@ -312,6 +315,7 @@ fun SpaceContent(
     onRename: ((String) -> Unit)? = null,
     onRefresh: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
+    onMoveCard: ((Card, String?) -> Unit)? = null,
 ) {
     val mosaic = rememberMosaicState(reels = true)
     val scroll = rememberLazyListState()
@@ -321,7 +325,7 @@ fun SpaceContent(
             PageSpinner()
         } else {
             PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop), top = VIEW_HEADER_HEIGHT) {
-                LibraryMosaic(feed, onLoadMore, onOpenCard, state = scroll, mosaic = mosaic, onLongPressCard = onLongPressCard, header = {
+                LibraryMosaic(feed, onLoadMore, onOpenCard, state = scroll, mosaic = mosaic, onLongPressCard = onLongPressCard, onMoveCard = onMoveCard, header = {
                     GalleryTitle(space.name.orEmpty(), start = SPACE_BACK_INSET, end = SPACE_MENU_INSET)
                 })
             }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +72,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.lerp as lerpColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
@@ -80,6 +82,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -112,6 +115,8 @@ import com.octaviantocan.mymind.ui.theme.MymindTheme
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.ensureActive
@@ -167,6 +172,11 @@ private data class MosaicLoadPosition(val count: Int, val last: Int, val total: 
  * @param header Scrolls above the cards, such as the page title.
  * @param tiles Draws and shapes the cards; library cards by default.
  * @param label What the gallery is called to accessibility services.
+ * @param onMoveCard Called when a held card is dragged to a new place and let go, with the card and the card it now
+ *   follows (null when it is now first); null leaves the cards' order alone. While it is set, holding a card and
+ *   letting go without moving opens [onLongPressCard] on release, and holding then dragging moves the card in the grid
+ *   as it is, the other cards making way under the finger (Tavi, 6 November 2026: "Reordering should happen in the
+ *   shape they're in").
  */
 @Composable
 internal fun LibraryMosaic(
@@ -180,6 +190,7 @@ internal fun LibraryMosaic(
     header: (@Composable () -> Unit)? = null,
     tiles: MosaicTiles = GalleryMosaicTiles,
     label: String = "Card gallery",
+    onMoveCard: ((Card, String?) -> Unit)? = null,
 ) {
     val colors = LibraryStyle.colors
     val backdropShown = MymindTheme.palette.backdrop != null
@@ -201,6 +212,19 @@ internal fun LibraryMosaic(
     val latestFeed by rememberUpdatedState(feed)
     val latestMore by rememberUpdatedState(onLoadMore)
     val headerItems = if (header == null) 0 else 1
+    // The cards in the order a drag has put them, until the feed brings that order back; null shows the feed's order.
+    var arranged by remember { mutableStateOf<List<Card>?>(null) }
+    // The card being dragged, where the finger is, and where in the card's tile the finger took hold of it.
+    var liftedId by remember { mutableStateOf<String?>(null) }
+    var finger by remember { mutableStateOf(Offset.Zero) }
+    var grab by remember { mutableStateOf(Offset.Zero) }
+    // The card the dragged one last swapped places with, so it does not swap back while the finger is still over it.
+    val swapped = remember { arrayOfNulls<String>(1) }
+    LaunchedEffect(feed.cards) { if (liftedId == null) arranged = null }
+    val latestMove by rememberUpdatedState(onMoveCard)
+    val latestHold by rememberUpdatedState(onLongPressCard)
+    val haptic = LocalHapticFeedback.current
+    val cards = arranged ?: feed.cards
     BoxWithConstraints(modifier.fillMaxSize()) {
         // The grid's own width: everything below works inside the margins, and touches are moved in by [margin].
         val margin = with(density) { MOSAIC_MARGIN.toPx() }
@@ -211,7 +235,7 @@ internal fun LibraryMosaic(
         }
         val bottomPadding = with(density) { 156.dp.toPx() }
         val page = if (mosaic.reels) height else 0f
-        val layouts = remember(feed.cards, width, gaps, tiles, page, margin) { MosaicLayouts(feed.cards, width, gaps, tiles, page, margin) }
+        val layouts = remember(cards, width, gaps, tiles, page, margin) { MosaicLayouts(cards, width, gaps, tiles, page, margin) }
 
         fun clampOrigin(value: Float): Float {
             // Reels have no header above their first page and no room after their last.
@@ -325,6 +349,13 @@ internal fun LibraryMosaic(
             return MosaicAnchor(layouts.cards[nearest].id, at,
                 Offset((at.x - cell.left) / cell.width, (at.y - cell.top) / cell.height))
         }
+        /** The card whose tile is under [point], in the gallery's own coordinates, and that tile's place there. */
+        fun tileAt(point: Offset): Pair<Int, Rect>? {
+            if (layouts.level(1).cells.isEmpty()) return null
+            val drawn = frame()
+            val local = point - Offset(margin, 0f)
+            return drawn.window(height).firstOrNull { drawn.cell(it).contains(local) }?.let { it to drawn.cell(it).translate(margin, 0f) }
+        }
         /** Lands on the current columns from where the gallery is, starting at [speed] stops per millisecond. */
         fun settle(speed: Float = 0f) {
             settling?.cancel()
@@ -430,6 +461,56 @@ internal fun LibraryMosaic(
         }
         val latestLayouts by rememberUpdatedState(layouts)
         val latestHeaderItems by rememberUpdatedState(headerItems)
+        val tileAtLatest by rememberUpdatedState<(Offset) -> Pair<Int, Rect>?> { point -> tileAt(point) }
+        // Moves the dragged card to the place of the card under the finger, the others making way.
+        fun follow() {
+            val id = liftedId ?: return
+            val over = tileAtLatest(finger)?.let { latestLayouts.cards[it.first].id }
+            if (over == null || over == id) {
+                swapped[0] = null
+                return
+            }
+            if (over == swapped[0]) return
+            val list = (arranged ?: latestFeed.cards).toMutableList()
+            val from = list.indexOfFirst { it.id == id }
+            val to = list.indexOfFirst { it.id == over }
+            if (from < 0 || to < 0) return
+            list.add(to, list.removeAt(from))
+            arranged = list
+            swapped[0] = over
+            haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+        }
+        // Lets go of the dragged card: a card held and let go without moving opens its menu; one moved keeps its place.
+        fun drop(card: Card, from: Int, moved: Boolean) {
+            liftedId = null
+            swapped[0] = null
+            val list = arranged
+            val to = list?.indexOfFirst { it.id == card.id } ?: -1
+            if (!moved || list == null || to < 0 || to == from) {
+                arranged = null
+                if (!moved) latestHold?.invoke(card)
+                return
+            }
+            latestMove?.invoke(card, list.getOrNull(to - 1)?.id)
+        }
+        // While a card is dragged near the top or bottom edge, the gallery scrolls under it.
+        if (onMoveCard != null) LaunchedEffect(liftedId) {
+            if (liftedId == null) return@LaunchedEffect
+            val edge = with(density) { MOVE_EDGE.toPx() }
+            // Waits without asking for frames until the finger reaches an edge, then scrolls a step a frame.
+            while (true) {
+                val step = snapshotFlow {
+                    when {
+                        finger.y < edge -> -MOVE_SCROLL_STEP
+                        finger.y > height - edge -> MOVE_SCROLL_STEP
+                        else -> 0f
+                    }
+                }.first { it != 0f }
+                withFrameNanos { }
+                // At the end the gallery cannot scroll, so it waits for the finger to move before trying again.
+                if (state.scrollBy(step) != 0f) follow() else snapshotFlow { finger }.drop(1).first()
+            }
+        }
         DisposableEffect(mosaic, state) {
             onDispose {
                 settling?.cancel()
@@ -536,6 +617,44 @@ internal fun LibraryMosaic(
                     mosaic.cancelPinch()
                 }
             }
+            .then(if (onMoveCard == null) Modifier else Modifier.pointerInput(mosaic, state) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    if (mosaic.reel > 0f || mosaic.isPinching) return@awaitEachGesture
+                    // A hold is a finger kept still for the long-press time; moving first scrolls, a second finger pinches.
+                    val broke = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                            if (change == null || !change.pressed || event.changes.count { it.pressed } != 1 ||
+                                (change.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+                        }
+                        true
+                    }
+                    if (broke != null) return@awaitEachGesture
+                    val (index, cell) = tileAtLatest(down.position) ?: return@awaitEachGesture
+                    val card = latestLayouts.cards[index]
+                    val from = (arranged ?: latestFeed.cards).indexOfFirst { it.id == card.id }
+                    grab = down.position - cell.topLeft
+                    finger = down.position
+                    liftedId = card.id
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    var moved = false
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            event.changes.forEach { it.consume() }
+                            if (!change.pressed) break
+                            finger = change.position
+                            if (!moved && (finger - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                            if (moved) follow()
+                        }
+                    } finally {
+                        drop(card, from, moved)
+                    }
+                }
+            })
             .sheetEdgeFade(top = 0.dp, bottom = 130.dp, color = colors.background, bottomStrength = { 1f - mosaic.reel },
                 // While the cards scroll or move under the fingers the fade is not blurred, so a frame draws the gallery
                 // once rather than once more for each blur layer.
@@ -589,7 +708,8 @@ internal fun LibraryMosaic(
                 }) {
                     // Its own composable, so the cards coming into view recompose only the cards, not the whole gallery.
                     MosaicBody(layouts, mosaic, height, margin, { frame() }, { anchor?.cardId?.let(layouts.byId::get) },
-                        { state.isScrollInProgress }, onOpenCard, onLongPressCard)
+                        { state.isScrollInProgress }, onOpenCard, onLongPressCard,
+                        lifted = { liftedId?.let { MosaicLift(it, finger - grab) } }, onMoveCard = onMoveCard)
                 }
             }
         }
@@ -605,6 +725,7 @@ internal fun LibraryMosaic(
 private fun MosaicBody(
     layouts: MosaicLayouts, mosaic: MosaicState, height: Float, margin: Float, frame: () -> MosaicFrame, focal: () -> Int?,
     scrolling: () -> Boolean, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
+    lifted: () -> MosaicLift? = { null }, onMoveCard: ((Card, String?) -> Unit)? = null,
 ) {
     val latestFrame by rememberUpdatedState(frame)
     val currentFrame = remember { { latestFrame() } }
@@ -637,7 +758,7 @@ private fun MosaicBody(
         ProjectedMosaicCards(layouts, mosaic, composed, focalIndex, shape, prefetch.unders.filterTo(HashSet()) { it in window },
             // At rest in reels every page shows at once; on the way there each waits until it is readied.
             if (tilesShown) prefetch.pages.filterTo(HashSet()) { it in pages } else pages.toSet(),
-            tilesShown, if (tilesShown) emptySet() else prefetch.tiles, currentFrame, margin, Modifier.fillMaxSize().testTag("mosaic-projection"), onOpenCard, onLongPressCard)
+            tilesShown, if (tilesShown) emptySet() else prefetch.tiles, currentFrame, margin, Modifier.fillMaxSize().testTag("mosaic-projection"), onOpenCard, onLongPressCard, lifted, onMoveCard)
     }
 }
 
@@ -888,7 +1009,9 @@ private fun mosaicSlots(index: Int, shape: MosaicShape?, unders: Set<Int>, tile:
 private fun ProjectedMosaicCards(
     layouts: MosaicLayouts, mosaic: MosaicState, indices: List<Int>, focal: Int?, shape: MosaicShape?, unders: Set<Int>, pages: Set<Int>, tiles: Boolean,
     readied: Set<Int>, frame: () -> MosaicFrame, left: Float, modifier: Modifier, onOpenCard: (Card) -> Unit, onLongPressCard: ((Card) -> Unit)?,
+    lifted: () -> MosaicLift? = { null }, onMoveCard: ((Card, String?) -> Unit)? = null,
 ) {
+    val latestMove by rememberUpdatedState(onMoveCard)
     val slots = indices.flatMap { mosaicSlots(it, shape, unders, tiles || it in readied, it in pages) }
     val density = LocalDensity.current
     val corner = with(density) { layouts.tiles.corner.toPx() }
@@ -921,10 +1044,13 @@ private fun ProjectedMosaicCards(
                             // would rebuild every tile on screen as the fingers land and again as they let go.
                             // A tile readied in reels is hidden from touch and from accessibility until it shows; the box
                             // around it changes, not the tile, so showing it rebuilds nothing.
-                            else -> Box(if (tiles) Modifier else Modifier.clearAndSetSemantics {}, propagateMinConstraints = true) {
+                            else -> Box(if (!tiles) Modifier.clearAndSetSemantics {} else if (onMoveCard != null) Modifier.moveActions(layouts.cards, index) { moved, after ->
+                                latestMove?.invoke(moved, after)
+                            } else Modifier, propagateMinConstraints = true) {
                                 layouts.tiles.Tile(card,
                                     onClick = { if (!mosaic.isPinching) onOpenCard(card) },
-                                    onLongClick = onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
+                                    // The gallery's own hold takes a card that can move, and opens its menu on release.
+                                    onLongClick = if (onMoveCard != null) null else onLongPressCard?.let { press -> { if (!mosaic.isPinching) press(card) } },
                                     enabled = true, imageRequestSizePx = imageSize, modifier = tile)
                             }
                         }
@@ -934,6 +1060,9 @@ private fun ProjectedMosaicCards(
         }
     }) { children, constraints ->
         val current = frame()
+        val held = lifted()
+        val heldIndex = held?.let { layouts.byId[it.cardId] }
+        val heldLift = with(density) { MOVE_LIFT.toPx() }
         // Reels reach the screen's edges, so their pages have square corners and no shadow.
         val round = corner * (1f - mosaic.reel)
         val lifted = 1f - mosaic.reel
@@ -974,12 +1103,17 @@ private fun ProjectedMosaicCards(
             val tile = child.measureTile(cell, layouts.wordsFrame(slot.index, if (slot.under) far else near).takeIf { words })
             // A tile with words changing shape casts one shadow, from its layout underneath, which is always opaque.
             val lift = if (reshapes && !slot.under) 0f else with(density) { layouts.tiles.elevation(layouts.cards[slot.index]).toPx() } * lifted
+            // The dragged card follows the finger at its own size, raised over the others.
+            if (slot.index == heldIndex && !slot.copy && !slot.under && held != null) {
+                return@zip PlacedTile(tile, Rect(held.topLeft, draw.rect.size), words, 1f, slot.index, lift = heldLift)
+            }
             PlacedTile(tile, draw.rect.translate(left, 0f), words, alpha, slot.index, lift = lift)
         }.filterNotNull()
         layout(constraints.maxWidth, constraints.maxHeight) {
             for (pagesNow in listOf(false, true)) {
-                placed.forEach { if (it.page == pagesNow && it.index != focal) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round, it.lift, shadow) }
-                placed.forEach { if (it.page == pagesNow && it.index == focal) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round, it.lift, shadow) }
+                val top = heldIndex ?: focal
+                placed.forEach { if (it.page == pagesNow && it.index != top) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round, it.lift, shadow) }
+                placed.forEach { if (it.page == pagesNow && it.index == top) placeTile(it.tile, it.cell, it.words, it.alpha, if (it.page) 0f else round, it.lift, shadow) }
             }
         }
     }
@@ -991,6 +1125,29 @@ private fun ProjectedMosaicCards(
  */
 private class PlacedTile(val tile: Placeable, val cell: Rect, val words: Boolean, val alpha: Float, val index: Int = -1, val page: Boolean = false,
     val lift: Float = 0f)
+
+/** The card being dragged ([cardId]) and where its tile's top left corner is under the finger, in the gallery's pixels. */
+private class MosaicLift(val cardId: String, val topLeft: Offset)
+
+/** Height, above the others, of the card being dragged. */
+private val MOVE_LIFT = 12.dp
+
+/** How near the top or bottom edge a dragged card scrolls the gallery. */
+private val MOVE_EDGE = 96.dp
+
+/** Pixels the gallery scrolls each frame while a dragged card is held at an edge. */
+private const val MOVE_SCROLL_STEP = 14f
+
+/**
+ * Move earlier and Move later for accessibility services, on the tile of card [index] of [cards]: each calls [move] with
+ * the card and the card it would then follow, as dropping it there would.
+ */
+private fun Modifier.moveActions(cards: List<Card>, index: Int, move: (Card, String?) -> Unit): Modifier = semantics {
+    customActions = listOfNotNull(
+        if (index > 0) CustomAccessibilityAction("Move earlier") { move(cards[index], cards.getOrNull(index - 2)?.id); true } else null,
+        if (index < cards.lastIndex) CustomAccessibilityAction("Move later") { move(cards[index], cards[index + 1].id); true } else null,
+    )
+}
 
 /** An inert second drawing of what [drawing] recorded: no semantics or touches. */
 @Composable

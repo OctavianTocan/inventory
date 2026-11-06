@@ -116,6 +116,40 @@ class OutboxTest {
     }
 
     @Test
+    fun aCardMovedInASpaceTakesItsPlaceAtOnceAndGoesOutThroughThePush() = runBlocking {
+        val inSpace = { id: String, rank: Double -> testCard(id, spaces = listOf("s1")).copy(spaceRanks = mapOf("s1" to rank)) }
+        copy.apply(ChangesPage(listOf(inSpace("a", 0.0), inSpace("b", 1.0), inSpace("c", 5.0)), next = "t1"))
+        val library = pushedLibrary()
+        pushAnswer = { ApiResult.Failed(ApiFailure.Network) }
+        assertEquals(ApiResult.Ok(Unit), library.moveInSpace("s1", "c", null))
+        assertEquals(listOf("c", "a", "b"), copy.spaceCards("s1")!!.cards.map { it.id })
+        assertEquals(listOf(0.0, 1.0, 2.0), listOf("c", "a", "b").map { copy.card(it)!!.spaceRanks!!.getValue("s1") })
+        assertEquals(ApiResult.Ok(Unit), library.moveInSpace("s1", "a", "b"))
+        assertEquals(listOf("c", "b", "a"), copy.spaceCards("s1")!!.cards.map { it.id })
+
+        pushAnswer = { request -> ApiResult.Ok(PushAnswer(request.changes.last().id)) }
+        assertNull(pushing.send())
+        val moves = pushed.last().changes.filter { it.name == "move-in-space" }
+        assertEquals(listOf("c", "a"), moves.map { (it.args["cardId"] as JsonPrimitive).content })
+        assertEquals(JsonPrimitive("b"), moves.last().args["afterId"])
+        assertTrue(pushing.isEmpty())
+    }
+
+    @Test
+    fun aMoveThePushTurnsDownPutsTheWholeSpaceBackAsTheServerHasIt() = runBlocking {
+        val inSpace = { id: String, rank: Double -> testCard(id, spaces = listOf("s1")).copy(spaceRanks = mapOf("s1" to rank)) }
+        copy.apply(ChangesPage(listOf(inSpace("a", 0.0), inSpace("b", 1.0)), next = "t1"))
+        val library = pushedLibrary()
+        pushAnswer = { ApiResult.Failed(ApiFailure.Network) }
+        library.moveInSpace("s1", "b", null)
+        assertEquals(listOf("b", "a"), copy.spaceCards("s1")!!.cards.map { it.id })
+        server.cardsById = mapOf("a" to inSpace("a", 0.0), "b" to inSpace("b", 1.0))
+        pushAnswer = { request -> ApiResult.Ok(PushAnswer(request.changes.last().id, refused = listOf(request.changes.last().id))) }
+        assertNull(pushing.send())
+        assertEquals(listOf("a", "b"), copy.spaceCards("s1")!!.cards.map { it.id })
+    }
+
+    @Test
     fun withoutTheFeedAnOnlineChangeGoesStraightToTheServer() = runBlocking {
         feed = mapOf("t1" to ApiResult.Failed(ApiFailure.Server(404)))
         assertEquals(SyncOutcome.Unavailable, sync.sync())

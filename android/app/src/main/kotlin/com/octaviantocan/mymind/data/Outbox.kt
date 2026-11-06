@@ -59,6 +59,15 @@ sealed interface Edit {
     data class RemoveFromSpace(override val cardId: String, val spaceId: String) : Edit
 
     /**
+     * Moves the card to a new place in the space's own order.
+     *
+     * @property spaceId The space, which holds the card.
+     * @property afterId The card it now follows, or null for the space's first place.
+     */
+    @Serializable @SerialName("move-in-space")
+    data class MoveInSpace(override val cardId: String, val spaceId: String, val afterId: String? = null) : Edit
+
+    /**
      * Makes an empty space at the end of the list.
      *
      * @property spaceId The id the phone made for it ([newPhoneId]), which the server keeps.
@@ -136,7 +145,7 @@ fun Card.edited(edit: Edit): Card? = when (edit) {
     is Edit.RemoveTag -> copy(tags = tags.orEmpty().filterNot { it.id == edit.tagId })
     is Edit.AddToSpace -> if (edit.spaceId in spaces.orEmpty()) this else copy(spaces = spaces.orEmpty() + edit.spaceId)
     is Edit.RemoveFromSpace -> copy(spaces = spaces.orEmpty() - edit.spaceId, spaceRanks = spaceRanks?.minus(edit.spaceId))
-    is Edit.CreateSpace, is Edit.CreateCard, is Edit.Visit -> this
+    is Edit.CreateSpace, is Edit.CreateCard, is Edit.Visit, is Edit.MoveInSpace -> this
     is Edit.DeleteSpace -> copy(spaces = spaces.orEmpty() - edit.spaceId, spaceRanks = spaceRanks?.minus(edit.spaceId))
 }
 
@@ -270,6 +279,8 @@ class Outbox(
     private suspend fun refuse(edit: Edit) {
         if (edit is Edit.Visit) return
         val card = edit.cardId?.let { copy.card(it) }
+        // A move numbered the whole space again on the phone, so every card in it goes back to the server's place.
+        if (edit is Edit.MoveInSpace) copy.spaceCards(edit.spaceId)?.cards?.forEach { if (it.id != edit.cardId) reread(it.id) }
         edit.cardId?.let { reread(it) }
         onRefused(edit, card)
     }
@@ -296,8 +307,9 @@ class Outbox(
         is Edit.RemoveFromSpace -> server.removeFromSpace(edit.spaceId, edit.cardId)
         // Only the push keeps the id the phone made, so a server without it cannot take the space or card.
         is Edit.CreateSpace, is Edit.CreateCard -> ApiResult.Failed(ApiFailure.Invalid)
-        // A server without the push keeps no sky.
+        // A server without the push keeps no sky, and no order of a space's own.
         is Edit.Visit -> ApiResult.Ok(Unit)
+        is Edit.MoveInSpace -> ApiResult.Failed(ApiFailure.Invalid)
         is Edit.DeleteSpace -> server.deleteSpace(edit.spaceId)
     }
 }

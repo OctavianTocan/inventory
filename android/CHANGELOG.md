@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.93 (104), 2026-11-06
+Put the cards in a space in your own order.
+
+### Added
+- In a space, hold a card and drag it: it lifts out of the grid, the other cards make way as you move it, and it stays where you let go. The space keeps that order on every phone, and All keeps its own. Holding a card and letting go without moving still opens its menu.
+
 ## 0.6.92 (103), 2026-11-06
 Search shows what you named first.
 
