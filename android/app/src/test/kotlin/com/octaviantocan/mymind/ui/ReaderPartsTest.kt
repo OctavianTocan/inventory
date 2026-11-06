@@ -59,7 +59,7 @@ class ReaderPartsTest {
         assertEquals(listOf("Read in Reader Mode", "Copy text"), labels(ReaderPart.Page, article))
         assertEquals(listOf("Edit tags", "Copy tags"), labels(ReaderPart.Tags, article))
         assertEquals(listOf("Edit tags"), labels(ReaderPart.Tags, article.copy(tags = null)))
-        assertEquals(listOf("Copy picture", "Share picture"), labels(ReaderPart.Picture, article))
+        assertEquals(listOf("Save picture", "Copy picture", "Share picture"), labels(ReaderPart.Picture, article))
         val photo = testCard("p1", type = "Image", blob = Blob(path = "/media/p1.jpg", type = "image/jpeg"))
         assertEquals(listOf("Save picture", "Copy picture", "Share picture"), labels(ReaderPart.Picture, photo))
         assertEquals(emptyList<PartChoice>(), partChoices(ReaderPart.Page, testCard("w1")))

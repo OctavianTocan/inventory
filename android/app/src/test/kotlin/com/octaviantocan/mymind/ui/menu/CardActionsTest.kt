@@ -3,6 +3,7 @@ package com.octaviantocan.mymind.ui.menu
 import com.octaviantocan.mymind.data.ApiFailure
 import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.Blob
+import com.octaviantocan.mymind.data.Cover
 import com.octaviantocan.mymind.data.Edit
 import com.octaviantocan.mymind.data.edited
 import com.octaviantocan.mymind.ui.library.FakeLibrary
@@ -59,10 +60,10 @@ class CardActionsTest {
 
     @Test
     fun imageGetsSameVibeDownloadAndCopyButNotForSvg() {
-        val png = testCard("i", type = "Image", blob = Blob(type = "image/png"))
+        val png = testCard("i", type = "Image", blob = Blob(type = "image/png", path = "u/i.png"))
         assertEquals(
             listOf(CardMenuItem(CardMenuAction.SameVibe, locked = true), CardMenuItem(CardMenuAction.Download), CardMenuItem(CardMenuAction.Copy)),
-            cardMenuItems(png, null).take(3),
+            cardMenuItems(png, null).filter { it.action in setOf(CardMenuAction.SameVibe, CardMenuAction.Download, CardMenuAction.Copy) },
         )
         assertFalse(CardMenuItem(CardMenuAction.SameVibe, locked = true) in cardMenuItems(png, null, setOf("sameVibe")))
         val svg = testCard("i", type = "Image", blob = Blob(type = "image/svg+xml"))
@@ -126,6 +127,28 @@ class CardActionsTest {
         assertEquals(CardMenuOutcome.Failed(ApiFailure.Server(404)), actions.perform(CardMenuItem(CardMenuAction.Download), missing, null))
         assertFalse("m.png" in saved)
         assertEquals(listOf("media:u/i.png", "media:u/m.png"), library.calls)
+    }
+
+    @Test
+    fun aPictureCopiesAndSavesItsPictureAndALinkWithACoverDoesNot() = runTest {
+        val actions = CardActions(FakeLibrary(), saver)
+        val photo = testCard("p", type = "Image", blob = Blob(type = "image/png", path = "u/p.png"))
+        assertEquals(CardMenuOutcome.CopyPicture(photo), actions.perform(CardMenuItem(CardMenuAction.Copy), photo, null))
+        // A picture saved from the web keeps no file, so it is saved as drawn.
+        val fromWeb = testCard("w", type = "Image", url = "https://example.com/w.jpg").copy(cover = Cover("https://example.com/w.jpg", 400, 300))
+        assertTrue(CardMenuItem(CardMenuAction.Download) in cardMenuItems(fromWeb, null))
+        assertEquals(CardMenuOutcome.SavePicture(fromWeb), actions.perform(CardMenuItem(CardMenuAction.Download), fromWeb, null))
+        val article = testCard("a", type = "Article", url = "https://example.com/a").copy(cover = Cover("https://example.com/a.jpg", 400, 300))
+        assertTrue(cardMenuItems(article, null).none { it.action == CardMenuAction.Copy || it.action == CardMenuAction.Download })
+    }
+
+    @Test
+    fun manyFindsCopyTheirWordsAndLinksOneAfterAnother() {
+        val note = testCard("n", type = "Note", note = "my words")
+        val link = testCard("l", type = "Article", title = "A page", url = "https://example.com/a")
+        val photo = testCard("p", type = "Image", blob = Blob(type = "image/png", path = "u/p.png"))
+        assertEquals("my words\n\nA page\nhttps://example.com/a", manyWords(listOf(note, link, photo.copy(title = null))))
+        assertNull(manyWords(listOf(photo.copy(title = null))))
     }
 
     @Test

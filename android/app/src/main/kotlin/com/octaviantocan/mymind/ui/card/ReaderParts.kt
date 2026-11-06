@@ -130,7 +130,7 @@ fun partChoices(part: ReaderPart, card: Card): List<PartChoice> {
             else listOf(PartChoice(PartAction.Read, "Read in Reader Mode"), PartChoice(PartAction.Copy, "Copy text"))
         ReaderPart.Tags -> listOfNotNull(PartChoice(PartAction.EditTags, "Edit tags"), words?.let { PartChoice(PartAction.Copy, "Copy tags") })
         ReaderPart.Picture -> if (galleryPicture(card) == null) emptyList() else listOfNotNull(
-            PartChoice(PartAction.SavePicture, "Save picture").takeIf { card.blob?.path != null },
+            PartChoice(PartAction.SavePicture, "Save picture"),
             PartChoice(PartAction.CopyPicture, "Copy picture"),
             PartChoice(PartAction.SharePicture, "Share picture"),
         )

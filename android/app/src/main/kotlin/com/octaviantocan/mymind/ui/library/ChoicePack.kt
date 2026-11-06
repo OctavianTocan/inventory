@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -63,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.data.Card
 import com.octaviantocan.mymind.data.Space
+import com.octaviantocan.mymind.ui.menu.manyWords
 import com.octaviantocan.mymind.ui.theme.AppFontFamily
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import com.octaviantocan.mymind.ui.theme.MymindTheme
@@ -92,28 +94,36 @@ private fun packText(size: Int, weight: FontWeight = FontWeight.Normal, color: C
  * @param count How many finds are chosen.
  * @param onTag Opens the tag sheet.
  * @param onSpace Opens the space sheet.
+ * @param onCopy Opens the sheet that copies or saves the finds.
  * @param onClose Empties the backpack.
  * @param modifier Places the bar.
  */
 @Composable
-fun ChoicePackBar(count: Int, onTag: () -> Unit, onSpace: () -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun ChoicePackBar(count: Int, onTag: () -> Unit, onSpace: () -> Unit, onCopy: () -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val c = packColors()
     val paper = LibraryStyle.colors.raised
-    val ink = LibraryStyle.colors.text
     Row(
         modifier.heightIn(min = 68.dp).clip(CircleShape).background(paper).padding(start = 12.dp, end = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(BadgeInk), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.size(16.dp)) { drawPath(sparkPath(size.width), PackGold) }
-        }
-        Column(Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
-            Text(findsLabel(count), style = packText(15, FontWeight.SemiBold, ink), maxLines = 1)
-            Text("in your backpack", style = packText(12, color = LibraryStyle.colors.muted), maxLines = 1)
+        // The count sits in the gold-on-ink badge, so Tag, Space and Copy fit beside it on a narrow phone.
+        Row(
+            Modifier.weight(1f).semantics(mergeDescendants = true) {
+                contentDescription = "${findsLabel(count)} in your backpack"
+                liveRegion = LiveRegionMode.Polite
+            },
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.heightIn(min = 40.dp).widthIn(min = 40.dp).clip(CircleShape).background(BadgeInk).padding(horizontal = 8.dp),
+                contentAlignment = Alignment.Center) {
+                Text(if (count > 999) "999+" else "$count", style = packText(15, FontWeight.SemiBold, PackGold), maxLines = 1)
+            }
         }
         PackPill("Tag", strong = true, onClick = onTag)
         PackPill("Space", strong = false, onClick = onSpace)
+        PackPill("Copy", strong = false, onClick = onCopy)
         Box(
             Modifier.size(44.dp).clip(CircleShape).background(c.soft)
                 .clickable(role = Role.Button, onClickLabel = "Empty the backpack", onClick = onClose)
@@ -134,7 +144,7 @@ private fun PackPill(label: String, strong: Boolean, onClick: () -> Unit, modifi
     val c = packColors()
     Box(
         modifier.heightIn(min = 44.dp).clip(CircleShape).background(if (strong) c.ink else c.soft)
-            .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp),
+            .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 13.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, style = packText(14, FontWeight.Medium, if (strong) c.paper else c.ink))
@@ -332,6 +342,61 @@ fun ChoiceSpaceSheet(count: Int, spaces: List<Space>, onPick: (Space) -> Unit, o
         }
     }
 }
+
+/** What the backpack's Copy sheet does with the chosen finds. */
+enum class PackOut {
+    /** Their pictures go on the clipboard together. */
+    Pictures,
+
+    /** Their words and links go on the clipboard as text. */
+    Words,
+
+    /** A link for AI agents to each goes on the clipboard. */
+    AgentLinks,
+
+    /** Their pictures are saved to the Downloads folder. */
+    SavePictures,
+}
+
+/**
+ * Copies or saves many finds: their pictures, their words, links for AI agents, or their pictures into Downloads. A row
+ * shows only when some chosen find has what it takes.
+ *
+ * @param cards The chosen finds.
+ * @param onPick Called with the row tapped.
+ * @param onDismiss Closes the sheet.
+ */
+@Composable
+fun ChoiceCopySheet(cards: List<Card>, onPick: (PackOut) -> Unit, onDismiss: () -> Unit) {
+    val c = packColors()
+    val pictures = cards.count { galleryPicture(it) != null }
+    val words = cards.count { manyWords(listOf(it)) != null }
+    PackSheet(onDismiss) {
+        Text("Copy or save ${findsLabel(cards.size)}", style = packText(20, FontWeight.SemiBold, c.ink))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (pictures > 0) CopyRow("Copy pictures", picturesLabel(pictures)) { onPick(PackOut.Pictures) }
+            if (words > 0) CopyRow("Copy words and links", "From ${findsLabel(words)}") { onPick(PackOut.Words) }
+            CopyRow("Copy links for AI agents", "Links your connected AI can open") { onPick(PackOut.AgentLinks) }
+            if (pictures > 0) CopyRow("Save pictures", "${picturesLabel(pictures)} to your Downloads folder") { onPick(PackOut.SavePictures) }
+        }
+    }
+}
+
+@Composable
+private fun CopyRow(title: String, detail: String, onClick: () -> Unit) {
+    val c = packColors()
+    Column(
+        Modifier.fillMaxWidth().heightIn(min = 60.dp).clip(RoundedCornerShape(16.dp)).background(c.tile)
+            .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(title, style = packText(16, FontWeight.Medium, c.ink), maxLines = 1)
+        Text(detail, style = packText(13, color = c.muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** "1 picture" or "N pictures". */
+internal fun picturesLabel(count: Int) = if (count == 1) "1 picture" else "$count pictures"
 
 private fun spaceDot(color: String?, fallback: Color): Color =
     color?.removePrefix("#")?.toLongOrNull(16)?.let { Color(0xFF000000 or it) } ?: fallback

@@ -597,3 +597,18 @@ Reordering should happen in the shape they're in. No turning it into a different
 first"). Hold-and-drag in a space, with hold-and-slide choosing kept to All and search, was
 agreed with the multi-select work; leaving smart spaces out is Claude's choice, not yet
 confirmed by Tavi.
+
+@cc [owner:OctavianTocan,label:product] backpack-copies-and-saves-many
+The backpack's bar MUST also offer Copy, which opens a sheet to copy or save the
+chosen finds together: Copy pictures puts every chosen find's picture on the clipboard
+at once, Copy words and links puts their words (a note's text, a post's words and link,
+else the title and link) one after another, Copy links for AI agents puts each find's
+link for AI agents on its own line, and Save pictures saves every picture into the
+Downloads folder, a picture file as it is and any other picture as drawn. A row MUST
+show only when some chosen find has what it copies, and finds stay chosen afterwards.
+A single picture card's Copy MUST copy the picture itself, and its Download MUST save
+it even when it keeps no file.
+Source: Tavi, 6 November 2026: "Once we have multi-select, with reorder and multi-tag,
+we should also have multi-copy of the different types" and "Images should also be able
+to be copied, and downloaded. Both single and multi." The four rows, their words and
+putting them behind one Copy pill are Claude's choice and not yet confirmed.

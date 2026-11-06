@@ -8,6 +8,7 @@ import com.octaviantocan.mymind.ui.card.ReaderPart
 import com.octaviantocan.mymind.ui.card.partText
 import com.octaviantocan.mymind.ui.library.TileKind
 import com.octaviantocan.mymind.ui.library.canTurnPicture
+import com.octaviantocan.mymind.ui.library.galleryPicture
 import com.octaviantocan.mymind.ui.library.turn
 import com.octaviantocan.mymind.ui.library.noteText
 import com.octaviantocan.mymind.ui.library.postText
@@ -33,7 +34,7 @@ data class CardMenuItem(val action: CardMenuAction, val locked: Boolean = false)
 fun cardMenuItems(card: Card, spaceId: String?, features: Set<String> = emptySet()): List<CardMenuItem> = buildList {
     if (card.type == "Image") add(CardMenuItem(CardMenuAction.SameVibe, locked = "sameVibe" !in features))
     if (partText(ReaderPart.Page, card) != null) add(CardMenuItem(CardMenuAction.ReaderMode))
-    if (card.blob != null) add(CardMenuItem(CardMenuAction.Download))
+    if (card.blob != null || pictureCard(card)) add(CardMenuItem(CardMenuAction.Download))
     if (canTurnPicture(card)) add(CardMenuItem(CardMenuAction.Rotate))
     if (!card.url.isNullOrBlank()) add(CardMenuItem(CardMenuAction.ViewSource))
     if (canCopy(card)) add(CardMenuItem(CardMenuAction.Copy))
@@ -45,9 +46,18 @@ fun cardMenuItems(card: Card, spaceId: String?, features: Set<String> = emptySet
 
 private fun canCopy(card: Card) = when (card.type) {
     "Note", "Content", "Quote", "Quotation" -> true
-    "Image" -> card.blob?.type != "image/svg+xml"
-    else -> false
+    else -> pictureCard(card)
 }
+
+/**
+ * Whether a card is a picture, whose Copy copies the picture itself and whose Download saves it.
+ *
+ * @param card A card.
+ * @return True for a picture or screenshot the app can draw, an SVG file excepted.
+ */
+fun pictureCard(card: Card): Boolean =
+    galleryPicture(card) != null && card.blob?.type != "image/svg+xml" &&
+        (card.type == "Image" || card.type == "Screenshot" || card.blob?.type?.startsWith("image/") == true)
 
 /** What happened after a card menu row was tapped. */
 sealed interface CardMenuOutcome {
@@ -86,6 +96,20 @@ sealed interface CardMenuOutcome {
      * @property text Text to copy.
      */
     data class Copy(val text: String) : CardMenuOutcome
+
+    /**
+     * The card's picture should go on the clipboard; loading it needs the screen's context.
+     *
+     * @property card The picture card.
+     */
+    data class CopyPicture(val card: Card) : CardMenuOutcome
+
+    /**
+     * The card's picture should be saved to the Downloads folder as drawn, because the card keeps no file of it.
+     *
+     * @property card The picture card.
+     */
+    data class SavePicture(val card: Card) : CardMenuOutcome
 
     /**
      * The card's source page should open in the browser.
@@ -197,8 +221,10 @@ class CardActions(private val library: Library, private val saver: FileSaver) {
         if (item.locked) return CardMenuOutcome.NotAvailable(item.action)
         return when (item.action) {
             CardMenuAction.ViewSource -> card.url?.let { CardMenuOutcome.OpenUrl(it) } ?: CardMenuOutcome.NotAvailable(item.action)
-            CardMenuAction.Copy -> copyText(card)?.let { CardMenuOutcome.Copy(it) } ?: CardMenuOutcome.NotAvailable(item.action)
-            CardMenuAction.Download -> download(card) ?: CardMenuOutcome.NotAvailable(item.action)
+            CardMenuAction.Copy -> copyText(card)?.let { CardMenuOutcome.Copy(it) }
+                ?: if (pictureCard(card)) CardMenuOutcome.CopyPicture(card) else CardMenuOutcome.NotAvailable(item.action)
+            CardMenuAction.Download -> download(card)
+                ?: if (pictureCard(card)) CardMenuOutcome.SavePicture(card) else CardMenuOutcome.NotAvailable(item.action)
             CardMenuAction.SameVibe -> CardMenuOutcome.ShowSimilar(card)
             CardMenuAction.AddTags -> CardMenuOutcome.OpenSubmenu(CardSubmenu.Tags)
             CardMenuAction.AddToSpace -> CardMenuOutcome.OpenSubmenu(CardSubmenu.Spaces)
@@ -233,7 +259,7 @@ class CardActions(private val library: Library, private val saver: FileSaver) {
 
 /**
  * The text Copy puts on the clipboard: a note's plain text. The web copies `GET /cards/{id}/markdown`, which no
- * backend of this project serves, so formatting is lost and pictures are not copied.
+ * backend of this project serves, so formatting is lost; a picture card copies its picture instead ([pictureCard]).
  *
  * @param card Card to copy.
  * @return The text, or null when the card has none to copy.
@@ -278,3 +304,15 @@ private const val PINNED_FLAG = 512
 /** Copy of the card with the pin set or cleared. */
 private fun Card.withPin(pinned: Boolean): Card =
     if (pinned) copy(flags = flags or PINNED_FLAG) else copy(flags = flags and PINNED_FLAG.inv(), pinPosition = null)
+
+/**
+ * The words Copy puts on the clipboard for many finds at once, one find after another: a note's text, a post's words
+ * and link, else the title and link.
+ *
+ * @param cards The finds, in the order they were chosen.
+ * @return The text, or null when none of them has words or a link.
+ */
+fun manyWords(cards: List<Card>): String? = cards.mapNotNull { card ->
+    (copyText(card) ?: shareText(card) ?: listOfNotNull(card.title?.takeIf { it.isNotBlank() }, card.url?.takeIf { it.isNotBlank() })
+        .joinToString("\n")).takeIf { it.isNotBlank() }
+}.joinToString("\n\n").takeIf { it.isNotEmpty() }

@@ -100,7 +100,10 @@ import com.octaviantocan.mymind.ui.library.cardAccent
 import com.octaviantocan.mymind.ui.library.pinned
 import com.octaviantocan.mymind.ui.library.EverythingScreen
 import com.octaviantocan.mymind.ui.library.CardChoice
+import com.octaviantocan.mymind.ui.library.ChoiceCopySheet
 import com.octaviantocan.mymind.ui.library.ChoicePackBar
+import com.octaviantocan.mymind.ui.library.PackOut
+import com.octaviantocan.mymind.ui.library.picturesLabel
 import com.octaviantocan.mymind.ui.library.ChoiceSpaceSheet
 import com.octaviantocan.mymind.ui.library.ChoiceTagSheet
 import com.octaviantocan.mymind.ui.library.ChoiceUndoBar
@@ -123,6 +126,9 @@ import com.octaviantocan.mymind.ui.menu.NotePage
 import com.octaviantocan.mymind.ui.menu.PartContent
 import com.octaviantocan.mymind.ui.menu.agentLink
 import com.octaviantocan.mymind.ui.menu.cacheImage
+import com.octaviantocan.mymind.ui.menu.DownloadsSaver
+import com.octaviantocan.mymind.ui.menu.manyWords
+import com.octaviantocan.mymind.ui.menu.savePicture
 import com.octaviantocan.mymind.ui.menu.loadPicture
 import com.octaviantocan.mymind.ui.menu.sharePicture
 import com.octaviantocan.mymind.ui.menu.sharedImageName
@@ -364,6 +370,57 @@ fun MainShell(
         }
         Unit
     }
+    val saver = remember(context) { DownloadsSaver(context.contentResolver) }
+    // Saves a picture that has no file of its own, as the gallery draws it.
+    val pictureSaved = { card: Card ->
+        scope.launch {
+            when (val saved = savePicture(context, card, saver)) {
+                null -> Toast.makeText(context, NO_PICTURE, Toast.LENGTH_SHORT).show()
+                is ApiResult.Ok -> Toast.makeText(context, DOWNLOADED, Toast.LENGTH_SHORT).show()
+                is ApiResult.Failed -> failure = saved.failure
+            }
+        }
+        Unit
+    }
+    // Copies or saves the backpack's finds together.
+    val packOut = { pick: PackOut, cards: List<Card> ->
+        scope.launch {
+            Track.event("action", detail = "CopyMany:${pick.name}", results = cards.size)
+            when (pick) {
+                PackOut.Pictures -> {
+                    val withPicture = cards.filter { galleryPicture(it) != null }
+                    val uris = withPicture.mapNotNull { card -> loadPicture(context, card)?.let { cacheImage(context, it, "${card.id}.jpg", png = false) } }
+                    if (uris.isEmpty()) {
+                        Toast.makeText(context, NO_PICTURE, Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+                    val clip = ClipData.newUri(context.contentResolver, "pictures", uris.first())
+                    uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+                    clipboard.setClipEntry(ClipEntry(clip))
+                    if (uris.size < withPicture.size) Toast.makeText(context, "Copied ${uris.size} of ${withPicture.size} pictures", Toast.LENGTH_SHORT).show()
+                }
+                PackOut.Words -> manyWords(cards)?.let { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Inventory finds", it))) }
+                PackOut.AgentLinks ->
+                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Inventory card links", cards.joinToString("\n") { agentLink(it) })))
+                PackOut.SavePictures -> {
+                    val withPicture = cards.filter { galleryPicture(it) != null }
+                    var saved = 0
+                    withPicture.forEach { card ->
+                        val result = if (card.blob?.path != null && card.blob.type?.startsWith("image/") == true) {
+                            if (viewModel.perform(CardMenuItem(CardMenuAction.Download), card, null) is CardMenuOutcome.Downloaded) 1 else 0
+                        } else {
+                            if (savePicture(context, card, saver, "${card.id}.jpg") is ApiResult.Ok) 1 else 0
+                        }
+                        saved += result
+                    }
+                    val text = if (saved == withPicture.size) "Saved ${picturesLabel(saved)} to Downloads"
+                    else "Saved $saved of ${picturesLabel(withPicture.size)} to Downloads"
+                    Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        Unit
+    }
     val togglePin = { card: Card ->
         scope.launch {
             val pin = CardMenuItem(if (card.pinned) CardMenuAction.Unpin else CardMenuAction.Pin)
@@ -478,6 +535,7 @@ fun MainShell(
                 ChoicePackBar(choice.count,
                     onTag = { viewModel.loadTagChoices(); packSheet = PackSheet.Tags },
                     onSpace = { if (!spaces.loaded) viewModel.loadSpaces(); packSheet = PackSheet.Spaces },
+                    onCopy = { packSheet = PackSheet.Copy },
                     onClose = { choice.clear() },
                     modifier = Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = UPLOAD_STRIP_BOTTOM)
                         .widthIn(max = ReadableWidth - 32.dp).fillMaxWidth())
@@ -619,6 +677,8 @@ fun MainShell(
                     when (val outcome = viewModel.perform(item, target.card, target.spaceId)) {
                         is CardMenuOutcome.OpenSubmenu -> submenu = outcome.submenu
                         is CardMenuOutcome.Copy -> clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("card", outcome.text)))
+                        is CardMenuOutcome.CopyPicture -> pictureOut(outcome.card, true)
+                        is CardMenuOutcome.SavePicture -> pictureSaved(outcome.card)
                         is CardMenuOutcome.OpenUrl -> runCatching { uriHandler.openUri(outcome.url) }
                         is CardMenuOutcome.Deleted, is CardMenuOutcome.RemovedFromSpace -> {
                             if (outcome is CardMenuOutcome.Deleted) recent.removeAll { it.id == outcome.cardId }
@@ -682,7 +742,9 @@ fun MainShell(
                             }
                             PartAction.SavePicture -> {
                                 closeMenu()
-                                scope.launch {
+                                // A picture with a file of its own saves that file; any other picture is saved as drawn.
+                                if (card.blob?.path == null || card.blob.type?.startsWith("image/") != true) pictureSaved(card)
+                                else scope.launch {
                                     when (val outcome = viewModel.perform(CardMenuItem(CardMenuAction.Download), card, target.spaceId)) {
                                         is CardMenuOutcome.Downloaded -> Toast.makeText(context, DOWNLOADED, Toast.LENGTH_SHORT).show()
                                         is CardMenuOutcome.Failed -> failure = outcome.failure
@@ -806,6 +868,12 @@ fun MainShell(
                     choice.refresh(change.cards)
                     manyDone = manyText("Put", change, " in ${space.name ?: "the space"}") to change
                 }
+            },
+            onDismiss = { packSheet = null })
+        PackSheet.Copy -> ChoiceCopySheet(choice.cards,
+            onPick = { pick ->
+                packSheet = null
+                packOut(pick, choice.cards.toList())
             },
             onDismiss = { packSheet = null })
         null -> Unit
@@ -960,7 +1028,7 @@ internal fun NothingOpen(modifier: Modifier = Modifier) {
 private const val NOTHING_OPEN = "A card you open shows here."
 
 /** Which of the backpack's sheets is open. */
-private enum class PackSheet { Tags, Spaces }
+private enum class PackSheet { Tags, Spaces, Copy }
 
 /** How much higher a batch's Undo sits while the backpack's bar is showing under it. */
 private val PACK_BAR_HEIGHT = 80.dp

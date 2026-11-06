@@ -12,6 +12,7 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
 import com.octaviantocan.mymind.BuildConfig
+import com.octaviantocan.mymind.data.ApiResult
 import com.octaviantocan.mymind.data.resolveMediaUrl
 import com.octaviantocan.mymind.ui.library.cardHeading
 import com.octaviantocan.mymind.ui.library.galleryPicture
@@ -162,3 +163,21 @@ internal fun sharedImageName(card: Card, suffix: String): String {
 private const val SHARED_DIR = "shared"
 private const val AGENT_LINK_DETAIL = "Copies a link your connected AI can open"
 private const val JPEG_QUALITY = 92
+
+/**
+ * Saves a card's picture, as the gallery draws it, into the Downloads folder as a JPEG: for a picture with no file of
+ * its own, or a link's or post's picture.
+ *
+ * @param context Any context of the app.
+ * @param card Card whose picture is saved.
+ * @param saver Where it goes.
+ * @param name File name.
+ * @return Success or why it failed; null when the card has no picture or it could not be loaded.
+ */
+internal suspend fun savePicture(context: Context, card: Card, saver: FileSaver, name: String = sharedImageName(card, ".jpg")): ApiResult<Unit>? {
+    val bitmap = loadPicture(context, card) ?: return null
+    return saver.save(name, "image/jpeg") { out ->
+        withContext(Dispatchers.IO) { bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out) }
+        ApiResult.Ok(Unit)
+    }
+}

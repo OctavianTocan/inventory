@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.96 (107), 2026-11-06
+Copy and save pictures, one find or many.
+
+### Added
+- With finds in your backpack, the bar has Copy: copy all their pictures at once, copy their words and links, copy a link for AI agents to each, or save all their pictures to your Downloads folder.
+
+### Changed
+- Copy on a picture now copies the picture itself, and Download saves any picture, even one saved from the web without a file.
+- Holding a picture in the reader offers Save picture for every picture, such as an article's.
+- The backpack bar shows its count in the gold badge, to make room for Copy on narrow phones.
+
 ## 0.6.95 (106), 2026-11-06
 Gather many finds at once and tag them together.
 

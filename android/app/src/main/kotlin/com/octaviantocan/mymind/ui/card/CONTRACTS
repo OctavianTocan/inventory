@@ -113,8 +113,8 @@ Source: Tavi's pick of F08 in the reader prototype, 28 October 2026.
 
 @cc [owner:OctavianTocan,label:product] card-reader-parts-are-held
 Holding a part of the reader MUST open a sheet titled with the part's name that
-offers only what that part has: the picture offers Save picture (for a picture
-file), Copy picture and Share picture; a summary, post or note offers Copy and
+offers only what that part has: the picture offers Save picture (its file when it
+has one, else the picture as drawn), Copy picture and Share picture; a summary, post or note offers Copy and
 Share; Tags offers Edit tags and Copy tags; Your note offers Write a note, or Edit
 note and Copy note; the page text offers Read in Reader Mode and Copy text. Edit
 tags closes the sheet and shows the tags' crosses (`card-reader-shows-the-whole-card`;
@@ -123,7 +123,9 @@ the same sheet, and Your note saves with
 Done, an emptied note taking the note off. Each hold MUST also be offered to
 accessibility services as an action.
 Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M20, hold a
-part for a small menu with few options).
+part for a small menu with few options). Save picture for every picture, not only
+picture files, follows Tavi's 6 November 2026 ask that pictures "be able to be copied,
+and downloaded. Both single and multi".
 
 @cc [owner:OctavianTocan,label:product;design] card-reader-mode
 Reader Mode MUST show only the page's text, selectable and at the reading size,
