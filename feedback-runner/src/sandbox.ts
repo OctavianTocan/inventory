@@ -10,7 +10,7 @@ import type { Engine } from "./states";
 const CA = "/etc/cloudflare/certs/cloudflare-containers-ca.crt";
 const HOME = "/home/agent";
 const ROUND = "/workspace/round";
-const LOGIN_PATHS = [".claude/.credentials.json", ".claude.json", ".codex/auth.json"];
+const LOGIN_PATHS = [".claude/.credentials.json", ".claude.json", ".codex/chatgpt.json"];
 
 /** What a round needs; the login files go into the sandbox and are never stored. */
 export interface RoundInput {

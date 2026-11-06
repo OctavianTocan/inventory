@@ -51,6 +51,7 @@ import com.octaviantocan.aikit.AiSignInServices
 import com.octaviantocan.mymind.MymindApp
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.AiAccount
+import com.octaviantocan.mymind.data.awaitLoopbackCallback
 import com.octaviantocan.mymind.feedback.FeedbackTracker
 import com.octaviantocan.mymind.ui.library.rememberPublicAccountPhotoLoader
 import com.octaviantocan.mymind.ui.menu.CardMenuFont
@@ -198,6 +199,8 @@ private fun rememberAiSignInServices(ai: AiAccount): AiSignInServices {
             open = { runCatching { uri.openUri(it) } },
             copy = { clipboard?.setPrimaryClip(ClipData.newPlainText("Sign-in code", it)) },
             copied = { runCatching { clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString() }.getOrNull() },
+            // The page the browser lands on opens the app again with this link.
+            listen = { awaitLoopbackCallback(it, "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=${context.packageName};end") },
         )
     }
 }

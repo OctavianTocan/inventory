@@ -26,15 +26,22 @@ Source: Tavi, 28 October 2026 (as `profile-ai-rows-are-pullys`); pulls.review
 c71ee10d2f6fc1b279c5396076cfed5039f8dbd7.
 
 @cc [owner:OctavianTocan,label:product;security] profile-ai-sign-in-is-the-accounts
-Claude Code and Codex MUST be signed in through the CLIs' own subscription sign-in on
-Pully's pages: Claude Code's page code is pasted back, or taken from the clipboard when
-the app returns to the front; Codex shows a device code and finishes by itself once it is
-approved. The sign-in belongs to the signed-in Inventory account and lives on the server,
-never on the phone. Everything a page holds belongs to the session that opened it: a new
-session MUST clear it and drop remembered sign-ins and model lists, and while the app is
-in the background a page MUST NOT send requests, open pages or read the clipboard. A
-refused AI request MUST NOT answer 401, because the app signs its session out on a 401.
-Source: Tavi, 28 October 2026 (as `profile-ai-rows-are-pullys`); ai-kit
+Claude Code and Codex MUST be signed in with the person's own subscription on Pully's
+pages. Claude Code uses the CLI's own sign-in: its page code is pasted back, or taken from
+the clipboard when the app returns to the front. Codex uses OpenAI's Sign in with ChatGPT
+(the self-serve flow for personal apps, developers.openai.com/siwc): the app opens OpenAI's
+page, listens on the phone's own `http://127.0.0.1:1455/auth/callback` for the browser to
+come back, and finishes once the app is in front again; when the last page does not load,
+its address can be pasted instead. Only an address on that callback with the state this
+sign-in was opened with MAY be sent. The sign-in belongs to the signed-in Inventory account
+and its tokens live on the server, never on the phone. Everything a page holds belongs to
+the session that opened it: a new session MUST clear it and drop remembered sign-ins and
+model lists, and while the app is in the background a page MUST NOT send requests, open
+pages or read the clipboard (waiting on the callback is not a request). A refused AI
+request MUST NOT answer 401, because the app signs its session out on a 401.
+Source: Tavi, 28 October 2026 (as `profile-ai-rows-are-pullys`); Tavi, 6 November 2026
+("Let's implement proper Sign in with ChatGPT ... instead of what we custom-built", and
+"Just use the self served flow. We literally only use it for personal use."); ai-kit
 `kit-subscription-sign-in-only`; pulls.review
 `android-provider-signin-keeps-its-session-on-browser-return` at
 c71ee10d2f6fc1b279c5396076cfed5039f8dbd7.

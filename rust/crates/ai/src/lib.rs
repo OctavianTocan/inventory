@@ -22,6 +22,7 @@ static THYMIND: Config = Config {
     image_setup: "rust/agent/setup.sh build",
     container_marker: "/.thymind-agent-container",
     sign_in_program: None,
+    chatgpt_name: "Inventory",
     tools: None,
     missing,
     secrets: &["GEMINI_API_KEY", "AI_CHAT_API_KEY", "ADMIN_TOKEN", "GOOGLE_CLIENT_SECRET"],

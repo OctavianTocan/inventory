@@ -32,10 +32,52 @@ class Answer(unittest.TestCase):
     def test_argv_passes_model_and_effort_like_ai_kit(self):
         job = {"engine": "codex", "model": "gpt-6.1", "effort": "none"}
         self.assertEqual(round_.agent_argv(job, "p")[-3:], ["-m", "gpt-6.1", "p"])
+        self.assertIn('model_providers.chatgpt_plan.env_key="ACCESS_TOKEN"', round_.agent_argv(job, "p"))
         job = {"engine": "claude", "model": "opus", "effort": "high"}
         argv = round_.agent_argv(job, "p")
         self.assertIn("--effort", argv)
         self.assertEqual(argv[-2:], ["--", "p"])
+
+
+class ChatGptToken(unittest.TestCase):
+    """chatgpt_token against a stand-in for OpenAI's token endpoint."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.path = f"{self.dir}/chatgpt.json"
+
+    def tearDown(self):
+        shutil.rmtree(self.dir)
+
+    def write(self, expires_in):
+        login = {"client_id": "app_1", "host_id": "urn:uuid:h", "scope": "chatgpt.tokens.use.direct",
+                 "expires_at": int((round_.time.time() + expires_in) * 1000),
+                 "tokens": {"access_token": "a1", "refresh_token": "r1", "id_token": "i1"}}
+        with open(self.path, "w") as handle:
+            json.dump(login, handle)
+
+    def test_a_token_that_outlasts_the_round_is_used_as_it_is(self):
+        self.write(3 * 3600)
+        self.assertEqual(round_.chatgpt_token(self.path, post=lambda *_: self.fail("refreshed")), "a1")
+
+    def test_a_refresh_rotates_and_saves_the_login(self):
+        self.write(1800)
+        sent = []
+        token = round_.chatgpt_token(self.path, post=lambda url, form: sent.append(form) or (200, {"access_token": "a2", "refresh_token": "r2", "expires_in": 3600}))
+        self.assertEqual(token, "a2")
+        self.assertEqual(sent[0]["refresh_token"], "r1")
+        self.assertEqual(sent[0]["client_id"], "app_1")
+        with open(self.path) as handle:
+            saved = json.load(handle)
+        self.assertEqual(saved["tokens"], {"access_token": "a2", "refresh_token": "r2", "id_token": "i1"})
+        self.assertEqual(saved["host_id"], "urn:uuid:h")
+
+    def test_a_refused_refresh_or_missing_file_is_signed_out(self):
+        self.write(60)
+        with self.assertRaises(round_.SignedOut):
+            round_.chatgpt_token(self.path, post=lambda *_: (400, {"error": "invalid_grant"}))
+        with self.assertRaises(round_.SignedOut):
+            round_.chatgpt_token(f"{self.dir}/missing.json")
 
 
 class Bump(unittest.TestCase):

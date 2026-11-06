@@ -12,6 +12,9 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 ROUND = "/workspace/round"
 REPO_DIR = "/workspace/repo"
@@ -33,8 +36,18 @@ ENV = {
     "IS_SANDBOX": "1",
     "GIT_TERMINAL_PROMPT": "0",
 }
-PLAN_LIMIT = re.compile(r"usage limit|limit reached|hit your (usage )?limit|quota exceeded|out of credits", re.I)
-SIGN_IN = re.compile(r"authentication_error|invalid_grant|oauth token (has )?expired|token expired|please run /login|not logged in|log in again|401 unauthorized", re.I)
+CHATGPT = ".codex/chatgpt.json"
+SIGN_IN_FILES = (".claude/.credentials.json", ".claude.json", CHATGPT)
+TOKEN_URL = "https://auth.openai.com/api/accounts/oauth/token"
+# Codex sends the Sign in with ChatGPT token in ACCESS_TOKEN to the Responses API, as ai-kit's chatgpt.rs does.
+CHATGPT_PLAN = ["-c", 'model_provider="chatgpt_plan"', "-c", 'model_providers.chatgpt_plan.name="ChatGPT plan"',
+                "-c", 'model_providers.chatgpt_plan.base_url="https://api.openai.com/v1"',
+                "-c", 'model_providers.chatgpt_plan.env_key="ACCESS_TOKEN"',
+                "-c", 'model_providers.chatgpt_plan.wire_api="responses"',
+                "-c", "model_providers.chatgpt_plan.requires_openai_auth=false",
+                "-c", "model_providers.chatgpt_plan.supports_websockets=false"]
+PLAN_LIMIT = re.compile(r"usage limit|limit reached|hit your (usage )?limit|quota exceeded|out of credits|subscription_sharing_usage", re.I)
+SIGN_IN = re.compile(r"authentication_error|invalid_grant|subscription_sharing_user_not_eligible|oauth token (has )?expired|token expired|please run /login|not logged in|log in again|401 unauthorized", re.I)
 
 
 def write(name, data):
@@ -48,11 +61,11 @@ def phase(name):
     write("status.json", {"phase": name, "at": int(time.time())})
 
 
-def run(args, timeout=600, check=True, cwd=REPO_DIR, as_agent=True):
-    """Runs a command (as the agent user unless told otherwise) and returns its result."""
+def run(args, timeout=600, check=True, cwd=REPO_DIR, as_agent=True, env=None):
+    """Runs a command (as the agent user unless told otherwise), with [env] added to ENV, and returns its result."""
     result = subprocess.run(
         (["setpriv", "--reuid", AGENT, "--regid", AGENT, "--init-groups"] if as_agent else []) + args,
-        cwd=cwd, env=ENV, capture_output=True, text=True, timeout=timeout,
+        cwd=cwd, env={**ENV, **(env or {})}, capture_output=True, text=True, timeout=timeout,
     )
     if check and result.returncode != 0:
         raise RuntimeError(f"{' '.join(args[:3])} failed: {(result.stderr or result.stdout)[-600:]}")
@@ -83,10 +96,54 @@ def agent_argv(job, prompt):
                 *(["--model", model] if model else []),
                 *(["--effort", effort] if effort and effort != "none" else []),
                 "--", prompt]
-    return ["codex", "exec", "--json", "--sandbox", "danger-full-access", "--skip-git-repo-check",
+    return ["codex", "exec", "--json", "--sandbox", "danger-full-access", "--skip-git-repo-check", *CHATGPT_PLAN,
             *(["-m", model] if model else []),
             *(["-c", f'model_reasoning_effort="{effort}"'] if effort and effort != "none" else []),
             prompt]
+
+
+class SignedOut(Exception):
+    """The login's Sign in with ChatGPT has ended; the person signs in again."""
+
+
+def chatgpt_token(path=None, post=None):
+    """The access token of the round's Sign in with ChatGPT login, refreshed unless it outlasts the agent's time limit.
+    A refresh rotates the refresh token, which is written back for the runner to check in (ai-kit chatgpt.js)."""
+    path = path or f"{HOME}/{CHATGPT}"
+    try:
+        with open(path) as handle:
+            login = json.load(handle)
+        tokens = login["tokens"]
+    except (OSError, ValueError, KeyError, TypeError):
+        raise SignedOut()
+    if login.get("expires_at", 0) / 1000 - time.time() > AGENT_TIMEOUT + 600:
+        return tokens["access_token"]
+    form = {"grant_type": "refresh_token", "client_id": login["client_id"], "refresh_token": tokens["refresh_token"],
+            "resource": "https://api.openai.com/v1"}
+    status, body = (post or _post)(TOKEN_URL, form)
+    if status in (400, 401):
+        raise SignedOut()
+    if status != 200 or not body.get("access_token"):
+        raise RuntimeError(f"ChatGPT did not refresh the sign-in ({status})")
+    login["tokens"] = {"access_token": body["access_token"], "refresh_token": body.get("refresh_token") or tokens["refresh_token"],
+                       "id_token": body.get("id_token") or tokens.get("id_token")}
+    login["expires_at"] = int((time.time() + int(body.get("expires_in") or 3600)) * 1000)
+    login["scope"] = body.get("scope") or login.get("scope", "")
+    with open(f"{path}.tmp", "w") as handle:
+        json.dump(login, handle)
+    os.chmod(f"{path}.tmp", 0o600)
+    os.replace(f"{path}.tmp", path)
+    return login["tokens"]["access_token"]
+
+
+def _post(url, form):
+    request = urllib.request.Request(url, data=urllib.parse.urlencode(form).encode(), method="POST",
+                                     headers={"content-type": "application/x-www-form-urlencoded", "accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.status, json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as error:
+        return error.code, {}
 
 
 def final_text(engine, stdout):
@@ -137,7 +194,7 @@ def sign_in_strings():
             for item in value.values():
                 walk(item)
 
-    for path in (".claude/.credentials.json", ".claude.json", ".codex/auth.json"):
+    for path in SIGN_IN_FILES:
         try:
             with open(f"{HOME}/{path}") as handle:
                 walk(json.load(handle))
@@ -199,8 +256,15 @@ def main():
         fetch_context(job.get("readRepos") or [])
 
         phase("agent")
+        extra = {}
+        if job["engine"] == "codex":
+            try:
+                extra["ACCESS_TOKEN"] = chatgpt_token()
+            except SignedOut:
+                result["outcome"] = "signin"
+                return result
         try:
-            agent = run(agent_argv(job, prompt), timeout=AGENT_TIMEOUT, check=False)
+            agent = run(agent_argv(job, prompt), timeout=AGENT_TIMEOUT, check=False, env=extra)
         except subprocess.TimeoutExpired:
             result["outcome"] = "timeout"
             return result

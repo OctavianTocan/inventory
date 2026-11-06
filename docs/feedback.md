@@ -40,7 +40,10 @@ reaches it through the `FEEDBACK_RUNNER` service binding after its sign-in gate,
   `index.crates.io`, `static.crates.io` and `registry.npmjs.org`, and refuses everything else.
 - Each round borrows the sender's sign-in from their `AgentHome` (`POST /feedback/checkout`, ai-kit) and gives it back
   with any refreshed tokens (`POST /feedback/checkin`). While it is out, the sender's AI search answers busy; a lost
-  checkin ends after 60 minutes.
+  checkin ends after 60 minutes. A Codex round's sign-in is OpenAI's Sign in with ChatGPT token file
+  (`.codex/chatgpt.json`, ai-kit `chatgpt.rs`): `round.py` refreshes it before the agent starts so the access token
+  outlasts the 45-minute limit, writes the rotated refresh token back for the checkin, and gives Codex only the access
+  token in `ACCESS_TOKEN`, sent to `api.openai.com/v1`.
 - Review: a pull request with green checks is not merged yet (see Review below); the job waits in `review` until
   Tavi approves it.
 - Merging: once approved, the job at the head of the queue takes its CHANGELOG entry out of the branch (two branches that each add a

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.94 (105), 2026-11-06
+Codex now signs in with OpenAI's Sign in with ChatGPT.
+
+### Changed
+- Profile, AI, Codex signs in with Sign in with ChatGPT: tap Sign in with ChatGPT, approve Inventory on OpenAI's page, then come back. There is no code to copy any more, and Codex runs on your own ChatGPT plan as before. If you were signed in to Codex, sign in once more.
+
 ## 0.6.93 (104), 2026-11-06
 Put the cards in a space in your own order.
 

@@ -62,6 +62,7 @@ import com.octaviantocan.aikit.aiSignInStep
 import com.octaviantocan.aikit.awaitDeviceSignIn
 import com.octaviantocan.aikit.groupModels
 import com.octaviantocan.aikit.isClaudeSignInCode
+import com.octaviantocan.aikit.isCallbackFor
 import com.octaviantocan.aikit.isCodeFor
 import com.octaviantocan.aikit.modelLabel
 import com.octaviantocan.aikit.modelNote
@@ -195,13 +196,16 @@ internal class AiSignInState {
     var code by mutableStateOf("")
     var busy by mutableStateOf(false)
     var problem by mutableStateOf<String?>(null)
-    fun clear() { signIns = null; started = null; code = ""; busy = false; problem = null }
+    /** The address the browser came back to from Sign in with ChatGPT, kept until the app is in front to finish. */
+    var returned by mutableStateOf<String?>(null)
+    fun clear() { signIns = null; started = null; code = ""; busy = false; problem = null; returned = null }
 }
 
 /**
  * Pully's sign-in page for [cli], drawn with ThyMind's sheet parts: the CLI's own sign-in on the person's own
  * subscription. Claude Code's page shows a code that is pasted back here, or taken from the clipboard on the way
- * back; Codex's page asks for the code shown here and the sign-in finishes by itself.
+ * back; Codex signs in with OpenAI's Sign in with ChatGPT, whose page sends the browser back to the phone's own
+ * loopback address, where the app takes the address and finishes.
  *
  * @param services The server, browser and clipboard.
  * @param cli The CLI to sign in.
@@ -237,6 +241,7 @@ internal fun ColumnScope.AiSignInPage(services: AiSignInServices, cli: AiCli, no
     fun signedIn() {
         state.started = null
         state.code = ""
+        state.returned = null
         notify("${cli.title} is signed in")
     }
     LaunchedEffect(services, cli, dispatchReady) {
@@ -257,6 +262,28 @@ internal fun ColumnScope.AiSignInPage(services: AiSignInServices, cli: AiCli, no
     }
 
     fun finishPasted() = run { if (services.finish(cli, state.code)) { refresh(); signedIn() } }
+
+    // Sign in with ChatGPT: the app listens on the callback while the browser is in front, and finishes once it is back.
+    val browsing = state.started?.takeIf { it.callback != null }
+    LaunchedEffect(browsing) {
+        val callback = browsing?.callback ?: return@LaunchedEffect
+        try {
+            val address = services.awaitCallback(callback)
+            if (state.started === browsing && isCallbackFor(browsing, address)) state.returned = address
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (services.current() && state.started === browsing) {
+                state.problem = e.message?.takeIf { "too long" in it } ?: "Inventory couldn't wait for ChatGPT here. When the page ends, copy its address and paste it below."
+            }
+        }
+    }
+    LaunchedEffect(state.returned, dispatchReady) {
+        val address = state.returned ?: return@LaunchedEffect
+        if (!dispatchReady) return@LaunchedEffect
+        state.returned = null
+        run { if (services.finish(cli, address)) { refresh(); signedIn() } }
+    }
     // Back from Claude's page with its code copied, the app takes the code itself and finishes, so nothing is pasted by
     // hand (Pully, recording 26 Oct 2026, 02:59 to 03:13).
     LaunchedEffect(state.started, dispatchReady) {
@@ -306,6 +333,22 @@ internal fun ColumnScope.AiSignInPage(services: AiSignInServices, cli: AiCli, no
             Explain("If OpenAI says device codes are off, turn on device code sign-in in ChatGPT's security settings, then start again.")
             Cancel(services, cli, state, ::run)
         }
+        AiSignInStep.Browser -> {
+            started!!
+            Explain("Sign in with your ChatGPT account on the page that opened and allow Inventory. Come back here when it says ChatGPT is connected.")
+            CardMenuGroup(Modifier.padding(top = 12.dp)) {
+                SheetRow(null, "Open the sign-in page again", { services.openPage(started.url) })
+            }
+            Explain("If the last page doesn't load, copy its address and paste it here.")
+            CardMenuGroup(Modifier.padding(top = 12.dp)) {
+                CodeField(state.code, { typed ->
+                    state.code = typed.trim()
+                    if (isCallbackFor(started, state.code)) finishPasted()
+                }, enabled = !state.busy, onDone = { if (state.code.isNotBlank()) finishPasted() }, placeholder = "Paste the address")
+            }
+            if (state.busy) Explain("Signing in…")
+            Cancel(services, cli, state, ::run)
+        }
         AiSignInStep.SignedIn -> {
             signIn!!
             CardMenuGroup(Modifier.padding(top = 12.dp)) {
@@ -323,11 +366,12 @@ internal fun ColumnScope.AiSignInPage(services: AiSignInServices, cli: AiCli, no
         }
         AiSignInStep.SignedOut -> {
             Explain(if (cli == AiCli.Claude) "Inventory runs Claude Code with your own Claude subscription. Sign in once with your Claude account."
-                else "Inventory runs Codex with your own ChatGPT subscription. Sign in once with your ChatGPT account.")
-            PrimaryButton(if (state.busy) "Starting…" else "Sign in to ${cli.title}", enabled = !state.busy) {
+                else "Inventory runs Codex on your own ChatGPT plan, with OpenAI's Sign in with ChatGPT. Sign in once with your ChatGPT account.")
+            PrimaryButton(if (state.busy) "Starting…" else if (cli == AiCli.Codex) "Sign in with ChatGPT" else "Sign in to ${cli.title}", enabled = !state.busy) {
                 run {
                     val start = services.start(cli)
                     state.code = ""
+                    state.returned = null
                     state.started = start
                     // Codex's page asks for the code shown here, so it is on the clipboard before the page opens and
                     // only needs pasting there.
@@ -498,7 +542,7 @@ internal fun Tick(shown: Boolean) {
 
 /** The field Claude Code's code is pasted into. */
 @Composable
-private fun CodeField(code: String, onChange: (String) -> Unit, enabled: Boolean, onDone: () -> Unit) {
+private fun CodeField(code: String, onChange: (String) -> Unit, enabled: Boolean, onDone: () -> Unit, placeholder: String = "Paste the code") {
     val colors = menuColors()
     BasicTextField(
         value = code,
@@ -512,7 +556,7 @@ private fun CodeField(code: String, onChange: (String) -> Unit, enabled: Boolean
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Code" },
         decorationBox = { field ->
             Box(Modifier.heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 14.dp), contentAlignment = Alignment.CenterStart) {
-                if (code.isEmpty()) Text("Paste the code", style = TextStyle(color = colors.rowText.copy(alpha = 0.5f), fontSize = 17.sp, fontFamily = CardMenuFont))
+                if (code.isEmpty()) Text(placeholder, style = TextStyle(color = colors.rowText.copy(alpha = 0.5f), fontSize = 17.sp, fontFamily = CardMenuFont))
                 field()
             }
         },

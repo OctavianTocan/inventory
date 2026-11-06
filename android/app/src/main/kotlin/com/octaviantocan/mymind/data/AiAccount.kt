@@ -180,9 +180,16 @@ class AiAccount(private val client: AiClient, val prefs: AiPrefs, private val se
      * @param open Opens a provider's sign-in page.
      * @param copy Puts text on the clipboard.
      * @param copied Reads the clipboard's text.
+     * @param listen Waits on the phone's loopback address for the browser to come back from Sign in with ChatGPT.
      * @return The services.
      */
-    fun services(foreground: () -> Boolean, open: (String) -> Unit, copy: (String) -> Unit, copied: () -> String?): AiSignInServices {
+    fun services(
+        foreground: () -> Boolean,
+        open: (String) -> Unit,
+        copy: (String) -> Unit,
+        copied: () -> String?,
+        listen: suspend (String) -> String = { throw UnsupportedOperationException("This app cannot finish a ChatGPT sign-in.") },
+    ): AiSignInServices {
         val token = session.token
         return object : AiSignInServices {
             override fun current() = token != null && session.token == token
@@ -196,6 +203,11 @@ class AiAccount(private val client: AiClient, val prefs: AiPrefs, private val se
             override suspend fun signOut(cli: AiCli) = client.signOut(cli)
             override fun openPage(url: String) { if (dispatchReady) open(url) }
             override fun copy(text: String) { if (dispatchReady) copy(text) }
+            // The browser is in front while it signs in, so this waits whether or not the app is.
+            override suspend fun awaitCallback(callback: String): String {
+                if (!current()) throw CancellationException("Signed out.")
+                return listen(callback)
+            }
         }
     }
 
