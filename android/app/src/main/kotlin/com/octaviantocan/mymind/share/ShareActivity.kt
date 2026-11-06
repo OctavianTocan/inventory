@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
@@ -22,7 +23,12 @@ import com.octaviantocan.mymind.data.SessionState
 import com.octaviantocan.mymind.data.copiedUploadOf
 import com.octaviantocan.mymind.data.galleryUploadOf
 import com.octaviantocan.mymind.data.uploadFileOf
+import com.octaviantocan.mymind.ui.card.rememberSheetMotionEnabled
 import com.octaviantocan.mymind.ui.menu.suggestSpace
+import com.octaviantocan.mymind.ui.moment.FindCount
+import com.octaviantocan.mymind.ui.moment.ShareMoment
+import com.octaviantocan.mymind.ui.moment.rarityIn
+import com.octaviantocan.mymind.ui.moment.sourceOfShare
 import com.octaviantocan.mymind.ui.share.SavePhase
 import com.octaviantocan.mymind.ui.share.ShareProblem
 import com.octaviantocan.mymind.ui.share.ShareSheet
@@ -36,6 +42,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.Instant
+import kotlin.math.roundToInt
 
 /** Receives text, links, pictures, videos, audio files and PDFs shared from other apps and saves them to the library. */
 class ShareActivity : ComponentActivity() {
@@ -162,12 +170,51 @@ class ShareActivity : ComponentActivity() {
             }
             state.findingTags = false
         }
-        ShareSheet(state, onClose = {
-            val details = state.details()
-            if (!details.isEmpty()) scope.launch { controller.finish(details) }
-            leave()
-        })
+        val finish = { details: ShareDetails -> if (!details.isEmpty()) scope.launch { controller.finish(details) } }
+        if (!rememberSheetMotionEnabled()) {
+            ShareSheet(state, onClose = { finish(state.details()); leave() })
+            return
+        }
+        val started = remember { System.currentTimeMillis() }
+        ShareMoment(
+            state,
+            count = { countFind(container, ready.items.firstOrNull(), state, started) },
+            onDetails = { finish(it) },
+            onSky = ::blurBehind,
+            onClosed = ::leave,
+        )
     }
+
+    /**
+     * Counts the library for what was shared: how many earlier cards came from the same source, and how many the
+     * gallery showed before, leaving out what this share saved (find-rarity-from-library).
+     */
+    private suspend fun countFind(container: AppContainer, item: ShareItem?, state: ShareSheetState, started: Long): FindCount? {
+        val cards = withContext(Dispatchers.IO) { container.libraryCopy.gallery() } ?: return null
+        val source = when (item) {
+            is ShareItem.Text -> sourceOfShare(item.text.trim().takeIf { it.startsWith("http") }, null)
+            is ShareItem.Stream -> sourceOfShare(null, runCatching { contentResolver.getType(Uri.parse(item.uri)) }.getOrNull() ?: "")
+            null -> return null
+        }
+        val saved = state.cards.mapTo(HashSet()) { it.id }
+        // A save can reach the copy before its id reaches the sheet; anything made since the share began is this one.
+        val earlier = cards.filter { it.id !in saved && (createdAt(it.created) ?: 0L) < started - 2_000L }
+        return FindCount(rarityIn(earlier, source), earlier.size)
+    }
+
+    /** Blurs the app that shared behind the sky as it comes in, where the phone can blur behind a window. */
+    private fun blurBehind(amount: Float) {
+        val windows = getSystemService(WindowManager::class.java) ?: return
+        if (!windows.isCrossWindowBlurEnabled) return
+        val radius = (amount * BLUR_DP * resources.displayMetrics.density).roundToInt()
+        if (radius == blurShown) return
+        blurShown = radius
+        window.attributes = window.attributes.apply {
+            blurBehindRadius = radius
+            flags = if (radius > 0) flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND else flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+        }
+    }
+    private var blurShown = 0
 
     /** Closes without the window's own animation, since the sheet has already gone. */
     private fun leave() {
@@ -188,8 +235,12 @@ class ShareActivity : ComponentActivity() {
         const val READS = 16
         const val TAG_READS = 10
         const val READ_GAP_MS = 750L
+        const val BLUR_DP = 24f
     }
 }
+
+/** @return When a card was made, in milliseconds, or null when its time cannot be read. */
+private fun createdAt(created: String): Long? = runCatching { Instant.parse(created).toEpochMilli() }.getOrNull()
 
 /** A card the library cannot give yet, so the saved row still has one to fill in. */
 private fun placeholderOf(id: String) = Card(id = id, type = "Placeholder", flags = 0, created = "", modified = "", bumped = "")

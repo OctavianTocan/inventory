@@ -179,6 +179,12 @@ class LibraryCopy(context: Context, private val session: Session, private val io
     /** @return Pinned from the copy, in pin order, or null when it cannot be read. */
     suspend fun pinned(): CardPage? = owned(null) { db -> CardPage(pinnedIn(db)) }
 
+    /** @return Every card the gallery shows, for counting finds, or null when the copy cannot be read. */
+    suspend fun gallery(): List<Card>? = owned(null) { db ->
+        db.rawQuery("SELECT card FROM cards WHERE (flags & $GRID_HIDDEN_FLAGS) = 0", null)
+            .use { rows -> buildList { while (rows.moveToNext()) add(decode(rows.getString(0))) } }
+    }
+
     /**
      * @param newest How many of the gallery's newest cards to include.
      * @return The cards whose pictures the phone keeps for use offline: Pinned, then the gallery's [newest] cards,

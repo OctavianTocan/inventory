@@ -9,10 +9,14 @@ scrim, Back or a drag closes it; tapping outside closes it at once. While it
 waits, the Done button shows the time left as a lighter part that shrinks. It
 MUST NOT block the other app longer than that wait, and the wait MUST last as
 long with the system's animations turned off. Spaces, tags and a note added
-before it goes MUST still reach the saved cards, however it closes.
+before it goes MUST still reach the saved cards, however it closes. After the
+shooting star (share-moment-shooting-star) its tag step waits the same way,
+from when the card has turned over; the star's own play before it, which a tap
+skips, and the flight into the backpack after it come on top of that wait.
 Source: Tavi's Cap recording of the share prototype, 29 October 2026: "it has to
 be something that goes away by itself ... if I don't tap anything, not something
-that I have to close"; "we do not want to block people".
+that I have to close"; "we do not want to block people". The shooting star's
+play time comes from Tavi's request of 5 November 2026 to build it into the app.
 
 @cc [owner:OctavianTocan,label:product;design] share-field-takes-everything
 The share sheet MUST be Pully's paper over the app that shared, resting at its
@@ -24,9 +28,13 @@ cross that takes it off; then one field, Add a space, a tag or a note. With
 nothing typed, the field offers the suggested space and recent tags; typed words
 offer the spaces and tags that hold them, a new tag for one word no tag matches,
 and Use as your note for words with a space. Enter adds the first row.
+This sheet shows when the shooting star does not play (share-moment-shooting-star):
+with the system's animations turned off, and when nothing was saved; otherwise
+the star's tag step (share-tag-step-icon-grid) takes its place.
 Source: Tavi's pick of 10, One field for everything, in the share prototype,
 29 October 2026 ("Let's do 10"). ThyMind's own tags show above the field
-(share-sheet-shows-thymind-tags), so the empty field offers recent tags.
+(share-sheet-shows-thymind-tags), so the empty field offers recent tags. The tag
+step took its place with Tavi's pick of M9 Icon grid, 5 November 2026.
 
 @cc [owner:OctavianTocan,label:product] share-problems-speak-for-thymind
 When nothing can be saved (nothing to keep, more than 20 things, a file over

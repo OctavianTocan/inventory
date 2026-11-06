@@ -1,0 +1,54 @@
+@cc [owner:OctavianTocan,label:product;motion] share-moment-shooting-star
+After something is shared into ThyMind, while it saves, the share target MUST play
+the shooting star moment over the app that shared: the page blurs under a night
+sky, a constellation draws itself, one star breaks off and falls, turning colour
+once for a Rare find and twice for a Legendary one, lands in a white-out, and the
+find's card spins out of it face up with its rarity, stars and points. The card
+then turns over into the tag step (share-tag-step-icon-grid); when that ends it
+turns back and flies into the backpack at the top right, whose count goes up, as
+the page comes back. A tap anywhere or Back while it plays MUST skip the rest of
+it and the tag step: the page comes back at once and the find pops into the
+backpack. When nothing could be saved the moment MUST fade without the backpack
+and the share sheet says why (share-problems-speak-for-thymind). With the
+system's animations turned off the share sheet shows instead. The moment MUST
+NOT show levels or XP, and the backpack MUST NOT be called a basket.
+Source: Tavi, 5 November 2026, 23:09: "Let's make the 03 shooting star one into a
+real thing in the app and build it out fully", moment 03 of the Inventory share
+moment prototype; the tap to skip, the backpack and no levels come from his
+feedback on that prototype the same day.
+
+@cc [owner:OctavianTocan,label:product;design] share-tag-step-icon-grid
+The tag step after the shooting star MUST be an icon grid on the back of the
+find's card, grown to fill the screen at the card's shape. It shows the spaces
+as a row of chips, one chosen at a time, with the space ThyMind suggests already
+chosen; a Search tags field that can add a new tag; and a grid of tiles, each a
+line icon, the tag's name and a check: ThyMind's own tags first, on and marked
+with the spark (share-sheet-shows-thymind-tags), then the user's, then recent
+tags, off. A tap on a tile puts its tag on or takes it off. It MUST go by itself
+as share-sheet-fades-by-itself says, its button showing the time left; a tap
+outside the card or Back closes it at once. The spaces and tags chosen MUST reach
+the saved cards however it closes.
+Source: Tavi's pick of M9 Icon grid on 5 November 2026, 23:27, for the tag step
+that follows the shooting star. Choosing the suggested space from the start is
+the M9 frame of the Inventory canvas; the icon for each tag is Claude's choice.
+
+@cc [owner:OctavianTocan,label:product] find-rarity-from-library
+A find's rarity MUST come from the user's own library, never from chance or
+payment: Legendary when no earlier card in the gallery comes from the same
+source, Rare when fewer than 5 do, and Common otherwise. A link's source is its
+site, without www., m. or mobile., with twitter.com read as x.com and youtu.be
+and music.youtube.com as youtube.com; a file's or note's source is its kind.
+Rarity sets the star's colours, the card's stars (1, 3, 5) and its points (10,
+40, 80). When the library cannot be counted before the star breaks off, the find
+is Common.
+Source: Tavi's rules for Inventory, 5 November 2026: rarity comes from the
+user's own library and points reward saving. The thresholds, the sources and
+the point values are Claude's choice and not yet confirmed.
+
+@cc [owner:OctavianTocan,label:product] share-moment-sounds
+The moment's sounds MUST play only while the phone's ringer is on, never when it
+is silent or on vibrate, and its vibrations MUST follow the phone's touch
+feedback setting.
+Source: the sound and feel of the Inventory share moment prototype Tavi heard on
+5 November 2026; following the ringer and the touch feedback setting is Claude's
+choice.

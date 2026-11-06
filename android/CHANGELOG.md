@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.81 (92), 2026-11-06
+A shooting star brings in everything you save.
+
+### Added
+- When you share something into Inventory, a night sky comes over the app you shared from and a star falls. It changes colour once for a rare find and twice for a legendary one, then lands as your find's card with its stars and points. How rare a find is comes from your own library: the first thing you save from a site is legendary, the next few are rare, and the rest are common.
+- The card then turns over to show your spaces and tags as a grid of icons. The space Inventory suggests is already picked; tap tags on or off, or search to add one. Left alone, it saves by itself after 5 seconds; touch it and it waits until you tap Save.
+- Then the card flies into the backpack at the top of the screen, and the backpack's count goes up by one.
+- Tap anywhere while the star falls to skip straight to the backpack.
+- The moment has its own sounds when your phone's ringer is on, and you feel each beat when touch vibration is on.
+
+### Changed
+- The share sheet now shows only when your phone's animations are turned off, or to say why nothing was saved.
+
 ## 0.6.80 (91), 2026-11-06
 A new icon for Inventory.
 
