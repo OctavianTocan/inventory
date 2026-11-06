@@ -30,6 +30,10 @@ import com.octaviantocan.mymind.ui.settings.glassSource
 import com.octaviantocan.mymind.ui.settings.rememberGlassBackdrop
 import com.octaviantocan.mymind.ui.sky.BackTodayBand
 import com.octaviantocan.mymind.ui.sky.BackTodayState
+import com.octaviantocan.mymind.ui.sky.SkyLayer
+import com.octaviantocan.mymind.ui.sky.rememberSkyOpening
+import com.octaviantocan.mymind.ui.sky.rememberStarFlight
+import com.octaviantocan.mymind.ui.sky.starFlights
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 
 /**
@@ -117,6 +121,13 @@ fun EverythingScreen(
         onOpenSettings = onOpenSettings, onAdd = onAdd, modifier = modifier,
         pinned = pinned.cards, onLoadMorePinned = viewModel.pinned::loadMore,
         backToday = backToday, onUncover = viewModel.backToday::uncover,
+        onSkyOpened = { viewModel.backToday.load(); viewModel.backToday.loadFinds() },
+        onOpenStar = { id ->
+            viewModel.backToday.state.value.finds[id]?.let { card ->
+                viewModel.backToday.uncover(card)
+                onOpenCard(card)
+            }
+        },
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
         onLongPressCard = onLongPressCard,
         photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, ai = rank,
@@ -168,6 +179,8 @@ fun EverythingContent(
     onLoadMorePinned: () -> Unit = {},
     backToday: BackTodayState = BackTodayState(),
     onUncover: (Card) -> Unit = {},
+    onSkyOpened: () -> Unit = {},
+    onOpenStar: (String) -> Unit = {},
     onRefresh: () -> Unit = {},
     onRefreshResults: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
@@ -185,6 +198,8 @@ fun EverythingContent(
     val accountPhotoLoader = photoLoader ?: if (photoUrl != null) rememberPublicAccountPhotoLoader() else null
     val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
     val resultsBackdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
+    val flight = rememberStarFlight()
+    val sky = rememberSkyOpening()
     Box(modifier.fillMaxSize().background(colors.background)) {
         when {
             searching && searchResults != null -> {
@@ -209,13 +224,16 @@ fun EverythingContent(
                         onLongPressCard = onLongPressCard, header = {
                             GalleryTitle("Your mind")
                             GalleryHighlights(pinned, onOpenCard, onLoadMore = onLoadMorePinned, onLongPressCard = onLongPressCard)
-                            BackTodayBand(backToday, onUncover, onOpenCard, onLongPressCard = onLongPressCard)
+                            BackTodayBand(backToday, { card, at -> onUncover(card); flight.launch(at) }, onOpenCard, onLongPressCard = onLongPressCard)
                             if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
                         })
                 }
                 GalleryScrollEdge(backdrop, colors.background, Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = 1f - mosaic.reel },
                     visible = { gridState.scrolledBy() })
-                GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd).awayInReels(mosaic), photoUrl = photoUrl, photoLoader = accountPhotoLoader)
+                GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd).awayInReels(mosaic), photoUrl = photoUrl, photoLoader = accountPhotoLoader,
+                    onSky = if (backToday.hasSky) ({ sky.open(); onSkyOpened() }) else null, flight = flight)
+                Box(Modifier.fillMaxSize().starFlights(flight))
+                backToday.sky?.let { SkyLayer(sky, it, backToday.finds, onOpenStar) }
             }
         }
     }

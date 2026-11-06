@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -65,10 +67,14 @@ internal const val OPEN_AFTER_MS = 520L
  *
  * @property sky The day's sky, or null before one is known for today.
  * @property cards Today's finds that the library still holds, in the server's order.
+ * @property finds The sky's finds that the library still holds, by id, once the sky has asked for them.
  */
-data class BackTodayState(val sky: Sky? = null, val cards: List<Card> = emptyList()) {
+data class BackTodayState(val sky: Sky? = null, val cards: List<Card> = emptyList(), val finds: Map<String, Card> = emptyMap()) {
     /** The finds opened from Back today or the sky; their leaves are gone. */
     val uncovered: Set<String> get() = sky?.stars?.mapTo(HashSet()) { it.id }.orEmpty()
+
+    /** True when the sky has anything to show: a constellation forming or finished, or a find opened again. */
+    val hasSky: Boolean get() = sky != null && (sky.active != null || sky.done.isNotEmpty() || sky.stars.isNotEmpty())
 }
 
 /**
@@ -117,6 +123,16 @@ class BackTodayModel(
         if (mutableState.value.sky?.day != today()) load()
     }
 
+    /** Reads the cards of every find on the sky, for the sky's stars to name and open. */
+    fun loadFinds() {
+        val sky = mutableState.value.sky ?: return
+        val ids = (listOfNotNull(sky.active) + sky.done).flatMap { it.cards } + sky.stars.map { it.id }
+        scope.launch {
+            val finds = ids.distinct().mapNotNull { id -> (library.card(id) as? ApiResult.Ok)?.value?.takeIf { it.deleted == null } }
+            mutableState.update { it.copy(finds = it.finds + finds.associateBy(Card::id)) }
+        }
+    }
+
     /** Reads the finds' cards again, as after the phone's copy changed: a find sent to the trash leaves the band. */
     fun reread() {
         val sky = mutableState.value.sky ?: return
@@ -146,7 +162,7 @@ class BackTodayModel(
             return
         }
         val cards = sky.back.mapNotNull { id -> (library.card(id) as? ApiResult.Ok)?.value?.takeIf { it.deleted == null } }
-        mutableState.value = BackTodayState(sky, cards)
+        mutableState.update { BackTodayState(sky, cards, it.finds) }
     }
 }
 
@@ -155,7 +171,7 @@ class BackTodayModel(
  * leaves away from the finger and opens the find as they fly; a find already opened today shows as it is.
  *
  * @param state The band's finds.
- * @param onUncover Called as a covered find's leaves start to blow away.
+ * @param onUncover Called as a covered find's leaves start to blow away, with where they blow from in the window's pixels.
  * @param onOpenCard Opens a find.
  * @param modifier Modifier for the band.
  * @param onLongPressCard Called when an uncovered find is held, or null.
@@ -163,7 +179,7 @@ class BackTodayModel(
 @Composable
 fun BackTodayBand(
     state: BackTodayState,
-    onUncover: (Card) -> Unit,
+    onUncover: (Card, Offset) -> Unit,
     onOpenCard: (Card) -> Unit,
     modifier: Modifier = Modifier,
     onLongPressCard: ((Card) -> Unit)? = null,
@@ -195,7 +211,7 @@ private const val BAND_SLOTS = 3
 private fun BackTodayFind(
     card: Card,
     covered: Boolean,
-    onUncover: (Card) -> Unit,
+    onUncover: (Card, Offset) -> Unit,
     onOpenCard: (Card) -> Unit,
     onLongPressCard: ((Card) -> Unit)?,
     modifier: Modifier,
@@ -206,20 +222,23 @@ private fun BackTodayFind(
     var blowing by remember(card.id) { mutableStateOf(false) }
     val latestUncover by rememberUpdatedState(onUncover)
     val latestOpen by rememberUpdatedState(onOpenCard)
+    // Where the tile is, kept without state so scrolling the gallery never recomposes it; read only on a tap.
+    val placed = remember(card.id) { arrayOfNulls<LayoutCoordinates>(1) }
     // The leaves stay while they fly, though the find counts as uncovered from the tap.
     val leaves = covered || (blowing && blown.value < 1f)
     fun blowFrom(at: Offset) {
         if (blowing) return
         blowing = true
         wind = at
-        latestUncover(card)
+        val tile = placed[0]?.takeIf { it.isAttached }
+        latestUncover(card, tile?.localToRoot(Offset(at.x * tile.size.width, at.y * tile.size.height)) ?: Offset.Zero)
         scope.launch {
             launch { blown.animateTo(1f, tween(BLOW_MS, easing = LinearEasing)) }
             delay(OPEN_AFTER_MS)
             latestOpen(card)
         }
     }
-    Box(modifier) {
+    Box(modifier.onPlaced { placed[0] = it }) {
         GalleryTile(card, onClick = { onOpenCard(card) }, enabled = !leaves,
             modifier = Modifier.fillMaxSize().then(if (leaves) Modifier.clearAndSetSemantics {} else Modifier),
             onLongClick = onLongPressCard?.let { { it(card) } })

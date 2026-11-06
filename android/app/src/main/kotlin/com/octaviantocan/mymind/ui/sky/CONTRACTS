@@ -27,3 +27,34 @@ gallery scrolls.
 Source: Tavi, 5 November 2026, 23:06 ("do the new stuff you mentioned for the Worn
 stuff"); the leaves are Claude's pick, 11 Leaves of the 30 worn directions on the
 "Your sky" canvas, not yet confirmed by Tavi.
+
+@cc [owner:OctavianTocan,label:product;design;motion] sky-opens-from-the-star-button
+On All, a star button MUST sit beside Add once the sky has anything to show: a
+constellation forming or finished, or a find opened again. Before that it MUST NOT
+show, so it never opens an empty sky. When a find in Back today is uncovered, a star
+MUST fly from where the finger lifted the leaves to the star button and the button
+glows as it lands, before the find has opened over it. The button opens Your sky over
+the gallery: the tab bar steps away as it does for reels, and Back or Close shuts it.
+A find opened from the sky rises over it, and closing the find returns to the sky.
+Source: Tavi, 5 November 2026, 23:06 ("implement all this other stuff into the actual
+app"), building the "Your sky" prototype into the app. The button's place beside Add
+and the star's flight are Claude's choices, not yet confirmed by Tavi.
+
+@cc [owner:OctavianTocan,label:product;design] sky-shows-constellations-not-sentences
+Your sky MUST show these, over a still nebula:
+- The active constellation, large. Its stars are lit for finds opened again since it
+  formed and dark otherwise, with gold lines between lit stars and dotted lines to dark
+  ones.
+- The finished constellations, smaller, with their figures drawn in.
+- Loose stars for the other finds opened from Back today.
+Its only words MUST be its title and the active constellation's name. No hints,
+sentences, counts, quests or levels go on the sky. A constellation MUST be drawn as one
+of the line figures, one for each figure the server names, and never with a find's
+words. Each star MUST name its find to accessibility. Tapping a star opens its find,
+which counts as a visit. Stars MAY twinkle only while the sky shows, and the nebula is
+painted once.
+Source: Tavi's reviews of the "Your sky" prototype, 5 November 2026:
+- 21:25: "Literally everything that isn't images looks god-awful in the stars."
+- Later rounds: no hint text or sentences on the sky, only one small constellation name.
+- 23:06: the request to build it into the app.
+Until Condense (Tavi's pick, variant 13) lands, a star opens its find directly.

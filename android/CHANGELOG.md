@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.75 (86), 2026-11-05
+Every find you go back to becomes a star in Your sky.
+
+### Added
+- Once you've opened something from Back today, a star button sits beside Add. When you tap a find under leaves, a star flies from it into the button.
+- The button opens Your sky. Old finds close in meaning to something you saved recently form a constellation, and each one you open again lights its star. Light them all and the constellation's picture appears, and it joins the finished ones below while a new one forms. Tap any star to open its find.
+
 ## 0.6.74 (85), 2026-11-05
 Old finds come back, three a day, under fallen leaves.
 

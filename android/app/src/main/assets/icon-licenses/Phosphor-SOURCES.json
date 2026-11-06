@@ -398,6 +398,18 @@
       "composition": "Both paths unchanged; the glass is scaled 0.8 and moved (10, 40), the star scaled 0.36 and moved (152, 14), as the search-with-sparkle mark of Google Photos."
     },
     {
+      "resource": "ic_library_sky",
+      "icon": "star-four",
+      "weight": "regular",
+      "source_path": "assets/regular/star-four.svg",
+      "source_sha256": "877f1c373b81f3eae0909031d73f7a10dfb47f459e3b13f773cf8f5e19c670cd",
+      "android_width": "24dp",
+      "android_height": "24dp",
+      "fill_color": "#FFFFFFFF",
+      "root_attributes": {},
+      "path_count": 1
+    },
+    {
       "resource": "ic_library_spaces",
       "icon": "squares-four",
       "weight": "regular",

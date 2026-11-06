@@ -83,6 +83,11 @@ class BackTodayTest {
         assertEquals(listOf("new", "old1"), model.state.value.sky?.active?.lit)
         assertEquals(listOf("old1"), library.visits)
 
+        // The sky reads the cards of its stars that the library still holds.
+        model.loadFinds()
+        advanceUntilIdle()
+        assertEquals(setOf("old1", "old2"), model.state.value.finds.keys)
+
         // Offline the next launch the same day shows the kept band, the find still uncovered.
         val offline = BackTodayModel(this, SkyLibrary(null), memory) { DAY }
         offline.load()
@@ -116,7 +121,7 @@ class BackTodayTest {
         val uncovered = mutableListOf<String>()
         val opened = mutableListOf<String>()
         compose.mainClock.autoAdvance = false
-        compose.setContent { MymindTheme(dark = false) { BackTodayBand(state, { uncovered += it.id }, { opened += it.id }) } }
+        compose.setContent { MymindTheme(dark = false) { BackTodayBand(state, { card, _ -> uncovered += card.id }, { opened += it.id }) } }
         compose.mainClock.advanceTimeByFrame()
         compose.onNodeWithText("Back today").assertIsDisplayed()
         compose.onAllNodesWithContentDescription("A find from your past, under fallen leaves").assertCountEquals(2)

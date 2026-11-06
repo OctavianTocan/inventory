@@ -33,6 +33,8 @@ import com.octaviantocan.mymind.ui.card.CardSheetIndication
 import com.octaviantocan.mymind.ui.shell.FootCircleButton
 import com.octaviantocan.mymind.ui.shell.FootPressTheme
 import com.octaviantocan.mymind.ui.shell.footShadow
+import com.octaviantocan.mymind.ui.sky.StarFlight
+import com.octaviantocan.mymind.ui.sky.starFlightTarget
 import com.octaviantocan.mymind.ui.theme.LibraryStyle
 import okhttp3.OkHttpClient
 
@@ -64,6 +66,8 @@ fun GalleryTitle(text: String, modifier: Modifier = Modifier, start: Dp = 20.dp,
  * @param modifier Modifier for the row; callers align it to the top end.
  * @param photoUrl The account's Google photo, or null for the profile glyph.
  * @param photoLoader Loader for [photoUrl] that never carries the library session.
+ * @param onSky Called when the star button beside Add is tapped, or null to show no star button.
+ * @param flight Where stars uncovered in Back today fly to the star button, or null.
  */
 @Composable
 fun GalleryControls(
@@ -72,10 +76,15 @@ fun GalleryControls(
     modifier: Modifier = Modifier,
     photoUrl: String? = null,
     photoLoader: ImageLoader? = null,
+    onSky: (() -> Unit)? = null,
+    flight: StarFlight? = null,
 ) {
     val colors = LibraryStyle.colors
     Column(modifier.padding(end = 16.dp, top = 12.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (onSky != null) {
+                FootCircleButton(R.drawable.ic_library_sky, "Your sky", onSky, if (flight != null) Modifier.starFlightTarget(flight) else Modifier, size = 44.dp)
+            }
             FootCircleButton(R.drawable.ic_library_add, "Add", onAdd, size = 44.dp)
             FootPressTheme {
                 Box(Modifier.size(44.dp).footShadow(CircleShape).clip(CircleShape)
