@@ -52,5 +52,12 @@ fn a_time_rendition_is_the_frame_at_that_moment() {
     assert!(blue > 200 && red < 60, "time(1.5) is in the blue second: {red} {blue}");
     let [red, _, blue] = still("time(0.2)/1x1.png");
     assert!(red > 200 && blue < 60, "time(0.2) is in the red second: {red} {blue}");
+    // The info rendition gives the length an agent spreads frames over, for videos saved without one.
+    let source = RenditionSource { body: Body::Bytes(bytes.clone()), size: bytes.len() as u64, name: "acct/card/two.mp4".to_owned() };
+    let made = mymind::runtime::run(async { processor.rendition(source, "acct/card/two.mp4;info.json").await.unwrap().expect("an info rendition") });
+    let Body::Bytes(data) = made.body else { panic!("a rendition has bytes") };
+    let info = mm_js::json::parse(&String::from_utf8(data).unwrap()).unwrap();
+    assert!((info.get("duration").to_number() - 2.0).abs() < 0.2, "two seconds long: {}", info.get("duration").to_number());
+    assert_eq!(info.get("width").to_number(), 64.0);
     let _ = std::fs::remove_dir_all(&dir);
 }

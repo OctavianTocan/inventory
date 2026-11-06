@@ -256,24 +256,36 @@ export function createServer(library: Library, onSignedOut: () => void, owner = 
     "thymind_get_frames",
     {
       title: "See frames of an Inventory video",
-      description: `Frames from a video the person saved, as images. Name the moments in seconds (at), or leave at empty for count frames spread evenly across the video. Up to ${FRAME_LIMIT} frames a call; call again for more.`,
+      description: `Frames from a video the person saved, as images. Name the moments in seconds (at), or leave at empty for count frames spread evenly across the video, or between from and to to look closer at one part. Up to ${FRAME_LIMIT} frames a call; call again for more, so every part of the video can be seen.`,
       inputSchema: z.object({
         id: CARD_REF.describe("The card's id, or a card link the person gave"),
         at: z.array(z.number().min(0).max(86_400)).max(FRAME_LIMIT).default([]).describe("Moments to see, in seconds from the start, e.g. [0, 12.5, 61]"),
         count: z.number().int().min(1).max(FRAME_LIMIT).default(6).describe(`With at empty: how many evenly spaced frames, 1-${FRAME_LIMIT}`),
+        from: z.number().min(0).max(86_400).optional().describe("With at empty: spread the frames from this second (default the start)"),
+        to: z.number().min(0).max(86_400).optional().describe("With at empty: spread the frames up to this second (default the end)"),
         size: z.number().int().min(128).max(1024).default(768).describe("Longest side in pixels, 128-1024"),
       }),
       annotations: READ,
     },
-    async ({ id: ref, at, count, size }) => {
+    async ({ id: ref, at, count, from, to, size }) => {
       try {
         const card = await library.json<Card>(`/app/v1/cards/${cardIdOf(ref)}`);
         if (mediaKind(card) !== "video") {
           const why = mediaKind(card) === "audio" ? "it is an audio file; read it with thymind_get_transcript" : "only videos saved into Inventory itself keep their frames";
           return { isError: true, content: [{ type: "text", text: `This card has no video frames: ${why}.` }] };
         }
-        const length = card.blob?.duration ?? 0;
-        const times = frameTimes(at, count, length);
+        // Videos saved before lengths were kept have none on the card; the library reads it from the file once.
+        let length = card.blob?.duration ?? 0;
+        if (!length && card.blob?.path) {
+          length = await library
+            .json<{ duration?: number }>(`/media/${card.blob.path};info.json`)
+            .then((info) => info.duration ?? 0)
+            .catch((error: unknown) => {
+              if (error instanceof LibraryError && error.signedOut) throw error;
+              return 0;
+            });
+        }
+        const times = frameTimes(at, count, length, from, to);
         const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];
         const missed: string[] = [];
         // One frame at a time: each one sends the whole video to the media service, and a long video is gigabytes.
@@ -356,11 +368,17 @@ export function createServer(library: Library, onSignedOut: () => void, owner = 
  * @param at Moments asked for, in seconds.
  * @param count How many evenly spaced frames to take when `at` is empty.
  * @param length The video's length in seconds, or 0 when unknown.
+ * @param from Where evenly spaced frames start, in seconds (the start when undefined).
+ * @param to Where evenly spaced frames end, in seconds (the end when undefined).
  * @returns Moments in seconds, kept inside the video (a moment at or past its end has no frame), rounded to tenths.
  */
-export function frameTimes(at: number[], count: number, length: number): number[] {
+export function frameTimes(at: number[], count: number, length: number, from?: number, to?: number): number[] {
   const last = length > 0.2 ? length - 0.1 : 0;
-  const wanted = at.length ? at : length > 0 ? Array.from({ length: count }, (_, i) => ((i + 0.5) * length) / count) : [0];
+  const start = Math.max(0, from ?? 0);
+  const end = to ?? length;
+  const span = end - start;
+  const spread = span > 0 ? Array.from({ length: count }, (_, i) => start + ((i + 0.5) * span) / count) : [start];
+  const wanted = at.length ? at : length > 0 || to !== undefined ? spread : [start];
   const kept = wanted.map((time) => Math.round((length > 0 ? Math.min(time, last) : time) * 10) / 10);
   return [...new Set(kept)];
 }

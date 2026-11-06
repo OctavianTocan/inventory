@@ -81,6 +81,9 @@ pub fn cover(blob: &Value, max_width: f64, max_height: f64) -> Result<Value> {
 pub enum Rendition {
     /// The stored original.
     Original { source: String },
+    /// What ffprobe reads from a stored video or audio file, as JSON (`path;info.json`, Inventory's own addition):
+    /// `{ duration, width, height }`, so an agent can place frames in a video saved before its length was kept.
+    Info { source: String },
     /// A derived image or video.
     Derived {
         source: String,
@@ -105,6 +108,7 @@ impl Rendition {
     pub fn to_value(&self) -> Value {
         match self {
             Rendition::Original { source } => obj! { "source" => source.as_str(), "suffix" => Value::Null }.into(),
+            Rendition::Info { source } => obj! { "source" => source.as_str(), "suffix" => INFO, "type" => "application/json" }.into(),
             Rendition::Derived { source, suffix, width, height, mode, format, page, time, flatten, content_type } => {
                 let mut object = obj! { "source" => source.as_str(), "suffix" => suffix.as_str(), "width" => *width, "height" => *height };
                 object.insert("mode", mode.map_or(Value::Undefined, |mode| Value::from(mode.to_string())));
@@ -126,6 +130,8 @@ static SIZE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?:^|/)([0-9]+)x([0-9]+)(?:-([tc]))?\.(webp|jpe?g|png|mp4)(?:/hevc\.mp4)?$").expect("regex"));
 static VIDEO: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|/)([0-9]+)x([0-9]+)/hevc\.mp4$").expect("regex"));
 static PAGE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"page\(([0-9]+)\)").expect("regex"));
+/// The suffix of an info rendition.
+pub const INFO: &str = "info.json";
 static TIME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|/)time\(([0-9]{1,5}(?:\.[0-9]{1,3})?)\)(?:/|$)").expect("regex"));
 static RANGE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^bytes=([0-9]*)-([0-9]*)$").expect("regex"));
 
@@ -153,6 +159,9 @@ pub fn parse_rendition(relative: &str) -> Result<Rendition> {
     let suffix = suffixes.join(";");
     if ORIGINAL.is_match(&suffix) {
         return Ok(Rendition::Original { source });
+    }
+    if suffix == INFO {
+        return Ok(Rendition::Info { source });
     }
     let size = SIZE.captures(&suffix);
     let video = VIDEO.captures(&suffix);

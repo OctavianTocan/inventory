@@ -34,8 +34,9 @@ length and whether it has a transcript.
 
 - `thymind_get_transcript` reads everything said in it, in pages of 50,000 characters (`next_offset` reads on).
 - `thymind_get_frames` shows a video's frames: name the moments in seconds (`at: [0, 12.5, 61]`), or leave `at`
-  empty for evenly spaced frames (`count`, up to 10 a call). Start with a few spread frames, then look closer where
-  it matters. The transcript has no times, so pick moments from the frames, not from the words.
+  empty for evenly spaced frames (`count`, up to 10 a call), and add `from`/`to` (seconds) to spread them over one
+  part. Start with frames spread over the whole video, then look closer where it matters; call as often as needed to
+  see every part. The transcript has no times, so pick moments from the frames, not from the words.
 - Web videos (a saved YouTube link) keep only their description and preview: no transcript and no frames.
 
 `by_meaning` is on by default and also finds cards close in meaning without the same words ("that article about

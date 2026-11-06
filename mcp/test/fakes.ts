@@ -170,6 +170,7 @@ export function fakeLibrary(token = "app-token-1", options: { refuse?: boolean }
       const card = Object.values(CARDS).find((found) => url.pathname === `/app/v1/cards/${found.id}`);
       if (card) return Response.json(card);
       if (url.pathname.startsWith("/app/v1/cards/")) return Response.json({ error: "not-found" }, { status: 404 });
+      if (url.pathname === "/media/u1/old/clip.mp4;info.json") return Response.json({ duration: 30, width: 720, height: 1280 });
       if (url.pathname.startsWith("/media/")) return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), { headers: { "content-type": "image/jpeg" } });
       return new Response("unexpected", { status: 500 });
     },

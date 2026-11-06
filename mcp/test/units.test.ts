@@ -177,5 +177,8 @@ describe("frame moments", () => {
     expect(frameTimes([0, 12.345, 60, 999], 6, 60)).toEqual([0, 12.3, 59.9]);
     expect(frameTimes([], 6, 0)).toEqual([0]);
     expect(frameTimes([5], 6, 0)).toEqual([5]);
+    expect(frameTimes([], 4, 60, 20, 24)).toEqual([20.5, 21.5, 22.5, 23.5]);
+    expect(frameTimes([], 2, 60, 50)).toEqual([52.5, 57.5]);
+    expect(frameTimes([], 3, 60, 58, 90)).toEqual([59.9]);
   });
 });

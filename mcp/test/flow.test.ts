@@ -228,7 +228,11 @@ describe("connecting an AI app", () => {
     expect((spread.content as Array<{ type: string }>).filter((part) => part.type === "image")).toHaveLength(3);
     expect(library.calls.some((found) => found.path === "/media/u1/vid/walk.mp4;time(50)/768x768-t.jpg")).toBe(true);
     const unknown = await client.callTool({ name: "thymind_get_frames", arguments: { id: CARDS.oldVideo.id } });
-    expect((unknown.content as Array<{ text?: string }>)[0]!.text).toContain("length is not known");
+    // An older video's length comes from the file itself, so its frames spread across all of it.
+    const unknownParts = unknown.content as Array<{ type: string; text?: string }>;
+    expect(unknownParts[0]!.text).toContain("0:30 long");
+    expect(unknownParts.filter((part) => part.type === "image")).toHaveLength(6);
+    expect(library.calls.some((found) => found.path === "/media/u1/old/clip.mp4;time(27.5)/768x768-t.jpg")).toBe(true);
     const audioFrames = await client.callTool({ name: "thymind_get_frames", arguments: { id: CARDS.audio.id } });
     expect(audioFrames.isError).toBe(true);
 

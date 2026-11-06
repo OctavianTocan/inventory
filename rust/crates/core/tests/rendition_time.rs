@@ -5,7 +5,7 @@ use mm_core::media_files::{Rendition, parse_rendition};
 fn time_of(path: &str) -> Option<f64> {
     match parse_rendition(path).expect(path) {
         Rendition::Derived { time, .. } => time,
-        Rendition::Original { .. } => panic!("{path} is an original"),
+        other => panic!("{path} is not a still: {other:?}"),
     }
 }
 
@@ -29,4 +29,10 @@ fn time_out_of_bounds_or_on_a_video_rendition_is_refused() {
     for path in ["v.mp4;time(-1)/64x64.jpg", "v.mp4;time(1.2345)/64x64.jpg", "v.mp4;time(abc)/64x64.jpg"] {
         assert_eq!(time_of(path), None, "{path}");
     }
+}
+
+#[test]
+fn info_names_a_files_length_and_size() {
+    assert_eq!(parse_rendition("u/c/v.mp4;info.json").unwrap(), Rendition::Info { source: "u/c/v.mp4".to_owned() });
+    assert!(parse_rendition("u/c/v.mp4;info.png").is_err());
 }

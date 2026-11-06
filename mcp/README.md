@@ -25,7 +25,7 @@ brief (`thymind-mcp/concepts_brief.md` in the project files).
 | `thymind_get_card` | One card in full: text, note, tags, spaces, link, comments. |
 | `thymind_get_picture` | A card's picture as an image (128–1024 px). |
 | `thymind_get_transcript` | Everything said in a saved video or audio file, in pages of 50,000 characters. |
-| `thymind_get_frames` | Frames of a saved video at chosen moments, or spread evenly (up to 10 a call), through the `time(s)` media rendition. |
+| `thymind_get_frames` | Frames of a saved video at chosen moments, or spread evenly over all of it or a `from`/`to` part (up to 10 a call), through the `time(s)` media rendition; a video without a stored length is measured once through `info.json`. |
 | `thymind_list_spaces` | Spaces with card counts. |
 | `thymind_list_tags` | Tags with card counts. |
 | `thymind_save` | Save a link or text, with a note, tags and spaces. A link already saved is bumped. |

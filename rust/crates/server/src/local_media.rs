@@ -372,10 +372,43 @@ impl Inner {
         Ok(info.is_file().then_some((file, info.len())))
     }
 
+    /// A stored video's or audio file's length and picture size as JSON (`path;info.json`), kept beside the
+    /// renditions; `None` for any other file.
+    async fn info(&self, file: &str, content_type: &str, relative: &str) -> Result<Option<MediaResult>> {
+        if !content_type.starts_with("video/") && !content_type.starts_with("audio/") {
+            return Ok(None);
+        }
+        let cache = self
+            .inside(&format!(".renditions/{}", relative.replace('/', "_")))
+            .ok_or_else(|| Error::internal("rendition path outside the root"))?;
+        if let Ok(info) = tokio::fs::metadata(&cache).await
+            && info.is_file()
+        {
+            return Ok(Some(MediaResult { key: cache, size: info.len(), content_type: "application/json".to_owned() }));
+        }
+        let output = run("ffprobe", &args(&["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height:format=duration", "-of", "json", file]), 15000).await?;
+        let probed = json::parse(&String::from_utf8_lossy(&output)).map_err(|error| Error::internal(error.message().to_owned()))?;
+        let mut info = Object::new();
+        let duration = probed.get("format").get("duration").to_number();
+        info.insert("duration", if duration.is_nan() { 0.0 } else { duration });
+        let stream = probed.get("streams").at(0);
+        if stream.as_object().is_some() {
+            info.insert("width", stream.get("width").clone());
+            info.insert("height", stream.get("height").clone());
+        }
+        let text = json::stringify(&Value::from(info))?.unwrap_or_default();
+        tokio::fs::create_dir_all(Path::new(&cache).parent().unwrap_or(&self.root)).await.map_err(io)?;
+        tokio::fs::write(&cache, text.as_bytes()).await.map_err(io)?;
+        Ok(Some(MediaResult { key: cache, size: text.len() as u64, content_type: "application/json".to_owned() }))
+    }
+
     async fn rendition(&self, relative: &str) -> Result<Option<MediaResult>> {
         let Some((file, size)) = self.original(relative.split(';').next().unwrap_or("")).await? else { return Ok(None) };
         let wanted = parse_rendition(relative)?;
         let content_type = mime(extname(&file).trim_start_matches('.')).unwrap_or("application/octet-stream");
+        if matches!(wanted, Rendition::Info { .. }) {
+            return self.info(&file, content_type, relative).await;
+        }
         let Rendition::Derived { width, height, mode, format, page, time, flatten, content_type: output_type, .. } = wanted else {
             return Ok(Some(MediaResult { key: file, size, content_type: content_type.to_owned() }));
         };

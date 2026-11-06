@@ -131,6 +131,7 @@ impl Inner {
         let wanted = match parse_rendition(relative)? {
             Rendition::Original { .. } => return Ok(Some(found)),
             Rendition::Derived { content_type, .. } => content_type,
+            Rendition::Info { .. } => "application/json".to_owned(),
         };
         let key = format!("{}renditions/{}", self.prefix, relative.replace('/', "_"));
         if let Some(cached) = self.bucket.head(&key).await? {
