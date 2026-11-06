@@ -83,6 +83,13 @@ export const CARDS = {
     cover: { src: "/media/u1/vid/walk.mp4;800x1000-t.webp", width: 800, height: 1000 },
     transcript: "So this is the river walk. ".repeat(3000).trim(),
   },
+  oldVideo: {
+    id: "00000002OldVideoAAAAAA",
+    type: "Video",
+    flags: 0,
+    created: "2026-10-11T13:41:06Z",
+    blob: { path: "u1/old/clip.mp4", type: "video/mp4", width: 720, height: 1280 },
+  },
   audio: {
     id: "00000002AudioAAAAAAAAA",
     type: "Audio",

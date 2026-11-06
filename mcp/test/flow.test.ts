@@ -227,6 +227,8 @@ describe("connecting an AI app", () => {
     const spread = await client.callTool({ name: "thymind_get_frames", arguments: { id: CARDS.video.id, count: 3 } });
     expect((spread.content as Array<{ type: string }>).filter((part) => part.type === "image")).toHaveLength(3);
     expect(library.calls.some((found) => found.path === "/media/u1/vid/walk.mp4;time(50)/768x768-t.jpg")).toBe(true);
+    const unknown = await client.callTool({ name: "thymind_get_frames", arguments: { id: CARDS.oldVideo.id } });
+    expect((unknown.content as Array<{ text?: string }>)[0]!.text).toContain("length is not known");
     const audioFrames = await client.callTool({ name: "thymind_get_frames", arguments: { id: CARDS.audio.id } });
     expect(audioFrames.isError).toBe(true);
 

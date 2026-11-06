@@ -289,7 +289,8 @@ export function createServer(library: Library, onSignedOut: () => void, owner = 
             missed.push(clock(time));
           }
         }
-        const total = length ? `The video is ${clock(length)} long. ` : "";
+        // Videos saved before lengths were kept have none, so evenly spaced frames cannot be placed.
+        const total = length ? `The video is ${clock(length)} long. ` : at.length ? "" : "This video's length is not known, so only its first frame is shown; name moments in at to see others. ";
         const lead = { type: "text" as const, text: `${total}${content.length / 2} frame${content.length === 2 ? "" : "s"}${missed.length ? `; none could be made at ${missed.join(", ")}` : ""}.` };
         if (!content.length) return { isError: true, content: [lead] };
         return { content: [lead, ...content] };
