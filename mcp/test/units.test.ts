@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { cardDetail, cardResult, detailMarkdown, fenced, htmlText, picturePath, proseText, TEXT_LIMIT } from "../src/cards";
 import { Library, LibraryError, allowed } from "../src/library";
 import { escape } from "../src/pages";
-import { cardIdOf, cardLink } from "../src/refs";
+import { cardIdOf, cardLink, spaceIdOf, spaceLink } from "../src/refs";
 import { frameTimes } from "../src/tools";
 import { CARDS } from "./fakes";
 
@@ -157,6 +157,17 @@ describe("card links", () => {
     for (const ref of ["", "../etc", "https://mymind.octaviantocan.com/cards/abc", "https://x.org/c/a/b", "https://x.org/c/a%2e", "a-b", "x".repeat(65)]) {
       expect(cardIdOf(ref), ref).toBeUndefined();
     }
+  });
+});
+
+describe("space links", () => {
+  it("name a space by its id or its link, and a card link is not one", () => {
+    const id = "00000002SpaceAAAAAAAAA";
+    expect(spaceIdOf(spaceLink("https://mymind.octaviantocan.com", id))).toBe(id);
+    expect(spaceLink("https://mymind.octaviantocan.com/", id)).toBe(`https://mymind.octaviantocan.com/s/${id}`);
+    expect(spaceIdOf(id)).toBe(id);
+    expect(spaceIdOf(cardLink("https://mymind.octaviantocan.com", id))).toBeUndefined();
+    expect(cardIdOf(spaceLink("https://mymind.octaviantocan.com", id))).toBeUndefined();
   });
 });
 

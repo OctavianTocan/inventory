@@ -162,6 +162,7 @@ export function fakeLibrary(token = "app-token-1", options: { refuse?: boolean }
       }
       const restore = /^\/objects\/([^/]+)\/restore$/.exec(url.pathname);
       if (restore && request.method === "POST") return known(restore[1]) ? Response.json({}) : Response.json({ error: "not-found" }, { status: 404 });
+      if (url.pathname === "/app/v1/spaces/00000002SpaceAAAAAAAAA/cards") return Response.json({ cards: [CARDS.note], next: null });
       if (url.pathname === "/app/v1/spaces") return Response.json({ spaces: [{ id: "00000002SpaceAAAAAAAAA", name: "Kitchen", count: 1, smart: false }] });
       if (url.pathname === "/app/v1/tags") return Response.json({ tags: [{ name: "recipes", count: 1 }] });
       if (url.pathname === "/app/v1/search" || url.pathname === "/app/v1/cards") return Response.json({ cards: [CARDS.note, CARDS.link], next: "cursor-2" });

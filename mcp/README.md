@@ -102,5 +102,5 @@ deploy above.
 
 ## Card links
 
-The app's Share sheet copies `<server>/c/<card id>` (Link for AI agents). Every tool that takes a card id also takes
+The app's Share sheet copies `<server>/c/<card id>` and a space's options copy `<server>/s/<space id>` (Link for AI agents). Every tool that takes a card or space id also takes
 that link (`src/refs.ts`); it names a card in the signed-in person's own library and reaches nothing else.

@@ -235,6 +235,12 @@ describe("connecting an AI app", () => {
     const missing = await client.callTool({ name: "thymind_get_card", arguments: { id: "00000002GoneAAAAAAAAAA" } });
     expect(missing.isError).toBe(true);
 
+    const bySpaceLink = await client.callTool({ name: "thymind_search", arguments: { space_id: "https://mymind.example/s/00000002SpaceAAAAAAAAA" } });
+    expect(bySpaceLink.isError).toBeFalsy();
+    expect(library.calls.some((found) => found.path === "/app/v1/spaces/00000002SpaceAAAAAAAAA/cards")).toBe(true);
+    const spaces = await client.callTool({ name: "thymind_list_spaces", arguments: {} });
+    expect((spaces.structuredContent as { spaces: Array<{ link: string }> }).spaces[0]!.link).toBe("https://mymind.example/s/00000002SpaceAAAAAAAAA");
+
     const pinned = await client.callTool({ name: "thymind_search", arguments: { pinned: true } });
     expect(pinned.structuredContent).toMatchObject({ count: 1, has_more: false });
 
@@ -341,7 +347,7 @@ describe("connecting an AI app", () => {
     expect(library.calls.find((found) => found.path === "/app/v1/auth/google")!.body).toMatchObject({ device: "MCP: ChatGPT" });
     const client = await mcp(call, access_token, true);
     const spaces = await client.callTool({ name: "thymind_list_spaces", arguments: {} });
-    expect(spaces.structuredContent).toEqual({ spaces: [{ id: "00000002SpaceAAAAAAAAA", name: "Kitchen", cards: 1, smart: false }] });
+    expect(spaces.structuredContent).toEqual({ spaces: [{ id: "00000002SpaceAAAAAAAAA", name: "Kitchen", cards: 1, smart: false, link: "https://mymind.example/s/00000002SpaceAAAAAAAAA" }] });
   });
 
   it("grants read only when the person unticks changes", async () => {

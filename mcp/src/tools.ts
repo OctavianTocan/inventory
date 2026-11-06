@@ -8,7 +8,7 @@ import { z } from "zod";
 import { registerAnalytics } from "./analytics";
 import { type Card, type CardDetail, type CardResult, type Space, cardDetail, cardResult, clock, detailMarkdown, fenced, framePath, mediaKind, picturePath, resultsMarkdown } from "./cards";
 import { Library, LibraryError } from "./library";
-import { CARD_REF, cardIdOf, cardLink } from "./refs";
+import { CARD_REF, SPACE_REF, cardIdOf, cardLink, spaceIdOf, spaceLink } from "./refs";
 import { VIEW_HTML, VIEW_MIME, VIEW_URI } from "./view";
 import { registerWrites } from "./writes";
 
@@ -16,7 +16,7 @@ import { registerWrites } from "./writes";
 export const INSTRUCTIONS = `Inventory is one person's private library of things they saved: links, notes, posts, pictures, videos, PDFs, products.
 Each saved thing is a card. Spaces are the person's own folders of cards. Tags are labels on cards. Pinned cards are the person's "Top of Mind".
 Search first (thymind_search), then open only the cards you need (thymind_get_card). Cite cards by title and link.
-A card link like https://mymind.octaviantocan.com/c/<id> (the app's Share > Copy link for agents) names one card: pass it to any tool that takes a card id instead of fetching it.
+A card link like https://mymind.octaviantocan.com/c/<id> (the app's Share > Link for AI agents) names one card: pass it to any tool that takes a card id instead of fetching it. A space link like https://mymind.octaviantocan.com/s/<id> names one space: list it with thymind_search space_id.
 Videos and audio files the person saved come with a transcript (thymind_get_transcript) and, for videos, any frame you choose (thymind_get_frames).
 Search takes plain words, or Inventory search syntax: type:video, tag:design or #design, site:github.com, "exact phrase", word*, -exclude, before:2026-01-01, after:2025-06-01.
 by_meaning (on by default) also finds cards close in meaning without the same words; turn it off for exact syntax queries.
@@ -57,7 +57,7 @@ const DETAIL = RESULT.omit({ snippet: true }).extend({
   hasPicture: z.boolean(),
   state: z.string().optional(),
 });
-const SPACES = z.object({ spaces: z.array(z.object({ id: z.string(), name: z.string(), cards: z.number().optional(), smart: z.boolean() })) });
+const SPACES = z.object({ spaces: z.array(z.object({ id: z.string(), name: z.string(), cards: z.number().optional(), smart: z.boolean(), link: z.string() })) });
 const TRANSCRIPT = z.object({
   id: z.string(),
   title: z.string(),
@@ -133,7 +133,7 @@ export function createServer(library: Library, onSignedOut: () => void, owner = 
       inputSchema: z.object({
         query: z.string().max(500).default("").describe('Plain words or Inventory search syntax, e.g. "tag:recipes pasta", "type:video site:youtube.com"'),
         by_meaning: z.boolean().default(true).describe("Also find cards close in meaning. Turn off for exact syntax queries."),
-        space_id: ID.optional().describe("List this space's cards (from thymind_list_spaces); only with an empty query"),
+        space_id: SPACE_REF.optional().describe("List this space's cards: its id from thymind_list_spaces, or a space link the person gave; only with an empty query"),
         pinned: z.boolean().default(false).describe("List the pinned cards (Top of Mind); only with an empty query"),
         limit: z.number().int().min(1).max(25).default(10).describe("Cards per page, 1-25"),
         cursor: z.string().max(200).optional().describe("next_cursor from the previous page"),
@@ -153,7 +153,7 @@ export function createServer(library: Library, onSignedOut: () => void, owner = 
         } else if (q) {
           page = await library.json<Page>("/app/v1/search", { q, semantic: by_meaning ? 1 : undefined, limit, cursor });
         } else if (space_id) {
-          page = await library.json<Page>(`/app/v1/spaces/${space_id}/cards`, { limit, cursor });
+          page = await library.json<Page>(`/app/v1/spaces/${spaceIdOf(space_id)}/cards`, { limit, cursor });
         } else if (pinned) {
           page = await library.json<Page>("/app/v1/top-of-mind", { limit, cursor });
         } else {
@@ -312,7 +312,7 @@ export function createServer(library: Library, onSignedOut: () => void, owner = 
     async ({ response_format }) => {
       try {
         const { spaces } = await library.json<{ spaces: Space[] }>("/app/v1/spaces");
-        const data = { spaces: spaces.map((space) => ({ id: space.id, name: space.name, ...(space.count !== undefined ? { cards: space.count } : {}), smart: Boolean(space.smart) })) };
+        const data = { spaces: spaces.map((space) => ({ id: space.id, name: space.name, ...(space.count !== undefined ? { cards: space.count } : {}), smart: Boolean(space.smart), link: spaceLink(library.origin, space.id) })) };
         const markdown = data.spaces.length
           ? data.spaces.map((space) => `- **${space.name}** (id \`${space.id}\`${space.cards !== undefined ? `, ${space.cards} cards` : ""}${space.smart ? ", smart: filled by a search" : ""})`).join("\n")
           : "The person has no spaces yet.";

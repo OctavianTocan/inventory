@@ -29,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.data.Card
+import com.octaviantocan.mymind.data.Space
 import com.octaviantocan.mymind.data.Track
 import com.octaviantocan.mymind.ui.card.siteOf
 
@@ -77,6 +78,16 @@ internal fun ShareContent(
  * @return `<server>/c/<card id>`.
  */
 internal fun agentLink(card: Card, server: String = BuildConfig.SERVER_URL): String = "${server.trimEnd('/')}/c/${card.id}"
+
+/**
+ * The link an AI agent connected to Inventory's MCP server lists this space's cards with; like [agentLink], it opens
+ * nothing without the person's own connected agent.
+ *
+ * @param space The space.
+ * @param server The Inventory server, [BuildConfig.SERVER_URL] in the app.
+ * @return `<server>/s/<space id>`.
+ */
+internal fun spaceAgentLink(space: Space, server: String = BuildConfig.SERVER_URL): String = "${server.trimEnd('/')}/s/${space.id}"
 
 /** "Photo, 1600 × 1067" when the picture's size is known, else "Photo". */
 private fun pictureDetail(card: Card): String {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.86 (97), 2026-11-06
+Give an AI a link to a whole space.
+
+### Added
+- A space's options now have Link for AI agents. It copies a link to the space that an AI connected to Inventory can open straight away, to look through every card in it.
+
 ## 0.6.85 (96), 2026-11-06
 The shooting star now plays in full.
 

@@ -6,11 +6,15 @@
  */
 import { z } from "zod";
 
+/** The path a space's agent link starts with, before the space's id (Tavi 2026-11-06: "a link thing to share a space"). */
+export const SPACE_LINK_PATH = "/s/";
+
 /** The path a card's agent link starts with, before the card's id. */
 export const CARD_LINK_PATH = "/c/";
 
 const BARE_ID = /^[A-Za-z0-9]{1,64}$/;
 const LINK = /^https?:\/\/[^\s/?#]+\/c\/([A-Za-z0-9]{1,64})\/?(?:[?#]\S*)?$/;
+const SPACE_LINK = /^https?:\/\/[^\s/?#]+\/s\/([A-Za-z0-9]{1,64})\/?(?:[?#]\S*)?$/;
 
 /**
  * The card id an id or agent link names.
@@ -40,3 +44,32 @@ export const CARD_REF = z
   .string()
   .max(300)
   .refine((ref) => cardIdOf(ref) !== undefined, "a card id (letters and digits) or a card link like https://mymind.octaviantocan.com/c/<id>");
+
+/**
+ * The space id an id or space link names.
+ *
+ * @param ref A space id, or a link like `https://mymind.octaviantocan.com/s/<id>`.
+ * @returns The id, or undefined when `ref` is neither.
+ */
+export function spaceIdOf(ref: string): string | undefined {
+  const text = ref.trim();
+  if (BARE_ID.test(text)) return text;
+  return SPACE_LINK.exec(text)?.[1];
+}
+
+/**
+ * A space's agent link.
+ *
+ * @param origin The library's public origin.
+ * @param id The space's id.
+ * @returns The link a space's options copy in the app.
+ */
+export function spaceLink(origin: string, id: string): string {
+  return `${origin.replace(/\/+$/, "")}${SPACE_LINK_PATH}${id}`;
+}
+
+/** A space id or space link in a tool's input; the tool reads the id with `spaceIdOf`. */
+export const SPACE_REF = z
+  .string()
+  .max(300)
+  .refine((ref) => spaceIdOf(ref) !== undefined, "a space id (letters and digits) or a space link like https://mymind.octaviantocan.com/s/<id>");

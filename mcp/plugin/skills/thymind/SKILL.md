@@ -23,6 +23,10 @@ The person can copy a card's link in the app (Share, Copy link for agents) and g
 `https://mymind.octaviantocan.com/c/<id>`. Every tool that takes a card id also takes that link: pass it straight
 to `thymind_get_card` instead of fetching the page. It opens only the person's own cards.
 
+A space link, `https://mymind.octaviantocan.com/s/<id>` (a space's options, Link for AI agents), names a whole
+space: pass it as `space_id` to `thymind_search` (with an empty query) to list its cards, then open the ones you
+need. `thymind_list_spaces` gives each space's link too.
+
 ## Videos and audio
 
 A video or audio file the person saved into Inventory keeps the file itself, and `thymind_get_card` says so with its

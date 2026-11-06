@@ -259,7 +259,7 @@ button. The Spaces list MUST end with a New space tile, a stack's square with a 
 where a cover would be, and the + on the Spaces list MUST open the New space sheet
 straight away, never the Add sheet with its add-to-your-inventory sources. New space is
 Pully's sheet with the name and colour in one raised group and Create space under it,
-never mymind's modal. A space's options (Add to this space, Rename space, Delete space held
+never mymind's modal. A space's options (Add to this space, Link for AI agents, Rename space, Delete space held
 as a card's delete is) MUST be a Pully sheet under the space's name, never a Material
 menu or dialog. Rename space MUST open its name field on the same sheet, filled with the
 current name. The opened space's dot menu and holding a space on the Spaces list MUST
@@ -522,3 +522,12 @@ tile corners (gallery-text-is-one-size, gallery-tiles-look-like-the-showcase), i
 colour of its own, and MUST NOT show a kind label above its words or request any media.
 Source: Tavi, 5 Nov 2026: "If we're not already using this for audio too, then we
 definitely should be".
+
+@cc [owner:OctavianTocan,label:product] space-options-copy-a-link-for-ai-agents
+Link for AI agents in a space's options MUST copy `<server>/s/<space id>` to the clipboard,
+and Inventory's MCP server MUST take that link wherever it takes a space id, so an agent the
+person connected can list that space's cards at once. Like a card's link, it names the space
+only and MUST open nothing except through the person's own connected agent.
+Source: Tavi, 6 November 2026 ("We should also have a link thing to share a space, not just
+a card, directly"). Its place under Add to this space and copying rather than sharing are
+Claude's choices, not yet confirmed by Tavi.

@@ -1,5 +1,12 @@
 package com.octaviantocan.mymind.ui.library
 
+import android.content.ClipData
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import com.octaviantocan.mymind.data.Track
+import com.octaviantocan.mymind.ui.menu.spaceAgentLink
+import kotlinx.coroutines.launch
 import com.octaviantocan.mymind.ui.theme.themeBackground
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.Image
@@ -340,8 +347,8 @@ private fun SpaceOptions(space: Space, onAdd: () -> Unit, onRename: ((String) ->
 }
 
 /**
- * A space's options as a Pully sheet under its name: adding to it, renaming it on a page of the same sheet, and
- * deleting it with a hold, as a card is deleted. The opened space's dot menu and a hold on the Spaces list open it.
+ * A space's options as a Pully sheet under its name: adding to it, copying its link for AI agents, renaming it on a
+ * page of the same sheet, and deleting it with a hold, as a card is deleted. The opened space's dot menu and a hold on the Spaces list open it.
  *
  * @param space The space.
  * @param onClose Called when the sheet closes, including after a pick.
@@ -353,6 +360,8 @@ private fun SpaceOptions(space: Space, onAdd: () -> Unit, onRename: ((String) ->
 internal fun SpaceOptionsSheet(space: Space, onClose: () -> Unit, onAdd: () -> Unit, onRename: ((String) -> Unit)?, onDelete: (() -> Unit)?) {
     val name = space.name.orEmpty()
     var renaming by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     PullySheet(if (renaming) "Rename space" else name.ifBlank { "Space" }, onClose = onClose) {
         if (renaming && onRename != null) {
             RenameSpaceContent(name, onRename = { onClose(); onRename(it) })
@@ -361,6 +370,12 @@ internal fun SpaceOptionsSheet(space: Space, onClose: () -> Unit, onAdd: () -> U
         CardMenuGroup(Modifier.padding(top = 20.dp)) {
             SheetRow(painterResource(R.drawable.ic_library_add), "Add to this space", { onClose(); onAdd() },
                 detail = "Photos, files or the camera")
+            SheetRowDivider()
+            SheetRow(painterResource(R.drawable.ic_library_search_spark), "Link for AI agents", {
+                onClose()
+                Track.event("share", detail = "space agent link")
+                scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Inventory space link", spaceAgentLink(space)))) }
+            }, detail = "Copies a link your connected AI can open")
             if (onRename != null) {
                 SheetRowDivider()
                 SheetRow(painterResource(R.drawable.ic_text), "Rename space", { renaming = true })

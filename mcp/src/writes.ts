@@ -9,7 +9,7 @@ import { z } from "zod";
 import { type Card, fenced } from "./cards";
 import { type Change, Library, LibraryError, newId } from "./library";
 import { READ_SCOPE, WRITE_SCOPE } from "./pages";
-import { CARD_REF, cardIdOf } from "./refs";
+import { CARD_REF, SPACE_REF, cardIdOf, spaceIdOf } from "./refs";
 
 /** Most cards one tool call may change. */
 export const CARD_LIMIT = 25;
@@ -80,7 +80,7 @@ export function registerWrites(
         content: z.string().trim().min(1).max(100_000).describe("A web address (https://...) to save as a link, or text to save as a note"),
         note: z.string().max(10_000).optional().describe("The person's note on the card"),
         tags: z.array(TAG).max(10).default([]).describe("Tags to add"),
-        space_ids: z.array(ID).max(10).default([]).describe("Spaces to put it in (ids from thymind_list_spaces)"),
+        space_ids: z.array(SPACE_REF).max(10).default([]).describe("Spaces to put it in (ids from thymind_list_spaces, or space links)"),
       }),
       outputSchema: z.object({ id: z.string(), already_saved: z.boolean(), not_applied: z.array(z.string()) }),
       annotations: { ...WRITE, idempotentHint: false },
@@ -91,7 +91,7 @@ export function registerWrites(
         const made = newId();
         const changes: Change[] = [{ name: "create-card", args: { cardId: made, content, source: "mcp", ...(note?.trim() ? { note } : {}) } }];
         for (const name of tags) changes.push({ name: "add-tag", args: { cardId: made, name } });
-        for (const spaceId of space_ids) changes.push({ name: "add-to-space", args: { cardId: made, spaceId } });
+        for (const spaceId of space_ids.map((ref) => spaceIdOf(ref) ?? ref)) changes.push({ name: "add-to-space", args: { cardId: made, spaceId } });
         const pushed = await library.push(changes);
         if (pushed.refused.includes(0)) return { isError: true, content: [{ type: "text" as const, text: "Inventory could not save that." }] };
         const id = pushed.cardIds.get(0) ?? made;
@@ -182,7 +182,7 @@ export function registerWrites(
         "Put up to 25 cards into a space, or take them out (remove: true). Name a new space with new_space_name to make it first. Cards stay in their other spaces.",
       inputSchema: z.object({
         ids: IDS,
-        space_id: ID.optional().describe("An existing space (from thymind_list_spaces)"),
+        space_id: SPACE_REF.optional().describe("An existing space: its id from thymind_list_spaces, or a space link the person gave"),
         new_space_name: z.string().trim().min(1).max(100).optional().describe("Make a new space with this name and use it"),
         remove: z.boolean().default(false).describe("Take the cards out of the space instead"),
       }),
@@ -198,7 +198,7 @@ export function registerWrites(
         }
         if (remove && new_space_name) return { isError: true, content: [{ type: "text" as const, text: "A new space has no cards to take out." }] };
         const changes: Change[] = [];
-        let spaceId = space_id ?? "";
+        let spaceId = space_id ? spaceIdOf(space_id) ?? space_id : "";
         if (new_space_name) {
           const existing = [...(await spaceNames())].find(([, name]) => name.toLowerCase() === new_space_name.toLowerCase());
           if (existing) {
