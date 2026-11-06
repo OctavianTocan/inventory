@@ -127,8 +127,6 @@ class SkyState internal constructor() {
 /** Remembers the sky over the gallery. */
 @Composable
 fun rememberSkyState(): SkyState {
-    // How light adds is checked once on the GPU; do it off the main thread before the sky first draws.
-    LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { LightBlend.check() } }
     return remember { SkyState() }
 }
 
@@ -158,7 +156,7 @@ internal class SkyPull(private val sky: SkyState) : NestedScrollConnection {
 
     override suspend fun onPreFling(available: Velocity): Velocity {
         if (sky.scene.pull <= 0f) return Velocity.Zero
-        sky.scene.releasePull()
+        sky.scene.releasePull(available.y / sky.unit)
         return available
     }
 }
@@ -473,15 +471,11 @@ private const val PULL_STAR = "M12 2.5l2.2 6.6 6.8.1-5.5 4.1 2 6.6-5.5-4-5.5 4 2
 private fun SkyImmersion(sky: SkyState) {
     val immersion = LocalShellImmersion.current ?: return
     DisposableEffect(immersion, sky) {
-        val before = immersion.page
-        val stripBefore = immersion.strip
-        val page = { max(before?.invoke() ?: 0f, sstep(sky.scene.look, 0.005f, 0.09f)) }
-        val strip = { SKY_TOP.copy(alpha = sstep(sky.scene.look, 0.02f, 0.3f)) }
-        immersion.page = page
-        immersion.strip = strip
+        val removePage = immersion.addPage { sstep(sky.scene.look, 0.005f, 0.09f) }
+        val removeStrip = immersion.addStrip { SKY_TOP.copy(alpha = sstep(sky.scene.look, 0.02f, 0.3f)) }
         onDispose {
-            if (immersion.page === page) immersion.page = before
-            if (immersion.strip === strip) immersion.strip = stripBefore
+            removePage()
+            removeStrip()
         }
     }
 }

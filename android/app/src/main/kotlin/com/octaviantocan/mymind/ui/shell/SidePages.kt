@@ -209,7 +209,7 @@ fun SidePages(state: SidePagesState, count: Int, modifier: Modifier = Modifier, 
     val outer = LocalShellImmersion.current
     val immersions = remember(count) { List(count) { ShellImmersion() } }
     if (outer != null) DisposableEffect(outer, immersions) {
-        val source = {
+        val removePage = outer.addPage {
             var amount = 0f
             immersions.forEachIndexed { page, immersion ->
                 val near = 1f - abs(page - state.at)
@@ -217,20 +217,18 @@ fun SidePages(state: SidePagesState, count: Int, modifier: Modifier = Modifier, 
             }
             amount
         }
-        outer.page = source
-        val strip = {
+        val removeStrip = outer.addStrip {
             var color = Color.Transparent
             immersions.forEachIndexed { page, immersion ->
                 val near = 1f - abs(page - state.at)
-                val own = immersion.strip?.invoke()
+                val own = immersion.strip()
                 if (near > 0f && own != null && own.alpha * near > color.alpha) color = own.copy(alpha = own.alpha * near)
             }
             color
         }
-        outer.strip = strip
         onDispose {
-            if (outer.page === source) outer.page = null
-            if (outer.strip === strip) outer.strip = null
+            removePage()
+            removeStrip()
         }
     }
     val immersed by remember(immersions, state.index) { derivedStateOf { (immersions.getOrNull(state.index)?.amount() ?: 0f) > 0f } }

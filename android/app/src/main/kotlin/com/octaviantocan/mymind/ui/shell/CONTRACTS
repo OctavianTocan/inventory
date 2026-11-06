@@ -41,8 +41,12 @@ A page that goes full screen, as a gallery does at one column, MUST register it 
 the shell's ShellImmersion. As far as the page has gone full screen, the bar slides down
 past the bottom of the screen and fades, out of reach of taps, and the shell's paper turns
 black with light status and navigation bar icons. A page that never goes full screen
-leaves the bar where library-bars-rest-alike puts it.
-Source: Tavi, 30 October 2026, the gallery's full-screen mode ("we full screen one thing").
+leaves the bar where library-bars-rest-alike puts it. When several parts of one page
+register (the gallery's reels and the sky over it), the furthest MUST count, whichever
+registered last, so one never cancels another.
+Source: Tavi, 30 October 2026, the gallery's full-screen mode ("we full screen one thing");
+6 November 2026, 16:53, the bar staying in the sky ("the UI for normal stuff stays while in
+the sky and I can even swipe to go to spaces").
 
 @cc [owner:OctavianTocan,label:product] library-foot-bar-owns-its-taps
 A tap anywhere inside the search pill, including its edge and padding, MUST focus

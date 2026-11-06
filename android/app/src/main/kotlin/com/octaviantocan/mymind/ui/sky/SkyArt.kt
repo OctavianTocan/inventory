@@ -8,13 +8,9 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.Picture
 import android.graphics.RadialGradient
 import android.graphics.RectF
-import android.graphics.RuntimeXfermode
 import android.graphics.Shader
-import android.graphics.Xfermode
-import android.os.Build
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -26,7 +22,7 @@ import kotlin.math.sin
 /**
  * The prototype adds its light in linear colour and turns the sum into the screen's sRGB at the end, which is what
  * makes a faint halo glow rather than vanish. Each light here is turned into sRGB on its own before it is gathered
- * ([LightBlend]): exact over black, a little brighter where lights overlap.
+ * with Screen ([LightBlend]): exact over black, a little brighter where lights overlap.
  */
 internal object Srgb {
     private const val STEPS = 4096
@@ -49,68 +45,19 @@ internal object Srgb {
 }
 
 /**
- * Adds the sky's light the way the prototype's renderer does: in linear light, turned back into sRGB once added, so
- * faint lights that overlap add up to as little as they do there and a halo over the bright nebula adds as little. On
- * Android 16 and later, once a first draw on the GPU shows it working, each light is added by a blend of our own into a
- * layer of the sky's lights, which is then added to the dome the same way. Elsewhere the lights are gathered with
- * Screen, which brightens faint overlaps more than the prototype does. Every light is made ready by [additive].
+ * Gathers the sky's light with Screen, a blend every GPU runs in its fixed blending, so the phone draws what the tests
+ * draw. Linear light is added only inside [WideBloom], on the CPU. Android 16's own blends (RuntimeXfermode) are not
+ * used: on a Galaxy Z Fold's GPU they drew field stars as dark octagons on lighter panels (Tavi's screenshot, 6 November
+ * 2026, 16:53).
  */
 internal object LightBlend {
-    // src is light over black, in sRGB; dst is what is already there.
-    private const val ADD = """
-        half4 main(half4 src, half4 dst) {
-            half3 d = dst.a > 0.0 ? toLinearSrgb(dst.rgb / dst.a) * dst.a : half3(0.0);
-            half a = min(1.0, src.a + dst.a);
-            return half4(min(fromLinearSrgb(min(toLinearSrgb(src.rgb) + d, half3(1.0))), half3(a)), a);
-        }
-    """
-
-    @Volatile private var checked = false
-
-    @Volatile private var blend: Xfermode? = null
-
-    /** Checks the blend on the GPU, once; [rememberSkyState] does it off the main thread before the sky first draws. */
-    fun check() {
-        if (checked) return
-        synchronized(this) {
-            if (checked) return
-            blend = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) runCatching { RuntimeXfermode(ADD).takeIf(::works) }.getOrNull() else null
-            checked = true
-        }
-    }
-
-    /** Changes once [check] is done, so paints made before it can take the blend. */
-    val version: Int get() = if (checked) 1 else 0
-
-    /** True when light is added in linear light. */
-    val linear: Boolean get() = blend != null
-
-    /** Makes [paint] add its light to what is under it: in linear light once [check] found the blend working. */
+    /** Makes [paint] gather its light with what is under it, with Screen. */
     fun use(paint: Paint) {
-        val add = blend
-        if (add != null) paint.xfermode = add else paint.blendMode = BlendMode.SCREEN
-    }
-
-    /** Makes [paint] gather its light with Screen: for many small lights that hardly overlap, such as field stars. */
-    fun screen(paint: Paint) {
         paint.blendMode = BlendMode.SCREEN
     }
 
-    // Some renderers may take the blend and not run it; dark red light added to a dark red ground on the GPU must come
-    // out at the linear sum.
-    private fun works(add: Xfermode): Boolean = runCatching {
-        val picture = Picture()
-        val canvas = picture.beginRecording(4, 4)
-        canvas.drawColor(Color.rgb(128, 0, 0))
-        canvas.saveLayer(null, Paint().apply { xfermode = add })
-        canvas.drawColor(Color.rgb(128, 0, 0))
-        canvas.restore()
-        picture.endRecording()
-        val drawn = Bitmap.createBitmap(picture)
-        val pixel = drawn.copy(Bitmap.Config.ARGB_8888, false).getPixel(1, 1)
-        drawn.recycle()
-        (pixel shr 16 and 255) in 166..186
-    }.getOrDefault(false)
+    /** Makes [paint] gather its light with Screen. */
+    fun screen(paint: Paint) = use(paint)
 }
 
 /**

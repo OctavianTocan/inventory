@@ -955,7 +955,7 @@ fun ShellFrame(
         val library: @Composable BoxScope.() -> Unit = {
             PageTheme(scheme) {
                 Box(Modifier.fillMaxSize().themeBackground(LibraryStyle.colors.background)
-                    .drawBehind { immersion.strip?.invoke()?.let { drawRect(it, size = Size(size.width, top)) } }.statusBarsPadding()) {
+                    .drawBehind { immersion.strip()?.let { drawRect(it, size = Size(size.width, top)) } }.statusBarsPadding()) {
                     // Sideways, the page sits in a readable column with the page colour either side (Pully's rule 207).
                     Box(if (shape == WindowShape.Sideways) Modifier.fillMaxHeight().readableWidth() else Modifier.fillMaxSize()) { page() }
                 }

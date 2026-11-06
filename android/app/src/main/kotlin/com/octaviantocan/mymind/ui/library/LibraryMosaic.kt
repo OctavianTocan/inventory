@@ -475,9 +475,8 @@ internal fun LibraryMosaic(
         BackHandler(enabled = mosaic.inReels) { resize(mosaic::smaller) }
         val immersion = LocalShellImmersion.current
         if (mosaic.reels && immersion != null) DisposableEffect(immersion, mosaic) {
-            val source = { mosaic.reel }
-            immersion.page = source
-            onDispose { if (immersion.page === source) immersion.page = null }
+            val remove = immersion.addPage { mosaic.reel }
+            onDispose { remove() }
         }
         val latestLayouts by rememberUpdatedState(layouts)
         val latestHeaderItems by rememberUpdatedState(headerItems)

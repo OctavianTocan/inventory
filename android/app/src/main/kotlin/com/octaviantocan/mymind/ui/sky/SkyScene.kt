@@ -376,23 +376,29 @@ internal class SkyScene {
     fun pullBy(dy: Float) {
         if (lookingUp || busy) return
         pull = max(0f, pull + dy)
-        look = min(0.42f, pull / 520f)
+        look = min(0.42f, pull / PULL_SPAN)
     }
 
-    /** Lets go of the pull: past the threshold the camera looks up, else the page settles back. */
-    fun releasePull() {
+    /**
+     * Lets go of the pull: past the threshold the camera looks up the rest of the way, carrying on at the finger's
+     * [speed] in screen units a second, down positive; short of it the page settles back.
+     */
+    fun releasePull(speed: Float = 0f) {
         if (pull <= 0f) return
         val amount = pull
         pull = 0f
-        if (amount > PULL_TO_LOOK) lookUp()
+        if (amount > PULL_TO_LOOK) lookUp(max(0f, speed) / PULL_SPAN)
         else {
             val l0 = look
             tweenLater(0.35f, Ease.out) { look = l0 * (1f - it) }
         }
     }
 
-    /** The camera pitches up from the page to the sky, then any finds waiting light their stars. */
-    fun lookUp() {
+    /**
+     * The camera pitches up from the page to the sky, then any finds waiting light their stars. From the star button it
+     * takes the prototype's 2.6 seconds; let go of a pull, it carries on at the finger's [speed], in looks a second.
+     */
+    fun lookUp(speed: Float = -1f) {
         if (lookingUp || busy) return
         lookingUp = true
         busy = true
@@ -400,25 +406,42 @@ internal class SkyScene {
         onLookUp()
         launch {
             val l0 = look
-            time.tween(2.6f * (1f - l0 * 0.7f), Ease.io) { look = l0 + (1f - l0) * it }
+            if (speed < 0f) time.tween(2.6f * (1f - l0 * 0.7f), Ease.io) { look = l0 + (1f - l0) * it }
+            else carryOn(1f - l0, speed) { look = l0 + (1f - l0) * it }
             skyOn = true
             busy = false
             if (queue.isNotEmpty()) igniteAll()
         }
     }
 
-    /** Back down to the page, the find in view first going back into starlight. */
-    fun lookDown() {
+    /**
+     * Back down to the page, the find in view first going back into starlight. From Back it takes the prototype's time;
+     * let go of a swipe up, it carries on at the finger's [speed], in looks a second.
+     */
+    fun lookDown(speed: Float = -1f) {
         if (!lookingUp || busy) return
         busy = true
         launch {
             if (focusedCon != null) unfocusNow(true)
             skyOn = false
             val l0 = look
-            time.tween(2.6f * l0, Ease.io) { look = l0 * (1f - it) }
+            if (speed < 0f) time.tween(2.6f * l0, Ease.io) { look = l0 * (1f - it) }
+            else carryOn(l0, speed) { look = l0 * (1f - it) }
             lookingUp = false
             busy = false
         }
+    }
+
+    // Moves the camera the rest of the [way] after a finger lets go at [speed] (both in looks): it starts at the finger's
+    // speed, so the sky never stalls under it, and settles in at most CARRY_ON seconds, sooner after a fast flick.
+    private suspend fun carryOn(way: Float, speed: Float, fn: (Float) -> Unit) {
+        if (way <= 0f) {
+            fn(1f)
+            return
+        }
+        val dur = if (speed * CARRY_ON > 3f * way) 3f * way / speed else CARRY_ON
+        val start = (speed * dur / way).coerceIn(0f, 3f)
+        time.tween(dur, { t -> (-2f * t + 3f) * t * t + start * ((t - 2f) * t + 1f) * t }, fn)
     }
 
     /** Back: from a star to the sky, from the sky to the page. */
@@ -897,6 +920,7 @@ internal class SkyScene {
     private var lastT = 0L
     private var velocityX = 0f
     private var velocityY = 0f
+    private var swipeY = 0f
     private var moved = false
     private var down = false
 
@@ -921,6 +945,7 @@ internal class SkyScene {
         val dtm = max(1L, t - lastT).toFloat()
         velocityX = dx / dtm * 1000f
         velocityY = dy / dtm * 1000f
+        swipeY = if (moved) 0.6f * velocityY + 0.4f * swipeY else velocityY
         if (!moved && hypot(x - downX, y - downY) > 7f) moved = true
         if (moved && !busy) {
             if (focusedCon != null) {
@@ -932,7 +957,7 @@ internal class SkyScene {
                 viewDy = ty * 0.6f
             } else {
                 upPull = max(0f, upPull - dy)
-                look = 1f - min(0.4f, upPull / 520f)
+                look = 1f - min(0.4f, upPull / PULL_SPAN)
             }
         }
         lastX = x
@@ -949,7 +974,7 @@ internal class SkyScene {
         if (upPull > 0f) {
             val amount = upPull
             upPull = 0f
-            if (amount > 140f) lookDown()
+            if (amount > 140f) lookDown(max(0f, -swipeY) / PULL_SPAN)
             else {
                 val l0 = look
                 tweenLater(0.35f, Ease.out) { look = l0 + (1f - l0) * it }
@@ -1064,6 +1089,12 @@ internal class SkyScene {
         const val SPARKS = 70
         const val SLOT_SCALE = 0.34f
         const val PULL_TO_LOOK = 150f
+
+        /** How far a pull goes, in screen units, to look all the way up, were it not held back at the start. */
+        const val PULL_SPAN = 520f
+
+        /** The most seconds the camera takes to finish looking up or down once a finger lets go. */
+        const val CARRY_ON = 1.3f
         const val CONDENSE_GRID = 110
         const val FIND_SIDE = 470f
 

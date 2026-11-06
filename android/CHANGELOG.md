@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.98 (109), 2026-11-06
+Your sky, fixed on the phone.
+
+### Fixed
+- Stars in Your sky no longer show as dark octagons, and the lines and shooting stars no longer sit on lighter rectangles. Every phone now combines the sky's light the same way.
+- While you look up at the sky, the tab bar and search button leave the screen, and a sideways swipe no longer takes you to Spaces.
+
+### Changed
+- Pulling down into the sky, or swiping up to come back, carries on at your finger's speed when you let go instead of pausing and starting again, and settles faster.
+
 ## 0.6.97 (108), 2026-11-06
 Your sky and Back today, rebuilt to look and move like the prototype.
 

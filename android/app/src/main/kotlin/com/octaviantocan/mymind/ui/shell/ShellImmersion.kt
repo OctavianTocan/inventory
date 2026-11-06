@@ -8,31 +8,61 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import kotlin.math.max
 
 /**
  * Lets the page take the whole screen, as a gallery does in reels: the shell darkens the status bar and slides its bar
- * away as far as the page has gone full screen.
+ * away as far as the page has gone full screen. Several parts of one page may each say so (the gallery in reels, the
+ * sky looked up at); the furthest counts, whichever said it last.
  */
 @Stable
 class ShellImmersion {
-    /** How far the page has gone full screen, from 0 to 1, read while drawing; null for a page that never does. */
-    var page: (() -> Float)? by mutableStateOf(null)
-
-    /** How far the page has gone full screen now, from 0 to 1. */
-    fun amount(): Float = page?.invoke()?.coerceIn(0f, 1f) ?: 0f
+    private val pages = mutableStateListOf<() -> Float>()
+    private val strips = mutableStateListOf<() -> Color>()
 
     /**
-     * A colour laid over the status bar's strip, read while drawing, for a page whose own top has become a picture,
-     * such as the sky; null leaves the strip the page's colour.
+     * Adds [source], read while drawing, to how far the page has gone full screen, from 0 to 1.
+     *
+     * @return A call that takes [source] away again.
      */
-    var strip: (() -> Color)? by mutableStateOf(null)
+    fun addPage(source: () -> Float): () -> Unit {
+        pages += source
+        return { pages.remove(source) }
+    }
+
+    /**
+     * Adds [source], read while drawing, a colour laid over the status bar's strip for a page whose own top has become
+     * a picture, such as the sky; the most opaque one shows.
+     *
+     * @return A call that takes [source] away again.
+     */
+    fun addStrip(source: () -> Color): () -> Unit {
+        strips += source
+        return { strips.remove(source) }
+    }
+
+    /** How far the page has gone full screen now, from 0 to 1. */
+    fun amount(): Float {
+        var amount = 0f
+        for (source in pages) amount = max(amount, source())
+        return amount.coerceIn(0f, 1f)
+    }
+
+    /** The colour over the status bar's strip now, or null to leave it the page's colour. */
+    fun strip(): Color? {
+        var color: Color? = null
+        for (source in strips) {
+            val own = source()
+            if (color == null || own.alpha > color.alpha) color = own
+        }
+        return color
+    }
 }
 
 /** The shell's [ShellImmersion], or null outside a [ShellFrame]. */

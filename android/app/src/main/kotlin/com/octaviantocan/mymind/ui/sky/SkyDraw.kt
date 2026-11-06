@@ -66,8 +66,7 @@ internal class SkyPainter {
         }
     }
     private val ribbonPaint = Paint().also { LightBlend.use(it) }
-    private val layerPaint = Paint()
-    private var blendVersion = -1
+    private val layerPaint = Paint().also { LightBlend.use(it) }
     private val wide = WideBloom()
     private var gain = 0f
 
@@ -86,11 +85,7 @@ internal class SkyPainter {
         if (look <= 0.001f) return
         val now = scene.time.now
         val so = sstep(look, 0.16f, 0.5f)
-        if (blendVersion != LightBlend.version) {
-            blendVersion = LightBlend.version
-            for (paint in listOf(sprite, figurePaint, linePaint, effectPaint, fallbackLine, ribbonPaint, layerPaint)) LightBlend.use(paint)
-        }
-        // Every light is gathered in one layer, then added to the dome in linear light as the prototype adds it.
+        // Every light is gathered in one layer, then laid over the dome.
         canvas.saveLayer(null, layerPaint)
         gain = SkyBloom.gain(SkyBloom.strength(look, scene.bloomKick))
         wide.begin(width, height, p.unit)
