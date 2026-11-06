@@ -73,6 +73,24 @@ export const CARDS = {
     pinPosition: 1,
     cover: { src: "/media/abc/shot.png;600x400.webp", type: "image", width: 600, height: 400 },
   },
+  video: {
+    id: "00000002VideoAAAAAAAAA",
+    type: "Video",
+    flags: 0,
+    created: "2026-11-06T09:00:00Z",
+    title: "walk.mp4",
+    blob: { path: "u1/vid/walk.mp4", type: "video/mp4", width: 1080, height: 1920, duration: 60 },
+    cover: { src: "/media/u1/vid/walk.mp4;800x1000-t.webp", width: 800, height: 1000 },
+    transcript: "So this is the river walk. ".repeat(3000).trim(),
+  },
+  audio: {
+    id: "00000002AudioAAAAAAAAA",
+    type: "Audio",
+    flags: 0,
+    created: "2026-11-06T09:30:00Z",
+    title: "memo.m4a",
+    blob: { path: "u1/aud/memo.m4a", type: "audio/mp4", duration: 12.4 },
+  },
 };
 
 /**

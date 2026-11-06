@@ -153,7 +153,7 @@ class SubmenuScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun shareSheet() = submenu("S14_share", PICTURED, title = "Share", back = false) {
-        ShareContent(PICTURED, onShareLink = {}, onShareText = null, onCopyLink = {}, onSharePicture = {}, onCardImage = {})
+        ShareContent(PICTURED, onShareLink = {}, onShareText = null, onCopyLink = {}, onSharePicture = {}, onCardImage = {}, onCopyAgentLink = {})
     }
 
     @Test

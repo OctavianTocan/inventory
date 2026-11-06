@@ -89,7 +89,8 @@ export class Library {
    */
   constructor(
     private readonly binding: Fetcher,
-    private readonly origin: string,
+    /** The library's public origin, which card links start with. */
+    readonly origin: string,
     private readonly appToken: string,
   ) {}
 

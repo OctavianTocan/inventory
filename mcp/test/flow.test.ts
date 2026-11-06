@@ -169,7 +169,7 @@ describe("connecting an AI app", () => {
 
     const client = await mcp(call, access_token);
     const { tools } = await client.listTools();
-    const reading = ["thymind_search", "thymind_get_card", "thymind_get_picture", "thymind_list_spaces", "thymind_list_tags"];
+    const reading = ["thymind_search", "thymind_get_card", "thymind_get_picture", "thymind_get_transcript", "thymind_get_frames", "thymind_list_spaces", "thymind_list_tags"];
     const writing = ["thymind_save", "thymind_set_note", "thymind_tag", "thymind_sort", "thymind_pin", "thymind_trash", "thymind_restore"];
     expect(tools.map((tool) => tool.name)).toEqual([...reading, ...writing]);
     expect(tools.filter((tool) => tool.annotations?.readOnlyHint).map((tool) => tool.name)).toEqual(reading);
@@ -201,6 +201,34 @@ describe("connecting an AI app", () => {
     const picture = await client.callTool({ name: "thymind_get_picture", arguments: { id: CARDS.link.id, size: 256 } });
     expect(picture.content).toEqual([{ type: "image", data: "/9j/2Q==", mimeType: "image/jpeg" }]);
     expect(library.calls.some((found) => found.path === "/media/abc/shot.png;256x256-t.jpg")).toBe(true);
+
+    // A card link from the app's Share sheet opens the same card, and the card says where its link is.
+    const byLink = await client.callTool({ name: "thymind_get_card", arguments: { id: `https://mymind.octaviantocan.com/c/${CARDS.video.id}` } });
+    expect(byLink.structuredContent).toMatchObject({ id: CARDS.video.id, media: "video", mediaSeconds: 60, transcriptChars: CARDS.video.transcript.length, link: `https://mymind.example/c/${CARDS.video.id}` });
+    expect((byLink.content as Array<{ text: string }>)[0]!.text).toContain("thymind_get_frames");
+    const badLink = await client.callTool({ name: "thymind_get_card", arguments: { id: "https://example.org/bread" } });
+    expect(badLink.isError).toBe(true);
+
+    const transcript = await client.callTool({ name: "thymind_get_transcript", arguments: { id: CARDS.video.id } });
+    expect(transcript.structuredContent).toMatchObject({ chars: CARDS.video.transcript.length, offset: 0, next_offset: 50_000 });
+    const rest = await client.callTool({ name: "thymind_get_transcript", arguments: { id: CARDS.video.id, offset: 50_000 } });
+    const restData = rest.structuredContent as { text: string; next_offset: number | null };
+    expect(restData.next_offset).toBeNull();
+    expect((transcript.structuredContent as { text: string }).text + restData.text).toBe(CARDS.video.transcript);
+    expect((await client.callTool({ name: "thymind_get_transcript", arguments: { id: CARDS.link.id } })).isError).toBe(true);
+
+    const frames = await client.callTool({ name: "thymind_get_frames", arguments: { id: CARDS.video.id, at: [12.5, 90], size: 256 } });
+    const parts = frames.content as Array<{ type: string; text?: string }>;
+    expect(parts.map((part) => part.type)).toEqual(["text", "text", "image", "text", "image"]);
+    expect(parts[1]!.text).toBe("Frame at 0:12.5 (12.5 s)");
+    // A moment past the end is the video's last frame.
+    expect(parts[3]!.text).toBe("Frame at 0:59.9 (59.9 s)");
+    expect(library.calls.some((found) => found.path === "/media/u1/vid/walk.mp4;time(12.5)/256x256-t.jpg")).toBe(true);
+    const spread = await client.callTool({ name: "thymind_get_frames", arguments: { id: CARDS.video.id, count: 3 } });
+    expect((spread.content as Array<{ type: string }>).filter((part) => part.type === "image")).toHaveLength(3);
+    expect(library.calls.some((found) => found.path === "/media/u1/vid/walk.mp4;time(50)/768x768-t.jpg")).toBe(true);
+    const audioFrames = await client.callTool({ name: "thymind_get_frames", arguments: { id: CARDS.audio.id } });
+    expect(audioFrames.isError).toBe(true);
 
     const missing = await client.callTool({ name: "thymind_get_card", arguments: { id: "00000002GoneAAAAAAAAAA" } });
     expect(missing.isError).toBe(true);

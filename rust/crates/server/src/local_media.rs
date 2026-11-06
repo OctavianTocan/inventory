@@ -183,8 +183,13 @@ impl Inner {
         .await
     }
 
-    async fn preview(&self, file: &str, content_type: &str, page: u32) -> Result<String> {
-        let target = format!("{file}.page-{page}.png");
+    /// The still a picture rendition of a PDF or video starts from: a PDF's page, or a video's frame `time` seconds in
+    /// (the first frame when `None`), kept beside the original.
+    async fn preview(&self, file: &str, content_type: &str, page: u32, time: Option<f64>) -> Result<String> {
+        let target = match time {
+            Some(time) if content_type != "application/pdf" => format!("{file}.page-t{}.png", (time * 1000.0).round() as u64),
+            _ => format!("{file}.page-{page}.png"),
+        };
         if is_file(&target).await {
             return Ok(target);
         }
@@ -195,7 +200,13 @@ impl Inner {
                 let stem = &temp[..temp.len() - 4];
                 run("pdftoppm", &args(&["-f", &page, "-l", &page, "-singlefile", "-scale-to", "1600", "-png", file, stem]), 30000).await?;
             } else {
-                let arguments = args(&["-v", "error", "-y", "-i", file, "-frames:v", "1", "-vf", "scale=1600:1600:force_original_aspect_ratio=decrease", &temp]);
+                // `-ss` before `-i` seeks by keyframe index instead of decoding everything before the moment.
+                let seek = time.map(|time| format!("{time:.3}"));
+                let mut arguments = args(&["-v", "error", "-y"]);
+                if let Some(seek) = &seek {
+                    arguments.extend(args(&["-ss", seek]));
+                }
+                arguments.extend(args(&["-i", file, "-frames:v", "1", "-vf", "scale=1600:1600:force_original_aspect_ratio=decrease", &temp]));
                 run("ffmpeg", &arguments, 30000).await?;
             }
             tokio::fs::rename(&temp, &target).await.map_err(io)
@@ -313,7 +324,7 @@ impl Inner {
                 let duration = probed.get("format").get("duration").to_number();
                 blob.insert("duration", if duration.is_nan() { 0.0 } else { duration });
             }
-            let page = self.preview(&file, &content_type, 1).await?;
+            let page = self.preview(&file, &content_type, 1, None).await?;
             let (width, height, color) = self.image_info(tokio::fs::read(&page).await.map_err(io)?).await?;
             if kind == "Document" {
                 blob.insert("width", width);
@@ -365,7 +376,7 @@ impl Inner {
         let Some((file, size)) = self.original(relative.split(';').next().unwrap_or("")).await? else { return Ok(None) };
         let wanted = parse_rendition(relative)?;
         let content_type = mime(extname(&file).trim_start_matches('.')).unwrap_or("application/octet-stream");
-        let Rendition::Derived { width, height, mode, format, page, flatten, content_type: output_type, .. } = wanted else {
+        let Rendition::Derived { width, height, mode, format, page, time, flatten, content_type: output_type, .. } = wanted else {
             return Ok(Some(MediaResult { key: file, size, content_type: content_type.to_owned() }));
         };
         let cache = self
@@ -388,7 +399,7 @@ impl Inner {
                 run("ffmpeg", &arguments, 60000).await?;
             } else {
                 let input = if content_type == "application/pdf" || content_type.starts_with("video/") {
-                    self.preview(&file, content_type, page).await?
+                    self.preview(&file, content_type, page, time).await?
                 } else {
                     file.clone()
                 };

@@ -101,13 +101,26 @@ bottom sheets in the color of the card type, just a little hint at the top of it
 The reader's Share button MUST open a Share sheet in the card's sheet, titled Share,
 offering only what the card has: The link for a card with a web link, The words for
 a note or a post (a post's words carry its link), The picture for a card with one,
-The card as an image for every card, and Copy link. The card as an image MUST open
+The card as an image for every card, Link for AI agents for every card, and Copy link.
+The card as an image MUST open
 a page in the same sheet that draws the card (its picture, title and byline) with
 Your note and Tags as choices, the note chosen when there is one, and Share image.
 Each other choice closes the sheet before it hands off to the system's share sheet
 or the clipboard.
 Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M25, the Share
 sheet with the card as an image).
+
+@cc [owner:OctavianTocan,label:product] share-copies-a-link-for-ai-agents
+Link for AI agents MUST copy `<server>/c/<card id>` to the clipboard, and every card tool
+of Inventory's MCP server MUST take that link wherever it takes a card id, so an agent
+the person connected can open that card at once; for a video it reads the transcript and
+any frame it picks (thymind_get_transcript, thymind_get_frames). The link names a card
+only: it MUST open nothing except through the person's own connected agent.
+Source: Tavi, 6 November 2026 ("have an ID for each card such that I have a button that
+I can use to share a link. I can give that link to those clients and they will be able
+to search for exactly that using the MCP super easily"). The name "Link for AI agents",
+its place after The card as an image, and copying rather than sharing are Claude's
+choices, not yet confirmed by Tavi.
 
 @cc [owner:OctavianTocan,label:product] pinning-is-called-pin
 The app MUST call keeping a card first "Pin" and the cards kept that way "Pinned",

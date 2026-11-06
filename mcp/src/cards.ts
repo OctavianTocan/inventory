@@ -25,12 +25,14 @@ export interface Card {
   spaces?: string[];
   pinPosition?: number;
   cover?: { src?: string; type?: string; width?: number; height?: number };
-  blob?: { path?: string; type?: string; width?: number; height?: number };
+  blob?: { path?: string; type?: string; width?: number; height?: number; duration?: number };
   prose?: unknown;
   post?: { bodyHtml?: string; author?: string };
   product?: { price?: string; brand?: string };
   reddit?: { title?: string; subreddit?: string; comments?: Array<{ author?: string; body?: string }> };
   videoLength?: number;
+  /** What a saved video or audio file says, written by the server's transcription (`extras.transcript.text`). */
+  transcript?: string;
   article?: { title?: string; preview?: string; url?: string };
   state?: string;
 }
@@ -69,6 +71,12 @@ export interface CardDetail extends Omit<CardResult, "snippet"> {
   comments?: string[];
   price?: string;
   videoSeconds?: number;
+  /** Length of a stored video or audio file in seconds. */
+  mediaSeconds?: number;
+  /** "video" or "audio" when the card keeps the file itself, so frames (video) and the transcript can be read. */
+  media?: "video" | "audio";
+  /** Characters in the card's transcript; read it whole with `thymind_get_transcript`. */
+  transcriptChars?: number;
   hasPicture: boolean;
   state?: string;
 }
@@ -218,9 +226,56 @@ export function cardDetail(card: Card, spaceNames: Map<string, string>): CardDet
     ...(comments.length ? { comments } : {}),
     ...(card.product?.price ? { price: card.product.price } : {}),
     ...(card.videoLength ? { videoSeconds: card.videoLength } : {}),
+    ...(mediaKind(card) ? { media: mediaKind(card) } : {}),
+    ...(card.blob?.duration && mediaKind(card) ? { mediaSeconds: Math.round(card.blob.duration * 10) / 10 } : {}),
+    ...(card.transcript ? { transcriptChars: card.transcript.length } : {}),
     hasPicture: Boolean(picturePath(card)),
     ...(card.state && card.state !== "ready" ? { state: card.state } : {}),
   };
+}
+
+/**
+ * Whether the card keeps a video or audio file of its own (an upload or a share from the phone, not a web link).
+ *
+ * @param card The app API card.
+ * @returns "video", "audio", or undefined for every other card.
+ */
+export function mediaKind(card: Card): "video" | "audio" | undefined {
+  const type = card.blob?.path ? card.blob.type ?? "" : "";
+  if (type.startsWith("video/")) return "video";
+  if (type.startsWith("audio/")) return "audio";
+  return undefined;
+}
+
+/**
+ * The library path of one still from a card's own video, fitted inside a square.
+ *
+ * @param card The app API card; it must keep a video (`mediaKind` is "video").
+ * @param seconds How far into the video, at most three decimals.
+ * @param size Longest side in pixels.
+ * @returns A `/media/` path the library renders with Inventory's `time(s)` rendition, or undefined for a card without
+ *   a video of its own.
+ */
+export function framePath(card: Card, seconds: number, size: number): string | undefined {
+  if (mediaKind(card) !== "video" || !card.blob?.path) return undefined;
+  const time = Math.max(0, Math.round(seconds * 1000) / 1000);
+  return `/media/${card.blob.path};time(${time})/${size}x${size}-t.jpg`;
+}
+
+/**
+ * `m:ss` (or `h:mm:ss`) for a moment in a video.
+ *
+ * @param seconds Seconds from the start.
+ * @returns The moment as a clock reading, tenths kept when there are any.
+ */
+export function clock(seconds: number): string {
+  const tenths = Math.round(seconds * 10) % 10;
+  const whole = Math.floor(Math.round(seconds * 10) / 10);
+  const h = Math.floor(whole / 3600);
+  const m = Math.floor((whole % 3600) / 60);
+  const s = String(whole % 60).padStart(2, "0");
+  const tail = tenths ? `${s}.${tenths}` : s;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${tail}` : `${m}:${tail}`;
 }
 
 /**
@@ -298,6 +353,13 @@ export function detailMarkdown(card: CardDetail): string {
   if (card.spaces.length) parts.push(`Spaces: ${card.spaces.join(", ")}`);
   if (card.price) parts.push(`Price: ${card.price}`);
   if (card.videoSeconds) parts.push(`Length: ${Math.round(card.videoSeconds / 60)} min`);
+  if (card.media) {
+    const length = card.mediaSeconds ? ` (${clock(card.mediaSeconds)} long)` : "";
+    const frames = card.media === "video" ? " `thymind_get_frames` shows any moment of it." : "";
+    parts.push(`Keeps the ${card.media} file itself${length}.${frames}`);
+  }
+  if (card.transcriptChars) parts.push(`Has a transcript (${card.transcriptChars} characters): \`thymind_get_transcript\` reads it.`);
+  else if (card.media && card.state === undefined) parts.push("No transcript: nobody speaks in it, or it was saved before transcripts began.");
   if (card.note) parts.push(`## The person's note\n${fenced(card.note)}`);
   if (card.description) parts.push(`## Description\n${fenced(unescaped(card.description) ?? "")}`);
   if (card.text) parts.push(`## Saved text\n${fenced(card.text)}${card.textCut ? `\n(cut: ${card.textCut} more characters)` : ""}`);

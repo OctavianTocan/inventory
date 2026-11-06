@@ -17,6 +17,23 @@ folders of cards; a card can sit in several. **Tags** are labels on cards. **Pin
 2. Open only the few cards you need with `thymind_get_card`. Do not open every result.
 3. Look at a picture with `thymind_get_picture` only when what it shows matters (a photo, a screenshot, a chart).
 
+## Card links
+
+The person can copy a card's link in the app (Share, Copy link for agents) and give it to you. It looks like
+`https://mymind.octaviantocan.com/c/<id>`. Every tool that takes a card id also takes that link: pass it straight
+to `thymind_get_card` instead of fetching the page. It opens only the person's own cards.
+
+## Videos and audio
+
+A video or audio file the person saved into Inventory keeps the file itself, and `thymind_get_card` says so with its
+length and whether it has a transcript.
+
+- `thymind_get_transcript` reads everything said in it, in pages of 50,000 characters (`next_offset` reads on).
+- `thymind_get_frames` shows a video's frames: name the moments in seconds (`at: [0, 12.5, 61]`), or leave `at`
+  empty for evenly spaced frames (`count`, up to 10 a call). Start with a few spread frames, then look closer where
+  it matters. The transcript has no times, so pick moments from the frames, not from the words.
+- Web videos (a saved YouTube link) keep only their description and preview: no transcript and no frames.
+
 `by_meaning` is on by default and also finds cards close in meaning without the same words ("that article about
 sleeping better" finds a post titled "Why rest matters"). Turn it off for exact syntax queries.
 

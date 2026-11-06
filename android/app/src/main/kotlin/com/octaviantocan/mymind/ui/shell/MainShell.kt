@@ -111,6 +111,7 @@ import com.octaviantocan.mymind.ui.library.galleryPicture
 import com.octaviantocan.mymind.ui.menu.CardImagePage
 import com.octaviantocan.mymind.ui.menu.NotePage
 import com.octaviantocan.mymind.ui.menu.PartContent
+import com.octaviantocan.mymind.ui.menu.agentLink
 import com.octaviantocan.mymind.ui.menu.cacheImage
 import com.octaviantocan.mymind.ui.menu.loadPicture
 import com.octaviantocan.mymind.ui.menu.sharePicture
@@ -327,6 +328,11 @@ fun MainShell(
         Unit
     }
     val copyLink = { card: Card -> card.url?.let { url -> scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("link", url))) } }; Unit }
+    val copyAgentLink = { card: Card ->
+        Track.event("share", card = card.id, kind = card.type, detail = "agent link")
+        scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Inventory card link", agentLink(card)))) }
+        Unit
+    }
     // Copies the card's picture or hands it to another app, through a file in the cache the app's provider lends out.
     val pictureOut = { card: Card, copy: Boolean ->
         scope.launch {
@@ -608,6 +614,7 @@ fun MainShell(
                         onCopyLink = card.url?.let { { closeMenu(); copyLink(card) } },
                         onSharePicture = galleryPicture(card)?.let { { closeMenu(); pictureOut(card, false) } },
                         onCardImage = { submenu = CardSubmenu.CardImage },
+                        onCopyAgentLink = { closeMenu(); copyAgentLink(card) },
                     )
                 })
                 is CardSheetRoot.Part -> ({

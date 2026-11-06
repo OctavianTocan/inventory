@@ -13,7 +13,7 @@ describe("the plugin packages and the skill", () => {
   it("names only tools the server has, and every one of them", () => {
     const skill = read("../plugin/skills/thymind/SKILL.md");
     const named = new Set([...skill.matchAll(/`(thymind_\w+)`/g)].map((match) => match[1]));
-    expect(registered.size).toBe(12);
+    expect(registered.size).toBe(14);
     expect([...named].sort()).toEqual([...registered].sort());
     expect(skill).toMatch(/^---\nname: thymind\ndescription: .+\n---\n/);
   });

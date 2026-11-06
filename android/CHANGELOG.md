@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.83 (94), 2026-11-06
+Give an AI a link to one card.
+
+### Added
+- Share now has Link for AI agents. It copies a link to the card that an AI connected to Inventory can open straight away. For a video you saved, that AI can read the whole transcript and look at any moment of it; for a recording, it can read the transcript.
+
 ## 0.6.82 (93), 2026-11-06
 Brings every update since 0.6.67 to your phone.
 

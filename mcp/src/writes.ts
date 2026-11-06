@@ -9,12 +9,16 @@ import { z } from "zod";
 import { type Card, fenced } from "./cards";
 import { type Change, Library, LibraryError, newId } from "./library";
 import { READ_SCOPE, WRITE_SCOPE } from "./pages";
+import { CARD_REF, cardIdOf } from "./refs";
 
 /** Most cards one tool call may change. */
 export const CARD_LIMIT = 25;
 
 const ID = z.string().regex(/^[A-Za-z0-9]{1,64}$/, "a card or space id: letters and digits");
-const IDS = z.array(ID).min(1).max(CARD_LIMIT).describe(`Card ids from thymind_search, 1-${CARD_LIMIT}`);
+const IDS = z.array(CARD_REF).min(1).max(CARD_LIMIT).describe(`Card ids from thymind_search, or card links the person gave, 1-${CARD_LIMIT}`);
+
+/** The card ids behind ids or card links, already checked by `CARD_REF`. */
+const idsOf = (refs: string[]) => refs.map((ref) => cardIdOf(ref) ?? ref);
 const TAG = z.string().trim().min(1).max(100);
 
 // The colours the app offers for a new space (`NewSpaceDialog.kt`, SPACE_COLORS).
@@ -104,13 +108,14 @@ export function registerWrites(
     {
       title: "Write an Inventory card's note",
       description: "Replace the person's note on one card (empty text clears it). Returns the note it replaced, so it can be put back.",
-      inputSchema: z.object({ id: ID.describe("The card's id"), note: z.string().max(10_000).describe("The new note; one paragraph per line") }),
+      inputSchema: z.object({ id: CARD_REF.describe("The card's id, or its card link"), note: z.string().max(10_000).describe("The new note; one paragraph per line") }),
       outputSchema: z.object({ id: z.string(), previous_note: z.string() }),
       annotations: { ...WRITE, destructiveHint: true },
       scopeChallenge: needsWrite,
     },
-    ({ id, note }) =>
+    ({ id: ref, note }) =>
       run(async () => {
+        const id = cardIdOf(ref) ?? ref;
         const card = await library.json<Card>(`/app/v1/cards/${id}`);
         const previous = card.note ?? "";
         const pushed = await library.push([{ name: "note", args: { cardId: id, text: note } }]);
@@ -134,8 +139,9 @@ export function registerWrites(
       annotations: WRITE,
       scopeChallenge: needsWrite,
     },
-    ({ ids, add, remove }) =>
+    ({ ids: refs, add, remove }) =>
       run(async () => {
+        const ids = idsOf(refs);
         if (!add.length && !remove.length) return { isError: true, content: [{ type: "text" as const, text: "Name tags to add or remove." }] };
         const changes: Change[] = [];
         const cardOf: string[] = [];
@@ -184,8 +190,9 @@ export function registerWrites(
       annotations: WRITE,
       scopeChallenge: needsWrite,
     },
-    ({ ids, space_id, new_space_name, remove }) =>
+    ({ ids: refs, space_id, new_space_name, remove }) =>
       run(async () => {
+        const ids = idsOf(refs);
         if (Boolean(space_id) === Boolean(new_space_name)) {
           return { isError: true, content: [{ type: "text" as const, text: "Give either space_id or new_space_name." }] };
         }
@@ -223,8 +230,9 @@ export function registerWrites(
       annotations: WRITE,
       scopeChallenge: needsWrite,
     },
-    ({ ids, pinned }) =>
+    ({ ids: refs, pinned }) =>
       run(async () => {
+        const ids = idsOf(refs);
         const pushed = await library.push(ids.map((cardId) => ({ name: "pin" as const, args: { cardId, pinned } })));
         return report(pinned ? "Pinned" : "Unpinned", ids, refusedCards(pushed.refused, ids));
       }),
@@ -241,8 +249,9 @@ export function registerWrites(
       annotations: { ...WRITE, destructiveHint: true },
       scopeChallenge: needsWrite,
     },
-    ({ ids }) =>
+    ({ ids: refs }) =>
       run(async () => {
+        const ids = idsOf(refs);
         const pushed = await library.push(ids.map((cardId) => ({ name: "trash" as const, args: { cardId } })));
         return report("Moved to the trash", ids, refusedCards(pushed.refused, ids));
       }),
@@ -258,8 +267,9 @@ export function registerWrites(
       annotations: WRITE,
       scopeChallenge: needsWrite,
     },
-    ({ ids }) =>
+    ({ ids: refs }) =>
       run(async () => {
+        const ids = idsOf(refs);
         const refused = new Set<string>();
         for (const id of ids) {
           await library.restore(id).catch((error: unknown) => {

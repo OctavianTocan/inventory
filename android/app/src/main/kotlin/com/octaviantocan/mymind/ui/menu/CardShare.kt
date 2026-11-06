@@ -42,6 +42,7 @@ import com.octaviantocan.mymind.ui.card.siteOf
  * @param onCopyLink Puts the card's link on the clipboard.
  * @param onSharePicture Sends the card's picture to another app.
  * @param onCardImage Opens the card as an image.
+ * @param onCopyAgentLink Puts the card's link for AI agents on the clipboard.
  */
 @Composable
 internal fun ShareContent(
@@ -51,12 +52,14 @@ internal fun ShareContent(
     onCopyLink: (() -> Unit)?,
     onSharePicture: (() -> Unit)? = null,
     onCardImage: (() -> Unit)? = null,
+    onCopyAgentLink: (() -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 20.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         onShareLink?.let { SheetChoice(painterResource(R.drawable.ic_link), "The link", siteOf(card) ?: card.url, it) }
         onShareText?.let { SheetChoice(painterResource(R.drawable.ic_summary), "The words", "As text, to paste anywhere", it) }
         onSharePicture?.let { SheetChoice(painterResource(R.drawable.ic_image), "The picture", pictureDetail(card), it) }
         onCardImage?.let { SheetChoice(painterResource(R.drawable.ic_card_image), "The card as an image", cardImageDetail(card), it) }
+        onCopyAgentLink?.let { SheetChoice(painterResource(R.drawable.ic_library_search_spark), "Link for AI agents", AGENT_LINK_DETAIL, it) }
         if (onCopyLink != null) {
             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center) {
                 SheetPill(painterResource(R.drawable.ic_link), "Copy link", onCopyLink)
@@ -64,6 +67,16 @@ internal fun ShareContent(
         }
     }
 }
+
+/**
+ * The link an AI agent connected to Inventory's MCP server opens this card with. It names the card only; it opens
+ * nothing without the person's own connected agent.
+ *
+ * @param card The card.
+ * @param server The Inventory server, [BuildConfig.SERVER_URL] in the app.
+ * @return `<server>/c/<card id>`.
+ */
+internal fun agentLink(card: Card, server: String = BuildConfig.SERVER_URL): String = "${server.trimEnd('/')}/c/${card.id}"
 
 /** "Photo, 1600 × 1067" when the picture's size is known, else "Photo". */
 private fun pictureDetail(card: Card): String {
@@ -134,4 +147,5 @@ internal fun sharedImageName(card: Card, suffix: String): String {
 }
 
 private const val SHARED_DIR = "shared"
+private const val AGENT_LINK_DETAIL = "Copies a link your connected AI can open"
 private const val JPEG_QUALITY = 92

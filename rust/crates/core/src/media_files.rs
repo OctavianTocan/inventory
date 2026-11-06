@@ -91,6 +91,9 @@ pub enum Rendition {
         mode: Option<char>,
         format: String,
         page: u32,
+        /// Seconds into a video for a still taken from it (`time(12.5)`, Inventory's own addition); the first frame
+        /// when absent.
+        time: Option<f64>,
         /// A white background was requested.
         flatten: bool,
         content_type: String,
@@ -102,11 +105,14 @@ impl Rendition {
     pub fn to_value(&self) -> Value {
         match self {
             Rendition::Original { source } => obj! { "source" => source.as_str(), "suffix" => Value::Null }.into(),
-            Rendition::Derived { source, suffix, width, height, mode, format, page, flatten, content_type } => {
+            Rendition::Derived { source, suffix, width, height, mode, format, page, time, flatten, content_type } => {
                 let mut object = obj! { "source" => source.as_str(), "suffix" => suffix.as_str(), "width" => *width, "height" => *height };
                 object.insert("mode", mode.map_or(Value::Undefined, |mode| Value::from(mode.to_string())));
                 object.insert("format", format.as_str());
                 object.insert("page", *page);
+                if let Some(time) = time {
+                    object.insert("time", *time);
+                }
                 object.insert("flatten", *flatten);
                 object.insert("type", content_type.as_str());
                 object.into()
@@ -120,11 +126,13 @@ static SIZE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?:^|/)([0-9]+)x([0-9]+)(?:-([tc]))?\.(webp|jpe?g|png|mp4)(?:/hevc\.mp4)?$").expect("regex"));
 static VIDEO: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|/)([0-9]+)x([0-9]+)/hevc\.mp4$").expect("regex"));
 static PAGE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"page\(([0-9]+)\)").expect("regex"));
+static TIME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:^|/)time\(([0-9]{1,5}(?:\.[0-9]{1,3})?)\)(?:/|$)").expect("regex"));
 static RANGE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^bytes=([0-9]*)-([0-9]*)$").expect("regex"));
 
 /// Split a media path into its original and the rendition it asks for, using mymind's rendition grammar
 /// (`path;WxH[-t|-c].ext`, `path;WxH/hevc.mp4`, optional `background(fff)` and `page(n)`; `path;original.ext` is the
-/// original itself).
+/// original itself), plus Inventory's `time(s)` for a still taken that many seconds into a video (at most 86400,
+/// three decimals).
 ///
 /// # Arguments
 /// * `relative` - Path below `/media/`, already decoded.
@@ -149,7 +157,11 @@ pub fn parse_rendition(relative: &str) -> Result<Rendition> {
     let size = SIZE.captures(&suffix);
     let video = VIDEO.captures(&suffix);
     let page = PAGE.captures(&suffix).map_or(1.0, |found| string_to_number(&found[1]));
+    let time = TIME.captures(&suffix).map(|found| string_to_number(&found[1]));
     let Some(chosen) = size.as_ref().or(video.as_ref()) else { return Err(invalid()) };
+    if time.is_some_and(|time| time > 86_400.0) || (time.is_some() && video.is_some()) {
+        return Err(invalid());
+    }
     let (width, height) = (string_to_number(&chosen[1]), string_to_number(&chosen[2]));
     if width < 1.0 || height < 1.0 || width > 4096.0 || height > 4096.0 || page < 1.0 || page > 1000.0 {
         return Err(invalid());
@@ -165,6 +177,7 @@ pub fn parse_rendition(relative: &str) -> Result<Rendition> {
         height: height as u32,
         format,
         page: page as u32,
+        time,
         content_type,
     })
 }

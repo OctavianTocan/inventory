@@ -24,6 +24,8 @@ brief (`thymind-mcp/concepts_brief.md` in the project files).
 | `thymind_search` | Search by meaning or words, or list a space, pinned cards or top of mind. Paged. |
 | `thymind_get_card` | One card in full: text, note, tags, spaces, link, comments. |
 | `thymind_get_picture` | A card's picture as an image (128–1024 px). |
+| `thymind_get_transcript` | Everything said in a saved video or audio file, in pages of 50,000 characters. |
+| `thymind_get_frames` | Frames of a saved video at chosen moments, or spread evenly (up to 10 a call), through the `time(s)` media rendition. |
 | `thymind_list_spaces` | Spaces with card counts. |
 | `thymind_list_tags` | Tags with card counts. |
 | `thymind_save` | Save a link or text, with a note, tags and spaces. A link already saved is bumped. |
@@ -97,3 +99,8 @@ npx wrangler deploy --dry-run --outdir /tmp/thymind-mcp   # bundles the Worker
 The flow test drives the real OAuth provider and the real MCP client against an in-memory KV, a fake `mymind`
 binding and a stubbed Google token endpoint. Nothing here has run against the live library yet; that waits for the
 deploy above.
+
+## Card links
+
+The app's Share sheet copies `<server>/c/<card id>` (Link for AI agents). Every tool that takes a card id also takes
+that link (`src/refs.ts`); it names a card in the signed-in person's own library and reaches nothing else.

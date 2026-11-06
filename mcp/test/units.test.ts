@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { cardDetail, cardResult, detailMarkdown, fenced, htmlText, picturePath, proseText, TEXT_LIMIT } from "../src/cards";
 import { Library, LibraryError, allowed } from "../src/library";
 import { escape } from "../src/pages";
+import { cardIdOf, cardLink } from "../src/refs";
+import { frameTimes } from "../src/tools";
 import { CARDS } from "./fakes";
 
 const SPACES = new Map([["00000002SpaceAAAAAAAAA", "Kitchen"]]);
@@ -142,5 +144,27 @@ describe("pictures", () => {
 describe("pages", () => {
   it("escapes client-chosen text", () => {
     expect(escape(`<script>"x"&'y'`)).toBe("&#60;script&#62;&#34;x&#34;&#38;&#39;y&#39;");
+  });
+});
+
+describe("card links", () => {
+  it("name a card by its id or its link, and nothing else", () => {
+    const id = "00000002VideoAAAAAAAAA";
+    expect(cardIdOf(id)).toBe(id);
+    expect(cardIdOf(` ${cardLink("https://mymind.octaviantocan.com/", id)} `)).toBe(id);
+    expect(cardLink("https://mymind.octaviantocan.com", id)).toBe(`https://mymind.octaviantocan.com/c/${id}`);
+    expect(cardIdOf(`http://localhost:8787/c/${id}/?from=share`)).toBe(id);
+    for (const ref of ["", "../etc", "https://mymind.octaviantocan.com/cards/abc", "https://x.org/c/a/b", "https://x.org/c/a%2e", "a-b", "x".repeat(65)]) {
+      expect(cardIdOf(ref), ref).toBeUndefined();
+    }
+  });
+});
+
+describe("frame moments", () => {
+  it("spread evenly when none are named and stay inside the video", () => {
+    expect(frameTimes([], 4, 60)).toEqual([7.5, 22.5, 37.5, 52.5]);
+    expect(frameTimes([0, 12.345, 60, 999], 6, 60)).toEqual([0, 12.3, 59.9]);
+    expect(frameTimes([], 6, 0)).toEqual([0]);
+    expect(frameTimes([5], 6, 0)).toEqual([5]);
   });
 });

@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "thymind",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Search, read and organize your Inventory library: the links, notes, posts, pictures, videos, PDFs and products you saved.",
   "author": { "name": "Octavian Tocan", "url": "https://mymind.octaviantocan.com" },
   "keywords": ["notes", "bookmarks", "library", "search"],
