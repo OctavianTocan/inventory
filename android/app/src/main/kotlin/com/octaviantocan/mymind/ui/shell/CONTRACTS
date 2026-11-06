@@ -7,7 +7,7 @@ Source: pulls.review kit-one-foot-bar, DESIGN rule 196, FootBar.kt at
 ee5cf358333cb1170f1923c7118e12af3f265b74; requested by Tavi on 22 October 2026.
 
 @cc [owner:OctavianTocan,label:design;motion;architecture] library-search-morphs-the-navigation
-Everything, Spaces and Search MUST show the same bar: one FootPill with one round
+All, Spaces and Search MUST show the same bar: one FootPill with one round
 button, FootCircle, beside it. The tabs and the search field MUST be contents of that
 pill, never a capsule or pill of their own, and Search and Close MUST be glyphs of that
 circle. Opening or closing search MUST keep the one pill and the one circle on the same
@@ -53,7 +53,7 @@ Source: pulls.review kit-foot-bar-owns-its-taps, DESIGN rule 198, FootBar.kt at
 ee5cf358333cb1170f1923c7118e12af3f265b74.
 
 @cc [owner:OctavianTocan,label:product;design;motion] library-navigation-is-the-gallery-capsule
-The library navigation pill MUST offer Everything and Spaces as two icon tabs, with
+The library navigation pill MUST offer All and Spaces as two icon tabs, with
 Search as a separate circular control showing a magnifier with a sparkle. It MUST NOT
 add a Create tab. The pill is only as wide as its two tabs and sits centred with the
 circle beside it, leaving the corners of the screen to the cards. The chosen tab shows
@@ -78,7 +78,7 @@ Source: Tavi's pick of 13 and 14 on the card opening page, 30 October 2026 ("Let
 13 and 14 together"), transitions.dev's Banner stacking.
 
 @cc [owner:OctavianTocan,label:product;motion] library-pages-swipe-side-by-side
-Everything, Spaces and Ask MUST sit side by side in the bar's order, Ask (the search the
+All, Spaces and Ask MUST sit side by side in the bar's order, Ask (the search the
 circle opens) last, through SidePages, ported from Pully's: a sideways drag anywhere a page
 does not use itself moves both pages exactly with the finger, nothing fading or blurring,
 and letting go settles on the nearer page, or on the next one the way a throw went once the
@@ -101,7 +101,7 @@ kit-drags-carry-on-or-settle.
 @cc [owner:OctavianTocan,label:design;motion] scroll-views-blur-their-edges
 Every scrolling view in the app MUST blur and fade its content into the page at the
 top once it has scrolled away from its start, and at the bottom while more lies below:
-the galleries (Everything, Ask's results, the Spaces list and an opened space) through
+the galleries (All, Ask's results, the Spaces list and an opened space) through
 gallery-top-edge-blurs-the-scrolling-content and the mosaic's foot fade, and every
 other scrolling column (Ask before anything is typed, the search dock's answer, the
 sheets, the reader and its name card) through `scrollEdgeFade`. At rest at an edge,
@@ -111,7 +111,8 @@ at the bottom when it's scrolled ... We are, in fact, also not doing it in the s
 
 @cc [owner:OctavianTocan,label:product] gallery-tab-is-called-all
 The tab of the whole library, mymind's Everything, MUST be named "All" wherever the app
-shows or speaks it, such as the bar's tab and the reader's Back to All.
+shows or speaks it, such as the bar's tab and the reader's Back to All; contracts call
+that page All too. The code keeps the enum `Tab.Everything`.
 Source: Tavi, 5 November 2026 ("Rename it to 'All'"), picked over Mind, Home and All
 cards when asked what to call Everything.
 

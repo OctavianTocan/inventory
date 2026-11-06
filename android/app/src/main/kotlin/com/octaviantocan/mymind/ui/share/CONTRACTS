@@ -1,8 +1,8 @@
 @cc [owner:OctavianTocan,label:product;motion] share-sheet-fades-by-itself
-What shows after something is shared into ThyMind MUST go away by itself: once
+What shows after something is shared into Inventory MUST go away by itself: once
 everything is saved, or kept on the phone while offline, it waits 5 seconds and
 fades out, and a sheet saying nothing was saved waits 8 seconds. The wait MUST
-NOT start while saving is still going, nor while ThyMind is still finding tags
+NOT start while saving is still going, nor while Inventory is still finding tags
 for one thing shared (share-sheet-shows-thymind-tags), for at most 10 reads. Any touch on the sheet or its scrim, or
 typing in it, MUST stop the wait and keep it open until Done, its cross, the
 scrim, Back or a drag closes it; tapping outside closes it at once. While it
@@ -23,7 +23,7 @@ The share sheet MUST be Pully's paper over the app that shared, resting at its
 content's height, titled with how saving is going (Saving to your mind, Saved to
 your mind, Kept on this phone, Nothing was saved). It MUST show what was saved
 as a raised row with its picture and two lines, filling in the page's title and
-picture as ThyMind reads them; then the spaces, tags and note added, each with a
+picture as Inventory reads them; then the spaces, tags and note added, each with a
 cross that takes it off; then one field, Add a space, a tag or a note. With
 nothing typed, the field offers the suggested space and recent tags; typed words
 offer the spaces and tags that hold them, a new tag for one word no tag matches,
@@ -32,7 +32,7 @@ This sheet shows when the shooting star does not play (share-moment-shooting-sta
 with the system's animations turned off, and when nothing was saved; otherwise
 the star's tag step (share-tag-step-icon-grid) takes its place.
 Source: Tavi's pick of 10, One field for everything, in the share prototype,
-29 October 2026 ("Let's do 10"). ThyMind's own tags show above the field
+29 October 2026 ("Let's do 10"). Inventory's own tags show above the field
 (share-sheet-shows-thymind-tags), so the empty field offers recent tags. The tag
 step took its place with Tavi's pick of M9 Icon grid, 5 November 2026.
 
@@ -60,19 +60,19 @@ section is Claude's choice.
 @cc [owner:OctavianTocan,label:product;security] share-reads-gallery-in-place
 A shared photo or video that the Gallery keeps on the phone (its own MediaStore
 entry, or the one a Google Photos link wraps) MUST upload from that file, without a
-copy on the phone, when ThyMind holds full photo and video access. ThyMind MUST ask
+copy on the phone, when Inventory holds full photo and video access. Inventory MUST ask
 for that access at most once, before saving a share that holds such an item, and
 MUST NOT ask for anything else. Without full access (refused, or only some photos
 allowed) and for every other shared file, the share MUST still save from a copy.
-ThyMind MUST NOT read a Gallery entry, in place or to copy it, unless the share
+Inventory MUST NOT read a Gallery entry, in place or to copy it, unless the share
 carried a read grant (Android grants only what the sender could read), and MUST
 unwrap a Google Photos link only when that authority belongs to the preinstalled
-Google Photos, so another app cannot use ThyMind's access to read the Gallery.
+Google Photos, so another app cannot use Inventory's access to read the Gallery.
 Source: Tavi, 5 November 2026, chose "Read from the Gallery" over copying, because a
 5 GB video needed 5 GB free on the phone.
 
 @cc [owner:OctavianTocan,label:product] share-sheet-shows-thymind-tags
-When one thing is shared, the sheet MUST show the tags ThyMind gave it as soon
+When one thing is shared, the sheet MUST show the tags Inventory gave it as soon
 as they reach the phone, before the tags the user added, each marked with the
 spark and taken off by a tap. Until they arrive it MUST show a Finding tags chip
 in their place. A tag taken off MUST come off the card when the sheet goes, and
@@ -81,11 +81,12 @@ them at least every second while it waits, and the server MUST start tagging a
 link as soon as its words are read, not after its pictures and screenshot.
 Source: Tavi, 5 November 2026: "the moment I share them and I see the little
 tag screen where I can add my own tags, I should already see tags that Jev
-generated". This replaces the share prototype's choice to leave ThyMind's tags
+generated" (Jev was the tag judge then; OpenAI's Decisions API took its place
+the same day). This replaces the share prototype's choice to leave Inventory's tags
 off the sheet.
 
 @cc [owner:OctavianTocan,label:product] share-sheet-says-when-merged
-When ThyMind finds that one thing just shared is the same thing as a card saved
+When Inventory finds that one thing just shared is the same thing as a card saved
 before (the same page, post, video, picture, file or note, even at another
 address), the server MUST fold the new save into the earlier card: its own
 tags, note and spaces move over, the earlier card comes to the top, and the new

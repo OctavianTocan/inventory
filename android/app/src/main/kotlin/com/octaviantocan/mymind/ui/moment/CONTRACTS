@@ -1,5 +1,5 @@
 @cc [owner:OctavianTocan,label:product;motion] share-moment-shooting-star
-After something is shared into ThyMind, while it saves, the share target MUST play
+After something is shared into Inventory, while it saves, the share target MUST play
 the shooting star moment over the app that shared: the page blurs under a night
 sky, a constellation draws itself, one star breaks off and falls, turning colour
 once for a Rare find and twice for a Legendary one, lands in a white-out, and the
@@ -20,9 +20,9 @@ feedback on that prototype the same day.
 @cc [owner:OctavianTocan,label:product;design] share-tag-step-icon-grid
 The tag step after the shooting star MUST be an icon grid on the back of the
 find's card, grown to fill the screen at the card's shape. It shows the spaces
-as a row of chips, one chosen at a time, with the space ThyMind suggests already
+as a row of chips, one chosen at a time, with the space Inventory suggests already
 chosen; a Search tags field that can add a new tag; and a grid of tiles, each a
-line icon, the tag's name and a check: ThyMind's own tags first, on and marked
+line icon, the tag's name and a check: Inventory's own tags first, on and marked
 with the spark (share-sheet-shows-thymind-tags), then the user's, then recent
 tags, off. A tap on a tile puts its tag on or takes it off. It MUST go by itself
 as share-sheet-fades-by-itself says, its button showing the time left; a tap

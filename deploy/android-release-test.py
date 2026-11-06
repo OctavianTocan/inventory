@@ -245,7 +245,7 @@ else: sys.stdout.write(os.environ['GIT_PATH'] + '\\0')
                 self.assertIn("newer versionName and versionCode", result.stderr)
                 current.write_text(new)
                 self.assertEqual(self.run_gate().returncode, 0)
-        for path in ("android/app/src/test/CardTest.kt", "android/app/src/androidTest/CardTest.kt", "android/app/screenshots/card.png", "android/README.md"):
+        for path in ("android/app/src/test/CardTest.kt", "android/app/src/androidTest/CardTest.kt", "android/app/screenshots/card.png", "android/README.md", "android/app/src/main/kotlin/ui/CONTRACTS"):
             self.env["GIT_PATH"] = path
             current.write_text(previous)
             self.assertEqual(self.run_gate().returncode, 0, path)

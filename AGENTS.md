@@ -1,13 +1,26 @@
 # AGENTS.md
 
 Instructions for any coding agent working in this repo (Claude Code reads it through `CLAUDE.md`; Codex reads it
-directly). `README.md` explains how to run and verify the replica; `docs/` holds specs and plans.
+directly). `README.md` explains how to run and verify it; `docs/` holds specs and plans.
 
 ## What this is
 
-A localhost replica of mymind (`access.mymind.com`). The Rust binary (`mymind serve`, `rust/`) serves mymind's own
-front-end (`mirror/`) and answers its API from the local database and storage.
-It is its own product: nothing checks it against mymind any more.
+Inventory (called ThyMind until 5 November 2026): a private library of things you save, where saving feels like
+looting. The Android app (`android/`) is the main product; it talks to a Rust server that runs as the Cloudflare
+Worker `mymind` at `mymind.octaviantocan.com` (`rust/crates/worker`), with an MCP Worker for AI agents (`mcp/`) and
+a feedback runner (`feedback-runner/`). It began as a localhost replica of mymind (`access.mymind.com`): the Rust
+binary (`mymind serve`) still serves mymind's front-end (`mirror/`) as the web library, but it is its own product
+and nothing checks it against mymind any more.
+
+Direction (Tavi, 5 November 2026): a game-like inventory in a modern, comfortable app. Finds have rarity from the
+person's own library (never chance or payment), a shooting star brings each share in, a backpack holds finds (never a
+basket), Back today brings up to three old finds a day, and Your sky gathers them into constellations. There are no
+levels or XP anywhere. Design ideas taken from games or other apps are drawn in the app's own colours, type and
+shapes, never as a copy of a specific game.
+
+Everything a person reads says Inventory. Internal names stay (`com.octaviantocan.mymind`, the `mymind` binary and
+Worker, `thymind_*` MCP tools and scopes, preference keys, Kotlin identifiers), because changing them breaks
+installed phones, sign-ins and connected agents; renaming one needs Tavi's go-ahead.
 
 ## Hard rules
 
@@ -39,6 +52,32 @@ It is its own product: nothing checks it against mymind any more.
    `ALLOWED_GOOGLE_DOMAIN` (default `octaviantocan.com`; set it empty to disable domain admission), plus exact
    verified addresses explicitly invited through `ALLOWED_GOOGLE_EMAILS` (the user, 2026-11-06). Invite only
    addresses the user authorizes; never admit a whole external domain to invite one person (`docs/second-user-setup.md`).
+
+## How work ships
+
+- **Merge your own PR once CI is green** (Tavi, 22 October 2026: "If it passes CI, you can merge any of the PRs you
+  make"), and do it as soon as it is green rather than leaving it open. This covers PRs that publish an Android
+  release. It does not cover PRs someone else opened.
+- **A merge to `main` is a release.** `Android verify` (the `android` check) then `Android release` publish the app to
+  every phone, and the VPS timer `mymind-worker-update.timer` deploys the `mymind` Worker within minutes
+  (`docs/feedback.md`). The MCP Worker and the feedback runner are deployed by hand (`docs/analytics.md`).
+- **Every Android change bumps the version** (feedback agents excepted, see Feedback agents) in `android/CHANGELOG.md` (version name and code both higher,
+  `docs/android-releases.md`). Several threads merge the same day: right before merging, check `main`'s top
+  CHANGELOG entry and, when another PR took your number, merge `main` and take the next one.
+- **Check the `Android release` run after merging**, not only verify: releases 0.6.68 to 0.6.81 failed after merge
+  on a release-only lint error until 0.6.82 (#108) added `:app:lintVitalRelease` to verify.
+- Force-pushing a thread branch is refused in agent sessions; to restart a branch from `main`, merge with
+  `git merge -s ours`. Never run `cargo fmt` here: the Rust code is not rustfmt-clean and it rewrites 100+ files.
+
+## Contracts
+
+`CONTRACTS` files hold the rules a part of the app must keep, for their directory and everything under it
+(`@cc [owner:OctavianTocan,label:<labels>] <id>`, then prose with RFC 2119 MUST/SHOULD/MAY that names its source:
+Tavi's words with the date, or the pick from a design page). Before changing a part of the Android app, read the
+`CONTRACTS` of its directory and those above it. When behaviour changes on purpose, change its contract in the same PR
+and say whose decision changed it; never weaken or delete one to make code pass. Add a contract for each new
+behaviour Tavi asks for or picks, and mark choices Tavi has not confirmed as Claude's choice. Keep ids stable even
+when the words they hold change (`share-sheet-shows-thymind-tags`).
 
 ## Long-running processes
 
@@ -89,9 +128,9 @@ output format and a length cap.
 
 ## Code conventions
 
-- Before changing Android UI, read applicable ancestor and area `CONTRACTS` files. Card-sheet navigation follows
-  `android/app/src/main/kotlin/com/octaviantocan/mymind/ui/menu/CONTRACTS`; its pinned Pully source is documented in
-  `docs/pully-ui-reference.md`. Keep the implementation, tests and contracts consistent in the same change.
+- Card-sheet navigation follows `android/app/src/main/kotlin/com/octaviantocan/mymind/ui/menu/CONTRACTS`; its pinned
+  Pully source is documented in `docs/pully-ui-reference.md`. Keep the implementation, tests and contracts consistent
+  in the same change (see Contracts).
 - The backend is Rust; public rustdoc states the caller contract. Retained Node tooling uses plain ES modules,
   no framework or build step. Match the surrounding code.
 - `feedback-runner/` is the one TypeScript Worker, because the Cloudflare Sandbox SDK is TypeScript

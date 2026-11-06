@@ -14,7 +14,7 @@ ChangelogEntries, ChangelogItem and NewTag at
 20e889540b7c05ed9174b038ae366191932924e9.
 
 @cc [owner:OctavianTocan,label:product] update-screen-is-required
-When the server offers a newer release, ThyMind MUST show only the update screen, over
+When the server offers a newer release, Inventory MUST show only the update screen, over
 everything, from the first frame of a start: "Inventory 0.6.72 is ready", "Update to keep
 using Inventory.", every newer version with its notes, and "Update to 0.6.72" as the main
 action. Nothing MUST close it but the update, and Back MUST leave the app. The phone

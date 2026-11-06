@@ -1,11 +1,16 @@
 # Android releases
 
 `android/CHANGELOG.md` remains the source of `versionName`, `versionCode`, bundled notes and update history.
-The next release is **0.5.1 (8)**: Android's system typeface, smaller gallery text and smoother pinch resizing. The published **0.5.0 (7)** introduced the photo-style gallery, profile and Top of Mind header, Pully floating navigation/search bar, and accented action sheets with nested Back navigation. Card reading remains full screen.
+Its top entry is the newest release. Every merge to `main` that changes the app publishes one, so several threads
+often want the same next number on the same day: check `main`'s top entry right before merging and take the next
+number when another PR took yours.
 
 The `Android verify` workflow compares a PR's checked-out merge revision with its base commit. Changes to Android
 main sources, resources, Gradle build files, dependency versions or the wrapper require both a higher version name
-and a higher version code. Tests, screenshots and documentation alone need no bump. Versions cannot decrease.
+and a higher version code. Tests, screenshots, documentation and `CONTRACTS` files alone need no bump (they are not built into the app). Versions cannot decrease. Verify also runs
+`:app:lintVitalRelease`, the lint the release build runs: releases 0.6.68 to 0.6.81 passed verify and then failed in
+`Android release` on a release-only lint error, until 0.6.82 (#108). A green verify on main is not a shipped release;
+check the `Android release` run after merging.
 Every PR runs the check so branch protection can require `android` (the job in `Android verify`) without leaving
 unrelated PRs waiting on a paths-filtered workflow. **Configure this required check in the repository's main branch
 protection/ruleset**; a workflow alone cannot prevent someone bypassing failed checks. This implementation does not
@@ -92,6 +97,6 @@ The production fingerprint is optional in local mode; if supplied, it is still e
 and `GRADLE_ARGS` retain their local build overrides.
 
 Repository tests and a green release job do not prove a phone installed the update. Confirm the authenticated
-hosted 0.4.0 (5) release first, then the device's version and installed certificate. The app installs
+hosted release first, then the device's version and installed certificate. The app installs
 only from its update screen, which shows over everything when the app opens while a newer release is offered; it
 waits for uploads in flight to finish before installing.

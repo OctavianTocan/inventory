@@ -173,7 +173,7 @@ Source: Tavi, 4 November 2026: "We gotta optimize the app for scrolling to be su
 smooth with no hitches or pops or lag of any sort." and "Same for pinching. It's laggy right now."
 
 @cc [owner:OctavianTocan,label:product;design;motion] gallery-reels-at-one-column
-In Everything, search results and an opened space, one column MUST be full screen: a pinch
+In All, search results and an opened space, one column MUST be full screen: a pinch
 in from two columns lands there, with no grid of one column before it. Each card gets a page
 the height of the gallery, edge to edge on black, with no corners or side margins, and the
 page MUST show a fuller card than its tile: a picture or video whole at its own shape in the
@@ -199,7 +199,7 @@ not zoom further. And also, what you see in the reels mode should be fuller card
 screen with info and stuff".
 
 @cc [owner:OctavianTocan,label:product;motion] gallery-pinches-everywhere
-Every gallery of cards, Everything, search results and an opened space, MUST pinch as
+Every gallery of cards, All, search results and an opened space, MUST pinch as
 gallery-pinches-change-tile-size describes from the moment it shows, including a gallery
 shown before its cards arrived, such as the first moments after the app opens and a
 search whose results are still on their way. The Spaces list MUST pinch the same way,
@@ -220,7 +220,7 @@ and highlights MUST NOT scale with a mosaic pinch.
 Source: Tavi, 22 October 2026, Google Photos layout request and gallery polish in the Codex conversation.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-top-controls-stay-fixed
-The profile and Add controls MUST stay fixed at the top of Everything and the Spaces
+The profile, star (sky-opens-from-the-star-button) and Add controls MUST stay fixed at the top of All and the Spaces
 list while the page scrolls under them. They float as their own raised, shadowed
 circles with no solid header strip behind them, except in full screen, where they slide
 away (gallery-reels-at-one-column). The page title ("Your
@@ -241,7 +241,7 @@ Source: Tavi, 28 October 2026 ("get completely rid of any stuff related to the r
 page").
 
 @cc [owner:OctavianTocan,label:design;interaction] gallery-top-edge-blurs-the-scrolling-content
-On Everything, Ask's results, the Spaces list and an opened space, once the page has scrolled, the cards passing under the status bar and the fixed
+On All, Ask's results, the Spaces list and an opened space, once the page has scrolled, the cards passing under the status bar and the fixed
 controls MUST soften through true backdrop blur that fades into the sharp viewport;
 at the top of the page there is no blur. It MUST sample the displayed
 gallery rather than create a second feed or replace the cards with an opaque
@@ -299,7 +299,7 @@ their colours, each deepened only as far as white words on it need to read at 4.
 shows the network's mark top left, the author's name with the handle under it (for
 Reddit, the subreddit with u/author), the post's words, and its own picture inset with
 rounded corners below them. It MUST NOT show likes, reposts, points or other counts.
-The tile and the reader show ThyMind's own saved copy of the post, never a live embed.
+The tile and the reader show Inventory's own saved copy of the post, never a live embed.
 Bare media links the platform appends, such as pic.twitter.com or t.co addresses, MUST
 NOT appear as text in the tile or the reader. An X post that carries an X article MUST
 stand two squares tall and show the article as X does, in a box ruled in X's line colour
@@ -376,7 +376,7 @@ Source: Tavi's recorded review, 22 October 2026 ("repositories I think could use
 the repositories cover").
 
 @cc [owner:OctavianTocan,label:product;privacy] gallery-opens-from-the-phone
-Everything, Pinned and the page scheme MUST open on what they showed last time,
+All, Pinned and the page scheme MUST open on what they showed last time,
 read from the phone's own copy (`data/LibraryCopy.kt`), before the server answers. The
 server's first page then decides: when the list already starts with it, the list stays
 and paging goes on after it; otherwise the list becomes the fresh page. Without the
@@ -389,7 +389,7 @@ Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search"
 
 @cc [owner:OctavianTocan,label:product;privacy] gallery-works-offline
 Once the phone holds the whole library (`data/LibraryCopy.kt`, filled page by page from
-`/app/v1/changes` by `data/LibrarySync.kt`), Everything, Pinned, the Spaces tab and
+`/app/v1/changes` by `data/LibrarySync.kt`), All, Pinned, the Spaces tab and
 its covers and space pages MUST read from it, in the
 server's order, without waiting on the network. Space pages read from it only once its
 cards carry their place in the space (`spaceRanks`); before that they ask the server.
@@ -419,8 +419,8 @@ and saving a shared link or text once the server has taken a push, under an id t
 makes; before that they wait for the server. A shared link the library already holds
 makes way for the saved card, which keeps its own note. Waiting changes belong to the
 session and are wiped at sign-out. Uploads still need a connection.
-On Wi-Fi with battery to spare, the phone MUST fetch ahead the gallery pictures of Top of
-Mind and the newest 1,000 cards (`data/KeptPictures.kt`) into its picture cache, which
+On Wi-Fi with battery to spare, the phone MUST fetch ahead the gallery pictures of Pinned
+and the newest 1,000 cards (`data/KeptPictures.kt`) into its picture cache, which
 holds up to 512 MB and is wiped at sign-out with the copy.
 Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search", step 4,
 and his choice of "Pinned + newest 1,000, Wi-Fi" for the pictures; online changes queued

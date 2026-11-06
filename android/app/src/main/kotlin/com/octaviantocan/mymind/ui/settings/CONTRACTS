@@ -7,7 +7,7 @@ effort, and the model page MUST NOT carry the efforts. Providers MUST list Claud
 Codex with their marks and whether each is signed in. The rows carry no lines that
 explain them. Model, Effort and each provider open child pages inside the same Profile
 sheet (`ui/menu/CONTRACTS` `card-sheet-pages-stay-in-the-sheet`). The rows MUST use
-ThyMind's own sheet rows, type and colours, not Pully's look.
+Inventory's own sheet rows, type and colours, not Pully's look.
 Source: Tavi, 28 October 2026 ("fully copy from the Pully project how it does sign-in for
 those, how it puts them in the settings, its model and effort selectors"); pulls.review
 `settings-model-row-names-the-model`, `settings-effort-under-model` and
@@ -29,7 +29,7 @@ c71ee10d2f6fc1b279c5396076cfed5039f8dbd7.
 Claude Code and Codex MUST be signed in through the CLIs' own subscription sign-in on
 Pully's pages: Claude Code's page code is pasted back, or taken from the clipboard when
 the app returns to the front; Codex shows a device code and finishes by itself once it is
-approved. The sign-in belongs to the signed-in ThyMind account and lives on the server,
+approved. The sign-in belongs to the signed-in Inventory account and lives on the server,
 never on the phone. Everything a page holds belongs to the session that opened it: a new
 session MUST clear it and drop remembered sign-ins and model lists, and while the app is
 in the background a page MUST NOT send requests, open pages or read the clipboard. A
@@ -53,7 +53,7 @@ properly, which we should").
 @cc [owner:OctavianTocan,label:product;security] profile-connected-agents
 For a signed-in account the Profile sheet's Account group MUST offer Connected agents above
 Sign out, opening a page inside the same sheet that lists each AI app signed in through
-ThyMind's MCP server by the name it gave itself, with when it connected and was last
+Inventory's MCP server by the name it gave itself, with when it connected and was last
 used. Remove MUST ask once more on the same row before it signs the app out, and the app
 MUST leave the list at once. The page MUST list only this account's AI apps, never a
 phone or browser session, and removing one MUST NOT sign out the phone.
@@ -84,7 +84,7 @@ Source: design_draft.md decision 2 (Tavi, 5 Nov 2026).
 @cc [owner:OctavianTocan,label:product;design] profile-theme-picks-pullys-themes
 The Profile sheet MUST offer a Theme row under Appearance, showing the theme in use, that
 opens a page inside the same sheet listing every colour theme Pully offers (Pully's own
-palette and every theme Pully converts from OpenCode), with ThyMind's own colours first
+palette and every theme Pully converts from OpenCode), with Inventory's own colours first
 and the default. The page MUST have a Find a theme search, show each theme as four dots
 (screen, accent, success, error) in the look on screen and a tick on the one in use. A tap
 MUST apply the theme at once through Pully's wipe, without leaving the page, and the
@@ -112,16 +112,16 @@ the same under every theme. Every theme MUST define the gallery, the pages, the 
 chrome and the sheets for the light and the dark look, so no screen keeps a colour from
 another theme; a theme with one look MUST use it for both. Colours a card takes from what
 it holds (a network's own colour, a type colour, a picture) MUST NOT change with the
-theme, and the splash keeps ThyMind's own colours. ThyMind's own theme MUST draw exactly
+theme, and the splash keeps Inventory's own colours. Inventory's own theme MUST draw exactly
 as the app did before themes.
 Source: Tavi, 5 November 2026 (as `profile-theme-picks-pullys-themes`); pulls.review
 `theme-changes-colours-only` at 9a44869.
 
 @cc [owner:OctavianTocan,label:product;design] profile-theme-backdrops
-Besides Pully's themes, the Theme page MUST offer ThyMind's own backdrop themes, after
+Besides Pully's themes, the Theme page MUST offer Inventory's own backdrop themes, after
 Pully's palette: some paint a gradient behind the gallery and the Spaces page, and some
 paint faint line doodles over it in the manner of a Telegram or WhatsApp chat wallpaper.
-The doodles MUST be ThyMind's own drawings, not copied from any app, and MUST stay faint
+The doodles MUST be Inventory's own drawings, not copied from any app, and MUST stay faint
 enough that the cards read first. The backdrop MUST stay still behind the whole window,
 status bar included, while the cards scroll and the pages swipe; tiles, sheets and opened
 cards keep solid colours. In the picker such a theme's first dot MUST show its backdrop.

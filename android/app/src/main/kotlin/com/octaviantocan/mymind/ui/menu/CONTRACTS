@@ -50,7 +50,7 @@ card.
 Choose one MUST show Add to space in place: up to three spaces as small mosaics of
 their cards, the suggested space first with a Suggested badge, then the card's own
 spaces, then the rest, each adding or removing the card with one tap, and All
-spaces. The suggestion is the space ThyMind's AI picked for the card when the
+spaces. The suggestion is the space Inventory's AI picked for the card when the
 server sent one, otherwise the space holding the most other cards that share a
 tag or a site with this card; it is never one the card is already in, nor a
 smart space. All spaces lists the suggestion, then every space with its mosaic

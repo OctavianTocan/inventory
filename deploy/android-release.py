@@ -51,7 +51,7 @@ def version(name):
 
 
 def runtime_path(path):
-    if not path.startswith("android/"):
+    if not path.startswith("android/") or path.endswith("/CONTRACTS"):
         return False
     source = re.search(r"/src/([^/]+)/", path)
     runtime_source = source is not None and not source[1].lower().startswith(("test", "androidtest"))
