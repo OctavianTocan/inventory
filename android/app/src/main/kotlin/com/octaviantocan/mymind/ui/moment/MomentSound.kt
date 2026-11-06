@@ -21,10 +21,10 @@ import kotlin.math.tanh
 
 /**
  * The moment's sounds, made as it plays from the prototype's Web Audio recipes (tones gliding in pitch, filtered noise,
- * bells), through a small room and a compressor. They play as the phone's own touch sounds do: not at all unless the
- * ringer is on, and at the phone's sound-effect volume (share-moment-sounds).
+ * bells), through a small room and a compressor. They play as a game's do, at the phone's media volume, and not at all
+ * unless the ringer is on (share-moment-sounds).
  */
-internal class MomentSound(context: Context) {
+internal class MomentSound(context: Context, private val name: String = "share-moment-sound", private val room: Room = Room.MOMENT) {
     private val audio = context.getSystemService(AudioManager::class.java)
     private val queue = ConcurrentLinkedQueue<Voice>()
     private val random = Random()
@@ -34,18 +34,26 @@ internal class MomentSound(context: Context) {
     /** True when the ringer is on, so the moment may be heard. */
     val audible: Boolean get() = audio?.ringerMode == AudioManager.RINGER_MODE_NORMAL
 
-    /** Opens the sound output; does nothing when the phone is silent or it is already open. */
+    /** Opens the sound output, or keeps one that is closing open; does nothing when the phone is silent. */
     fun start() {
-        if (running || !audible) return
-        running = true
-        stopping = false
-        Thread(::loop, "share-moment-sound").apply { isDaemon = true }.start()
+        if (!audible) return
+        synchronized(this) {
+            stopping = false
+            if (running) return
+            running = true
+        }
+        Thread(::loop, name).apply { isDaemon = true }.start()
     }
 
     /** Plays a beat's sound now. */
-    fun play(cue: Cue) {
-        if (!running || stopping) return
-        voicesOf(cue, RATE, random).forEach(queue::add)
+    fun play(cue: Cue) = play(voicesOf(cue, RATE, random))
+
+    /** Plays [voices] now, made at [RATE]. */
+    fun play(voices: List<Voice>) {
+        synchronized(this) {
+            if (!running || stopping) return
+            voices.forEach(queue::add)
+        }
     }
 
     /** Lets what is sounding ring out, then closes the output. */
@@ -54,11 +62,12 @@ internal class MomentSound(context: Context) {
     private fun loop() {
         Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
         val track = runCatching { openTrack() }.getOrNull()
-        if (track == null) { running = false; return }
-        val mix = Mixer(RATE)
+        if (track == null) { synchronized(this) { running = false; queue.clear() }; return }
+        val mix = Mixer(RATE, room)
         val active = ArrayList<Voice>()
         val block = FloatArray(BLOCK)
         var tail = 0
+        var closed = false
         try {
             track.play()
             while (true) {
@@ -67,12 +76,17 @@ internal class MomentSound(context: Context) {
                 active.removeAll { it.render(block); it.done }
                 mix.process(block)
                 track.write(block, 0, BLOCK, AudioTrack.WRITE_BLOCKING)
-                if (stopping && active.isEmpty()) { tail += BLOCK; if (tail > RATE * 2) break }
+                if (stopping && active.isEmpty()) {
+                    tail += BLOCK
+                    // Decided under the lock, so a start() racing the close either keeps it open or opens a new one.
+                    closed = tail > RATE * 2 && synchronized(this) { (stopping && queue.isEmpty()).also { if (it) running = false } }
+                    if (closed) break
+                } else tail = 0
             }
         } finally {
             runCatching { track.stop() }
             track.release()
-            running = false
+            if (!closed) synchronized(this) { running = false }
         }
     }
 
@@ -80,7 +94,7 @@ internal class MomentSound(context: Context) {
         val format = AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_FLOAT).setSampleRate(RATE).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
         val min = AudioTrack.getMinBufferSize(RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
         return AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
             .setAudioFormat(format)
             .setTransferMode(AudioTrack.MODE_STREAM)
             .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
@@ -173,12 +187,20 @@ private fun envelope(s: Float, attack: Float, dur: Float, vol: Float): Float = w
     else -> vol * (0.0008f / vol).pow((s - attack) / (dur - attack).coerceAtLeast(0.0001f))
 }
 
+/** How much room a sound has: the [wet] level beside the dry sound and how long it rings ([feedback] of its combs). */
+internal class Room(val wet: Float, val feedback: Float) {
+    companion object {
+        /** The share moment prototype's room. */
+        val MOMENT = Room(0.3f, 0.84f)
+    }
+}
+
 /**
  * The prototype's bus: a room (wet 0.3) beside the dry sound, the output at 0.6, then a compressor at -14 dB, 4 to 1,
  * with Web Audio's own make-up gain.
  */
-internal class Mixer(rate: Int) {
-    private val combs = intArrayOf(1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617).map { Comb((it * rate / 44_100f).toInt()) }
+internal class Mixer(rate: Int, private val room: Room = Room.MOMENT) {
+    private val combs = intArrayOf(1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617).map { Comb((it * rate / 44_100f).toInt(), room.feedback) }
     private val passes = intArrayOf(556, 441, 341, 225).map { AllPass((it * rate / 44_100f).toInt()) }
     private val attack = exp(-1f / (0.003f * rate))
     private val release = exp(-1f / (0.25f * rate))
@@ -191,7 +213,7 @@ internal class Mixer(rate: Int) {
             val input = dry * 0.015f
             for (c in combs) wet += c.next(input)
             for (a in passes) wet = a.next(wet)
-            var out = (dry + wet * 0.3f) * 0.6f
+            var out = (dry + wet * room.wet) * 0.6f
             val a = abs(out)
             level = if (a > level) attack * level + (1 - attack) * a else release * level + (1 - release) * a
             val db = 20f * log10(max(level, 1e-6f))
@@ -201,14 +223,14 @@ internal class Mixer(rate: Int) {
         }
     }
 
-    private class Comb(size: Int) {
+    private class Comb(size: Int, private val feedback: Float) {
         private val buf = FloatArray(size)
         private var at = 0
         private var store = 0f
         fun next(x: Float): Float {
             val y = buf[at]
             store = y * 0.8f + store * 0.2f
-            buf[at] = x + store * 0.84f
+            buf[at] = x + store * feedback
             at = (at + 1) % buf.size
             return y
         }

@@ -115,6 +115,9 @@ class StarMotes internal constructor(private val scope: CoroutineScope) {
 }
 
 private const val MOTE_MS = 800
+
+/** Seconds a star takes to fly into the star button. */
+internal const val MOTE_SECONDS = MOTE_MS / 1000f
 private const val HIT_MS = 700
 private const val RING_MS = 800
 

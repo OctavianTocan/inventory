@@ -70,7 +70,9 @@ the point values are Claude's choice and not yet confirmed.
 @cc [owner:OctavianTocan,label:product] share-moment-sounds
 The moment's sounds MUST play only while the phone's ringer is on, never when it
 is silent or on vibrate, and its vibrations MUST follow the phone's touch
-feedback setting.
+feedback setting. The app's sounds MUST play at the phone's media volume, the
+one the volume keys set while the app is open, as a game's do.
 Source: the sound and feel of the Inventory share moment prototype Tavi heard on
 5 November 2026; following the ringer and the touch feedback setting is Claude's
-choice.
+choice. Media volume: Tavi, 6 November 2026, 22:14: "the volume doesn't get
+controlled by normal sound volume for some reason? That sucks."

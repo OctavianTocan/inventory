@@ -171,3 +171,21 @@ Accessibility MUST offer each finished constellation by its name.
 Source: Tavi, 6 November 2026, 22:09: "Also, not being able to go back to previous
 constellations sucks. Fix." The tap, the sideways swipe and which way goes back in time
 are Claude's choice, not yet confirmed by Tavi.
+
+@cc [owner:OctavianTocan,label:product;design;motion] sky-sounds
+Your sky MUST make game-like sounds for its beats, timed to what moves: a rising swell
+as the camera looks up and a falling one as it comes down, a chime as a pull reaches
+the point where letting go looks up, a whoosh for each shooting star and a bell as its
+star lights, the bells climbing a scale as a constellation fills, a surge for each ring
+of a completing constellation then a full chord with a low boom as its figure draws, a
+swirl as a new constellation gathers out of its vortex with a note for each star that
+appears, sparkles as a find condenses out of starlight, a comet along the line when a
+swipe travels to the next star, a soft whoosh as a finished constellation is brought
+back to the middle or sent back to its place, and a whoosh and a chime as a Back today
+star flies into the star button. The sounds MUST be made by the app's own synth as they play (no
+recorded files, so nothing carries another licence), and like the share moment they
+MUST play only while the phone's ringer is on, at the media volume
+(share-moment-sounds). The sky MUST NOT play a sound while nothing moves in it.
+Source: Tavi, 6 November 2026, 21:50: "We need cool game-like sound effects for the
+sky." Which beats sound, the recipes, the D major pentatonic scale and the synth over
+licensed recordings are Claude's choices, not yet confirmed by Tavi.

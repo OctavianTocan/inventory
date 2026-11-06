@@ -1,6 +1,7 @@
 package com.octaviantocan.mymind.share
 
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -58,6 +59,8 @@ class ShareActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The volume keys set the media volume the app's sounds play at (share-moment-sounds).
+        volumeControlStream = AudioManager.STREAM_MUSIC
         enableEdgeToEdge()
         // The sheet draws its own way in and out, so the window neither slides nor fades on top of it.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

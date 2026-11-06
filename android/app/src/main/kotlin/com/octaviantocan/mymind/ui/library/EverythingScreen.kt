@@ -33,7 +33,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.octaviantocan.mymind.ui.sky.BackTodayBand
 import com.octaviantocan.mymind.ui.sky.BackTodayState
+import com.octaviantocan.mymind.ui.sky.MOTE_SECONDS
 import com.octaviantocan.mymind.ui.sky.SkyBackdrop
+import com.octaviantocan.mymind.ui.sky.SkyCue
 import com.octaviantocan.mymind.ui.sky.SkyOverlay
 import com.octaviantocan.mymind.ui.sky.SkyState
 import com.octaviantocan.mymind.ui.sky.rememberSkyPull
@@ -255,7 +257,8 @@ fun EverythingContent(
                     sky.scene.returned()
                     for (id in latestToday.arriving) {
                         if (!flying.add(id)) continue
-                        motes.fly(moteFrom[id] ?: Offset.Zero) { flying.remove(id); latestLanded(id) }
+                        sky.play(SkyCue.Mote(MOTE_SECONDS))
+                        motes.fly(moteFrom[id] ?: Offset.Zero) { flying.remove(id); sky.play(SkyCue.Land); latestLanded(id) }
                     }
                 }
                 SkyBackdrop(sky, plan, backToday.finds, paused = cardOpen, onOpenFind = onOpenStar, onSeen = onSeen,

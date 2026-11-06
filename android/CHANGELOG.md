@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.103 (114), 2026-11-06
+Your sky has sound.
+
+### Added
+- Your sky now sounds like a game: a rising swell as you look up, a whoosh and a bell as each shooting star lights a star (climbing a scale as the constellation fills), a surge and a big chord as one completes, a swirling vortex as the next one forms, sparkles as a find condenses out of starlight, a comet along the line when you swipe between stars, and a chime as a star lands in the star button. Like the share moment, it only plays when your ringer is on.
+
+### Fixed
+- The app's sounds, in the share moment and the sky, now follow your media volume, so the volume keys turn them up and down.
+
 ## 0.6.102 (113), 2026-11-06
 Your sky: go back to every constellation you finished.
 

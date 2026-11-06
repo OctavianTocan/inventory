@@ -254,6 +254,9 @@ internal class SkyScene {
     var onSeen: (String) -> Unit = {}
     var onCompleted: () -> Unit = {}
     var onLookUp: () -> Unit = {}
+
+    /** Plays a beat's sound (sky-sounds); the layer gives it the sky's synth. */
+    var sfx: (SkyCue) -> Unit = {}
     var picture: suspend (String) -> Bitmap? = { null }
     var title: (String) -> String = { "" }
 
@@ -390,7 +393,9 @@ internal class SkyScene {
     /** Follows a pull at the top of the page by [dy] screen units, down positive. */
     fun pullBy(dy: Float) {
         if (lookingUp || busy) return
+        val was = pull
         pull = max(0f, pull + dy)
+        if (was <= PULL_TO_LOOK && pull > PULL_TO_LOOK) sfx(SkyCue.PullReady)
         look = min(0.42f, pull / PULL_SPAN)
     }
 
@@ -419,6 +424,7 @@ internal class SkyScene {
         busy = true
         pull = 0f
         onLookUp()
+        sfx(SkyCue.LookUp(if (speed < 0f) 2.6f * (1f - look * 0.7f) else carryTime(1f - look, speed)))
         launch {
             val l0 = look
             if (speed < 0f) time.tween(2.6f * (1f - l0 * 0.7f), Ease.io) { look = l0 + (1f - l0) * it }
@@ -440,6 +446,7 @@ internal class SkyScene {
             if (focusedCon != null) unfocusNow(true)
             skyOn = false
             val l0 = look
+            sfx(SkyCue.LookDown(if (speed < 0f) 2.6f * l0 else carryTime(l0, speed)))
             if (speed < 0f) time.tween(2.6f * l0, Ease.io) { look = l0 * (1f - it) }
             else carryOn(l0, speed) { look = l0 * (1f - it) }
             visiting?.let { settleVisit(it) }
@@ -455,10 +462,13 @@ internal class SkyScene {
             fn(1f)
             return
         }
-        val dur = if (speed * CARRY_ON > 3f * way) 3f * way / speed else CARRY_ON
+        val dur = carryTime(way, speed)
         val start = (speed * dur / way).coerceIn(0f, 3f)
         time.tween(dur, { t -> (-2f * t + 3f) * t * t + start * ((t - 2f) * t + 1f) * t }, fn)
     }
+
+    // Seconds carryOn takes for the [way] at [speed].
+    private fun carryTime(way: Float, speed: Float): Float = if (speed * CARRY_ON > 3f * way) 3f * way / speed else CARRY_ON
 
     /** Back: from a star to the sky, from a finished constellation brought back to the one forming, from the sky to the page. */
     fun back() {
@@ -528,6 +538,7 @@ internal class SkyScene {
         ribbonOn = true
         ribbonOp = 1f
         headOp = 1f
+        sfx(SkyCue.Meteor(1.05f, big))
         var lastEmit = -1f
         time.tween(1.05f, Ease.lin) { p ->
             val q0 = Ease.io(p)
@@ -585,6 +596,7 @@ internal class SkyScene {
     private suspend fun ignite(con: ConState, i: Int) {
         shootTo(con.x + con.px[i] * con.scale, con.y + con.py[i] * con.scale)
         val star = con.stars[i]
+        sfx(SkyCue.Light(con.stars.count { it.lit }))
         star.lit = true
         star.pop = 1f
         star.popT = time.now
@@ -601,6 +613,7 @@ internal class SkyScene {
     private suspend fun igniteLoose(id: String) {
         val star = looseFor(id, 0f)
         shootTo(star.x, star.y, 0.55f)
+        sfx(SkyCue.Light(-1))
         loose += LooseStar(star.id, star.x, star.y, star.seed, time.now)
     }
 
@@ -625,7 +638,8 @@ internal class SkyScene {
             level = next
         }
         con.stars.getOrNull(0)?.let { it.pop = 0.8f; it.popT = time.now }
-        for (wave in waves) {
+        for ((n, wave) in waves.withIndex()) {
+            sfx(SkyCue.Surge(n))
             for ((line, from) in wave) {
                 val forward = line.from == from
                 launch {
@@ -643,6 +657,7 @@ internal class SkyScene {
         time.wait(0.25f)
         time.hitStop = 0.12f
         bloomKick = 0.6f
+        sfx(SkyCue.Complete)
         labelOp = 1f
         tweenLater(1f, Ease.io) { labelDone = it }
         tweenLater(3.4f, Ease.lin) { p -> pushZ = 150f * Ease.sine(min(1f, p * 1.6f)) }
@@ -665,6 +680,7 @@ internal class SkyScene {
         val x0 = con.x
         val y0 = con.y
         val z0 = con.z
+        sfx(SkyCue.Settle(1.9f))
         time.tween(1.9f, Ease.io) { p ->
             con.x = mix(x0, sx, p)
             con.y = mix(y0, sy, p)
@@ -687,6 +703,7 @@ internal class SkyScene {
         labelTyped = 0
         con.vortexPoints = vortexFor(con)
         con.vortex = 0f
+        sfx(SkyCue.Vortex(3.6f))
         val appear = FloatArray(con.stars.size) { 1.4f + it * 0.18f + 0.95f }
         var shown = 0
         val t0 = time.now
@@ -698,6 +715,7 @@ internal class SkyScene {
                 star.vis = 1f
                 star.pop = 0.9f
                 star.popT = time.now
+                sfx(SkyCue.Appear(shown))
                 shown++
             }
         }
@@ -706,6 +724,7 @@ internal class SkyScene {
         tweenLater(0.8f) { con.lineVis = it }
         val name = con.name
         time.tween(0.9f, Ease.lin) { p -> labelTyped = kotlin.math.ceil(p * name.length).toInt() }
+        sfx(SkyCue.Named)
     }
 
     // Going back to finished constellations.
@@ -739,6 +758,7 @@ internal class SkyScene {
         val start = spotOf(con)
         val leaveFrom = leaving?.let(::spotOf)
         val leaveTo = leaving?.let { placeOf(finishedIndex(it))?.let(::placeSpot) ?: offSpot(if (from == 0f) -1f else -from) }
+        sfx(SkyCue.Settle(VISIT_TIME))
         val forming = active
         val formingFrom = forming?.let(::spotOf)
         visiting = con
@@ -770,6 +790,7 @@ internal class SkyScene {
         val end = placeOf(finishedIndex(con))?.let(::placeSpot) ?: offSpot(if (exit == 0f) -1f else exit)
         val forming = active
         val formingFrom = forming?.let(::spotOf)
+        sfx(SkyCue.Settle(VISIT_TIME))
         launch {
             val o = labelOp
             tweenLater(0.35f, Ease.io) { labelOp = o * (1f - it) }
@@ -865,6 +886,7 @@ internal class SkyScene {
         star.pop = 0.9f
         star.popT = time.now
         tweenLater(0.6f) { labelOp = min(labelOp, 1f - it) }
+        sfx(SkyCue.Focus)
         launch {
             tweenLater(0.95f, Ease.io) { fz = it }
             var view: FindView? = null
@@ -917,6 +939,7 @@ internal class SkyScene {
 
     private suspend fun unfocusNow(quick: Boolean) {
         if (focusedCon == null) return
+        sfx(SkyCue.Unfocus)
         hideFind(quick)
         val f0 = fz
         val dx = dragX
@@ -954,6 +977,7 @@ internal class SkyScene {
         val vx = viewDx
         val vy = viewDy
         val line = con.lines.firstOrNull { (it.a == i && it.b == j) || (it.a == j && it.b == i) }
+        sfx(SkyCue.Glide(0.95f, j))
         launch {
             val hide = scope?.launch { hideFind(true) }
             if (line != null) {
@@ -1035,6 +1059,7 @@ internal class SkyScene {
         val i = focusedIndex
         val card = con.stars[i].id
         if (!con.stars[i].lit) lightOnReturn = con to i
+        sfx(SkyCue.Open)
         onOpenFind(card)
     }
 

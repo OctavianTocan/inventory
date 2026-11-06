@@ -116,6 +116,9 @@ class SkyState internal constructor() {
     /** Looks up from the page to the sky; any finds waiting light their stars once it is there. */
     fun lookUp() = scene.lookUp()
 
+    /** Plays one of the sky's sounds, such as a star flying into the star button. */
+    internal fun play(cue: SkyCue) = scene.sfx(cue)
+
     /** The camera for the page under the sky, [width] by [height] pixels, placed for this frame. */
     internal fun pageCamera(width: Float, height: Float): SkyProjector {
         val p = page?.takeIf { it.widthPx == width && it.heightPx == height } ?: SkyProjector(width, height).also { page = it }
@@ -251,7 +254,9 @@ fun SkyBackdrop(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val latestFinds by rememberUpdatedState(finds)
+    val sound = remember { SkySound(context) }
     SideEffect {
+        scene.sfx = sound::play
         scene.scope = scope
         scene.onOpenFind = onOpenFind
         scene.onSeen = onSeen
