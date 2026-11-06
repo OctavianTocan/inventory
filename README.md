@@ -141,7 +141,8 @@ To reach the library from other computers, run the server with Google sign-in an
 | `AUTH=google` | Turns sign-in on. Requires the three below. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | A Google OAuth "Web application" client whose redirect URI is `{PUBLIC_URL}/google/oauth2-callback`. |
 | `OWNER_EMAIL` | Google account that is always let in. Its library mapping is left as it is. |
-| `ALLOWED_GOOGLE_DOMAIN` | Also admit a verified address whose host is exactly this domain. Unset means `octaviantocan.com`. Empty means only `OWNER_EMAIL`. A subdomain or a longer suffix is not a match. |
+| `ALLOWED_GOOGLE_DOMAIN` | Also admit a verified address whose host is exactly this domain. Unset means `octaviantocan.com`. Empty disables domain admission; the owner and explicit email invitations still work. A subdomain or a longer suffix is not a match. |
+| `ALLOWED_GOOGLE_EMAILS` | Also admit these exact verified Google email addresses, comma-separated. Unset or empty adds nobody. Entries are trimmed and compared case-insensitively; wildcards, Gmail dot aliases and plus aliases are not expanded. On the Worker, keep this invitation list in a secret binding so deployments preserve it. |
 | `PUBLIC_URL` | The address browsers use, default `http://localhost:PORT`. An `https://` URL makes cookies `Secure`. |
 | `AUTH_DB` | Sessions and password users, default `data/auth.db`. |
 | `LOCAL_PORT` | Also serves this computer without sign-in on `127.0.0.1:LOCAL_PORT`; tunnelled requests there get 403. |
@@ -153,7 +154,9 @@ button opens a popup; the server runs the OAuth flow (PKCE, `state`, `nonce`), v
 `/signout` ends the session.
 
 Password users (test accounts, or a browser without Google) sign in at `/signin/password`, which exists only once a
-user has been added; the plain sign-in page links to it. A password session reaches the same library as the owner.
+user has been added; the plain sign-in page links to it. On the local server a password session reaches the same
+library as the owner. On the Cloudflare Worker, each newly admitted Google or password account gets its own empty
+library on its first library request; existing account mappings are preserved. See [inviting another person](docs/second-user-setup.md).
 Ten wrong passwords for a username, or 30 from one address, lock it for 15 minutes.
 
 ```bash

@@ -268,3 +268,76 @@ fn unverified_other_domain_and_lookalikes_are_rejected() {
     assert_eq!(status, 401, "{body}");
     assert_eq!(libraries(&*custom.db), 1);
 }
+
+#[test]
+fn invited_google_email_gets_its_own_library_on_web_and_app() {
+    let gate = open(&[("ALLOWED_GOOGLE_EMAILS", " Invited.Person@Gmail.Com , second@example.test ")]);
+    auth_store::set_library(&*gate.db, "google:owner@example.com", "owner").unwrap();
+
+    let (status, body) = gate.web("Invited.Person@gmail.com", true);
+    assert_eq!(status, 200, "{body}");
+    assert!(body.contains("/everything"), "{body}");
+    let created = library_for(&*gate.db, "invited.person@gmail.com");
+    assert!(auth_store::generated_library("google:invited.person@gmail.com", &created));
+    assert_ne!(created, "owner");
+
+    let (status, body) = gate.app("invited.person@gmail.com", true);
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(library_for(&*gate.db, "invited.person@gmail.com"), created);
+    assert_eq!(libraries(&*gate.db), 2);
+    assert_eq!(auth_store::library_of(&*gate.db, &Identity { sub: "owner-sub".into(), email: "owner@example.com".into() }).unwrap().as_deref(), Some("owner"));
+
+    for email in ["second@example.test", "ada@octaviantocan.com", "owner@example.com"] {
+        let (status, body) = gate.app(email, true);
+        assert_eq!(status, 200, "{email}: {body}");
+    }
+}
+
+#[test]
+fn google_invitation_requires_the_exact_verified_email() {
+    let gate = open(&[("ALLOWED_GOOGLE_EMAILS", "invited.person@gmail.com")]);
+    let rejected = [
+        ("invited.person@gmail.com", false),
+        ("other@gmail.com", true),
+        ("invitedperson@gmail.com", true),
+        ("invited.person+other@gmail.com", true),
+        ("invited.person@gmail.com.evil.test", true),
+        ("invited.person@sub.gmail.com", true),
+        ("invited.person@gmail.com@evil.test", true),
+        ("invited.pers\u{043e}n@gmail.com", true),
+        ("", true),
+    ];
+    for (email, verified) in rejected {
+        let (status, body) = gate.app(email, verified);
+        assert_eq!(status, if verified { 401 } else { 400 }, "{email}: {body}");
+        let (status, body) = gate.web(email, verified);
+        assert_eq!(status, 200, "{email}: {body}");
+        assert!(body.contains("AccountNotFound"), "{email}: {body}");
+        assert!(!body.contains("/everything"), "{email}: {body}");
+        assert_eq!(libraries(&*gate.db), 0);
+    }
+
+    let uninvited = open(&[]);
+    let (status, body) = uninvited.app("invited.person@gmail.com", true);
+    assert_eq!(status, 401, "{body}");
+}
+
+#[test]
+fn google_invitations_work_without_domain_access_and_empty_lists_grant_nothing() {
+    let gate = open(&[("ALLOWED_GOOGLE_DOMAIN", ""), ("ALLOWED_GOOGLE_EMAILS", " , invited.person@gmail.com, , ")]);
+    let (status, body) = gate.app("invited.person@gmail.com", true);
+    assert_eq!(status, 200, "{body}");
+    let (status, body) = gate.app("ada@octaviantocan.com", true);
+    assert_eq!(status, 401, "{body}");
+    let (status, body) = gate.web("owner@example.com", true);
+    assert_eq!(status, 200, "{body}");
+    assert!(body.contains("/everything"), "{body}");
+
+    for emails in ["", " , , ", "gmail.com, *@gmail.com"] {
+        let gate = open(&[("ALLOWED_GOOGLE_DOMAIN", ""), ("ALLOWED_GOOGLE_EMAILS", emails)]);
+        for email in ["", "invited.person@gmail.com"] {
+            let (status, body) = gate.app(email, true);
+            assert_eq!(status, 401, "{emails:?}: {body}");
+        }
+    }
+}

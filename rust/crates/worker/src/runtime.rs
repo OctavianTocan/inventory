@@ -22,6 +22,7 @@ const KNOWN: &[&str] = &[
     "OWNER_EMAIL",
     "FEEDBACK_OPEN",
     "ALLOWED_GOOGLE_DOMAIN",
+    "ALLOWED_GOOGLE_EMAILS",
     "AUTH",
     "PUBLIC_URL",
     "ADMIN_TOKEN",

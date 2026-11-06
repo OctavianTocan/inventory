@@ -149,6 +149,7 @@ struct Config {
     client_secret: String,
     owner: String,
     allowed_domain: Option<String>,
+    allowed_emails: Vec<String>,
     public_url: String,
     secure: bool,
     redirect_uri: String,
@@ -476,8 +477,7 @@ impl Inner {
         }
     }
 
-    // The owner, or a verified address whose host is exactly `allowed_domain`. `email_verified` must be boolean true.
-    // A subdomain, a longer suffix, or a different character that only looks like the domain does not match.
+    // The owner, an exact invitation, or the allowed domain. Only Google's verified email can grant access.
     fn google_access(&self, claims: &Value) -> Option<String> {
         if !matches!(claims.get("email_verified"), Value::Bool(true)) {
             return None;
@@ -485,6 +485,9 @@ impl Inner {
         let email = text::to_lower(text::trim(&claims.get("email").to_js_string()));
         if email == self.cfg.owner {
             return Some(self.cfg.owner.clone());
+        }
+        if self.cfg.allowed_emails.contains(&email) {
+            return Some(email);
         }
         let domain = self.cfg.allowed_domain.as_deref()?;
         let (local, host) = email.split_once('@')?;
@@ -828,6 +831,8 @@ impl Auth {
         }
         let (client_id, client_secret, owner) = credentials(env)?;
         let allowed_domain = allowed_domain(env);
+        let allowed_emails = env.get("ALLOWED_GOOGLE_EMAILS").map(String::as_str).unwrap_or("")
+            .split(',').map(|email| text::to_lower(text::trim(email))).filter(|email| !email.is_empty()).collect();
         let configured = env.get("PUBLIC_URL").cloned().unwrap_or_else(|| format!("http://localhost:{}", options.port));
         let public_url = configured.strip_suffix('/').unwrap_or(&configured).to_owned();
         let var = |name: &str, default: &str| env.get(name).cloned().unwrap_or_else(|| default.to_owned());
@@ -844,6 +849,7 @@ impl Auth {
             client_secret,
             owner,
             allowed_domain,
+            allowed_emails,
         };
         install_auth_schema(&*options.db)?;
         let now = runtime::now_ms();

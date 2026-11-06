@@ -1,5 +1,9 @@
 # Accounts (roadmap phase 8)
 
+Current invitation setup (2026-11-06): [Inviting another person](second-user-setup.md). The Worker creates a private
+empty library for a newly admitted account; `ALLOWED_GOOGLE_EMAILS` adds exact verified Google invitations beside
+the owner and the allowed domain. The historical local-server plan below is still not built.
+
 Status: owner-only Google sign-in is built (`rust/crates/core/src/auth.rs`, proven by `tools/check-auth.mjs`), and Cloudflare Access
 is gone (2026-10-16). On the Worker, an account the gate already admits gets an empty library at its first library
 request when it has none (`library_for_session` in `rust/crates/core/src/auth_store.rs`). Google admits `OWNER_EMAIL`
