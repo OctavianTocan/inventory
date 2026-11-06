@@ -50,11 +50,25 @@ Your sky MUST show these, over a still nebula:
 Its only words MUST be its title and the active constellation's name. No hints,
 sentences, counts, quests or levels go on the sky. A constellation MUST be drawn as one
 of the line figures, one for each figure the server names, and never with a find's
-words. Each star MUST name its find to accessibility. Tapping a star opens its find,
-which counts as a visit. Stars MAY twinkle only while the sky shows, and the nebula is
-painted once.
+words. Each star MUST name its find to accessibility. Tapping a star moves in on it
+(sky-star-condenses-into-its-find). Stars MAY twinkle only while the sky shows, and the
+nebula is painted once.
 Source: Tavi's reviews of the "Your sky" prototype, 5 November 2026:
 - 21:25: "Literally everything that isn't images looks god-awful in the stars."
 - Later rounds: no hint text or sentences on the sky, only one small constellation name.
 - 23:06: the request to build it into the app.
-Until Condense (Tavi's pick, variant 13) lands, a star opens its find directly.
+
+@cc [owner:OctavianTocan,label:product;design;motion] sky-star-condenses-into-its-find
+Tapping a star MUST move the camera in on it, and stars from all over the screen MUST
+fly together and become its find's tile, a picture named under it. Only a tap on
+that tile opens the find; moving in MUST NOT open it or count as a visit. A swipe MUST
+travel along the constellation to the star that lies that way, a spark running down the
+line between them, and the next find gathers the same way. A drag MUST NOT also open
+the find or star it began on. Back, or a tap on empty sky, moves back out. Accessibility
+MUST offer Next star and Previous star on the find. A star opened again MUST light only
+once the sky is back in view, with a flare, and a constellation whose last star lights
+then draws its figure in; a figure finished more than a day ago MUST simply be there.
+Source: Tavi, 5 November 2026, 23:06: "Let's do 13 Condense", variant 13 of the
+prototype's views. The stars landing evenly over the tile rather than on its picture,
+the name under the tile, swiping along the lines and the light-on-return flare are
+Claude's choices, not yet confirmed by Tavi.

@@ -704,6 +704,13 @@ internal fun galleryTileIsPicture(card: Card): Boolean =
 internal fun galleryKeepsText(card: Card): Boolean = card.type !in VISUAL_CARD_TYPES
     || !card.note.isNullOrBlank() || card.prose?.let(::proseText)?.isNotBlank() == true
 
+/** True when [card]'s [GalleryTile] shows words: a card of words, or a picture with words on the print's foot. */
+internal fun galleryTileShowsWords(card: Card): Boolean {
+    if (galleryPicture(card) == null) return true
+    return galleryText(card).isNotBlank() && galleryKeepsText(card) && !productStandsTall(card) &&
+        card.type != "SoftwareApplication" && !pdfStandsTall(card)
+}
+
 internal fun galleryText(card: Card): String = when (tileKind(card)) {
     TileKind.Note -> noteText(card)
     TileKind.Audio -> audioWords(card).ifBlank { card.title.orEmpty() }

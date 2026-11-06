@@ -3,24 +3,31 @@ package com.octaviantocan.mymind.ui.sky
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.octaviantocan.mymind.data.Blob
 import com.octaviantocan.mymind.data.Constellation
 import com.octaviantocan.mymind.data.Sky
 import com.octaviantocan.mymind.data.SkyStar
 import com.octaviantocan.mymind.ui.PHONE_QUALIFIERS
 import com.octaviantocan.mymind.ui.library.EverythingContent
 import com.octaviantocan.mymind.ui.library.FeedState
+import com.octaviantocan.mymind.ui.library.galleryTileShowsWords
 import com.octaviantocan.mymind.ui.library.testCard
 import com.octaviantocan.mymind.ui.setPhoneContent
 import kotlinx.coroutines.runBlocking
@@ -100,19 +107,57 @@ class SkyTest {
     }
 
     @Test
-    fun theSkyNamesItsConstellationAndOpensAStarsFind() {
+    fun aTappedStarCondensesIntoItsFindWhichOpensAndASwipeTravelsAlongTheLines() {
         runBlocking { Nebula.picture() }
         val opened = mutableListOf<String>()
         var closed = false
         compose.setPhoneContent(true) { SkyScreen(SKY, FINDS, { opened += it }, { closed = true }) }
+        compose.mainClock.advanceTimeByFrame()
         compose.onNodeWithText("Your sky").assertIsDisplayed()
         compose.onNodeWithText("The Voyager").assertIsDisplayed()
         compose.onRoot().captureRoboImage("screenshots/sky.png")
         compose.onAllNodesWithContentDescription("Find c0, a lit star")[0].assertIsDisplayed()
+
         compose.onNodeWithContentDescription("Harbour at dusk, a dark star").performClick()
+        compose.mainClock.advanceTimeBy(FOCUS_MS / 2L + CONDENSE_MS * 2L / 5L)
+        compose.onRoot().captureRoboImage("screenshots/sky_condensing.png")
+        compose.mainClock.advanceTimeBy(CONDENSE_MS.toLong())
+        compose.onRoot().captureRoboImage("screenshots/sky_condensed.png")
+        assertTrue("the find opens only when tapped", opened.isEmpty())
+        // A find of words shows its name on the tile, so it is not named again under it.
+        compose.onAllNodesWithText("Harbour at dusk").assertCountEquals(1)
+        compose.onNodeWithContentDescription("Harbour at dusk").performClick()
         assertEquals(listOf("c3"), opened)
+
+        // The mast's star lies above the ship; dragging the sky left brings the star to its right, joined by a line.
+        compose.onRoot().performTouchInput { swipeLeft(startX = centerX + 200f, endX = centerX - 200f) }
+        compose.mainClock.advanceTimeBy(GLIDE_MS + CONDENSE_MS + 64L)
+        compose.onNodeWithContentDescription("Find c4").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("Harbour at dusk").assertCountEquals(0)
+        assertEquals("a swipe across the find does not open it", listOf("c3"), opened)
+
+        // A tap on empty sky moves back out; Close shuts the sky.
+        compose.onRoot().performTouchInput { click(Offset(width * 0.03f, height * 0.075f)) }
+        compose.mainClock.advanceTimeBy(FOCUS_MS + 64L)
+        compose.onAllNodesWithContentDescription("Find c4").assertCountEquals(0)
         compose.onNodeWithContentDescription("Close the sky").performClick()
         assertTrue(closed)
+    }
+
+    @Test
+    fun onlyAPictureIsNamedUnderItsTile() {
+        assertTrue(galleryTileShowsWords(testCard("w", title = "Harbour at dusk")))
+        assertFalse(galleryTileShowsWords(testCard("p", type = "Image", blob = Blob(path = "p.jpg", type = "image/jpeg"))))
+    }
+
+    @Test
+    fun aSwipeFindsTheStarThatLiesThatWay() {
+        val active = skyLayout(SKY, 1080f, 2520f, 250f, 150f).constellations.first()
+        // The ship: 3 is the mast top, 4 the sail's right foot, 5 the left, 1 the keel.
+        assertEquals(4, starToward(active, 3, Offset(1f, 1f)))
+        assertEquals(5, starToward(active, 3, Offset(-1f, 1f)))
+        assertEquals(3, starToward(active, 1, Offset(0f, -1f)))
+        assertEquals(null, starToward(active, 3, Offset(0f, -1f)))
     }
 
     @Test

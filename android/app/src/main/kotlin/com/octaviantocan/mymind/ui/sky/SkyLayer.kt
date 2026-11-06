@@ -72,10 +72,11 @@ fun rememberSkyOpening(): SkyOpening {
  * @param opening Whether the sky is open.
  * @param sky The sky.
  * @param finds The sky's finds that are known, by id.
- * @param onOpenStar Called with a star's find when it is tapped.
+ * @param onOpenStar Called with a find's id when it is opened from the sky.
+ * @param covered True while something covers the sky, such as a find opened from it.
  */
 @Composable
-fun SkyLayer(opening: SkyOpening, sky: Sky, finds: Map<String, Card>, onOpenStar: (String) -> Unit) {
+fun SkyLayer(opening: SkyOpening, sky: Sky, finds: Map<String, Card>, onOpenStar: (String) -> Unit, covered: Boolean = false) {
     val visible by remember(opening) { derivedStateOf { opening.isOpen || opening.shown.value > 0f } }
     if (!visible) return
     BackHandler(enabled = opening.isOpen) { opening.close() }
@@ -87,8 +88,8 @@ fun SkyLayer(opening: SkyOpening, sky: Sky, finds: Map<String, Card>, onOpenStar
         onDispose { if (immersion.page === source) immersion.page = before }
     }
     SkyScreen(
-        sky, finds, onOpenStar, onClose = opening::close,
-        Modifier.graphicsLayer {
+        sky, finds, onOpenStar, onClose = opening::close, covered = covered,
+        modifier = Modifier.graphicsLayer {
             val shown = opening.shown.value
             alpha = shown
             val scale = 0.9f + 0.1f * shown

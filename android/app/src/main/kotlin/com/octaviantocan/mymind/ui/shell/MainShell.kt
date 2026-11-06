@@ -481,6 +481,7 @@ fun MainShell(
                 Tab.Everything.ordinal -> EverythingScreen(
                     viewModel,
                     onOpenCard = { openCard(it, null) },
+                    cardOpen = opened != null,
                     onOpenSettings = { profileOpen = true },
                     onAdd = { adding = AddTarget(null) },
                     onLongPressCard = { openMenu(it, null) },

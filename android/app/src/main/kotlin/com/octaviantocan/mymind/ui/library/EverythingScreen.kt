@@ -72,6 +72,7 @@ enum class SearchType(val type: String, val label: String, val slug: String) {
  * The library gallery; its search field lives in the shell's single floating bar.
  *
  * @param openedLately Cards opened lately, latest first, which the opened search page offers again.
+ * @param cardOpen True while a card is open over the page, which then covers the sky.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -87,6 +88,7 @@ fun EverythingScreen(
     onOpenSpace: (AiSpace) -> Unit = {},
     photoLoader: ImageLoader? = null,
     openedLately: List<Card> = emptyList(),
+    cardOpen: Boolean = false,
 ) {
     val feed by viewModel.everything.state.collectAsStateWithLifecycle()
     val pinned by viewModel.pinned.state.collectAsStateWithLifecycle()
@@ -121,7 +123,7 @@ fun EverythingScreen(
         onOpenSettings = onOpenSettings, onAdd = onAdd, modifier = modifier,
         pinned = pinned.cards, onLoadMorePinned = viewModel.pinned::loadMore,
         backToday = backToday, onUncover = viewModel.backToday::uncover,
-        onSkyOpened = { viewModel.backToday.load(); viewModel.backToday.loadFinds() },
+        onSkyOpened = { viewModel.backToday.load(); viewModel.backToday.loadFinds() }, cardOpen = cardOpen,
         onOpenStar = { id ->
             viewModel.backToday.state.value.finds[id]?.let { card ->
                 viewModel.backToday.uncover(card)
@@ -181,6 +183,7 @@ fun EverythingContent(
     onUncover: (Card) -> Unit = {},
     onSkyOpened: () -> Unit = {},
     onOpenStar: (String) -> Unit = {},
+    cardOpen: Boolean = false,
     onRefresh: () -> Unit = {},
     onRefreshResults: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
@@ -233,7 +236,7 @@ fun EverythingContent(
                 GalleryControls(onOpenSettings, onAdd, Modifier.align(Alignment.TopEnd).awayInReels(mosaic), photoUrl = photoUrl, photoLoader = accountPhotoLoader,
                     onSky = if (backToday.hasSky) ({ sky.open(); onSkyOpened() }) else null, flight = flight)
                 Box(Modifier.fillMaxSize().starFlights(flight))
-                backToday.sky?.let { SkyLayer(sky, it, backToday.finds, onOpenStar) }
+                backToday.sky?.let { SkyLayer(sky, it, backToday.finds, onOpenStar, covered = cardOpen) }
             }
         }
     }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.76 (87), 2026-11-06
+Tap a star and its find gathers out of the sky.
+
+### Added
+- Tap a star in Your sky and the sky moves in on it while stars from all over the screen fly together and become the find. Tap the find to open it.
+- Swipe to travel along the constellation's lines to the next star, and its find gathers the same way. Back, or a tap on empty sky, moves back out.
+- A star you open again lights up with a flare once you come back to the sky, and a constellation you finish draws its picture in.
+
 ## 0.6.75 (86), 2026-11-05
 Every find you go back to becomes a star in Your sky.
 
