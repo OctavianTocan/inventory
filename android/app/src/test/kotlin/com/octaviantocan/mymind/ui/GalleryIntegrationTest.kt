@@ -16,6 +16,10 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.geometry.Offset
@@ -225,5 +229,42 @@ class GalleryIntegrationTest {
         compose.waitForIdle()
         assertTrue("deleteSpace:s1" in library.calls)
         compose.onNodeWithText("Add to this space").assertDoesNotExist()
+    }
+
+    @Test fun aSpaceIsRenamedFromItsDotMenu() {
+        // "We need a way to rename a space in its dot menu" (Tavi, 5 Nov 2026).
+        showShell(spaces = listOf(Space("s1", "Walks", "#ff5924")))
+        compose.onNodeWithText("Spaces").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Walks").performClick()
+        compose.onNodeWithContentDescription("Space options").performClick()
+        compose.onNodeWithText("Rename space").performClick()
+        compose.onNodeWithContentDescription("Space name").performTextReplacement("Long walks")
+        compose.onNodeWithText("Save name").performClick()
+        compose.waitForIdle()
+        assertTrue("renameSpace:s1:Long walks" in library.calls)
+        compose.onNodeWithText("Save name").assertDoesNotExist()
+        compose.onAllNodesWithText("Long walks").onFirst().assertIsDisplayed()
+    }
+
+    @Test fun holdingASpaceOnTheListOpensItsOptions() {
+        // "also show that dot menu when holding over it in the spaces page" (Tavi, 5 Nov 2026).
+        showShell(spaces = listOf(Space("s1", "Walks", "#ff5924")))
+        compose.onNodeWithText("Spaces").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Walks").performTouchInput { longClick() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Add to this space").assertIsDisplayed()
+        compose.onNodeWithText("Rename space").performClick()
+        compose.onNodeWithContentDescription("Space name").performTextReplacement("Hikes")
+        compose.onNodeWithText("Save name").performClick()
+        compose.waitForIdle()
+        assertTrue("renameSpace:s1:Hikes" in library.calls)
+        compose.onNodeWithText("Hikes").assertIsDisplayed()
+        compose.onNodeWithText("Hikes").performTouchInput { longClick() }
+        compose.onNodeWithText("Delete space").performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+        assertTrue("deleteSpace:s1" in library.calls)
+        compose.onNodeWithText("Hikes").assertDoesNotExist()
     }
 }

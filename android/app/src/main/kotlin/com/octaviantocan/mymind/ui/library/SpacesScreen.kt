@@ -14,6 +14,8 @@ import com.octaviantocan.mymind.ui.menu.CardMenuGroup
 import com.octaviantocan.mymind.ui.menu.HoldToDeleteRow
 import com.octaviantocan.mymind.ui.menu.PullySheet
 import com.octaviantocan.mymind.ui.menu.SheetRow
+import com.octaviantocan.mymind.ui.menu.SheetRowDivider
+import com.octaviantocan.mymind.ui.menu.RenameSpaceContent
 import com.octaviantocan.mymind.ui.settings.glassSource
 import com.octaviantocan.mymind.ui.settings.rememberGlassBackdrop
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -24,6 +26,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -98,9 +101,10 @@ private val COVER_FRAME = 160.dp
  * @param openSpace Space on show, or null for the list.
  * @param onOpenSpace Called with a tapped space, or null to go back to the list.
  * @param onOpenCard Called with a card tapped inside a space and that space's id.
- * @param onDeleteSpace Called when "Delete space" is picked in an opened space's menu.
- * @param onAddToSpace Called with the opened space when "Add to this space" is picked in its menu.
+ * @param onDeleteSpace Called with a space when "Delete space" is picked in its options.
+ * @param onAddToSpace Called with a space when "Add to this space" is picked in its options.
  * @param modifier Modifier for the page.
+ * @param onRenameSpace Called with a space and its trimmed new name when a rename is saved in its options.
  * @param onLongPressCard Called with a card long-pressed inside a space and that space's id.
  * @param onNewSpace Called when the New space tile at the end of the list is tapped.
  * @param controls The gallery's fixed controls, drawn over the list of spaces.
@@ -114,6 +118,7 @@ fun SpacesScreen(
     onDeleteSpace: (Space) -> Unit,
     onAddToSpace: (Space) -> Unit,
     modifier: Modifier = Modifier,
+    onRenameSpace: (Space, String) -> Unit = { _, _ -> },
     onLongPressCard: ((Card, String) -> Unit)? = null,
     onNewSpace: () -> Unit = {},
     controls: @Composable BoxScope.() -> Unit = {},
@@ -135,6 +140,7 @@ fun SpacesScreen(
             mosaic = listMosaic,
             scroll = listScroll,
             onNewSpace = onNewSpace,
+            options = SpaceActions(onAddToSpace, onRenameSpace, onDeleteSpace),
         )
     } else {
         val feed = viewModel.spaceFeed(openSpace.id)
@@ -147,6 +153,7 @@ fun SpacesScreen(
             onOpenCard = { onOpenCard(it, openSpace.id) },
             onAdd = { onAddToSpace(openSpace) },
             onDelete = { onDeleteSpace(openSpace) },
+            onRename = { onRenameSpace(openSpace, it) },
             modifier = modifier,
             onRefresh = { viewModel.refreshSpaceFeed(openSpace.id) },
             onLongPressCard = onLongPressCard?.let { press -> { card: Card -> press(card, openSpace.id) } },
@@ -167,6 +174,7 @@ fun SpacesScreen(
  * @param mosaic The list's size, kept by the caller so it survives opening a space.
  * @param scroll The list's scroll position, kept for the same reason.
  * @param onNewSpace Called when the New space tile after the spaces is tapped.
+ * @param options What a held space's options sheet does, or null to leave holds alone.
  */
 @Composable
 fun SpaceListContent(
@@ -179,8 +187,11 @@ fun SpaceListContent(
     mosaic: MosaicState = rememberMosaicState(),
     scroll: LazyListState = rememberLazyListState(),
     onNewSpace: () -> Unit = {},
+    options: SpaceActions? = null,
 ) {
     val backdrop = rememberGlassBackdrop(rememberUpdatedState(1f))
+    // The held space by id, read from the list so a deleted one closes its sheet.
+    var heldId by remember { mutableStateOf<String?>(null) }
     Box(modifier.fillMaxSize().themeBackground(LibraryStyle.colors.background, backdrop = false)) {
         when {
             state.spaces.isEmpty() && state.error != null -> WebErrorScreen(onRetry = onRetry)
@@ -194,14 +205,34 @@ fun SpaceListContent(
                         onOpenCard = { card ->
                             if (card.id == NEW_SPACE_CARD.id) onNewSpace() else state.spaces.firstOrNull { it.id == card.id }?.let(onOpenSpace)
                         },
-                        state = scroll, mosaic = mosaic, header = { GalleryTitle("All Spaces") }, tiles = tiles, label = "All spaces")
+                        state = scroll, mosaic = mosaic, header = { GalleryTitle("All Spaces") }, tiles = tiles, label = "All spaces",
+                        // Holding a space opens the same options as its opened page's dot menu (Tavi, 5 November 2026).
+                        onLongPressCard = options?.let { { card -> if (card.id != NEW_SPACE_CARD.id) heldId = card.id } })
                 }
                 GalleryScrollEdge(backdrop, LibraryStyle.colors.background, Modifier.align(Alignment.TopCenter), visible = { scroll.scrolledBy() })
             }
         }
         controls()
     }
+    val held = state.spaces.firstOrNull { it.id == heldId }
+    if (options != null && held != null) {
+        SpaceOptionsSheet(held, onClose = { heldId = null }, onAdd = { options.add(held) }, onRename = { options.rename(held, it) },
+            onDelete = { options.delete(held) })
+    }
 }
+
+/**
+ * What a space's options sheet does with the space it was opened for.
+ *
+ * @property add Called with the space when "Add to this space" is picked.
+ * @property rename Called with the space and its trimmed new name when a rename is saved.
+ * @property delete Called with the space once "Delete space" has been held.
+ */
+class SpaceActions(
+    val add: (Space) -> Unit,
+    val rename: (Space, String) -> Unit,
+    val delete: (Space) -> Unit,
+)
 
 /** The card that stands for the New space tile after the spaces; no space has this id. */
 private val NEW_SPACE_CARD = Card(id = "new-space-tile", type = "Space", flags = 0, created = "", modified = "", bumped = "", title = "New space")
@@ -227,7 +258,7 @@ private class SpaceMosaicTiles(private val spaces: Map<String, Space>, private v
     override fun Tile(card: Card, onClick: () -> Unit, onLongClick: (() -> Unit)?, enabled: Boolean, imageRequestSizePx: Int, modifier: Modifier) {
         if (card.id == NEW_SPACE_CARD.id) return NewSpaceStack(onClick, modifier, enabled)
         val space = spaces[card.id] ?: return
-        SpaceStack(space, covers[card.id], onClick, modifier, enabled, imageRequestSizePx)
+        SpaceStack(space, covers[card.id], onClick, modifier, enabled, imageRequestSizePx, onLongClick)
     }
 
     /** The Spaces list has no reels; a page would show the space's stack. */
@@ -256,7 +287,8 @@ private class SpaceMosaicTiles(private val spaces: Map<String, Space>, private v
  * @param onOpenCard Called with a tapped card.
  * @param onAdd Called when "Add to this space" is picked in the options.
  * @param modifier Modifier for the page.
- * @param onDelete Called when "Delete space" is picked in the options; null leaves only the add option.
+ * @param onDelete Called when "Delete space" is picked in the options; null leaves it out.
+ * @param onRename Called with the trimmed new name when a rename is saved in the options; null leaves it out.
  * @param onRefresh Called when the mosaic is pulled down to refresh.
  * @param onLongPressCard Called with a long-pressed card, or null to ignore long presses.
  */
@@ -270,6 +302,7 @@ fun SpaceContent(
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
     onDelete: (() -> Unit)? = null,
+    onRename: ((String) -> Unit)? = null,
     onRefresh: () -> Unit = {},
     onLongPressCard: ((Card) -> Unit)? = null,
 ) {
@@ -290,29 +323,51 @@ fun SpaceContent(
         }
         FootCircleButton(R.drawable.ic_sheet_back, "Back", onBack,
             Modifier.align(Alignment.TopStart).awayInReels(mosaic).padding(start = 16.dp, top = 12.dp), size = 44.dp)
-        SpaceOptions(space.name.orEmpty(), onAdd, onDelete, Modifier.align(Alignment.TopEnd).awayInReels(mosaic).padding(end = 16.dp, top = 12.dp))
+        SpaceOptions(space, onAdd, onRename, onDelete, Modifier.align(Alignment.TopEnd).awayInReels(mosaic).padding(end = 16.dp, top = 12.dp))
     }
 }
 
-/**
- * The opened space's options as a Pully sheet under the space's name: adding to it, and deleting it with a hold, as a
- * card is deleted. The button gives the long-press haptic the web gives the menu.
- */
+/** The opened space's dot menu: a button that opens [SpaceOptionsSheet], with the long-press haptic the web gives the menu. */
 @Composable
-private fun SpaceOptions(name: String, onAdd: () -> Unit, onDelete: (() -> Unit)?, modifier: Modifier = Modifier) {
+private fun SpaceOptions(space: Space, onAdd: () -> Unit, onRename: ((String) -> Unit)?, onDelete: (() -> Unit)?, modifier: Modifier = Modifier) {
     val haptic = LocalHapticFeedback.current
     var open by remember { mutableStateOf(false) }
     FootCircleButton(R.drawable.ic_sheet_more, "Space options", {
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         open = true
     }, modifier, size = 44.dp)
-    if (open) PullySheet(name.ifBlank { "Space" }, onClose = { open = false }) {
+    if (open) SpaceOptionsSheet(space, onClose = { open = false }, onAdd, onRename, onDelete)
+}
+
+/**
+ * A space's options as a Pully sheet under its name: adding to it, renaming it on a page of the same sheet, and
+ * deleting it with a hold, as a card is deleted. The opened space's dot menu and a hold on the Spaces list open it.
+ *
+ * @param space The space.
+ * @param onClose Called when the sheet closes, including after a pick.
+ * @param onAdd Called when "Add to this space" is picked.
+ * @param onRename Called with the trimmed new name when Save name is pressed; null leaves Rename space out.
+ * @param onDelete Called once "Delete space" has been held; null leaves it out.
+ */
+@Composable
+internal fun SpaceOptionsSheet(space: Space, onClose: () -> Unit, onAdd: () -> Unit, onRename: ((String) -> Unit)?, onDelete: (() -> Unit)?) {
+    val name = space.name.orEmpty()
+    var renaming by remember { mutableStateOf(false) }
+    PullySheet(if (renaming) "Rename space" else name.ifBlank { "Space" }, onClose = onClose) {
+        if (renaming && onRename != null) {
+            RenameSpaceContent(name, onRename = { onClose(); onRename(it) })
+            return@PullySheet
+        }
         CardMenuGroup(Modifier.padding(top = 20.dp)) {
-            SheetRow(painterResource(R.drawable.ic_library_add), "Add to this space", { open = false; onAdd() },
+            SheetRow(painterResource(R.drawable.ic_library_add), "Add to this space", { onClose(); onAdd() },
                 detail = "Photos, files or the camera")
+            if (onRename != null) {
+                SheetRowDivider()
+                SheetRow(painterResource(R.drawable.ic_text), "Rename space", { renaming = true })
+            }
         }
         if (onDelete != null) CardMenuGroup(Modifier.padding(top = 20.dp)) {
-            HoldToDeleteRow(onDelete = { open = false; onDelete() }, label = "Delete space", detail = "Its cards stay in your mind")
+            HoldToDeleteRow(onDelete = { onClose(); onDelete() }, label = "Delete space", detail = "Its cards stay in your mind")
         }
     }
 }
@@ -354,6 +409,7 @@ private fun NewSpaceStack(onClick: () -> Unit, modifier: Modifier = Modifier, en
  * @param modifier Modifier for the cell.
  * @param enabled False for a drawing that takes no touches.
  * @param imageRequestSizePx Size, in pixels, to decode the cover's picture at, or null for the stack's own size.
+ * @param onLongClick Called when the stack is held, or null when holding does nothing.
  */
 @Composable
 private fun SpaceStack(
@@ -363,12 +419,18 @@ private fun SpaceStack(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     imageRequestSizePx: Int? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val colors = LibraryStyle.colors
     val shape = RoundedCornerShape(TILE_RADIUS)
     val shadows = stackShadows(MymindTheme.colors.dark)
     val angles = remember(space.id) { stackAngles(space.id) }
-    val press = if (enabled) Modifier.clickable(interactionSource = null, indication = null, onClick = onClick) else Modifier
+    val press = if (enabled) {
+        Modifier.combinedClickable(interactionSource = null, indication = null, onLongClickLabel = "Space options", onLongClick = onLongClick,
+            onClick = onClick)
+    } else {
+        Modifier
+    }
     BoxWithConstraints(modifier.then(press)) {
         val nameWidth = maxWidth - minOf(SPACE_NAME_INSET, maxWidth * 0.3f)
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {

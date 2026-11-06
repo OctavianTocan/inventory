@@ -297,6 +297,14 @@ data class NameBody(val name: String)
 data class NewSpaceBody(val name: String, val color: String)
 
 /**
+ * Body of `PATCH /spaces/<id>` that renames a space and keeps its colour.
+ *
+ * @property name The space's new name.
+ */
+@Serializable
+data class RenameSpaceBody(val name: String)
+
+/**
  * An answer that names what it created.
  *
  * @property id Id of the new object.

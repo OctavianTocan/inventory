@@ -88,6 +88,10 @@ class LocalFirstLibrary(
 
     override suspend fun deleteSpace(spaceId: String): ApiResult<Unit> = change(Edit.DeleteSpace(spaceId), Unit) { server.deleteSpace(spaceId) }
 
+    // Straight to the server's PATCH, which every deployed server has, rather than the push, which would refuse a change
+    // name it does not know yet; the sync after it brings the new name into the copy.
+    override suspend fun renameSpace(spaceId: String, name: String): ApiResult<Unit> = written(server.renameSpace(spaceId, name))
+
     override suspend fun setPinned(cardId: String, pinned: Boolean): ApiResult<Unit> =
         change(Edit.Pin(cardId, pinned), Unit) { server.setPinned(cardId, pinned) }
 

@@ -113,6 +113,8 @@ class Repository(private val api: MymindApi, private val session: Session, priva
 
     override suspend fun deleteSpace(spaceId: String): ApiResult<Unit> = api.deleteSpace(spaceId)
 
+    override suspend fun renameSpace(spaceId: String, name: String): ApiResult<Unit> = api.renameSpace(spaceId, name)
+
     override suspend fun media(path: String, sink: (InputStream) -> Unit): ApiResult<Unit> = api.media(path, sink)
 
     override suspend fun setPinned(cardId: String, pinned: Boolean): ApiResult<Unit> = api.setPinned(cardId, pinned)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.79 (90), 2026-11-06
+Rename a space, and hold a space to see its options.
+
+### Added
+- A space's dot menu has Rename space. It opens the name on the same sheet with the cursor at the end; Save name keeps the new name, and the space shows it at once.
+- Holding a space on the Spaces page opens the same options as its dot menu: Add to this space, Rename space and Delete space.
 ## 0.6.78 (89), 2026-11-06
 New themes that paint the gallery with gradients and doodles.
 

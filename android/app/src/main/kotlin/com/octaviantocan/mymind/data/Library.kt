@@ -85,6 +85,13 @@ interface Library {
     suspend fun deleteSpace(spaceId: String): ApiResult<Unit>
 
     /**
+     * @param spaceId Space to rename; its colour, place and cards stay.
+     * @param name The new name.
+     * @return Success, or the failure.
+     */
+    suspend fun renameSpace(spaceId: String, name: String): ApiResult<Unit>
+
+    /**
      * @param path The card's `blob.path`.
      * @param sink Receives the file's bytes off the main thread.
      * @return Success once [sink] returned, or the failure.

@@ -44,6 +44,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -495,6 +497,34 @@ internal fun SpaceNameAndColor(
     onDone: () -> Unit,
     focusOnOpen: Boolean = false,
 ) {
+    // The field keeps its own cursor and selection, as BasicTextField's String overload does.
+    var field by remember { mutableStateOf(TextFieldValue(name)) }
+    if (field.text != name) field = field.copy(text = name)
+    SpaceNameField(field, { field = it; if (it.text != name) onName(it.text) }, busy, onDone, focusOnOpen)
+    val colors = menuColors()
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        SPACE_COLORS.forEach { choice ->
+            Box(Modifier.size(40.dp).clip(CircleShape)
+                .clickable(enabled = !busy, role = Role.RadioButton) { onColor(choice) }
+                .semantics { contentDescription = "Space color $choice"; selected = color == choice },
+                contentAlignment = Alignment.Center) {
+                SpaceRing(parseHexColor(choice) ?: colors.rowText, color == choice, 28.dp)
+            }
+        }
+    }
+}
+
+/**
+ * A space's name field on the sheet's paper, with "Name it" while it is empty.
+ *
+ * @param name The name typed so far.
+ * @param onName Called with each edit of the name.
+ * @param busy True while the name is being saved: it cannot be changed.
+ * @param onDone Called when the keyboard's Done is pressed.
+ * @param focusOnOpen True puts the cursor in the field once it shows.
+ */
+@Composable
+internal fun SpaceNameField(name: TextFieldValue, onName: (TextFieldValue) -> Unit, busy: Boolean, onDone: () -> Unit, focusOnOpen: Boolean) {
     val colors = menuColors()
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -515,21 +545,11 @@ internal fun SpaceNameAndColor(
             .clip(RoundedCornerShape(12.dp)).background(colors.sheet).padding(horizontal = 14.dp, vertical = 13.dp),
         decorationBox = { field ->
             Box {
-                if (name.isEmpty()) Text("Name it", style = mutedStyle(colors).copy(fontSize = 17.sp, lineHeight = 22.sp))
+                if (name.text.isEmpty()) Text("Name it", style = mutedStyle(colors).copy(fontSize = 17.sp, lineHeight = 22.sp))
                 field()
             }
         },
     )
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        SPACE_COLORS.forEach { choice ->
-            Box(Modifier.size(40.dp).clip(CircleShape)
-                .clickable(enabled = !busy, role = Role.RadioButton) { onColor(choice) }
-                .semantics { contentDescription = "Space color $choice"; selected = color == choice },
-                contentAlignment = Alignment.Center) {
-                SpaceRing(parseHexColor(choice) ?: colors.rowText, color == choice, 28.dp)
-            }
-        }
-    }
 }
 
 /**
@@ -563,6 +583,25 @@ internal fun NewSpaceSheetContent(busy: Boolean, error: String?, onCreate: (name
     if (error != null) Text(error, Modifier.padding(start = 4.dp, top = 12.dp), style = mutedStyle(colors).copy(color = colors.dangerText))
     SheetCta(if (busy) "Creating…" else "Create space", if (busy) null else R.drawable.ic_library_add, Modifier.padding(top = 20.dp),
         enabled = ready) { submit() }
+}
+
+/**
+ * The Rename space page of a space's options: its name in the field with the cursor at the end, and Save name under
+ * it, which takes a changed, nonblank name (Tavi, 5 November 2026).
+ *
+ * @param current The space's name now.
+ * @param onRename Called with the trimmed new name when Save name or the keyboard's Done is pressed.
+ * @param focusOnOpen True puts the cursor in the field once it shows.
+ */
+@Composable
+internal fun RenameSpaceContent(current: String, onRename: (String) -> Unit, focusOnOpen: Boolean = true) {
+    var name by remember { mutableStateOf(TextFieldValue(current, TextRange(current.length))) }
+    val ready = name.text.isNotBlank() && name.text.trim() != current
+    val submit = { if (ready) onRename(name.text.trim()) }
+    CardMenuGroup(Modifier.padding(top = 20.dp)) {
+        Column(Modifier.padding(16.dp)) { SpaceNameField(name, { name = it }, busy = false, onDone = submit, focusOnOpen = focusOnOpen) }
+    }
+    SheetCta("Save name", null, Modifier.padding(top = 20.dp), enabled = ready) { submit() }
 }
 
 /** Title of the New space sheet. */

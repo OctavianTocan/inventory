@@ -507,6 +507,14 @@ fun MainShell(
                         }
                     },
                     onAddToSpace = { adding = AddTarget(it.id, "Add to ${it.name}") },
+                    onRenameSpace = { space, name ->
+                        scope.launch {
+                            when (val answer = viewModel.renameSpace(space, name)) {
+                                is ApiResult.Ok -> if (openSpace?.id == space.id) openSpace = openSpace?.copy(name = name)
+                                is ApiResult.Failed -> failure = answer.failure
+                            }
+                        }
+                    },
                     onLongPressCard = openMenu,
                     onNewSpace = openNewSpace,
                 ) {

@@ -258,15 +258,18 @@ button. The Spaces list MUST end with a New space tile, a stack's square with a 
 where a cover would be, and the + on the Spaces list MUST open the New space sheet
 straight away, never the Add sheet with its add-to-your-mind sources. New space is
 Pully's sheet with the name and colour in one raised group and Create space under it,
-never mymind's modal. An opened space's options (Add to this space, Delete space held
+never mymind's modal. A space's options (Add to this space, Rename space, Delete space held
 as a card's delete is) MUST be a Pully sheet under the space's name, never a Material
-menu or dialog.
+menu or dialog. Rename space MUST open its name field on the same sheet, filled with the
+current name. The opened space's dot menu and holding a space on the Spaces list MUST
+both open these options.
 Source: Tavi's recorded review, 22 October 2026 ("the background should be the same",
 "remove the orange plus, but keep the functionality"); Tavi, 5 November 2026 ("there
 should be a space that has a little plus in the middle instead of an image and is called
 'New Space'", "there's no real reason for that one to open a bottom sheet when you're in
 the Spaces", "Make it into a bottom sheet and use our actual design system. That also
-goes for the little dot menu").
+goes for the little dot menu", "We need a way to rename a space in its dot menu, and also
+show that dot menu when holding over it in the spaces page").
 
 @cc [owner:OctavianTocan,label:product;design;motion] gallery-videos-play-quietly
 Video tiles MUST NOT show a camera icon. A video kept on the library server MUST play

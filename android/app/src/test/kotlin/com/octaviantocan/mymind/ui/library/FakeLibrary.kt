@@ -159,6 +159,8 @@ class FakeLibrary(
 
     override suspend fun deleteSpace(spaceId: String) = write("deleteSpace:$spaceId") {}
 
+    override suspend fun renameSpace(spaceId: String, name: String) = write("renameSpace:$spaceId:$name") {}
+
     override suspend fun media(path: String, sink: (InputStream) -> Unit): ApiResult<Unit> {
         calls += "media:$path"
         val bytes = media[path] ?: return ApiResult.Failed(ApiFailure.Server(404))

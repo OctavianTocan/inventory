@@ -368,6 +368,16 @@ class MymindApi(private val client: OkHttpClient, private val server: String) {
     suspend fun deleteSpace(id: String): ApiResult<Unit> = write(Request.Builder().url(url("spaces/$id")).delete())
 
     /**
+     * Renames a space; its colour, place and cards stay.
+     *
+     * @param id Space id.
+     * @param name The new name.
+     * @return Success, or the failure.
+     */
+    suspend fun renameSpace(id: String, name: String): ApiResult<Unit> =
+        write(Request.Builder().url(url("spaces/$id")).patch(AppJson.encodeToString(RenameSpaceBody(name)).toRequestBody(JSON_TYPE)))
+
+    /**
      * Streams an uploaded file as it was saved.
      *
      * @param path The card's `blob.path`.

@@ -541,6 +541,19 @@ class LibraryViewModel(
         }
     }
 
+    /**
+     * Renames a space and shows the new name in the list at once.
+     *
+     * @param space Space to rename.
+     * @param name Trimmed, nonblank new name.
+     * @return Success, or the failure.
+     */
+    suspend fun renameSpace(space: Space, name: String): ApiResult<Unit> = library.renameSpace(space.id, name).also { answer ->
+        if (answer is ApiResult.Ok) {
+            mutableSpaces.update { state -> state.copy(spaces = state.spaces.map { if (it.id == space.id) it.copy(name = name) else it }) }
+        }
+    }
+
     private suspend fun showUploaded(cardId: String, spaceId: String?) {
         when (val answer = library.card(cardId)) {
             is ApiResult.Ok -> everything.prepend(answer.value)
