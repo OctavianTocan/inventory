@@ -52,7 +52,7 @@ class UploadScreenshotTest(private val dark: Boolean) {
 
     @Test
     fun addSheet() {
-        shell(overlay = { SheetFixture("Add to your mind") { AddSheetContent({}, {}, onCamera = {}) } }) { SampleEverything() }
+        shell(overlay = { SheetFixture("Add to your inventory") { AddSheetContent({}, {}, onCamera = {}) } }) { SampleEverything() }
         capture("S21_add_sheet")
     }
 

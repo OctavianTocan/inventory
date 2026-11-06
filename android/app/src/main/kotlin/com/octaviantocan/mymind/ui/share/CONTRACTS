@@ -20,8 +20,8 @@ play time comes from Tavi's request of 5 November 2026 to build it into the app.
 
 @cc [owner:OctavianTocan,label:product;design] share-field-takes-everything
 The share sheet MUST be Pully's paper over the app that shared, resting at its
-content's height, titled with how saving is going (Saving to your mind, Saved to
-your mind, Kept on this phone, Nothing was saved). It MUST show what was saved
+content's height, titled with how saving is going (Saving to your inventory, Saved
+to your inventory, Kept on this phone, Nothing was saved). It MUST show what was saved
 as a raised row with its picture and two lines, filling in the page's title and
 picture as Inventory reads them; then the spaces, tags and note added, each with a
 cross that takes it off; then one field, Add a space, a tag or a note. With
@@ -32,7 +32,8 @@ This sheet shows when the shooting star does not play (share-moment-shooting-sta
 with the system's animations turned off, and when nothing was saved; otherwise
 the star's tag step (share-tag-step-icon-grid) takes its place.
 Source: Tavi's pick of 10, One field for everything, in the share prototype,
-29 October 2026 ("Let's do 10"). Inventory's own tags show above the field
+29 October 2026 ("Let's do 10"). "Your inventory" in place of mymind's "your mind" is
+Tavi's pick of 6 November 2026. Inventory's own tags show above the field
 (share-sheet-shows-thymind-tags), so the empty field offers recent tags. The tag
 step took its place with Tavi's pick of M9 Icon grid, 5 November 2026.
 

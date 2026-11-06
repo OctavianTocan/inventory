@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.octaviantocan.mymind.R
 import com.octaviantocan.mymind.ui.theme.MymindTheme
 
-private const val TITLE = "Access\nyour mind"
+private const val TITLE = "Access\nyour inventory"
 private const val GOOGLE_LABEL = "Sign in with Google"
 private const val SPRING_STIFFNESS = 400f
 

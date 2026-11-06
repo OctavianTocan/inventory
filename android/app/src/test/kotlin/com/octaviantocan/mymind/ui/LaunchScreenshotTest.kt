@@ -69,7 +69,7 @@ class LaunchScreenshotTest {
         compose.mainClock.advanceTimeBy(SETTLE_MS)
         compose.onRoot().captureRoboImage("screenshots/sign_in_keyboard_$suffix.png")
         val google = compose.onNodeWithText("Sign in with Google").fetchSemanticsNode().boundsInRoot
-        val title = compose.onNodeWithText("Access\nyour mind").fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText("Access\nyour inventory").fetchSemanticsNode().boundsInRoot
         val username = compose.onNodeWithText("Username").fetchSemanticsNode().boundsInRoot
         val button = compose.onNodeWithText("Sign in").fetchSemanticsNode().boundsInRoot
         assertTrue("Google button ends at ${google.bottom}, form starts at ${username.top}", google.bottom <= username.top)

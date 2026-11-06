@@ -240,8 +240,8 @@ fun savedLines(state: ShareSheetState): SavedLines {
  * @return The header's words: saving, saved, kept on the phone, or nothing saved.
  */
 fun statusText(state: ShareSheetState): String = when (state.phase) {
-    SavePhase.Saving -> if (state.items.size > 1) "Saving ${minOf(state.saved + state.failed + 1, state.items.size)} of ${state.items.size}" else "Saving to your mind"
-    SavePhase.Saved -> if (state.merged) MERGED else "Saved to your mind"
+    SavePhase.Saving -> if (state.items.size > 1) "Saving ${minOf(state.saved + state.failed + 1, state.items.size)} of ${state.items.size}" else "Saving to your inventory"
+    SavePhase.Saved -> if (state.merged) MERGED else "Saved to your inventory"
     SavePhase.Kept -> "Kept on this phone"
     SavePhase.Failed -> NOT_SAVED
 }

@@ -131,7 +131,7 @@ class FootBarTest {
         settle()
         val close = compose.onNodeWithContentDescription("Close search").fetchSemanticsNode().boundsInRoot
         assertEquals(before, close.bottom, 1f)
-        val field = compose.onNodeWithContentDescription("Search your mind")
+        val field = compose.onNodeWithContentDescription("Search your inventory")
         field.assertIsFocused()
         field.performTextInput("forest")
         compose.runOnIdle { assertEquals("forest", query) }
@@ -144,7 +144,7 @@ class FootBarTest {
         compose.runOnIdle { assertEquals("", query) }
         compose.onNodeWithContentDescription("Close search").performClick()
         settle()
-        compose.onNodeWithContentDescription("Search your mind").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Search your inventory").assertDoesNotExist()
         compose.onAllNodesWithText("All").assertCountEquals(1)
         compose.runOnIdle { assertEquals(1, bars.slots.size); assertEquals(0, openedCard) }
     }
@@ -182,7 +182,7 @@ class FootBarTest {
         assertEquals(gap, close.left - wide.right, 1f)
         assertEquals(circle.size, close.size)
         assertEquals(pill.bottom, wide.bottom, 1f)
-        val field = compose.onNodeWithContentDescription("Search your mind").fetchSemanticsNode().boundsInRoot
+        val field = compose.onNodeWithContentDescription("Search your inventory").fetchSemanticsNode().boundsInRoot
         assertTrue("The field sits inside the navigation's pill", wide.contains(field.center))
         compose.onNodeWithText("Spaces").assertDoesNotExist()
         compose.onNodeWithContentDescription("Close search").performClick()

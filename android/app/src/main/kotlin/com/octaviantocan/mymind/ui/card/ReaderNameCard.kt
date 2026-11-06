@@ -113,7 +113,7 @@ internal fun ReaderNameCard(visible: Boolean, card: Card, details: ReaderDetails
                 actions.onTogglePin?.let { toggle ->
                     add {
                         SheetRow(painterResource(R.drawable.topofmindicon), "Pin", toggle,
-                            detail = if (card.pinned) "Pinned" else "Keep it first in your mind", role = Role.Switch,
+                            detail = if (card.pinned) "Pinned" else "Keep it first in your inventory", role = Role.Switch,
                             trailing = { SheetSwitch(card.pinned) })
                     }
                 }

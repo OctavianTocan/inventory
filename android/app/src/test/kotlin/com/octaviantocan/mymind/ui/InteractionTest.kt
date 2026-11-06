@@ -128,7 +128,7 @@ class InteractionTest {
         var camera = 0
         var withCamera by mutableStateOf(true)
         show {
-            SheetFixture("Add to your mind") {
+            SheetFixture("Add to your inventory") {
                 AddSheetContent({ photos++ }, { files++ }, if (withCamera) ({ camera++ }) else null)
             }
         }

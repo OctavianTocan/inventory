@@ -58,7 +58,7 @@ class UploadService : Service() {
             .createNotificationChannel(NotificationChannel(CHANNEL, "Uploads", NotificationManager.IMPORTANCE_LOW))
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification_upload)
-            .setContentTitle("Saving to your mind")
+            .setContentTitle("Saving to your inventory")
             .setProgress(0, 0, true)
             .setOngoing(true)
             .setSilent(true)

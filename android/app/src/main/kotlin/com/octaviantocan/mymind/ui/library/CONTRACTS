@@ -224,7 +224,8 @@ The profile, star (sky-opens-from-the-star-button) and Add controls MUST stay fi
 list while the page scrolls under them. They float as their own raised, shadowed
 circles with no solid header strip behind them, except in full screen, where they slide
 away (gallery-reels-at-one-column). The page title ("Your
-mind", "All Spaces") MUST scroll away with the page. The controls MUST remain
+inventory", "All Spaces"; "Your inventory" replaced mymind's "Your mind" on Tavi's pick,
+6 November 2026) MUST scroll away with the page. The controls MUST remain
 available for an empty, loading or failed feed. Pull to refresh and mosaic gestures
 belong to the scrolling page; search and browsing MUST retain independent scroll
 positions.
@@ -256,7 +257,7 @@ The Spaces list and an opened space MUST use the gallery's background, title row
 floating controls, not a separate page style. Spaces MUST NOT have a floating create
 button. The Spaces list MUST end with a New space tile, a stack's square with a plus
 where a cover would be, and the + on the Spaces list MUST open the New space sheet
-straight away, never the Add sheet with its add-to-your-mind sources. New space is
+straight away, never the Add sheet with its add-to-your-inventory sources. New space is
 Pully's sheet with the name and colour in one raised group and Create space under it,
 never mymind's modal. A space's options (Add to this space, Rename space, Delete space held
 as a card's delete is) MUST be a Pully sheet under the space's name, never a Material

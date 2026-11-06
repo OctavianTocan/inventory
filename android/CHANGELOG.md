@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.84 (95), 2026-11-06
+Everything you keep is now your inventory.
+
+### Changed
+- The All page, sign-in, search, the share sheet and upload notices say "your inventory" instead of "your mind".
+
 ## 0.6.83 (94), 2026-11-06
 Give an AI a link to one card.
 

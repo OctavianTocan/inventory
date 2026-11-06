@@ -226,7 +226,7 @@ fun EverythingContent(
                 PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().glassSource(backdrop), top = GALLERY_CONTROLS_HEIGHT) {
                     LibraryMosaic(feed, onLoadMore, onOpenCard, state = gridState, mosaic = mosaic,
                         onLongPressCard = onLongPressCard, header = {
-                            GalleryTitle("Your mind")
+                            GalleryTitle("Your inventory")
                             GalleryHighlights(pinned, onOpenCard, onLoadMore = onLoadMorePinned, onLongPressCard = onLongPressCard)
                             BackTodayBand(backToday, { card, at -> onUncover(card); flight.launch(at) }, onOpenCard, onLongPressCard = onLongPressCard)
                             if (feed.cards.isEmpty()) GalleryFeedNotice(feed, onRetry, search = false)
@@ -256,7 +256,7 @@ private fun GalleryFeedNotice(feed: FeedState, onRetry: () -> Unit, search: Bool
                     style = LibraryStyle.body, color = colors.text)
             }
             feed.loading || !feed.endReached -> LoadingSpinner(color = colors.accent)
-            else -> Text(if (search) "No cards found" else "Your mind starts here", style = LibraryStyle.body, color = colors.muted)
+            else -> Text(if (search) "No cards found" else "Your inventory starts here", style = LibraryStyle.body, color = colors.muted)
         }
     }
 }

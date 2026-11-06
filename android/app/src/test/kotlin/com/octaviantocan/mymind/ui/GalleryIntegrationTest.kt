@@ -99,12 +99,12 @@ class GalleryIntegrationTest {
         val model = showShell()
         compose.onNodeWithText("Spaces").performClick()
         compose.onNodeWithContentDescription("Search").performClick()
-        val field = compose.onNodeWithContentDescription("Search your mind")
+        val field = compose.onNodeWithContentDescription("Search your inventory")
         field.assertIsFocused().performTextInput("forest")
         compose.runOnIdle { assertEquals("forest", model.search.query.value) }
         compose.onNodeWithContentDescription("Close search").performClick()
         compose.onNodeWithText("Spaces").assertIsSelected()
-        compose.onNodeWithContentDescription("Search your mind").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Search your inventory").assertDoesNotExist()
         compose.runOnIdle { assertEquals("", model.search.query.value) }
         compose.onNodeWithText("All").performClick()
         compose.onNodeWithContentDescription("Card gallery").assertExists()
@@ -120,10 +120,10 @@ class GalleryIntegrationTest {
         compose.onRoot().performTouchInput { swipeLeft(startX = width * 0.9f, endX = width * 0.1f) }
         compose.onNodeWithText("Find something").assertIsDisplayed()
         // "When I swipe over to the search screen, the search input should be automatically focused" (Tavi, 5 Nov 2026).
-        compose.onNodeWithContentDescription("Search your mind").assertIsFocused()
+        compose.onNodeWithContentDescription("Search your inventory").assertIsFocused()
         compose.onRoot().performTouchInput { swipeRight(startX = width * 0.1f, endX = width * 0.9f) }
         compose.onNodeWithText("Spaces").assertIsSelected()
-        compose.onNodeWithContentDescription("Search your mind").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Search your inventory").assertDoesNotExist()
         compose.onRoot().performTouchInput { swipeRight(startX = width * 0.1f, endX = width * 0.9f) }
         compose.onNodeWithText("All").assertIsSelected()
         compose.onNodeWithContentDescription("Card gallery").assertIsDisplayed()
@@ -160,8 +160,8 @@ class GalleryIntegrationTest {
         // "The zoom in and stuff should work on the results too" (Tavi, 28 Oct 2026): the results open before their cards.
         showShell(searchHits = (1..40).map { testCard("s$it", type = "Image", title = "Found $it") })
         compose.onNodeWithContentDescription("Search").performClick()
-        compose.onNodeWithContentDescription("Search your mind").performTextInput("forest")
-        compose.onNodeWithContentDescription("Search your mind").performImeAction()
+        compose.onNodeWithContentDescription("Search your inventory").performTextInput("forest")
+        compose.onNodeWithContentDescription("Search your inventory").performImeAction()
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Found 1").assertExists()
         val gallery = compose.onNodeWithContentDescription("Card gallery")
@@ -174,7 +174,7 @@ class GalleryIntegrationTest {
         }
         compose.waitForIdle()
         assertEquals("4 columns", gallery.fetchSemanticsNode().config[SemanticsProperties.StateDescription])
-        compose.onNodeWithContentDescription("Search your mind").assertExists()
+        compose.onNodeWithContentDescription("Search your inventory").assertExists()
     }
 
     @Test fun theSpacesListPinchesLikeTheGalleryAndKeepsItsSizeAcrossASpace() {

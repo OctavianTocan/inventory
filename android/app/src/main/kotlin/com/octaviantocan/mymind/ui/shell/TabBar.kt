@@ -60,7 +60,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 /** What the empty search field says, and its name for accessibility services. */
-const val SEARCH_HINT = "Search your mind"
+const val SEARCH_HINT = "Search your inventory"
 
 private val NAVIGATION_INSET = 8.dp
 private val TAB_SIDE = 13.dp

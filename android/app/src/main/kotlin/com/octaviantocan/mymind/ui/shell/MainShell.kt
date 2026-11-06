@@ -176,7 +176,7 @@ data class OpenedCard(val card: Card, val spaceId: String?, val reading: Boolean
  * @property spaceId Space the new cards join, or null outside a space.
  * @property title Title of the Add sheet.
  */
-private data class AddTarget(val spaceId: String?, val title: String = "Add to your mind")
+private data class AddTarget(val spaceId: String?, val title: String = "Add to your inventory")
 
 /**
  * The signed-in shell: the page of the selected tab with the tab bar over its bottom edge, an opened card over both,

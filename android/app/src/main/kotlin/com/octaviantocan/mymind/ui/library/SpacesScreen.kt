@@ -367,7 +367,7 @@ internal fun SpaceOptionsSheet(space: Space, onClose: () -> Unit, onAdd: () -> U
             }
         }
         if (onDelete != null) CardMenuGroup(Modifier.padding(top = 20.dp)) {
-            HoldToDeleteRow(onDelete = { onClose(); onDelete() }, label = "Delete space", detail = "Its cards stay in your mind")
+            HoldToDeleteRow(onDelete = { onClose(); onDelete() }, label = "Delete space", detail = "Its cards stay in your inventory")
         }
     }
 }

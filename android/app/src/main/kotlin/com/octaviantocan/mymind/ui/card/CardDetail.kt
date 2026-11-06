@@ -871,7 +871,7 @@ private const val PAGE_NEAR_SCREENS = 2f
 @Composable
 private fun SameVibeSection(cards: List<Card>, onOpen: ((Card) -> Unit)?) {
     ReaderSection(SECTION_PADDING) {
-        SectionHeading(R.drawable.samevibeicon, "Same Vibe", trailing = "From your mind")
+        SectionHeading(R.drawable.samevibeicon, "Same Vibe", trailing = "From your inventory")
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             cards.take(SAME_VIBE_SHOWN).forEach { near ->
