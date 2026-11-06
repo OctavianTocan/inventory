@@ -232,6 +232,8 @@ private val TILT_MATRIX = ThreadLocal.withInitial { Matrix() }
  * @param onSeen Called with a find's id once its star has lit in front of the person.
  * @param onLookUp Called as the camera starts to look up.
  * @param modifier Modifier for the sky.
+ * @param onCompleted Called once a finished constellation has taken its place, for the sky to be read again with the
+ *   next one.
  */
 @Composable
 fun SkyBackdrop(
@@ -243,6 +245,7 @@ fun SkyBackdrop(
     onSeen: (String) -> Unit,
     onLookUp: () -> Unit,
     modifier: Modifier = Modifier,
+    onCompleted: () -> Unit = {},
 ) {
     val scene = sky.scene
     val context = LocalContext.current
@@ -253,6 +256,7 @@ fun SkyBackdrop(
         scene.onOpenFind = onOpenFind
         scene.onSeen = onSeen
         scene.onLookUp = onLookUp
+        scene.onCompleted = onCompleted
         scene.picture = { id -> latestFinds[id]?.let { card -> sky.loadPicture(context, card) ?: findFigureArt(findFigureKind(card)) } }
         scene.title = { id -> latestFinds[id]?.let(::findTitle).orEmpty() }
     }
@@ -280,7 +284,7 @@ fun SkyBackdrop(
     val label = remember { TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center) }
     val about = remember { TextStyle(fontSize = 12.sp, lineHeight = 16.sp, textAlign = TextAlign.Center) }
     val skyOn by animateFloatAsState(if (scene.skyOn) 1f else 0f, tween(800), label = "sky on")
-    Box(modifier.fillMaxSize().onSizeChanged { sky.unit = it.height / Proto.H }) {
+    Box(modifier.fillMaxSize().onSizeChanged { sky.unit = it.height / Proto.H; scene.viewW = it.width / sky.unit }) {
         Dome(scene)
         Canvas(Modifier.fillMaxSize().graphicsLayer()) {
             scene.frames.intValue

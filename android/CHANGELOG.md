@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.99 (110), 2026-11-06
+Your sky: finds you can see whole, and a new constellation after each one you finish.
+
+### Fixed
+- When you tap a star, its find now shows whole, in its own shape and inside the screen, small enough to tell what it is. It is no longer cut off at the bottom or blown up past the edges.
+- Finishing a constellation no longer snaps back to it. It takes its place among the finished ones, and the next constellation gathers in the middle as soon as the server has made it.
+
 ## 0.6.98 (109), 2026-11-06
 Your sky, fixed on the phone.
 

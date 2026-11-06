@@ -111,6 +111,10 @@ internal class FindView(val card: String, val title: String, val picture: Bitmap
     val phase = FloatArray(MAX_CONDENSE)
     val aspect: Float = picture.width.toFloat() / picture.height.coerceAtLeast(1)
 
+    /** The box the find shows in, in units: the picture's own shape, set when its stars are laid out. */
+    var boxW = 0f
+    var boxH = 0f
+
     companion object {
         const val MAX_CONDENSE = 4200
     }
@@ -155,6 +159,9 @@ internal class SkyScene {
 
     /** Counts frames, so what draws the sky draws again. */
     val frames = mutableIntStateOf(0)
+
+    /** The screen's width in units, which a find's picture fits inside. */
+    var viewW = 390f
 
     var busy = false
         private set
@@ -1018,43 +1025,49 @@ internal class SkyScene {
     }
 
     private fun inView(x: Float, y: Float, w: Float): Boolean {
-        if (find == null) return false
-        if (hypot(x - w / 2f, y - (Proto.SKY_STAR_Y + 120f)) < 200f && hypot(x - w / 2f, y - Proto.SKY_STAR_Y) > 40f) return true
+        val view = find ?: return false
+        val inBox = abs(x - w / 2f) < view.boxW / 2f + 20f && abs(y - FIND_Y) < view.boxH / 2f + 20f
+        if (inBox && hypot(x - w / 2f, y - Proto.SKY_STAR_Y) > 40f) return true
         return abs(x - w / 2f) < (w - 40f) / 2f && abs(y - (Proto.H - 150f)) < 110f
     }
 
     // The find condensing out of the stars.
 
     private fun buildCondense(view: FindView) {
-        val n = CONDENSE_GRID
-        val scaled = coverSquare(view.picture, n)
-        val pixels = IntArray(n * n)
-        scaled.getPixels(pixels, 0, n, 0, 0, n, n)
+        val (bw, bh) = findBox(view.aspect, viewW)
+        view.boxW = bw
+        view.boxH = bh
+        // One point per cell of a grid CONDENSE_GRID across the picture's longer side.
+        val nx = if (view.aspect >= 1f) CONDENSE_GRID else max(8, (CONDENSE_GRID * view.aspect).toInt())
+        val ny = if (view.aspect >= 1f) max(8, (CONDENSE_GRID / view.aspect).toInt()) else CONDENSE_GRID
+        val scaled = sampled(view.picture, nx, ny)
+        val pixels = IntArray(nx * ny)
+        scaled.getPixels(pixels, 0, nx, 0, 0, nx, ny)
         if (scaled !== view.picture) scaled.recycle()
         val r = Random(view.card.hashCode())
-        val cx = Proto.SKY_STAR_Y + 120f
-        val size = FIND_SIDE
+        // Points as big as the prototype's for its spacing, scaled with the spacing here.
+        val grow = (bw / nx) / (FIND_SIDE * 0.92f / CONDENSE_GRID)
         var count = 0
-        for (y in 0 until n) for (x in 0 until n) {
-            val p = pixels[y * n + x]
+        for (y in 0 until ny) for (x in 0 until nx) {
+            val p = pixels[y * nx + x]
             val red = (p shr 16 and 255) / 255f
             val green = (p shr 8 and 255) / 255f
             val blue = (p and 255) / 255f
             val l = 0.2126f * red + 0.7152f * green + 0.0722f * blue
-            val ox = (x + r.nextFloat()) / n - 0.5f
-            val oy = 0.5f - (y + r.nextFloat()) / n
-            val mask = 1f - sstep(hypot(ox, oy * 1.05f) + (r.nextFloat() - 0.5f) * 0.12f, 0.2f, 0.5f)
+            val ox = (x + r.nextFloat()) / nx - 0.5f
+            val oy = 0.5f - (y + r.nextFloat()) / ny
+            val mask = 1f - sstep(boxEdge(ox, oy) + (r.nextFloat() - 0.5f) * 0.12f, FIND_FADE, 1f)
             if (r.nextFloat() > l.pow(1.8f) * mask * 2.6f) continue
             if (count >= FindView.MAX_CONDENSE) continue
-            view.tx[count] = ox * size * 0.92f
-            view.ty[count] = cx - oy * size * 0.92f
+            view.tx[count] = ox * bw
+            view.ty[count] = FIND_Y - oy * bh
             view.sx[count] = r.nextFloat()
             view.sy[count] = r.nextFloat()
             view.cr[count] = mix(1f, red, 0.5f) * 1.1f
             view.cg[count] = mix(0.9f, green, 0.5f) * 1.1f
             view.cb[count] = mix(0.72f, blue, 0.5f) * 1.1f
             view.delay[count] = r.nextFloat() * 0.55f
-            view.size[count] = 1.3f + l * 2.8f
+            view.size[count] = (1.3f + l * 2.8f) * grow
             view.phase[count] = r.nextFloat() * 6.28f
             count++
         }
@@ -1096,7 +1109,24 @@ internal class SkyScene {
         /** The most seconds the camera takes to finish looking up or down once a finger lets go. */
         const val CARRY_ON = 1.3f
         const val CONDENSE_GRID = 110
+
+        /** The prototype's find, a square this many units across; the points keep its density. */
         const val FIND_SIDE = 470f
+
+        /**
+         * The most a find's picture takes, in units, and the margin it keeps from each side of the screen, so it shows
+         * whole and small enough to tell what it is (Claude's choice, after Tavi, 6 November 2026, 21:50: "they're too
+         * scaled up").
+         */
+        const val FIND_MAX_W = 440f
+        const val FIND_MAX_H = 380f
+        const val FIND_MARGIN = 28f
+
+        /** Where the find's middle sits, in units from the top: the prototype's, under its star. */
+        const val FIND_Y = Proto.SKY_STAR_Y + 120f
+
+        /** How far out from the middle, as a share of the way to the edge, the find starts to fade. */
+        const val FIND_FADE = 0.72f
 
         /** How far the slide moves per screen unit dragged while focused. */
         val PXW = (Proto.RC - 700f) * Proto.TAN / 422f
@@ -1198,17 +1228,34 @@ internal class MicroStars(random: Random) {
     }
 }
 
-/** A square [side] pixels across cut from the middle of [picture] to cover it, as the prototype samples a find. */
-internal fun coverSquare(picture: Bitmap, side: Int): Bitmap {
-    val w = picture.width
-    val h = picture.height
-    val crop = min(w, h)
+/** The whole of [picture] scaled to [width] by [height] pixels, for its points to sample. */
+internal fun sampled(picture: Bitmap, width: Int, height: Int): Bitmap {
     val src = if (picture.config == Bitmap.Config.HARDWARE) picture.copy(Bitmap.Config.ARGB_8888, false) else picture
-    val cut = Bitmap.createBitmap(src, (w - crop) / 2, (h - crop) / 2, crop, crop)
-    val out = Bitmap.createScaledBitmap(cut, side, side, true)
-    if (cut !== out && cut !== src) cut.recycle()
+    val out = Bitmap.createScaledBitmap(src, width, height, true)
     if (src !== picture && src !== out) src.recycle()
     return out
+}
+
+/**
+ * The box a find's picture shows in, in units: its own shape, at most [SkyScene.FIND_MAX_W] by [SkyScene.FIND_MAX_H] and
+ * [SkyScene.FIND_MARGIN] in from each side of a screen [screenW] wide.
+ *
+ * @param aspect The picture's width over its height.
+ * @param screenW The screen's width in units.
+ * @return The box's width and height.
+ */
+internal fun findBox(aspect: Float, screenW: Float): Pair<Float, Float> {
+    val maxW = min(SkyScene.FIND_MAX_W, screenW - 2f * SkyScene.FIND_MARGIN).coerceAtLeast(80f)
+    val maxH = SkyScene.FIND_MAX_H
+    val a = aspect.coerceIn(0.2f, 5f)
+    return if (a >= maxW / maxH) maxW to maxW / a else maxH * a to maxH
+}
+
+/** How far a point is toward a find box's rounded edge: 0 in the middle, 1 on the edge; [x] and [y] from -0.5 to 0.5. */
+internal fun boxEdge(x: Float, y: Float): Float {
+    val qx = (2f * x).pow(4)
+    val qy = (2f * y).pow(4)
+    return sqrt(sqrt(qx + qy))
 }
 
 /** A figure's line picture split into strokes, each in the figure's own units: x and y from -1 to 1, y up. */

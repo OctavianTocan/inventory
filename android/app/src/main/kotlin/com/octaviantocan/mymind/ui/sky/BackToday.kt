@@ -110,12 +110,24 @@ class BackTodayModel(
             }
             val answer = library.sky(day)
             if (answer is ApiResult.Ok) {
-                // A visit still waiting to be sent stays uncovered until the server has it.
+                // A visit still waiting to be sent stays uncovered, and its star lit, until the server has it.
                 val waiting = mutableState.value.sky?.takeIf { it.day == day }?.stars.orEmpty().filter { star -> answer.value.stars.none { it.id == star.id } }
-                val sky = answer.value.copy(stars = answer.value.stars + waiting)
+                val sky = withVisits(answer.value, waiting, Instant.now().toString())
                 show(sky)
                 memory?.saveSky(AppJson.encodeToString(Sky.serializer(), sky))
             }
+        }
+    }
+
+    /**
+     * Asks the server again once any read running has ended, as after a constellation is finished: the server then forms
+     * the next one.
+     */
+    fun reload() {
+        val running = loading
+        scope.launch {
+            running?.join()
+            load()
         }
     }
 
@@ -184,8 +196,8 @@ class BackTodayModel(
     fun uncover(card: Card, arriving: Boolean = true) {
         val sky = mutableState.value.sky ?: return
         if (card.id in mutableState.value.uncovered) return
-        val active = sky.active?.let { if (card.id in it.cards && card.id !in it.lit) it.copy(lit = it.lit + card.id) else it }
-        val visited = sky.copy(stars = sky.stars + SkyStar(card.id, Instant.now().toString()), active = active)
+        val now = Instant.now().toString()
+        val visited = withVisits(sky, listOf(SkyStar(card.id, now)), now)
         mutableState.update { it.copy(sky = visited, arriving = if (arriving) it.arriving + card.id else it.arriving) }
         scope.launch {
             library.visit(card.id)
@@ -308,4 +320,22 @@ private fun BackTodayFind(
         }
         HologramGlints(hologram, Modifier.fillMaxSize())
     }
+}
+
+/**
+ * [sky] as the server will have it once [visits] reach it: they light their stars in the active constellation, and one
+ * whose last star they light is finished, as the server finishes it, so it never shows again as the one forming.
+ *
+ * @param sky The sky.
+ * @param visits Finds opened that the server may not have yet.
+ * @param now When, for a constellation they finish.
+ * @return The sky with them.
+ */
+internal fun withVisits(sky: Sky, visits: List<SkyStar>, now: String): Sky {
+    val stars = sky.stars + visits
+    val active = sky.active ?: return sky.copy(stars = stars)
+    val lit = (active.lit + visits.map { it.id }.filter { it in active.cards }).distinct()
+    val lighted = active.copy(lit = lit)
+    if (active.cards.isEmpty() || !active.cards.all { it in lit }) return sky.copy(stars = stars, active = lighted)
+    return sky.copy(stars = stars, active = null, done = sky.done + lighted.copy(completed = now))
 }

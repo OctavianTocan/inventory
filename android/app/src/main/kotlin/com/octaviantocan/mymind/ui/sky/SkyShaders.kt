@@ -130,12 +130,11 @@ internal object SkyShaders {
         }
     """
 
-    // Local units: the square from -uSide/2 to uSide/2, y down.
+    // Local units: the box from -uBox/2 to uBox/2, y down; the picture fills it, fading out toward its rounded edge.
     private const val SMOKE = """
         uniform shader uMap;
         uniform float2 uMapSize;
-        uniform float uSide;
-        uniform float uAsp;
+        uniform float2 uBox;
         uniform float uOp;
         uniform float uIn;
         uniform float uTime;
@@ -145,17 +144,18 @@ internal object SkyShaders {
         float n2(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
         float fbm(vec2 p) { float s = 0.0; float a = 0.5; for (int i = 0; i < 5; i++) { s += a * n2(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return s / 0.97; }
         float L(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
-        vec2 fit(vec2 p, float z) { return 0.5 + p * z * (uAsp > 1.0 ? vec2(1.0 / uAsp, 1.0) : vec2(1.0, uAsp)); }
         vec3 pic(vec2 uv) { uv = clamp(uv, 0.002, 0.998); return decode(uMap.eval(vec2(uv.x, 1.0 - uv.y) * uMapSize).rgb); }
         half4 main(float2 at) {
-            vec2 vUv = vec2(at.x / uSide + 0.5, 0.5 - at.y / uSide);
-            vec2 p = vUv - 0.5; float t = uTime; float rev = clamp(uIn, 0.0, 1.0);
+            vec2 p = vec2(at.x / uBox.x, -at.y / uBox.y);
+            float t = uTime; float rev = clamp(uIn, 0.0, 1.0);
             float drift = 1.0 - 0.04 * sin(t * 0.07);
-            vec2 uv = fit(p, drift) + vec2(sin(t * 0.05), cos(t * 0.04)) * 0.012;
+            vec2 uv = 0.5 + p * drift + vec2(sin(t * 0.05), cos(t * 0.04)) * 0.012;
             vec3 c = pic(uv); float l = L(c);
-            float wisp = fbm(p * 4.0 + vec2(t * 0.02, 0.0)); float rr = length(p * vec2(1.0, 1.05));
-            float m = 1.0 - smoothstep(0.18, 0.5, rr + (wisp - 0.5) * 0.32);
-            float grain = 0.85 + 0.3 * h(floor(vUv * uSide * 0.9));
+            // The prototype's wisps, four across its 470 square, the same size here whatever the box.
+            float wisp = fbm(vec2(at.x, -at.y) / 117.5 + vec2(t * 0.02, 0.0));
+            vec2 q = abs(p) * 2.0; q = q * q; float edge = sqrt(sqrt(dot(q, q)));
+            float m = 1.0 - smoothstep(0.72, 1.0, edge + (wisp - 0.5) * 0.14);
+            float grain = 0.85 + 0.3 * h(floor((at + uBox * 0.5) * 0.9));
             vec3 smoke = mix(vec3(0.06, 0.16, 0.36), vec3(1.0, 0.86, 0.6), smoothstep(0.3, 0.95, l)) * (0.25 + l * 1.3) + c * 0.18;
             vec3 col = smoke * m * grain * 0.42 * smoothstep(0.5, 1.0, rev);
             float lw = L(col); col = mix(col, vec3(lw) * vec3(0.62, 0.72, 0.95), uWorn * 0.55) * (1.0 - uWorn * 0.3);

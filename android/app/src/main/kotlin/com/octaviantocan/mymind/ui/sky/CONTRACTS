@@ -127,9 +127,29 @@ camera dips and the line surges, and the next find condenses the same way; while
 finger is down the view follows it. A tap on empty sky, or Back, MUST move back out to
 the whole sky. A star opened from the sky MUST light once the find closes, its picture
 regaining its colour, and a constellation whose last star lights then completes.
+The find MUST show whole, in its own shape, inside the screen with a margin on each side
+and above its title, small enough to tell what it is: never cut off at an edge, cropped
+to a square or blown up past the screen, its smoke fading out before the edge of what is
+drawn (Tavi, 6 November 2026, 21:50, on the Fold's cover screen: "the cards are still
+cut off in the stars zoom. At the bottom. And they're too scaled up. It's hard to tell
+what they are."). Its size, at most 440 by 380 of the prototype's units and 28 in from
+each side, is Claude's choice, not yet confirmed by Tavi.
 Accessibility MUST offer Back to your library, a way to each star of the middle
 constellation by its find's title, and Next star and Previous star while one shows.
 Source: Tavi, 5 November 2026, 23:06: "Let's do 13 Condense"; 6 November 2026, 12:43:
 "DId you use 13-Condense for the star tap? I hope you did." and "Did you implement all
 the swiping mechanics between stars?"; 12:56: "How do I even go back from being focused
 on a star? Why are the cards not using the condense effect?"
+
+@cc [owner:OctavianTocan,label:product;motion] sky-finishing-one-brings-the-next
+Once the last star of the middle constellation lights, it MUST complete and take its
+place among the finished ones, and MUST NOT come back to the middle: the phone counts it
+finished at once, as the server does, even before the visit that finished it is sent.
+The sky MUST then send that visit and ask the server again, and the next constellation
+the server forms MUST gather in the middle out of its vortex while the sky shows. When
+the server has none to form (no save from the last two weeks with old finds near it),
+the middle stays empty until it has.
+Source: Tavi, 6 November 2026, 21:50: "once I finished a constellation it played a nice
+animation and then proceeded to just snap back to the constellation itself. No new one
+generated. That's bad"; and 5 November 2026, 17:02: "Once you complete one, another AI
+gives you a new one".

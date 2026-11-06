@@ -524,8 +524,7 @@ internal class SkyPainter {
     private fun drawFind(canvas: Canvas, p: SkyProjector, scene: SkyScene, view: FindView, now: Float) {
         val unit = p.unit
         val cx = (p.w / 2f + scene.viewDx) * unit
-        val cy = (Proto.SKY_STAR_Y + 120f + scene.viewDy) * unit
-        val side = SkyScene.FIND_SIDE
+        val cy = (SkyScene.FIND_Y + scene.viewDy) * unit
         val smoke = smokeShader
         if (smoke != null && view.op > 0.002f) {
             if (smokeFor !== view.picture) {
@@ -533,8 +532,7 @@ internal class SkyPainter {
                 smoke.setFloatUniform("uMapSize", view.picture.width.toFloat(), view.picture.height.toFloat())
                 smokeFor = view.picture
             }
-            smoke.setFloatUniform("uSide", side)
-            smoke.setFloatUniform("uAsp", view.aspect)
+            smoke.setFloatUniform("uBox", view.boxW, view.boxH)
             smoke.setFloatUniform("uOp", view.op)
             smoke.setFloatUniform("uIn", view.into)
             smoke.setFloatUniform("uTime", now)
@@ -543,7 +541,10 @@ internal class SkyPainter {
             canvas.save()
             canvas.translate(cx, cy)
             canvas.scale(unit, unit)
-            canvas.drawRect(-side / 2f, -side / 2f, side / 2f, side / 2f, effectPaint)
+            // A little past the box, where its smoke has faded out, so no edge shows.
+            val halfW = view.boxW * 0.56f
+            val halfH = view.boxH * 0.56f
+            canvas.drawRect(-halfW, -halfH, halfW, halfH, effectPaint)
             canvas.restore()
         }
         if (view.condOp <= 0.002f) return

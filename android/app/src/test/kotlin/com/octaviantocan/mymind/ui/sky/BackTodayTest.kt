@@ -116,6 +116,35 @@ class BackTodayTest {
     }
 
     @Test
+    fun lightingTheLastStarFinishesTheConstellationUntilTheServerGivesTheNext() = runTest {
+        val library = SkyLibrary(TODAY)
+        val model = BackTodayModel(this, library, null) { DAY }
+        model.load()
+        advanceUntilIdle()
+        model.uncover(FINDS[0])
+        model.uncover(FINDS[1])
+        advanceUntilIdle()
+        // Its last star lit: it is finished on the phone at once, as the server finishes it.
+        assertEquals(null, model.state.value.sky?.active)
+        assertEquals(listOf(1L), model.state.value.sky?.done?.map { it.id })
+
+        // A server that has not had the visits yet still answers it as forming; the phone keeps it finished.
+        model.reload()
+        advanceUntilIdle()
+        assertEquals(null, model.state.value.sky?.active)
+        assertEquals(listOf(1L), model.state.value.sky?.done?.map { it.id })
+
+        // Once it has them, it answers with the next one.
+        val finished = TODAY.active!!.copy(lit = TODAY.active!!.cards, completed = "2026-11-05T10:00:00Z")
+        val next = Constellation(id = 2, figure = "lantern", name = "The Lantern", seed = "newer", cards = listOf("newer", "old3"), lit = listOf("newer"))
+        library.sky = TODAY.copy(active = next, done = listOf(finished), stars = listOf(SkyStar("old1"), SkyStar("old2")))
+        model.reload()
+        advanceUntilIdle()
+        assertEquals(2L, model.state.value.sky?.active?.id)
+        assertEquals(listOf(1L), model.state.value.sky?.done?.map { it.id })
+    }
+
+    @Test
     fun aFindOpenedFromBackTodayWaitsOnTheStarButtonUntilItsStarLightsInTheSky() = runTest {
         val library = SkyLibrary(TODAY.copy(stars = listOf(SkyStar("old3"))))
         val model = BackTodayModel(this, library, SkyMemory(), today = { DAY })

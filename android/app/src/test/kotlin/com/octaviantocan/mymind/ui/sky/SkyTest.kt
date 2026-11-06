@@ -34,6 +34,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.Instant
+import kotlin.math.abs
 
 private fun ids(prefix: String) = (0 until 6).map { "$prefix$it" }
 
@@ -187,6 +188,14 @@ class SkyTest {
         compose.onRoot().captureRoboImage("screenshots/sky_06_condensed.png")
         assertEquals("Harbour at dusk", sky.scene.memTitle)
         assertTrue("moving in does not open the find", opened.isEmpty())
+        // The find shows whole: inside the screen with a margin, above its title, every point of light inside its box.
+        val view = sky.scene.find!!
+        assertTrue(view.boxW <= sky.scene.viewW - 2 * SkyScene.FIND_MARGIN + 0.01f)
+        assertTrue(SkyScene.FIND_Y + view.boxH / 2f < Proto.H - 260f)
+        assertTrue(view.count > 200)
+        for (k in 0 until view.count) {
+            assertTrue(abs(view.tx[k]) <= view.boxW / 2f && abs(view.ty[k] - SkyScene.FIND_Y) <= view.boxH / 2f)
+        }
 
         // From the mast's top, a swipe up and to the left glides down to the sail's right foot (index 4).
         compose.onRoot().performTouchInput {
@@ -206,6 +215,109 @@ class SkyTest {
         compose.onRoot().performTouchInput { click(Offset(width * 0.05f, height * 0.12f)) }
         compose.mainClock.advanceTimeBy(1500)
         assertEquals(null, sky.scene.focusedCard)
+    }
+
+    @Test
+    fun aVideoFindShowsWholeUnderItsStar() {
+        val sky = SkyState()
+        compose.setPhoneContent(true) {
+            Box(Modifier.fillMaxSize()) {
+                SkyBackdrop(sky, skyPlan(SKY, SKY.stars.map { it.id }.toSet(), emptySet()), FINDS, paused = false, onOpenFind = {}, onSeen = {}, onLookUp = {})
+                SkyOverlay(sky)
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        sky.lookUp()
+        compose.mainClock.advanceTimeBy(3000)
+        // After the sky last composed, which hands the scene the library's pictures.
+        val frame = videoFrame()
+        sky.scene.picture = { frame }
+        val (x, y) = assertNotNullPoint(sky, 3)
+        compose.onRoot().performTouchInput { click(Offset(x, y)) }
+        compose.mainClock.advanceTimeBy(3200)
+        compose.onRoot().captureRoboImage("screenshots/sky_10_video_find.png")
+        val view = sky.scene.find!!
+        assertEquals(16f / 9f, view.boxW / view.boxH, 0.01f)
+        assertEquals(sky.scene.viewW - 2 * SkyScene.FIND_MARGIN, view.boxW, 0.01f)
+    }
+
+    // A 16:9 frame like a video's thumbnail: a dusk sky, a sun, a dark hill and a white house.
+    private fun videoFrame(): android.graphics.Bitmap {
+        val bitmap = android.graphics.Bitmap.createBitmap(480, 270, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        paint.shader = android.graphics.LinearGradient(0f, 0f, 0f, 270f, 0xFF2B4C8C.toInt(), 0xFFF2A65A.toInt(), android.graphics.Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, 480f, 270f, paint)
+        paint.shader = null
+        paint.color = 0xFFFFF4D6.toInt()
+        canvas.drawCircle(340f, 120f, 46f, paint)
+        paint.color = 0xFF1C1F2A.toInt()
+        canvas.drawOval(-120f, 190f, 600f, 420f, paint)
+        paint.color = 0xFFF5F5F0.toInt()
+        canvas.drawRect(90f, 150f, 190f, 215f, paint)
+        val roof = android.graphics.Path().apply { moveTo(80f, 152f); lineTo(140f, 110f); lineTo(200f, 152f); close() }
+        canvas.drawPath(roof, paint)
+        return bitmap
+    }
+
+    @Test
+    fun aFindFitsTheScreenInItsOwnShape() {
+        // Tavi's Galaxy Z Fold cover screen, 1080 by 2520 pixels: 362 units wide. A video's frame keeps its shape.
+        val (w, h) = findBox(16f / 9f, 362f)
+        assertEquals(362f - 2 * SkyScene.FIND_MARGIN, w, 0.01f)
+        assertEquals(w * 9f / 16f, h, 0.01f)
+        // Open, the Fold is wide: a square find stops at its height.
+        val (sw, sh) = findBox(1f, 937f)
+        assertEquals(SkyScene.FIND_MAX_H, sw, 0.01f)
+        assertEquals(SkyScene.FIND_MAX_H, sh, 0.01f)
+        // A tall picture on a phone stops at its height, narrower than the screen.
+        val (tw, th) = findBox(9f / 16f, 390f)
+        assertEquals(SkyScene.FIND_MAX_H, th, 0.01f)
+        assertTrue(tw < 390f - 2 * SkyScene.FIND_MARGIN)
+        assertEquals(1f, boxEdge(0.5f, 0f), 0.001f)
+        assertEquals(0f, boxEdge(0f, 0f), 0.001f)
+    }
+
+    @Test
+    fun finishingAConstellationKeepsItInItsPlaceAndTheNextGathersInTheMiddle() {
+        val at = "2026-11-06T10:00:00Z"
+        val one = Constellation(1, "ship", "The Voyager", "c0", ids("c"), lit = ids("c") - "c5")
+        var today by mutableStateOf(Sky(day = "2026-11-06", active = one, stars = ids("c").drop(1).dropLast(1).map { SkyStar(it, at) }))
+        var seen by mutableStateOf(today.stars.map { it.id }.toSet())
+        val sky = SkyState()
+        var completed = 0
+        compose.setPhoneContent(true) {
+            Box(Modifier.fillMaxSize()) {
+                SkyBackdrop(sky, skyPlan(today, seen, emptySet()), FINDS, paused = false,
+                    onOpenFind = { id -> today = withVisits(today, listOf(SkyStar(id, at)), at) },
+                    onSeen = { seen = seen + it }, onLookUp = {}, onCompleted = { completed++ })
+                SkyOverlay(sky)
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        sky.lookUp()
+        compose.mainClock.advanceTimeBy(3000)
+
+        // Open the last dark star's find from the sky, then come back from it.
+        val (x, y) = assertNotNullPoint(sky, 5)
+        compose.onRoot().performTouchInput { click(Offset(x, y)) }
+        compose.mainClock.advanceTimeBy(3000)
+        assertEquals("c5", sky.scene.focusedCard)
+        compose.onRoot().performTouchInput { click(Offset(centerX, height * 0.9f)) }
+        compose.mainClock.advanceTimeBy(100)
+        assertEquals("finished on the phone at once", null, today.active)
+        compose.runOnIdle { sky.scene.returned() }
+        compose.mainClock.advanceTimeBy(14000)
+        assertEquals(1, completed)
+        assertEquals("the finished one stays in its place, not back in the middle", null, sky.scene.active)
+        compose.onRoot().captureRoboImage("screenshots/sky_08_finished.png")
+
+        // The server's next constellation gathers in the middle.
+        today = today.copy(active = Constellation(5, "lantern", "The Lantern", "n0", ids("n"), lit = listOf("n0")))
+        compose.mainClock.advanceTimeBy(2500)
+        compose.onRoot().captureRoboImage("screenshots/sky_09_next_gathering.png")
+        compose.mainClock.advanceTimeBy(3000)
+        assertEquals(5L, sky.scene.active?.id)
     }
 
     private fun assertNotNullPoint(sky: SkyState, i: Int): Pair<Float, Float> {

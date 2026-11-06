@@ -143,7 +143,7 @@ fun EverythingScreen(
                 onOpenCard(card)
             }
         },
-        onSeen = viewModel.backToday::markSeen, onLanded = viewModel.backToday::landed,
+        onSeen = viewModel.backToday::markSeen, onSkyCompleted = viewModel::skyCompleted, onLanded = viewModel.backToday::landed,
         onRefresh = viewModel::refreshEverything, onRefreshResults = results::refresh,
         onLongPressCard = onLongPressCard, choice = choice,
         photoUrl = photoUrl, photoLoader = photoLoader, resultsState = resultsScroll, ai = rank,
@@ -198,6 +198,7 @@ fun EverythingContent(
     onSkyFinds: () -> Unit = {},
     onOpenStar: (String) -> Unit = {},
     onSeen: (String) -> Unit = {},
+    onSkyCompleted: () -> Unit = {},
     onLanded: (String) -> Unit = {},
     cardOpen: Boolean = false,
     onRefresh: () -> Unit = {},
@@ -258,7 +259,7 @@ fun EverythingContent(
                     }
                 }
                 SkyBackdrop(sky, plan, backToday.finds, paused = cardOpen, onOpenFind = onOpenStar, onSeen = onSeen,
-                    onLookUp = { onRefresh(); scope.launch { gridState.animateScrollToItem(0) } })
+                    onLookUp = { onRefresh(); scope.launch { gridState.animateScrollToItem(0) } }, onCompleted = onSkyCompleted)
                 val pull = rememberSkyPull(sky) { hasSky && mosaic.reel == 0f }
                 PullRefresh(feed.refreshing, onRefresh, Modifier.fillMaxSize().nestedScroll(pull).skyTilt(sky, colors.background) { gridState.scrolledBy() }
                     .glassSource(backdrop), top = GALLERY_CONTROLS_HEIGHT, enabled = !hasSky) {

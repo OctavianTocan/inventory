@@ -250,6 +250,17 @@ class LibraryViewModel(
         pinned.refresh { pulled.await() }
     }
 
+    /**
+     * A constellation was finished in the sky: once the visit that finished it has reached the server, reads the sky
+     * again, so the server forms the next one and it gathers in the middle.
+     */
+    fun skyCompleted() {
+        viewModelScope.launch {
+            sync?.let { withTimeoutOrNull(REFRESH_SYNC_WAIT_MS) { it.sync(afterCurrent = true) } }
+            backToday.reload()
+        }
+    }
+
     /** Syncs the phone's copy, as when the app comes back or the network returns, and shows what changed. */
     fun syncNow() {
         backToday.loadIfNewDay()
