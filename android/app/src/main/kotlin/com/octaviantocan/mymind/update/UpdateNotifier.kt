@@ -66,6 +66,29 @@ class UpdateNotifier(private val context: Context) {
         )
     }
 
+    /**
+     * Tells the user that an update they started stopped while they were away; the tap opens the update screen, which
+     * offers Try again.
+     *
+     * @param release The release being installed, or null when unknown.
+     */
+    fun stopped(release: ReleaseInfo?) {
+        val open = PendingIntent.getActivity(
+            context,
+            REQUEST_OPEN,
+            openUpdateIntent(context),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        post(
+            NotificationCompat.Builder(context, CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification_download)
+                .setContentTitle("Inventory ${release?.versionName.orEmpty()} did not finish updating".replace("  ", " "))
+                .setContentText("Open Inventory to try again.")
+                .setContentIntent(open)
+                .setAutoCancel(true),
+        )
+    }
+
     /** Removes the update notification. */
     fun cancel() = NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
 

@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** How far the update screen's Update got. */
@@ -68,10 +67,9 @@ data class UpdateGateModel(val release: ReleaseInfo, val entries: List<Changelog
 /**
  * What the update screen's taps started.
  *
- * @property running True while a tap's download and install run.
  * @property needsAllow True after a tap found that Android does not let the app install yet.
  */
-private data class UpdatePress(val running: Boolean = false, val needsAllow: Boolean = false)
+private data class UpdatePress(val needsAllow: Boolean = false)
 
 /**
  * The versions [release] brings over the installed one, newest first, from the server's release description.
@@ -96,6 +94,8 @@ fun offeredEntries(release: ReleaseInfo, installedCode: Int): List<ChangelogEntr
  * @param canInstallPackages Whether Android lets this app install packages right now.
  * @param installedCode `versionCode` of the running app.
  * @param versionLabel Installed version shown in Settings, such as `Version 0.2.0 (2)`.
+ * @param onStopped Called with what a run of Update did, on any thread, such as to tell a user who left the app that it
+ *   stopped.
  */
 class UpdateViewModel(
     private val updater: Updater,
@@ -105,6 +105,7 @@ class UpdateViewModel(
     private val canInstallPackages: () -> Boolean,
     private val installedCode: Int,
     private val versionLabel: String,
+    private val onStopped: (UpdateStart) -> Unit = {},
 ) : ViewModel() {
     private val installAllowed = MutableStateFlow(canInstallPackages())
     private val press = MutableStateFlow(UpdatePress())
@@ -121,8 +122,8 @@ class UpdateViewModel(
 
     /** The update screen, shown over everything while the server offers a newer release; null otherwise. */
     val gate: StateFlow<UpdateGateModel?> =
-        combine(updater.offer, updater.state, updater.prompt, uploads, press) { offer, state, prompt, uploading, pressed ->
-            offer?.let { UpdateGateModel(it, offeredEntries(it, installedCode), step(state, prompt != null, uploading > 0, pressed)) }
+        combine(updater.offer, updater.state, updater.prompt, uploads, combine(press, installer.running, ::Pair)) { offer, state, prompt, uploading, (pressed, running) ->
+            offer?.let { UpdateGateModel(it, offeredEntries(it, installedCode), step(state, prompt != null, uploading > 0, running, pressed)) }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, updater.offer.value?.let { UpdateGateModel(it, offeredEntries(it, installedCode), UpdateStep.Idle) })
 
     /** Rows the settings drawer adds for updates. */
@@ -137,11 +138,11 @@ class UpdateViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUpdates())
 
-    private fun step(state: UpdateState, prompting: Boolean, uploading: Boolean, pressed: UpdatePress): UpdateStep = when {
+    private fun step(state: UpdateState, prompting: Boolean, uploading: Boolean, running: Boolean, pressed: UpdatePress): UpdateStep = when {
         state is UpdateState.Installing -> if (prompting) UpdateStep.Confirm else UpdateStep.Installing
-        pressed.running && state is UpdateState.Downloading -> UpdateStep.Downloading(state.progress)
-        pressed.running && state is UpdateState.Ready && uploading -> UpdateStep.WaitingForUpload
-        pressed.running -> UpdateStep.Preparing
+        running && state is UpdateState.Downloading -> UpdateStep.Downloading(state.progress)
+        running && state is UpdateState.Ready && uploading -> UpdateStep.WaitingForUpload
+        running -> UpdateStep.Preparing
         state is UpdateState.Failed -> UpdateStep.Failed(state.reason)
         pressed.needsAllow -> UpdateStep.NeedsAllow
         else -> UpdateStep.Idle
@@ -170,25 +171,22 @@ class UpdateViewModel(
 
     /**
      * Starts the update for the screen's Update or Try again: downloads the offered release when needed, waits for
-     * uploads in flight, then hands it to Android. Its notes count as read, so they do not open again after the install.
+     * uploads in flight, then hands it to Android. The run belongs to the app, not the screen, so it carries on with a
+     * notification when the user leaves. Its notes count as read, so they do not open again after the install.
      *
      * @return False when Android does not let the app install yet; the caller opens its settings page.
      */
     fun update(): Boolean {
-        if (press.value.running) return true
+        if (installer.running.value) return true
         if (!canInstallPackages()) {
             press.value = UpdatePress(needsAllow = true)
             return false
         }
         updater.offer.value?.let { whatsNew.markShown(it.versionCode) }
-        press.value = UpdatePress(running = true)
-        viewModelScope.launch {
-            val start = try {
-                installer.update()
-            } finally {
-                press.update { it.copy(running = false) }
-            }
+        press.value = UpdatePress()
+        installer.start { start ->
             if (start == UpdateStart.NeedsAllow) press.value = UpdatePress(needsAllow = true)
+            onStopped(start)
         }
         return true
     }

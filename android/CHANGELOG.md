@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.104 (115), 2026-11-07
+Updates keep going when you leave the app.
+
+### Changed
+- Once you tap Update, Inventory keeps downloading and installing even if you leave the app. A notification shows how far it got, asks for your tap when Android needs one, and tells you if the update stopped so you can try again.
+
 ## 0.6.103 (114), 2026-11-06
 Your sky has sound.
 

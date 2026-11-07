@@ -105,4 +105,31 @@ class UpdateInstallerTest {
         assertEquals(UpdateStart.Started, run.await())
         assertEquals(1, installed.size)
     }
+
+    @Test
+    fun startRunsOutsideTheCallerAndOnlyOnceAtATime() = runBlocking {
+        enqueueRelease()
+        updater.check()
+        uploads.begin()
+        var runs = 0
+        val done = kotlinx.coroutines.CompletableDeferred<UpdateStart>()
+        val background = UpdateInstaller(updater, { allowed }, uploads, onRun = { runs++ })
+        assertTrue(background.start { done.complete(it) })
+        assertTrue(background.running.value)
+        assertFalse(background.start())
+        assertEquals(1, runs)
+        uploads.end()
+        assertEquals(UpdateStart.Started, done.await())
+        assertFalse(background.running.value)
+        assertEquals(1, installed.size)
+    }
+
+    @Test
+    fun theNotificationFollowsTheRun() {
+        val release = ReleaseInfo("0.3.1", 3, "/a.apk", 10, "x")
+        assertEquals(UpdateProgress.Downloading(42), updateProgress(UpdateState.Downloading(release, 0.425f), uploading = false))
+        assertEquals(UpdateProgress.WaitingForUpload, updateProgress(UpdateState.Ready(release, File("a")), uploading = true))
+        assertEquals(UpdateProgress.Installing, updateProgress(UpdateState.Installing(release), uploading = false))
+        assertEquals(UpdateProgress.Preparing, updateProgress(UpdateState.Checking, uploading = false))
+    }
 }

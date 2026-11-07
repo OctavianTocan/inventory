@@ -38,6 +38,7 @@ import com.octaviantocan.mymind.update.SessionApkInstaller
 import com.octaviantocan.mymind.update.UploadActivity
 import com.octaviantocan.mymind.update.UploadService
 import com.octaviantocan.mymind.update.UpdateInstaller
+import com.octaviantocan.mymind.update.UpdateService
 import com.octaviantocan.mymind.update.UpdateNotifier
 import com.octaviantocan.mymind.update.UpdatePrefs
 import com.octaviantocan.mymind.update.UpdateWorker
@@ -157,6 +158,8 @@ class AppContainer(context: Context) {
         updater,
         canInstall = { context.packageManager.canRequestPackageInstalls() },
         uploads = uploadActivity,
+        scope = updateScope,
+        onRun = { UpdateService.start(context.applicationContext) },
     )
     val whatsNew = WhatsNew(
         updatePrefs,

@@ -37,7 +37,10 @@ class InstallStatusReceiver : BroadcastReceiver() {
         when (val action = container.updater.onInstallStatus(status, message, confirm)) {
             is StatusAction.OpenPrompt -> context.startActivity(action.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             is StatusAction.NotifyPrompt -> container.updateNotifier.promptNeeded(container.updater.currentRelease(), action.intent)
-            StatusAction.None -> Unit
+            // A cancel is the user's own answer to Android's prompt, so only other failures tell a user who left.
+            StatusAction.None -> if (status != PackageInstaller.STATUS_FAILURE_ABORTED && container.updater.state.value is UpdateState.Failed && !container.updater.foreground) {
+                container.updateNotifier.stopped(container.updater.currentRelease())
+            }
         }
     }
 }

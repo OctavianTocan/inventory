@@ -82,6 +82,10 @@
             android:name=".update.UploadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <service
+            android:name=".update.UpdateService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

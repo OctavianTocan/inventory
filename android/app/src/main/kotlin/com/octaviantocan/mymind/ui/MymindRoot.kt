@@ -22,6 +22,7 @@ import com.octaviantocan.mymind.BuildConfig
 import com.octaviantocan.mymind.update.allowInstallsIntent
 import com.octaviantocan.mymind.ui.update.UpdateOverlays
 import com.octaviantocan.mymind.ui.update.UpdateViewModel
+import com.octaviantocan.mymind.update.UpdateStart
 import com.octaviantocan.mymind.ui.settings.SettingsUpdates
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -123,7 +124,9 @@ private fun SignedIn(container: AppContainer, online: Boolean) {
             { context.packageManager.canRequestPackageInstalls() },
             BuildConfig.VERSION_CODE,
             "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-        )
+        ) { start ->
+            if (start != UpdateStart.Started && !container.updater.foreground) container.updateNotifier.stopped(container.updater.offer.value)
+        }
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()

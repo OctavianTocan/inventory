@@ -20,7 +20,8 @@ using Inventory.", every newer version with its notes, and "Update to 0.6.72" as
 action. Nothing MUST close it but the update, and Back MUST leave the app. The phone
 remembers the last offer, so a start shows the screen before the server answers again;
 a failed check keeps the offer and a server with nothing newer takes it away. Updates
-MUST NOT install by themselves when the user leaves the app. Source: Tavi, 5 Nov 2026
+MUST NOT start installing by themselves when the user leaves the app; an update the user
+started carries on (update-carries-on-when-you-leave). Source: Tavi, 5 Nov 2026
 ("updating when you open and not letting you use until updated. Like Pully"); pulls.review
 update-screen-is-required and updater-remembers-the-offer. The app's name changed from
 ThyMind to Inventory on Tavi's word, 5 Nov 2026 ("fully rename it to Inventory everywhere").
@@ -38,3 +39,14 @@ update-confirmation-remains-actionable.
 While the app is closed, the background check MUST download a newer release and tell the
 user in a notification once per version; its tap opens the app on the update screen.
 Source: Tavi, 5 Nov 2026; pulls.review updater-notifies-once.
+
+@cc [owner:OctavianTocan,label:product] update-carries-on-when-you-leave
+Once the user taps Update (or Try again), the download, the wait for uploads in flight and
+the hand-off to Android MUST carry on when the user leaves the app, with an ongoing
+notification that shows the download's percent, the wait for an upload and the install;
+its tap opens the update screen. When Android then needs the user's tap, a notification
+MUST ask for it; when the update stops while the user is away (a failed download or
+install, not a cancel of Android's prompt), a notification MUST say so and its tap opens
+the update screen with Try again. Source: Tavi, 7 Nov 2026 ("once we start an update in
+the app, we gotta make sure it happens even if you leave the app as it downloads or
+installs!"). The wording of the notifications is Claude's choice, not confirmed by Tavi.
