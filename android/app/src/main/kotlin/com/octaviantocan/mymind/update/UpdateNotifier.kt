@@ -53,7 +53,7 @@ class UpdateNotifier(private val context: Context) {
         val open = PendingIntent.getActivity(
             context,
             REQUEST_PROMPT,
-            prompt.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            Intent(prompt).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         post(

@@ -35,6 +35,15 @@ approval Android still waits for MUST offer Continue update; neither lets the us
 through. Source: Tavi, 5 Nov 2026; pulls.review update-shows-its-progress and
 update-confirmation-remains-actionable.
 
+@cc [owner:OctavianTocan,label:product] update-prompt-opens-from-the-screen
+Android's install prompt MUST be opened by the visible update screen, never from the
+background, and only once per prompt Android sends; Continue update opens it again. A
+status Android reports for an install session the app no longer follows (one a retry
+abandoned) MUST be ignored. Saying no in Android's prompt MUST bring back Update, not a
+failure. Source: Tavi, 7 Nov 2026 ("It say to try again because this shit no work. 'The
+install was cancelled' and the Android prompt for install did show up but it just stays
+there"); pulls.review UpdateInstallReceiver and Updates.openConfirmation.
+
 @cc [owner:OctavianTocan,label:product] update-notifies-once
 While the app is closed, the background check MUST download a newer release and tell the
 user in a notification once per version; its tap opens the app on the update screen.

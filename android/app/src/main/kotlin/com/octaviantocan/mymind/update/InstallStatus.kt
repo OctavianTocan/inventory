@@ -12,12 +12,8 @@ sealed interface StatusAction {
     /** Nothing more to do. */
     data object None : StatusAction
 
-    /**
-     * Show the system install prompt now.
-     *
-     * @property intent The prompt's activity intent.
-     */
-    data class OpenPrompt(val intent: Intent) : StatusAction
+    /** The status is about a session the app no longer follows, such as one a retry abandoned; it is ignored. */
+    data object Stale : StatusAction
 
     /**
      * Tell the user in a notification that a tap is needed.
@@ -34,8 +30,11 @@ class InstallStatusReceiver : BroadcastReceiver() {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
         val confirm = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_INTENT, Intent::class.java)
-        when (val action = container.updater.onInstallStatus(status, message, confirm)) {
-            is StatusAction.OpenPrompt -> context.startActivity(action.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val session = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+        // The prompt is never started from here: the visible update screen opens it, so Android's rules for starting
+        // activities from the background cannot hide or break it.
+        when (val action = container.updater.onInstallStatus(status, message, confirm, session)) {
+            StatusAction.Stale -> Unit
             is StatusAction.NotifyPrompt -> container.updateNotifier.promptNeeded(container.updater.currentRelease(), action.intent)
             // A cancel is the user's own answer to Android's prompt, so only other failures tell a user who left.
             StatusAction.None -> if (status != PackageInstaller.STATUS_FAILURE_ABORTED && container.updater.state.value is UpdateState.Failed && !container.updater.foreground) {

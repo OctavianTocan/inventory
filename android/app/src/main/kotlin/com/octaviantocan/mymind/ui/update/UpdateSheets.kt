@@ -1,5 +1,6 @@
 package com.octaviantocan.mymind.ui.update
 
+import android.content.Intent
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -40,6 +42,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.octaviantocan.mymind.changelog.ChangelogEntry
 import com.octaviantocan.mymind.ui.theme.MymindTheme
@@ -185,11 +190,20 @@ fun UpdateOverlays(viewModel: UpdateViewModel, onAllow: () -> Unit, onLeave: () 
     val gate by viewModel.gate.collectAsStateWithLifecycle()
     val after by viewModel.afterUpdate.collectAsStateWithLifecycle()
     val changelog by viewModel.changelogOpen.collectAsStateWithLifecycle()
+    val promptRequest by viewModel.promptRequest.collectAsStateWithLifecycle()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val openPrompt = { automatic: Boolean ->
+        viewModel.promptToOpen(automatic)?.let { runCatching { context.startActivity(Intent(it)) } }
+    }
+    LaunchedEffect(promptRequest) {
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) openPrompt(true)
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { openPrompt(true) }
     gate?.let { model ->
         UpdateGate(
             model,
             onUpdate = { if (!viewModel.update()) onAllow() },
-            onContinue = { viewModel.pendingPrompt()?.let { runCatching { context.startActivity(it) } } },
+            onContinue = { openPrompt(false) },
             onLeave = onLeave,
         )
         return

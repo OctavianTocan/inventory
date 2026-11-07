@@ -37,7 +37,8 @@ class UpdateInstallerTest {
     private lateinit var installer: UpdateInstaller
 
     private val installerFake = object : ApkInstaller {
-        override suspend fun install(file: File) {
+        override suspend fun install(file: File, beforeCommit: (Int) -> Unit) {
+            beforeCommit(installed.size + 1)
             installed += file
         }
     }

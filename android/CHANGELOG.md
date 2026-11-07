@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.105 (116), 2026-11-07
+Updates no longer stop at "The install was cancelled".
+
+### Fixed
+- Android's install prompt now opens from the update screen, once, so tapping Install in it finishes the update. Before, the app could say "The install was cancelled" while the prompt was still on screen.
+- If you say no in Android's prompt, the update screen offers Update again instead of an error.
+
 ## 0.6.104 (115), 2026-11-07
 Updates keep going when you leave the app.
 

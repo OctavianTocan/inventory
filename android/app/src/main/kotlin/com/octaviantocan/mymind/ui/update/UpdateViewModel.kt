@@ -191,8 +191,25 @@ class UpdateViewModel(
         return true
     }
 
-    /** @return Android's waiting install prompt, for Continue update, or null. */
-    fun pendingPrompt(): Intent? = updater.prompt.value
+    /** Changes each time Android sends a new install prompt. */
+    val promptRequest: StateFlow<Int> = updater.promptRequest
+
+    private var openedRequest = -1
+
+    /**
+     * Android's waiting install prompt, to open from the visible activity, or null. The screen asks for it by itself
+     * once per prompt, so a prompt already showing is never started a second time; Continue update asks again.
+     *
+     * @param automatic True when the screen asks by itself rather than for a tap.
+     * @return The prompt to start, or null when there is none or it was already opened.
+     */
+    fun promptToOpen(automatic: Boolean): Intent? {
+        val prompt = updater.prompt.value ?: return null
+        val request = updater.promptRequest.value
+        if (automatic && openedRequest == request) return null
+        openedRequest = request
+        return prompt
+    }
 
     /** Asks the server again, for "Check for updates" in Settings; a newer release brings up the update screen. */
     fun checkNow() {

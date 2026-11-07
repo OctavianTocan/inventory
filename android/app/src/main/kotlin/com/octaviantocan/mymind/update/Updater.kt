@@ -57,10 +57,23 @@ class Updater(
     private val mutablePrompt = MutableStateFlow<Intent?>(null)
 
     /**
-     * Android's install prompt while it waits for the user's tap, or null. The update screen offers it again when the
-     * user comes back without finishing it.
+     * Android's install prompt while it waits for the user's tap, or null. The update screen opens it from the visible
+     * activity, and offers it again when the user comes back without finishing it.
      */
     val prompt: StateFlow<Intent?> = mutablePrompt
+
+    private val mutablePromptRequest = MutableStateFlow(0)
+
+    /** Changes each time Android sends a new prompt, so the update screen opens it once. */
+    val promptRequest: StateFlow<Int> = mutablePromptRequest
+
+    // The session the last install committed, and the package it installs. Android reports every session it ends,
+    // including ones a retry abandoned, so a status for any other session is stale.
+    @Volatile
+    private var session: Int? = null
+
+    @Volatile
+    private var installing: UpdateState.Ready? = null
 
     /** True while the app is on screen; set by the activity. */
     @Volatile
@@ -121,8 +134,9 @@ class Updater(
         val ready = mutableState.value as? UpdateState.Ready ?: return
         mutableState.value = UpdateState.Installing(ready.release)
         mutablePrompt.value = null
+        installing = ready
         try {
-            installer.install(ready.file)
+            installer.install(ready.file) { session = it }
         } catch (error: IOException) {
             mutableState.value = UpdateState.Failed("Could not start the install: ${error.message ?: "unknown error"}", ready.release)
         } catch (error: SecurityException) {
@@ -136,9 +150,12 @@ class Updater(
      * @param status A `PackageInstaller.STATUS_*` value.
      * @param message Android's explanation, or null.
      * @param confirm The system prompt's intent for `STATUS_PENDING_USER_ACTION`, or null.
+     * @param sessionId The session the status is about, or -1 when unknown.
      * @return What the receiver does next.
      */
-    fun onInstallStatus(status: Int, message: String?, confirm: Intent?): StatusAction {
+    fun onInstallStatus(status: Int, message: String?, confirm: Intent?, sessionId: Int = -1): StatusAction {
+        val current = session
+        if (sessionId != -1 && current != null && sessionId != current) return StatusAction.Stale
         val release = currentRelease()
         return when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> when {
@@ -148,10 +165,18 @@ class Updater(
                 }
                 else -> {
                     mutablePrompt.value = confirm
-                    if (foreground) StatusAction.OpenPrompt(confirm) else StatusAction.NotifyPrompt(confirm)
+                    mutablePromptRequest.value += 1
+                    if (foreground) StatusAction.None else StatusAction.NotifyPrompt(confirm)
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> StatusAction.None.also { mutablePrompt.value = null }
+            // Saying no in Android's prompt is a choice, not a failure: the package stays and Update is offered again.
+            PackageInstaller.STATUS_FAILURE_ABORTED -> {
+                mutablePrompt.value = null
+                val ready = installing
+                mutableState.value = if (ready != null && ready.file.isFile) ready else UpdateState.Failed(failureText(status, message), release)
+                StatusAction.None
+            }
             else -> {
                 mutablePrompt.value = null
                 mutableState.value = UpdateState.Failed(failureText(status, message), release)

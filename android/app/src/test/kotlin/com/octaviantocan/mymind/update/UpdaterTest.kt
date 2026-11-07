@@ -39,9 +39,10 @@ class UpdaterTest {
     private class RecordingInstaller(var failure: IOException? = null) : ApkInstaller {
         val installed = mutableListOf<File>()
 
-        override suspend fun install(file: File) {
+        override suspend fun install(file: File, beforeCommit: (Int) -> Unit) {
             failure?.let { throw it }
             installed += file
+            beforeCommit(installed.size)
         }
     }
 
@@ -172,13 +173,43 @@ class UpdaterTest {
     }
 
     @Test
-    fun pendingUserActionOpensThePromptInTheForeground() = runBlocking {
+    fun pendingUserActionAsksTheScreenToOpenThePromptInTheForeground() = runBlocking {
         enqueueRelease()
         val updater = updater().also { it.foreground = true }
         updater.check()
         updater.install()
-        val action = updater.onInstallStatus(PackageInstaller.STATUS_PENDING_USER_ACTION, null, Intent("prompt"))
-        assertTrue(action is StatusAction.OpenPrompt)
+        val before = updater.promptRequest.value
+        val action = updater.onInstallStatus(PackageInstaller.STATUS_PENDING_USER_ACTION, null, Intent("prompt"), 1)
+        assertEquals(StatusAction.None, action)
+        assertEquals(before + 1, updater.promptRequest.value)
+    }
+
+    @Test
+    fun aStatusForAnAbandonedSessionIsIgnored() = runBlocking {
+        enqueueRelease()
+        val updater = updater()
+        updater.check()
+        updater.install()
+        updater.onInstallStatus(PackageInstaller.STATUS_FAILURE_ABORTED, null, null, 1)
+        // Update again commits session 2, abandoning session 1, which Android may report once more as aborted.
+        updater.install()
+        val prompt = Intent("prompt")
+        updater.onInstallStatus(PackageInstaller.STATUS_PENDING_USER_ACTION, null, prompt, 2)
+        assertEquals(StatusAction.Stale, updater.onInstallStatus(PackageInstaller.STATUS_FAILURE_ABORTED, null, null, 1))
+        assertTrue(updater.state.value is UpdateState.Installing)
+        assertEquals(prompt, updater.prompt.value)
+    }
+
+    @Test
+    fun cancellingThePromptOffersUpdateAgain() = runBlocking {
+        enqueueRelease()
+        val updater = updater()
+        updater.check()
+        updater.install()
+        updater.onInstallStatus(PackageInstaller.STATUS_PENDING_USER_ACTION, null, Intent("prompt"), 1)
+        updater.onInstallStatus(PackageInstaller.STATUS_FAILURE_ABORTED, null, null, 1)
+        assertTrue(updater.state.value is UpdateState.Ready)
+        assertEquals(null, updater.prompt.value)
     }
 
     @Test
