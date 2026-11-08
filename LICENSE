@@ -22,8 +22,5 @@ SOFTWARE.
 
 ---
 
-This license covers the code written for this project. It does not cover:
-
-- mirror/, which holds mymind's own web front-end and remains the property of
-  its authors;
-- third-party fonts, libraries and assets, which keep their own licenses.
+This license covers the code written for this project. Third-party fonts,
+libraries and assets keep their own licenses.

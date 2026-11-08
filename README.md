@@ -98,9 +98,12 @@ change log.
 
 ## License
 
-[MIT](LICENSE) for the code written for this project. [`mirror/`](mirror) holds mymind's own web front-end, kept
-so the original web library can run; it belongs to its authors and is not covered. Fonts and third-party libraries
-keep their own licenses.
+[MIT](LICENSE) for the code written for this project. Fonts and third-party libraries keep their own licenses.
+
+This is the public copy of a private working repository. It leaves out `mirror/` (mymind's own web front-end,
+which is not ours to publish) and the recordings of a real library the replica was first built from, in every
+commit. The Android app, the server, the MCP and the feedback agent are all here; the original web library needs
+mymind's front-end in `mirror/` to run.
 
 ---
 
@@ -475,9 +478,7 @@ Hopper and Ghidra are not involved. They read native machine code; this app ship
 
 ## Private data
 
-`mirror/` holds mymind's front-end and is committed, which makes this repository private data: keep it private.
-`npm run bundle` snapshots `data/` into `library/` as a local backup.
+`mirror/` (mymind's front-end) is not part of this public copy. `npm run bundle` snapshots `data/` into `library/` as a local backup.
 
 Never committed: `.env` (API keys), `data/` (the working database), `library/` (its snapshot) and `evidence/`
-(verification screenshots). Commits made before the database left Git still contain `library/mymind.db`; removing
-it from them means rewriting history. Git history still contains the old `capture/` and `replay/` recordings.
+(verification screenshots). None of them, nor the early `capture/` and `replay/` recordings, are in this copy's history.
