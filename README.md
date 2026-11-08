@@ -1,13 +1,113 @@
-# Inventory
+<p align="center">
+  <img src="docs/media/icon.png" width="96" alt="Inventory's app icon: a backpack drawn as a constellation">
+</p>
 
-Inventory (called ThyMind until 5 November 2026) is a private library of things you save: an Android app, a web
-library and an MCP server for AI agents. The app's name is Inventory everywhere a person reads it; internal names
-(`mymind` binary, `com.octaviantocan.mymind` package, `thymind_*` MCP tools, Cloudflare Worker and Docker names)
-stay as they are so installed phones, sign-ins and connected agents keep working.
+<h1 align="center">Inventory</h1>
 
-It began as a localhost replica of `https://access.mymind.com/everything`. It runs mymind's real front-end against a local
-SQLite library. Notes, pasted text, URL placeholders, edits, tags, spaces and settings persist locally. No write
-is forwarded to mymind.
+<p align="center"><b>A private library for everything you save, where every save feels like picking up loot.</b></p>
+
+<p align="center">
+  Android app · Rust server on Cloudflare Workers · AI tags and search · an MCP server for AI agents
+  <br>
+  <a href="https://www.figma.com/design/XOmC8KfGVurXlA7iPFXEbe/Inventory-%E2%80%94-Android-Design-Book">Figma design book</a> ·
+  <a href="android/CHANGELOG.md">Changelog</a> ·
+  <a href="docs/">Docs</a>
+</p>
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/media/share.gif" width="240" alt="Sharing a link to Inventory: a shooting star brings it in as a legendary find, then its tags"></td>
+    <td align="center"><img src="docs/media/library.gif" width="240" alt="The library: a grid of saved photos, notes and articles, then an article opened in reader mode"></td>
+    <td align="center"><img src="docs/media/sky.gif" width="240" alt="Your sky: finds you came back to light up stars in a constellation"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Save</b><br>Share anything from any app</td>
+    <td align="center"><b>Keep</b><br>Your whole library, read cleanly</td>
+    <td align="center"><b>Come back</b><br>Old finds light up your sky</td>
+  </tr>
+</table>
+
+## Why
+
+Most of what we save is never seen again. Bookmarks, screenshots and "read later" lists turn into thousands of
+cards of moss that nobody clicks. Inventory is built on two ideas to change that:
+
+- **Saving should feel good.** Sharing a link, a photo or a post into Inventory is a small moment: a shooting star
+  carries it in, it lands in your backpack as a find, and you tag it with a tap. Finds have a rarity, and the
+  rarity comes from your own library (the first thing you ever save from a site is legendary), never from chance
+  or payment.
+- **What you saved should come back.** Every day, *Back today* brings up to three old finds to the top. Opening one
+  lights a star, and stars gather into constellations in *Your sky*, so going back to old things builds something
+  you can see. Nothing wears with age, and there are no levels, XP or streaks to keep up.
+
+It is a game-like inventory inside a calm, modern app: ideas from games, drawn in the app's own colours, type and
+shapes. It is also *mine*: the library, the server and the data belong to the person who runs it.
+
+Inventory started in October 2026 as a faithful local replica of [mymind](https://mymind.com), the visual
+bookmarking app, to keep a library on my own server. It grew into its own product, with its own Android app, server,
+search and AI, and was renamed Inventory (from ThyMind) on 5 November 2026.
+
+## What it does
+
+- **Save from anywhere.** The Android share sheet takes links, text, photos, videos, PDFs and files from any app.
+  The server reads the page (OpenGraph, oEmbed, JSON-LD, Reddit, YouTube, Bluesky, Mastodon, X), keeps a cover and
+  a clean copy, and makes a card for it: article, post, picture, video, product, repository, note.
+- **AI that stays out of the way.** Each save gets a short summary, tags picked from your own vocabulary (OpenAI's
+  Decisions API), an embedding (Gemini) for search by meaning, and a transcript for videos and audio.
+- **Search the way you think.** Words and meaning blended into one ranking, plus `type:video`, `tag:design`,
+  `site:github.com`, `"exact phrase"`, `before:`/`after:` and `-exclude`.
+- **A library that feels like a gallery.** A pinch-to-zoom grid, reader mode for articles and threads, Spaces
+  (your own folders), pins, sweep-to-select many cards with a backpack bar to tag or move them, and themes.
+- **Works offline.** The phone keeps its own copy of the library, queues changes, and syncs with a change feed.
+- **Your sky and Back today.** Daily finds, constellations, and synthesised game sounds.
+- **For AI agents.** A hosted MCP server lets Claude, ChatGPT and other agents search, read and save to your
+  library, with OAuth sign-in and read or write scopes.
+- **Feedback that ships itself.** Feedback sent from the app goes to a coding agent in a Cloudflare Sandbox, which
+  opens a pull request; it merges once approved and CI is green.
+- Also: a Chrome extension, a Tauri desktop app and the original web library.
+
+## How it is built
+
+| Part | Where | Stack |
+|---|---|---|
+| Android app | [`android/`](android) | Kotlin, Jetpack Compose, WorkManager, Coil; the shooting star and the sky are drawn in Compose |
+| Server | [`rust/`](rust) | Rust; runs locally as `mymind serve` (SQLite) and in production as a Cloudflare Worker compiled to WebAssembly, with Durable Objects, R2 and a media container (ffmpeg, libvips) |
+| AI | [`rust/crates/ai`](rust/crates/ai), [`vendor/ai-kit`](https://github.com/OctavianTocan/ai-kit) | Gemini embeddings and summaries, OpenAI Decisions API for tags, OpenAI speech to text |
+| MCP server | [`mcp/`](mcp) | TypeScript Cloudflare Worker, remote MCP with OAuth |
+| Feedback agent | [`feedback-runner/`](feedback-runner) | TypeScript Worker on the Cloudflare Sandbox SDK |
+| Extension, desktop | [`extension/`](extension), [`desktop/`](desktop) | Chrome MV3; Tauri 2 |
+
+A merge to `main` is a release: CI verifies the app and server, publishes the APK to every phone (the app updates
+itself), and a timer on the host deploys the Worker within minutes.
+
+### Built with AI agents, held to contracts
+
+Almost all of this code was written by AI coding agents (Claude Code and Codex) working from my reviews, design
+picks and screen recordings. Two things keep that honest:
+
+- [`AGENTS.md`](AGENTS.md) is the brief every agent reads: the product direction, the hard rules, and how work ships.
+- `CONTRACTS` files beside the code record each behaviour I asked for or picked, in RFC 2119 words with the date
+  and the source, so a later change can't quietly undo a decision. Changing one needs my say.
+
+## Design
+
+The design system, components and screens live in the
+**[Inventory Android Design Book on Figma](https://www.figma.com/design/XOmC8KfGVurXlA7iPFXEbe/Inventory-%E2%80%94-Android-Design-Book)**:
+colours, materials, type, buttons, cards, the gallery, navigation, search, sheets, Spaces, design decisions and a
+change log.
+
+## License
+
+[MIT](LICENSE) for the code written for this project. [`mirror/`](mirror) holds mymind's own web front-end, kept
+so the original web library can run; it belongs to its authors and is not covered. Fonts and third-party libraries
+keep their own licenses.
+
+---
+
+The rest of this README is the developer guide: how to run, host and verify Inventory. Internal names stay as they
+were (`mymind` binary, `com.octaviantocan.mymind` package, `thymind_*` MCP tools, Cloudflare Worker and Docker
+names) so installed phones, sign-ins and connected agents keep working. The web library still runs mymind's
+front-end against a local SQLite library; no write is ever forwarded to mymind.
 
 ## Run it
 
