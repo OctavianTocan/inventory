@@ -1,7 +1,7 @@
 # Inviting another person
 
-Assessed and configured on 2026-11-06. The user authorized an invitation for Esther's Google account and required
-her own private library. Use the existing hosted Inventory service at `https://mymind.octaviantocan.com`.
+Assessed and configured on 2026-11-06. The user authorized an invitation for another person's Google account and required
+a separate private library. Use the existing hosted Inventory service at `https://mymind.octaviantocan.com`.
 
 ## What an invitation needs
 
@@ -24,7 +24,7 @@ create an account on the hosted Worker. The hosted password uploader only suppor
 
 ## Google Cloud
 
-Use the existing agent Chromium, signed in as `tocanoctavian@gmail.com`, and verify that account in the page
+Use the existing agent Chromium, signed in as the owner's Google account, and verify that account in the page
 before editing project `mymind-replica` (display name `mymind replica`). Under Google Auth Platform > Audience,
 keep the existing audience and add the invited account as a test user if the project is in Testing.
 Save, reopen the page and confirm the address remains in the table. Preserve the owner and every callback URL.
