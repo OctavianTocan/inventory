@@ -1,5 +1,5 @@
 // Inventory for AI agents: the remote MCP server (README.md here, docs/mcp.md). It shares the app's hostname
-// (Tavi, 2026-11-05: "mymind.octaviantocan.com/mcp") through two routes more specific than the `mymind` Worker's
+// (Octavian, 2026-11-05: "mymind.octaviantocan.com/mcp") through two routes more specific than the `mymind` Worker's
 // `/*`, and reaches the library only through the `mymind` Worker's own API over a service binding.
 {
   "name": "thymind-mcp",

@@ -4,7 +4,7 @@ FootBarLayer in the shell draws the active registration over the pages. A page c
 MUST keep that layer in place; the contents change through Pully's blur fade and the
 pill's width eases to its new size. Disposed registrations MUST stop owning the bar.
 Source: pulls.review kit-one-foot-bar, DESIGN rule 196, FootBar.kt at
-ee5cf358333cb1170f1923c7118e12af3f265b74; requested by Tavi on 22 October 2026.
+ee5cf358333cb1170f1923c7118e12af3f265b74; requested by Octavian on 22 October 2026.
 
 @cc [owner:OctavianTocan,label:design;motion;architecture] library-search-morphs-the-navigation
 All, Spaces and Search MUST show the same bar: one FootPill with one round
@@ -16,11 +16,11 @@ carrying the circle to the end, and narrows back when search closes, while the t
 blur out as the field blurs in and the magnifier with a sparkle turns into the close
 cross, through Pully's blur fade. A page that adds its own bar MUST do so through the
 same pill and circle.
-Source: Tavi, 28 October 2026 ("the bottom bar of the search and spaces isn't the same
+Source: Octavian, 28 October 2026 ("the bottom bar of the search and spaces isn't the same
 one as it is on the everything section. if you look at pully, you will see that the
 best is to use exactly the same one and morph it depending on the page");
 pulls.review kit-one-foot-bar. The pill widening replaced "in place and at the same
-size" when Tavi picked version 03 of the Everything bar on 1 November 2026 ("Yeah!
+size" when Octavian picked version 03 of the Everything bar on 1 November 2026 ("Yeah!
 Let's use 03").
 
 @cc [owner:OctavianTocan,label:design] library-bars-rest-alike
@@ -30,9 +30,9 @@ add their own bottom offset to the bar. The bar floats over the content without 
 solid strip behind it and carries Pully's two-layer downward canvas shadow. The pill
 and the circle beside it are 56dp tall on every page, search included, with an 8dp
 highlight inset around the tabs (made one height for search on 28 October 2026, when
-Tavi asked for one bar on every page).
+Octavian asked for one bar on every page).
 Source: pulls.review kit-bottom-bars-rest-alike, DESIGN rules 192 and 45, Kit.kt at
-ee5cf358333cb1170f1923c7118e12af3f265b74; geometry from Tavi's Google Photos
+ee5cf358333cb1170f1923c7118e12af3f265b74; geometry from Octavian's Google Photos
 comparison in the recorded review of 22 October 2026 ("less tall", "start a bit
 further to the left", "a bit wider").
 
@@ -44,7 +44,7 @@ black with light status and navigation bar icons. A page that never goes full sc
 leaves the bar where library-bars-rest-alike puts it. When several parts of one page
 register (the gallery's reels and the sky over it), the furthest MUST count, whichever
 registered last, so one never cancels another.
-Source: Tavi, 30 October 2026, the gallery's full-screen mode ("we full screen one thing");
+Source: Octavian, 30 October 2026, the gallery's full-screen mode ("we full screen one thing");
 6 November 2026, 16:53, the bar staying in the sky ("the UI for normal stuff stays while in
 the sky and I can even swipe to go to spaces").
 
@@ -71,10 +71,10 @@ accessibility services while folded. Each tab keeps the pill's full height to ta
 When system animations are disabled the highlight and the name MUST change at once.
 Changing the selected tab MUST preserve the one bar registration rather than creating
 a second visible bar.
-Source: Tavi's pick of version 03, "Two icons, names on change", from the 15 Everything
+Source: Octavian's pick of version 03, "Two icons, names on change", from the 15 Everything
 bars, 1 November 2026 ("Yeah! Let's use 03"), which replaced the Google Photos capsule
-with both labels of 22 and 23 October 2026; Tavi's no-Create decision, 22 October 2026.
-The glyph was redrawn after Google Photos' when Tavi said on 6 November 2026 that "the
+with both labels of 22 and 23 October 2026; Octavian's no-Create decision, 22 October 2026.
+The glyph was redrawn after Google Photos' when Octavian said on 6 November 2026 that "the
 search icon is not quite like the Google Photos one" and that it keeps its sparkle ("It's
 the new AI search"); its proportions and size were measured by Claude from a Google Photos
 screenshot and are Claude's choice.
@@ -84,7 +84,7 @@ While a card's reader is open, ShellFrame MUST draw the page and its bar as one 
 that steps back as far as the reader's sheet is up (`card-reader-rises-as-a-sheet`),
 on black, and MUST come forward with the sheet as it sinks or is pulled down. Anything
 drawn over the page as an overlay stays where it is.
-Source: Tavi's pick of 13 and 14 on the card opening page, 30 October 2026 ("Let's do
+Source: Octavian's pick of 13 and 14 on the card opening page, 30 October 2026 ("Let's do
 13 and 14 together"), transitions.dev's Banner stacking.
 
 @cc [owner:OctavianTocan,label:product;motion] library-pages-swipe-side-by-side
@@ -95,7 +95,7 @@ and letting go settles on the nearer page, or on the next one the way a throw we
 finger has moved it part of the way, on Pully's critically damped page spring. A tab or the
 circle glides the row to its page. The bar MUST change with the page as the finger lets go,
 through library-navigation-is-the-gallery-capsule and library-search-morphs-the-navigation.
-Arriving on Ask, by the circle or by a swipe, MUST put the cursor in its field (Tavi,
+Arriving on Ask, by the circle or by a swipe, MUST put the cursor in its field (Octavian,
 5 November 2026: "When I swipe over to the search screen, the search input should be
 automatically focused"); only Same Vibe's similar cards open it with the keyboard down. Closing
 Ask goes back to the page it was opened from. Two fingers are a pinch and MUST NOT turn a
@@ -103,7 +103,7 @@ page; a page in full screen (library-bar-leaves-for-full-screen) MUST NOT swipe,
 page's full screen MUST only hide the bar while that page is on screen. Each page keeps its
 scroll and column count while away, and the page beside the one on screen is built ahead so
 a swipe never holds at its start.
-Source: Tavi, 5 November 2026 ("I want to be able to swipe between the everything, spaces,
+Source: Octavian, 5 November 2026 ("I want to be able to swipe between the everything, spaces,
 and ask pages. Should feel seamless to go from one to another. Just as it does in Pully");
 pulls.review kit-side-pages-slide-whole, kit-side-pages-keep-state and
 kit-drags-carry-on-or-settle.
@@ -116,14 +116,14 @@ gallery-top-edge-blurs-the-scrolling-content and the mosaic's foot fade, and eve
 other scrolling column (Ask before anything is typed, the search dock's answer, the
 sheets, the reader and its name card) through `scrollEdgeFade`. At rest at an edge,
 that edge stays sharp. The reader's foot keeps its own fade under its buttons instead.
-Source: Tavi, 5 November 2026 ("If there's a scroll view, we have blur at the top and
+Source: Octavian, 5 November 2026 ("If there's a scroll view, we have blur at the top and
 at the bottom when it's scrolled ... We are, in fact, also not doing it in the spaces").
 
 @cc [owner:OctavianTocan,label:product] gallery-tab-is-called-all
 The tab of the whole library, mymind's Everything, MUST be named "All" wherever the app
 shows or speaks it, such as the bar's tab and the reader's Back to All; contracts call
 that page All too. The code keeps the enum `Tab.Everything`.
-Source: Tavi, 5 November 2026 ("Rename it to 'All'"), picked over Mind, Home and All
+Source: Octavian, 5 November 2026 ("Rename it to 'All'"), picked over Mind, Home and All
 cards when asked what to call Everything.
 
 @cc [owner:OctavianTocan,label:product;design;architecture] window-shapes-follow-pully
@@ -140,7 +140,7 @@ card from the gallery replaces the one beside it. Every shape MUST keep pages cl
 camera cutout or navigation bar at the side, and turning the phone or opening the foldable
 MUST keep the open card, page and scroll (the activity handles the change itself rather than
 being recreated).
-Source: Tavi, 5 November 2026 ("Let's also follow Pully in how it adapted its layouts for
+Source: Octavian, 5 November 2026 ("Let's also follow Pully in how it adapted its layouts for
 foldable phones and rotated states a while ago (look into it), and do that for this as
 well"); pulls.review unfolded-window-reads-one-stack-as-two-panes and
 wide-window-pages-keep-a-readable-column, DESIGN rules 206, 207 and 209 (PR #137).

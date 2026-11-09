@@ -10,11 +10,11 @@ keeping the complete name in text semantics. The pill and controls MUST remain
 separate at narrow widths and large font settings. Sheet headers remain plain
 titles; this pill belongs to the reader. The card's actions moved to the foot
 (`card-reader-foot-holds-its-actions`).
-Source: Tavi's attached toolbar reference and one-row requirement, 22 October 2026;
+Source: Octavian's attached toolbar reference and one-row requirement, 22 October 2026;
 the recorded review of the same day ("this icon here should actually be a back
-icon"); Tavi's pick of F08 in the reader prototype, 28 October 2026, after his canvas
+icon"); Octavian's pick of F08 in the reader prototype, 28 October 2026, after his canvas
 comment on G08 ("Maybe we can just put a share button there instead"); the sheet
-instead of the whole screen from Tavi's pick of 13 and 14 on the card opening page,
+instead of the whole screen from Octavian's pick of 13 and 14 on the card opening page,
 30 October 2026.
 
 @cc [owner:OctavianTocan,label:product;design;motion] card-reader-rises-as-a-sheet
@@ -34,7 +34,7 @@ carry the sheet off the bottom and close the reader, as the card's sheets do (pu
 DESIGN rule 105); anything less springs it back to rest.
 A card opened from inside the reader takes its place without the sheet moving. With
 animations off, the sheet and the gallery go straight to where they end.
-Source: Tavi's pick on the card opening page, 30 October 2026 ("Let's do 13 and 14
+Source: Octavian's pick on the card opening page, 30 October 2026 ("Let's do 13 and 14
 together"): 13 is transitions.dev's Panel reveal, 14 its Banner stacking; times and
 curve from pulls.review DESIGN rule 73.
 
@@ -43,7 +43,7 @@ The reader MUST show every part of a card it has, each once, in its own raised
 section: the picture (cover, post image or image file) with the title, who made it,
 where it is from, when it was saved and how long its page takes to read; the post or
 note body, or else the saved summary; a video file's Transcript, what the server heard
-said in it (`share-takes-gallery-videos`, Tavi, 5 November 2026); the tags; the user's note; and the captured
+said in it (`share-takes-gallery-videos`, Octavian, 5 November 2026); the tags; the user's note; and the captured
 page text with its reading time. Text sections MUST carry a small muted heading. A social
 post MUST instead show as one section on its network's colour
 (`gallery-posts-look-like-posts`): who posted it, with the handle, the posting day where
@@ -69,12 +69,12 @@ the Tags section MUST NOT show Edit tags itself: Edit tags, from the tags' held
 sheet, reveals a cross on each and Done hides them again, and + Add opens Add
 tags. A card that is not itself a note MUST show Your note even before one is
 written, inviting one. The page MUST NOT end with a line saying any part can be held.
-Tavi took the always-shown Edit tags and the "Hold any part for its own actions"
+Octavian took the always-shown Edit tags and the "Hold any part for its own actions"
 line off, 4 November 2026.
-Source: Tavi's recorded review, 22 October 2026 ("why is there nothing here", "can't
-just tint only the bottom sheet", "some tags which look really weird"); Tavi's pick
+Source: Octavian's recorded review, 22 October 2026 ("why is there nothing here", "can't
+just tint only the bottom sheet", "some tags which look really weird"); Octavian's pick
 of F08, whose page is the prototype's 02 raised sections, 28 October 2026; the post
-section from Tavi's pick of X10 on the card previews canvas, 29 October 2026, and the
+section from Octavian's pick of X10 on the card previews canvas, 29 October 2026, and the
 product's price and Same Vibe from his pick of P5 the same day, and the PDF's pages from
 his pick of D5 ("I wanted to see the content"); the top comments from R4 ("the top
 comments stay, from R3") and the article from XA5, both taken with "Pick recommended and
@@ -90,7 +90,7 @@ posted and saved and how many posts the thread has. It shows no counts of likes 
 reposts. Holding the posts' words offers the post's Copy and Share, of every post's
 words; a picture opens the post on X. The server keeps only posts written before the
 saved one, because the posts after it need X's paid API.
-Source: Tavi's pick of 08 Summary first on the X threads page, 4 November 2026 ("Let's
+Source: Octavian's pick of 08 Summary first on the X threads page, 4 November 2026 ("Let's
 implement 08").
 
 @cc [owner:OctavianTocan,label:product] card-reader-opens-its-source
@@ -101,15 +101,15 @@ source; a PDF without one shows Open the PDF in its place, which hands the file 
 phone's own viewer. A video the server
 keeps plays in place instead (`card-reader-plays-videos`), and Open source still
 opens its link.
-Source: Tavi's recorded review, 22 October 2026 ("especially the preview, I should be
-taken to the source"); Tavi's pick of F08, 28 October 2026; Open the PDF from his pick of
+Source: Octavian's recorded review, 22 October 2026 ("especially the preview, I should be
+taken to the source"); Octavian's pick of F08, 28 October 2026; Open the PDF from his pick of
 D5 on the card previews canvas, 29 October 2026.
 
 @cc [owner:OctavianTocan,label:product;design] card-reader-foot-holds-its-actions
 The reader's foot MUST float Open source (or Open the PDF), a 52dp pill in the page's ink, and a 52dp
 raised round button that opens the card's actions, over a fade into the page, and
 the page MUST leave room under its last section so the foot never covers it.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026.
+Source: Octavian's pick of F08 in the reader prototype, 28 October 2026.
 
 @cc [owner:OctavianTocan,label:product] card-reader-parts-are-held
 Holding a part of the reader MUST open a sheet titled with the part's name that
@@ -122,9 +122,9 @@ a card without tags opens Add tags in the same sheet), Edit note opens its page 
 the same sheet, and Your note saves with
 Done, an emptied note taking the note off. Each hold MUST also be offered to
 accessibility services as an action.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M20, hold a
+Source: Octavian's pick of F08 in the reader prototype, 28 October 2026 (M20, hold a
 part for a small menu with few options). Save picture for every picture, not only
-picture files, follows Tavi's 6 November 2026 ask that pictures "be able to be copied,
+picture files, follows Octavian's 6 November 2026 ask that pictures "be able to be copied,
 and downloaded. Both single and multi".
 
 @cc [owner:OctavianTocan,label:product;design] card-reader-mode
@@ -135,7 +135,7 @@ and system Back MUST return to the card rather than close it. Reader Mode opens 
 Choose one and from the page text's sheet, for any card with page text, and from a
 PDF's Read in Reader Mode with the words the phone reads from its pages (Android 15 and
 later), joined back into paragraphs.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M27, Reader
+Source: Octavian's pick of F08 in the reader prototype, 28 October 2026 (M27, Reader
 Mode, "definitely"); PDFs from his pick of D5 on the card previews canvas, 29 October 2026.
 
 @cc [owner:OctavianTocan,label:product;design;motion] card-reader-name-grows-into-its-card
@@ -146,12 +146,12 @@ switch, and Spaces naming the card's spaces; then up to three cards opened befor
 it, each of which opens in its place, and Back to All. Copy link and Spaces
 hide the card before they act; Pin keeps it open. Tapping the name, the scrim
 or system Back MUST shrink it back into the pill before Back closes the reader.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026.
+Source: Octavian's pick of F08 in the reader prototype, 28 October 2026.
 
 @cc [owner:OctavianTocan,label:product;design] card-reader-shows-the-whole-picture
 The reader MUST show a card's picture whole, at its own proportions (kept between a
 tall phone screenshot and a wide banner), never cropped to a fixed frame.
-Source: Tavi's recorded review, 23 October 2026 ("the image is half cut", "it's not even
+Source: Octavian's recorded review, 23 October 2026 ("the image is half cut", "it's not even
 like complete").
 
 @cc [owner:OctavianTocan,label:product;design;motion] card-reader-plays-videos
@@ -161,7 +161,7 @@ or resumes it, and under it sit play or pause, the time played of the whole, sou
 or off, and a bar to move through it. It MUST pause when the app leaves the screen and
 stop when the reader closes, and it MUST only request media from the library server.
 Videos on other sites keep their still picture, which opens the source.
-Source: Tavi's recorded review, 23 October 2026 ("we should be showing things like kind
+Source: Octavian's recorded review, 23 October 2026 ("we should be showing things like kind
 of more similar to how Google Photos shows a video", "they open kind of a video player,
 which makes far more sense for a video").
 
@@ -172,7 +172,7 @@ close, and its header MUST leave Back out, because the gallery it would go back 
 sight; Reader Mode keeps its Back to the card, and system Back still closes the reader. On
 a phone held sideways the reader's sheet MUST be no wider than ReadableWidth, centred over
 the stepped-back gallery.
-Source: Tavi, 5 November 2026 (follow Pully's foldable and rotated layouts); pulls.review
+Source: Octavian, 5 November 2026 (follow Pully's foldable and rotated layouts); pulls.review
 first-page-beside-the-list-has-no-back and sheets-and-foot-bars-stay-column-wide, DESIGN
 rules 206, 208 and 210 (PRs #137 and #138).
 
@@ -184,5 +184,5 @@ itself, pause when the app leaves the screen and release its player when the rea
 closes, and it MUST only request media from the library server. The card's Transcript
 MUST show as a part of the reader, held like the other parts (card-reader-parts-are-held),
 once the server has transcribed the file.
-Source: Tavi, 5 Nov 2026: "If we're not already using this for audio too, then we
+Source: Octavian, 5 Nov 2026: "If we're not already using this for audio too, then we
 definitely should be".

@@ -164,7 +164,7 @@ fun LibraryFootBar(
 }
 
 /**
- * Version 03 of the Everything bar (Tavi's pick, 1 November 2026): two icon tabs, the chosen one filled on its
+ * Version 03 of the Everything bar (Octavian's pick, 1 November 2026): two icon tabs, the chosen one filled on its
  * highlight. Changing the tab shows the chosen place's name beside its icon for a moment, then folds it away; arriving on
  * a page shows no name. The names stay in the tabs for accessibility services and tests while folded.
  */

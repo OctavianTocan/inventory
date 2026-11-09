@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploys Inventory's two Workers in order: feedback-runner, then mymind (docs/feedback.md, Deploying).
 # Before deploying it lists every feedback commit since the last deploy and flags commits that touch sign-in code,
-# Wrangler files (and so Durable Object migrations), the runner itself or the ai-kit pin, so Tavi sees them first.
+# Wrangler files (and so Durable Object migrations), the runner itself or the ai-kit pin, so Octavian sees them first.
 # The last deployed commit is kept in deploy/.last-worker-deploy (local, ignored by Git).
 set -euo pipefail
 

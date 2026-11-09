@@ -1,6 +1,6 @@
 /**
  * The only way this Worker reaches a person's library: the `mymind` Worker's own app API over the service binding,
- * with the app token kept in the OAuth grant. Tavi chose (2026-11-05) to keep the limit on what an agent can reach
+ * with the app token kept in the OAuth grant. Octavian chose (2026-11-05) to keep the limit on what an agent can reach
  * here rather than in the Rust sign-in code, so every request is checked against `ALLOWED` before it leaves.
  */
 
@@ -40,7 +40,7 @@ export const ALLOWED: ReadonlyArray<readonly [string, RegExp]> = [
 ];
 
 /**
- * Named changes this Worker may push (`POST /app/v1/push`, `docs/app-api.md`). Tavi chose (2026-11-05) that agents
+ * Named changes this Worker may push (`POST /app/v1/push`, `docs/app-api.md`). Octavian chose (2026-11-05) that agents
  * read, save and edit; deleting a space, uploads, sharing and account settings stay out.
  */
 export const CHANGES = ["create-card", "note", "add-tag", "remove-tag", "add-to-space", "remove-from-space", "create-space", "pin", "trash"] as const;

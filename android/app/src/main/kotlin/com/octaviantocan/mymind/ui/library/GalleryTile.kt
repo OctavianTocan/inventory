@@ -84,7 +84,7 @@ private val HIGHLIGHT_TEXT = 17.sp
 private val TILE_LINE = 18.5.sp
 private val SOURCE_LINE = 16.sp
 
-/** The corner radius of a gallery tile, the web showcase's `rounded-lg` (Tavi, 29 October 2026). */
+/** The corner radius of a gallery tile, the web showcase's `rounded-lg` (Octavian, 29 October 2026). */
 internal val TILE_CORNER = 12.dp
 
 /** The corner radius of a Pinned card. */
@@ -104,7 +104,7 @@ private val HIGHLIGHT_BORDER = 6.dp
 
 /**
  * How big a gallery tile's words show at [columns] across, in sp: 11 at four columns, 13 at three and 16 at two, the
- * Gentle rule of look 07 Prints (Tavi's pick on the card looks canvas, 1 November 2026). A tile lays its words out at
+ * Gentle rule of look 07 Prints (Octavian's pick on the card looks canvas, 1 November 2026). A tile lays its words out at
  * [TILE_TEXT] in a frame drawn scaled to its cell ([MosaicLayouts.wordsFrame]), so this is the frame's scale times 13.
  *
  * @param columns Columns across, two to four; fewer count as two and more as four.
@@ -124,7 +124,7 @@ internal fun galleryTileCastsShadow(card: Card): Boolean = !pdfStandsTall(card)
 
 /**
  * A gallery brick keeps both the words and picture of a mixed card visible at every density. Every tile is drawn as a
- * print, the look Tavi picked on 1 November 2026 (07 Prints): a picture stands in a thin white border, a card with words
+ * print, the look Octavian picked on 1 November 2026 (07 Prints): a picture stands in a thin white border, a card with words
  * and a picture carries the words on the print's white foot, and a card of words is a plain white card. Posts keep their
  * network's colour, products are pins in the same border, and a PDF's page stands on the paper. It rounds its own corners
  * to [corner]; the mosaic passes 0 and rounds them itself, with the print's shadow, so a tile drawn scaled keeps
@@ -432,7 +432,7 @@ private fun AppTile(card: Card, highlight: Boolean, picture: @Composable (Modifi
  * A print with words under its picture: the picture in a thin white border with round corners, with [marks] on it, then
  * [words] on the print's white foot, with [source] under them once the foot holds two lines of words besides it. The
  * words take what they need, up to a little over half the tile (two fifths of a tile standing tall), the last line fading when they
- * run out of room, and the picture fills the rest (Tavi's pick of 07 Prints, 1 November 2026).
+ * run out of room, and the picture fills the rest (Octavian's pick of 07 Prints, 1 November 2026).
  */
 @Composable
 private fun PrintTile(words: TileWords, source: String?, highlight: Boolean, marks: @Composable (BoxScope) -> Unit,
@@ -502,7 +502,7 @@ private fun PostHead(brand: PostBrand, byline: PostByline) {
 
 /**
  * An X thread's tile head: X's mark, then the author's name and how many posts the thread has, in one muted line, as
- * the thread's name leads the tile under it (Tavi's pick of 08 Summary first, 4 November 2026).
+ * the thread's name leads the tile under it (Octavian's pick of 08 Summary first, 4 November 2026).
  */
 @Composable
 private fun ThreadHead(brand: PostBrand, name: String, posts: Int) {
@@ -598,7 +598,7 @@ private fun Modifier.fadeLastLine(layout: WordsLayout, paper: Color): Modifier =
 /**
  * A card of words as a plain white card: its words fill it, the last line fading when they run out of room, with where
  * they come from under them, a site, a quote's author, once the card holds three lines of words besides it. No kind
- * label shows (Tavi's pick of 07 Prints, 1 November 2026).
+ * label shows (Octavian's pick of 07 Prints, 1 November 2026).
  */
 @Composable
 private fun WordsTile(card: Card, highlight: Boolean) {

@@ -13,15 +13,15 @@ with a photo, drawn as a pin (gallery-products-are-pins), and a PDF, its first p
 NOT leave a hole before the last card. One column shows each card across the width at
 its own proportions. Images fill their cells; text cards retain a readable preview. Tap
 and hold MUST target the same card at every density.
-Source: Tavi, 22 October 2026, Google Photos layout request in the Codex conversation;
+Source: Octavian, 22 October 2026, Google Photos layout request in the Codex conversation;
 the recorded review of 23 October 2026 ("they use all these shapes to break up the
 layout so that you don't just have like a bunch of squares", "the screenshots are kind
 of taking the aspect ratio of screenshots", "some of these images are just bigger");
-posts two squares high from Tavi's pick of X10 on the card previews canvas, 29 October
+posts two squares high from Octavian's pick of X10 on the card previews canvas, 29 October
 2026 ("Pick recommended and build it"), after his review of X05 ("having them be two
 rows instead of one is actually pretty interesting"); products two squares high from his
 pick of P5 the same day, and PDFs from his pick of D5. Cards with words and a picture
-take the showcase's big and tall shapes from Tavi, 29 October 2026, comparing the app with
+take the showcase's big and tall shapes from Octavian, 29 October 2026, comparing the app with
 the web showcase ("the way some tiles are bigger and some are smaller looks nicer").
 
 @cc [owner:OctavianTocan,label:product;design] gallery-tiles-look-like-the-showcase
@@ -34,7 +34,7 @@ leaves at that edge. The space between cards MUST be about a twentieth of a colu
 phone 16 dp at one column, 8 at two and 6 at three and four. The Spaces list keeps its own
 stacks inside the same margins and spacing. Full screen (gallery-reels-at-one-column) is
 the one exception: there the corners and side margins shrink to nothing as the pinch goes in.
-Source: Tavi, 29 October 2026, comparing the app with the web showcase ("their corner
+Source: Octavian, 29 October 2026, comparing the app with the web showcase ("their corner
 radius looks nicer, their spacing between tiles looks nicer ... I think we should do all
 those").
 
@@ -55,7 +55,7 @@ its network's colour (gallery-posts-look-like-posts) and casts the same shadow; 
 page stands on the paper with its own (gallery-pdfs-show-their-first-page). In the dark
 scheme the prints are the raised colour. Pinned's cards are prints too, with a wider
 border.
-Source: Tavi, 1 November 2026 ("I still don't like how they look, nor the size of the text
+Source: Octavian, 1 November 2026 ("I still don't like how they look, nor the size of the text
 as you zoom"), then his pick of 07 Prints on the card looks canvas the same day ("Let's do
 07").
 
@@ -65,7 +65,7 @@ preview, including the smallest density and Pinned. Neither the cover nor a
 generated title may replace the note or post body. Text and images MUST have separate
 visible areas, and text MUST use the app's font with enough contrast against its paper. A
 photo or video with an authored note MUST also retain that note beside its image.
-Source: Tavi, 22 October 2026, preserve text and images in small note previews.
+Source: Octavian, 22 October 2026, preserve text and images in small note previews.
 
 @cc [owner:OctavianTocan,label:product;motion] gallery-pinches-change-tile-size
 A two-finger pinch on the mosaic MUST continuously change tile size through multiple
@@ -81,10 +81,10 @@ MUST NOT rewrap, change its inset, or show or hide its labels under the fingers:
 keeps its layouts at the stops on either side, each drawn scaled to where the card is,
 and the two cross-fade with its progress. The layout at the other stop is composed
 ahead, while the gallery rests, and kept while the card shows, so neither the fingers
-coming down nor crossing a stop composes a burst of layouts in one frame (Tavi, 4 November
+coming down nor crossing a stop composes a burst of layouts in one frame (Octavian, 4 November
 2026: "Same for pinching. It's laggy right now."; every tile's second layout was composed
 in the frame the fingers landed)
-(Tavi's pick of 07 Prints, with its Gentle sizes, on the card looks canvas, 1 November
+(Octavian's pick of 07 Prints, with its Gentle sizes, on the card looks canvas, 1 November
 2026, replacing version 13 of the design canvas he picked on 28 October 2026, where
 every tile was laid out once at three columns and drawn scaled with its cell).
 Adjacent cached grids MUST remain coherent and nonoverlapping within each projection, sharing one focal card's fractional X/Y point and physical
@@ -127,7 +127,7 @@ bounded visible window, without scanning all cards or changing image decode size
 on each pointer frame. Starting, moving or letting go of a pinch MUST NOT rebuild any
 card's tile: the cards move, and their copies and the blurred fill draw what the tiles
 last drew. Pictures change their decode size only once the gallery is at rest, after the
-landing's last frame (Tavi, 30 Oct 2026: "There are some frames that skip and at the end
+landing's last frame (Octavian, 30 Oct 2026: "There are some frames that skip and at the end
 it kind of snaps weirdly"; every tile rebuilt as the fingers came down and again as they
 let go, and every picture reloaded at its new size on the landing's first frame). A
 picture keeps the largest size it has been decoded at, so landing on more, smaller cards
@@ -138,17 +138,17 @@ position in the same pass. Equivalent larger/smaller actions MUST be accessible,
 each tab MUST retain its density and scroll position. Removing the gallery during
 a gesture or settle MUST synchronously save a canonical density, the stop a landing
 was headed for, and an anchored scroll request, so reusing its state cannot restore a fractional transition.
-Source: Tavi, 22 October 2026, explicit pinch-to-enlarge/reduce requirement; the
+Source: Octavian, 22 October 2026, explicit pinch-to-enlarge/reduce requirement; the
 recorded review of the same day, with Google Photos as the reference ("the
 intermediate state where there is emptiness", "I shouldn't be able to pan"); the
 recorded review of 23 October 2026 ("then they reorganize completely, which is weird
-and doesn't feel good"); Tavi on the squares canvases, 28 October 2026 ("the cards
+and doesn't feel good"); Octavian on the squares canvases, 28 October 2026 ("the cards
 only move after a while of you pinching ... instead of moving while you pinch, which
 is actually what I want", "All of them have transitions that last too long", "I don't
 want to see blank spots between them"), who then picked O3b of the "Calmer steps for
 O" canvas; the web showcase's port of O3b found the focal card wrapping when it
-changed shape, fixed the same day; Tavi on the same port, 28 October 2026 ("at the
-end of the transition it all pops for a frame"): the fill vanished in one frame; Tavi,
+changed shape, fixed the same day; Octavian on the same port, 28 October 2026 ("at the
+end of the transition it all pops for a frame"): the fill vanished in one frame; Octavian,
 28 October 2026 ("It's when I pinch and let go without fully getting to the next stage.
 Then it pops, instead of being smooth"): the landing started at three times its average
 speed, and the gallery jumped once it had landed. The pace and curve match the web
@@ -167,9 +167,9 @@ fingers are composed one a frame, before they fade in. Drawing a frame MUST NOT 
 card: a tile's fading last line is its paper laid over the words, and the blurred fade
 at the foot of the gallery blurs each of its layers only as far as that layer reaches. While
 the cards scroll or move under the fingers, the foot fade MUST NOT blur, only fade: each
-blur layer draws the whole gallery again, and Tavi's 4 November recording of the
+blur layer draws the whole gallery again, and Octavian's 4 November recording of the
 phone's frame bars showed drawing, not the app's own work, made frames late.
-Source: Tavi, 4 November 2026: "We gotta optimize the app for scrolling to be super
+Source: Octavian, 4 November 2026: "We gotta optimize the app for scrolling to be super
 smooth with no hitches or pops or lag of any sort." and "Same for pinching. It's laggy right now."
 
 @cc [owner:OctavianTocan,label:product;design;motion] gallery-reels-at-one-column
@@ -190,7 +190,7 @@ drag settles on the nearer page. Pinching the fingers together, the Smaller card
 Back MUST come back to two columns, and Larger cards at two columns goes full screen. A tap
 on a page opens its card and a hold opens its actions. The Spaces list MUST NOT go full
 screen; its one column is a grid.
-Source: Tavi, 30 October 2026 ("When I zoom all the way in by pinching on the everything
+Source: Octavian, 30 October 2026 ("When I zoom all the way in by pinching on the everything
 screen, we go into a Instagram-reels-like mode where we full screen one thing and we allow
 scroll to move between them. But you can also obviously zoom out or pinch out to come back
 to the other zooms"), then on 0.6.38, which put full screen past a one-column grid and
@@ -207,7 +207,7 @@ through the same one to four columns, with each space one square. Its stacks are
 their cell's size with the name under them at its own size, so a name shortens rather
 than shrinks, and a cover with words is drawn scaled so its words never rewrap. The list
 MUST keep its size and scroll position while a space is open.
-Source: Tavi, 28 October 2026 ("the moment I open the app pinching doesnt work until I
+Source: Octavian, 28 October 2026 ("the moment I open the app pinching doesnt work until I
 switch to spaces and back", "for spaces we also need fthe pinching stuff", "The zoom in
 and stuff should work on the results too. Pinching is a thing in this app all across the
 app").
@@ -217,28 +217,28 @@ Pinned MUST remain above the main mosaic, in pin order, as a horizontal rail of
 large highlight cards. The rail MUST remain horizontally scrollable and scroll
 vertically with the mosaic, without a visible "Pinned" text heading. Profile
 and highlights MUST NOT scale with a mosaic pinch.
-Source: Tavi, 22 October 2026, Google Photos layout request and gallery polish in the Codex conversation.
+Source: Octavian, 22 October 2026, Google Photos layout request and gallery polish in the Codex conversation.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-top-controls-stay-fixed
 The profile, star (sky-opens-from-the-star-button) and Add controls MUST stay fixed at the top of All and the Spaces
 list while the page scrolls under them. They float as their own raised, shadowed
 circles with no solid header strip behind them, except in full screen, where they slide
 away (gallery-reels-at-one-column). The page title ("Your
-inventory", "All Spaces"; "Your inventory" replaced mymind's "Your mind" on Tavi's pick,
+inventory", "All Spaces"; "Your inventory" replaced mymind's "Your mind" on Octavian's pick,
 6 November 2026) MUST scroll away with the page. The controls MUST remain
 available for an empty, loading or failed feed. Pull to refresh and mosaic gestures
 belong to the scrolling page (on All with a sky, the pull at the top looks up instead,
 sky-pull-down-looks-up); search and browsing MUST retain independent scroll positions.
-Source: Tavi, 22 October 2026, gallery polish in the Codex conversation; the recorded
+Source: Octavian, 22 October 2026, gallery polish in the Codex conversation; the recorded
 review of the same day ("the title should not be sticky", "the buttons should be
 sticky but without a background"). Rediscover left the row on 28 October 2026, see
 `library-has-no-serendipity`.
 
 @cc [owner:OctavianTocan,label:product] library-has-no-serendipity
 The app MUST NOT offer mymind's Serendipity page, the deck of cards to keep or forget
-that Tavi calls the remix page, nor any button, tab, route or server call that leads to
+that Octavian calls the remix page, nor any button, tab, route or server call that leads to
 it, such as the Rediscover button that opened it.
-Source: Tavi, 28 October 2026 ("get completely rid of any stuff related to the remix
+Source: Octavian, 28 October 2026 ("get completely rid of any stuff related to the remix
 page").
 
 @cc [owner:OctavianTocan,label:design;interaction] gallery-top-edge-blurs-the-scrolling-content
@@ -248,7 +248,7 @@ at the top of the page there is no blur. It MUST sample the displayed
 gallery rather than create a second feed or replace the cards with an opaque
 gradient. The fixed controls stay sharp, and the decorative blur MUST NOT own taps,
 pinches or pull-to-refresh gestures.
-Source: Tavi's annotated gallery screenshot, 22 October 2026: "We're missing blur
+Source: Octavian's annotated gallery screenshot, 22 October 2026: "We're missing blur
 on the top part of the scrollable section."; extended to every gallery page on 5
 November 2026 (scroll-views-blur-their-edges).
 
@@ -264,8 +264,8 @@ as a card's delete is) MUST be a Pully sheet under the space's name, never a Mat
 menu or dialog. Rename space MUST open its name field on the same sheet, filled with the
 current name. The opened space's dot menu and holding a space on the Spaces list MUST
 both open these options.
-Source: Tavi's recorded review, 22 October 2026 ("the background should be the same",
-"remove the orange plus, but keep the functionality"); Tavi, 5 November 2026 ("there
+Source: Octavian's recorded review, 22 October 2026 ("the background should be the same",
+"remove the orange plus, but keep the functionality"); Octavian, 5 November 2026 ("there
 should be a space that has a little plus in the middle instead of an image and is called
 'New Space'", "there's no real reason for that one to open a bottom sheet when you're in
 the Spaces", "Make it into a bottom sheet and use our actual design system. That also
@@ -283,13 +283,13 @@ player has read it, or for a YouTube video as YouTube gave it when the link was 
 the tile has room, then a white play circle, drawn straight on
 the picture with a soft shadow, with no pill and no site logo. Previews MUST only
 request media from the library server.
-Source: Tavi's recorded reviews, 22 October 2026 ("I don't really like this camera icon",
+Source: Octavian's recorded reviews, 22 October 2026 ("I don't really like this camera icon",
 "videos autoplay ... They don't play with sound", "this icon with the time is actually
 much more helpful") and 23 October 2026 ("that YouTube icon, if you look at the Google
 Photos ... it was a lot more interesting", "the videos aren't auto playing").
 A YouTube or Instagram video with a title and no note of its own MUST show the title under
 its still on the print's foot (gallery-tiles-are-prints), in as many lines as fit, with its
-channel under it once there is room; the badge stays on the still. Source: Tavi's
+channel under it once there is room; the badge stays on the still. Source: Octavian's
 recorded review of the card previews canvas, 29 October 2026, picking V1; the print's foot
 from his pick of 07 Prints, 1 November 2026.
 
@@ -306,7 +306,7 @@ NOT appear as text in the tile or the reader. An X post that carries an X articl
 stand two squares tall and show the article as X does, in a box ruled in X's line colour
 under the post's words: the article's cover, then its title in up to two lines with
 Article under it. The article's opening lines are not the post's words.
-Source: Tavi's recorded review, 22 October 2026 ("if we have a link for the thing, I
+Source: Octavian's recorded review, 22 October 2026 ("if we have a link for the thing, I
 don't think we should put it on the thing", "I think we can just probably show the tweet");
 his recorded review of the card previews canvas, 29 October 2026 (X08's ink tile "I think
 we should do for all of them ... but use X's actual color and also put the username
@@ -322,7 +322,7 @@ whole thread, in the gallery's one text size and weight (`gallery-text-is-one-si
 under one muted line with X's mark, the author's name and how many posts the thread has,
 such as "Theo Park · 7 posts", over the thread's first picture. Until the thread has
 been named and summed up, the tile shows its first post's words instead of the name.
-Source: Tavi's pick of 08 Summary first on the X threads page, 4 November 2026 ("Let's
+Source: Octavian's pick of 08 Summary first on the X threads page, 4 November 2026 ("Let's
 implement 08"); the name stays at the gallery's one size rather than the page's larger
 bold line, keeping `gallery-text-is-one-size`.
 
@@ -332,7 +332,7 @@ corners standing in a print's white border (gallery-tiles-are-prints), the shop'
 the photo as a small white pill with the currency's sign (such as £24 for GBP 24.00), and
 under the photo the name in up to two lines with the brand, else the shop, under it. It MUST NOT show counts or
 ratings. A product without a photo keeps the text tile.
-Source: Tavi's recorded review of the card previews canvas, 29 October 2026 (P1 "kind of
+Source: Octavian's recorded review of the card previews canvas, 29 October 2026 (P1 "kind of
 nice", and look at how Pinterest shows products), and his pick of P5, a tall pin with
 P1's price on the photo, the same day ("Pick recommended and build it"); the print's border
 from his pick of 07 Prints, 1 November 2026.
@@ -341,7 +341,7 @@ from his pick of 07 Prints, 1 November 2026.
 A PDF with a picture of its first page MUST show that page whole, at its own shape, on
 white with a soft shadow on the gallery's paper, with its name in up to two lines and
 PDF under it. The page MUST NOT be cut to a band or covered by words.
-Source: Tavi's recorded review of the card previews canvas, 29 October 2026 (of the
+Source: Octavian's recorded review of the card previews canvas, 29 October 2026 (of the
 first three PDF versions, "none of the ones you showed. I wanted to see the content"),
 and his pick of D5 the same day ("Pick recommended and build it").
 
@@ -349,7 +349,7 @@ and his pick of D5 the same day ("Pick recommended and build it").
 An app MUST show its icon whole, with rounded corners, in the middle of a white print
 (gallery-tiles-are-prints), with its name in one line and the store it is on under it:
 Google Play or the App Store with the store's mark, else the address it was saved from.
-Source: Tavi's pick of A1 on the card previews canvas, 29 October 2026 ("Pick recommended
+Source: Octavian's pick of A1 on the card previews canvas, 29 October 2026 ("Pick recommended
 and build it"); the white print, in place of paper of its type colour, from his pick of 07
 Prints, 1 November 2026.
 
@@ -362,9 +362,9 @@ much larger, never under 11 sp. Long text wraps with hyphenation and fills the t
 it runs out of room it stops at the last whole line that fits, which fades out towards its
 end, and it never shrinks to fit. A line under a tile's words, such as its site, MUST NOT
 repeat them, such as a link whose only text is its own address.
-Source: Tavi's recorded review, 23 October 2026 ("some fonts are bigger, some fonts are
+Source: Octavian's recorded review, 23 October 2026 ("some fonts are bigger, some fonts are
 smaller ... this is just weird", "some of them are bold"), replacing the shrinking text
-of 22 October; the sizes and the fading last line from Tavi's pick of 07 Prints, with its
+of 22 October; the sizes and the fading last line from Octavian's pick of 07 Prints, with its
 Gentle sizes, on the card looks canvas, 1 November 2026 ("I still don't like ... the size
 of the text as you zoom"), replacing version 13 of 28 October 2026, where words were
 under 10 sp at four columns and about 20 at two.
@@ -373,7 +373,7 @@ under 10 sp at four columns and about 20 at two.
 A GitHub repository card without a stored cover MUST show GitHub's generated preview
 picture of that repository. Requests to any host other than the library server MUST NOT
 carry the session token (`data/Api.kt` AuthInterceptor).
-Source: Tavi's recorded review, 22 October 2026 ("repositories I think could use having
+Source: Octavian's recorded review, 22 October 2026 ("repositories I think could use having
 the repositories cover").
 
 @cc [owner:OctavianTocan,label:product;privacy] gallery-opens-from-the-phone
@@ -385,7 +385,7 @@ network the kept cards stay on show. The copy holds at most the first
 200 cards of each list, belongs to the session that wrote it, reads as empty under any
 other session and is wiped at sign-out; a copy that cannot be read or written MUST
 never stop the app.
-Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search", step 2
+Source: Octavian, 22 October 2026, the plan "ThyMind: instant app and better search", step 2
 (an instant, offline local copy on the phone).
 
 @cc [owner:OctavianTocan,label:product;privacy] gallery-works-offline
@@ -401,8 +401,8 @@ screen, a small Offline pill under the top controls, and search by words, cards,
 and space pages answered from the copy. A server without the changes feed MUST leave the
 app working as before. The copy belongs to its session and is wiped at sign-out, like
 `gallery-opens-from-the-phone`.
-Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search", step 3
-(sync and offline mode); spaces and space pages added for Tavi's ask of 28
+Source: Octavian, 22 October 2026, the plan "ThyMind: instant app and better search", step 3
+(sync and offline mode); spaces and space pages added for Octavian's ask of 28
 October 2026 for a sync engine like Zero in Omar's Wholana, plan "ThyMind: a Zero-style
 sync engine", step 1.
 
@@ -423,9 +423,9 @@ session and are wiped at sign-out. Uploads still need a connection.
 On Wi-Fi with battery to spare, the phone MUST fetch ahead the gallery pictures of Pinned
 and the newest 1,000 cards (`data/KeptPictures.kt`) into its picture cache, which
 holds up to 512 MB and is wiped at sign-out with the copy.
-Source: Tavi, 22 October 2026, the plan "ThyMind: instant app and better search", step 4,
+Source: Octavian, 22 October 2026, the plan "ThyMind: instant app and better search", step 4,
 and his choice of "Pinned + newest 1,000, Wi-Fi" for the pictures; online changes queued
-first for Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
+first for Octavian's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
 "ThyMind: a Zero-style sync engine", steps 2 and 3.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-pictures-blur-in
@@ -434,7 +434,7 @@ keeps for it (`thumbHash`, a ThumbHash on its cover or blob, `data/ThumbHash.kt`
 its dominant colour the moment it shows, until the picture loads, and keep showing it
 when the picture cannot load, as without internet. A picture without a preview keeps the
 dominant colour alone.
-Source: Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, whose
+Source: Octavian's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, whose
 own image server shows blurred pictures that "load right away, even with slower
 connections" (Fireflies, 26 October 2026, 1:01:12); plan "ThyMind: a Zero-style sync
 engine", step 6.
@@ -445,7 +445,7 @@ While the app is on screen and signed in, the phone MUST listen on the server's 
 announces a change, such as a card saved on the web or a shared link the server has
 finished reading, without a pull to refresh. A dropped connection is tried again; the
 phone stops listening when the app leaves the screen.
-Source: Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
+Source: Octavian's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
 "ThyMind: a Zero-style sync engine", step 4.
 
 @cc [owner:OctavianTocan,label:product;architecture] gallery-follows-the-copy
@@ -454,7 +454,7 @@ an open space and an opened card MUST redraw from the copy whenever it changes
 (`LibraryCopy.changes`): a sync, a change made on the phone or a card read again from the
 server all show the same way, without a screen asking the server again. Lists that did
 not change keep their place.
-Source: Tavi's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
+Source: Octavian's ask of 28 October 2026 for a sync engine like Zero in Omar's Wholana, plan
 "ThyMind: a Zero-style sync engine", step 5.
 
 @cc [owner:OctavianTocan,label:product] search-puts-named-cards-first
@@ -465,7 +465,7 @@ or by meaning. A card in a space whose name matches the search MUST be found eve
 word is nowhere in the card. Space names are compared as whole words, the last as a prefix
 for `word*`. Field terms and excluded words still filter these cards. The web library's
 search is unchanged.
-Source: Tavi, 6 November 2026, after searching "reading" in a second person's library
+Source: Octavian, 6 November 2026, after searching "reading" in a second person's library
 brought up many cards neither tagged that nor in a space with that name; "Go for it" to
 Claude's suggestion to rank tag, space and title hits first and make space names searchable.
 
@@ -485,11 +485,11 @@ A failed reading MUST still rank the search's own
 matches, and a failed ranking MUST keep the matches and say why. Typing again or changing
 the filter MUST drop the engine's work. Same vibe is never ranked, and without a
 signed-in engine pressing search changes nothing.
-Source: Tavi, 28 October 2026 ("we will modify how the search works so that we use
+Source: Octavian, 28 October 2026 ("we will modify how the search works so that we use
 Claude or Codex", combined with the embedding search of the plan "ThyMind: instant app
-and better search"); Tavi, 28 October 2026 ("lets make sure that the search your mind
+and better search"); Octavian, 28 October 2026 ("lets make sure that the search your mind
 search is actually super useful and uses llms as needed"); the step, reading
-and answer moved from under the Search title into the docked card when Tavi picked
+and answer moved from under the Search title into the docked card when Octavian picked
 version 10 of the search pages on 5 November 2026 ("Let's build 10").
 
 @cc [owner:OctavianTocan,label:product;design;motion] search-docks-near-the-thumb
@@ -510,7 +510,7 @@ its card count once every match is read, a tap taking it off; the results take i
 as their title and the field says "Search in" it. The card's changes MUST use the shared
 fast smooth-out fade, the engine's working mark and skeleton lines MUST breathe, and
 reduced motion MUST show every change at once with nothing breathing.
-Source: Tavi, 5 November 2026 ("Let's build 10"), version 10 "Near your thumb" of the
+Source: Octavian, 5 November 2026 ("Let's build 10"), version 10 "Near your thumb" of the
 search pages canvas (28 October 2026); Pully DESIGN rules on 44dp targets, skeletons over
 spinners and AI work that looks alive.
 
@@ -521,7 +521,7 @@ leave the phone, MUST be forgotten with Clear on the search page, and MUST be wi
 whenever the app signs out, with the rest of the account's phone data. Each pressed
 search's words do reach the server as one usage event (`usage-events-stay-apart`); the
 kept list itself never does.
-Source: Tavi, 5 November 2026 ("Let's build 10"), version 10's Recent list; the sign-out
+Source: Octavian, 5 November 2026 ("Let's build 10"), version 10's Recent list; the sign-out
 wipe follows gallery-keeps-offline-changes.
 
 @cc [owner:OctavianTocan,label:product;design] gallery-audio-tiles-are-words
@@ -532,7 +532,7 @@ lines of what is said in it, or its summary when nothing has been transcribed ye
 use the gallery's one text size and regular weight, the note tile's colours and the
 tile corners (gallery-text-is-one-size, gallery-tiles-look-like-the-showcase), invent no
 colour of its own, and MUST NOT show a kind label above its words or request any media.
-Source: Tavi, 5 Nov 2026: "If we're not already using this for audio too, then we
+Source: Octavian, 5 Nov 2026: "If we're not already using this for audio too, then we
 definitely should be".
 
 @cc [owner:OctavianTocan,label:product] space-options-copy-a-link-for-ai-agents
@@ -540,9 +540,9 @@ Link for AI agents in a space's options MUST copy `<server>/s/<space id>` to the
 and Inventory's MCP server MUST take that link wherever it takes a space id, so an agent the
 person connected can list that space's cards at once. Like a card's link, it names the space
 only and MUST open nothing except through the person's own connected agent.
-Source: Tavi, 6 November 2026 ("We should also have a link thing to share a space, not just
+Source: Octavian, 6 November 2026 ("We should also have a link thing to share a space, not just
 a card, directly"). Its place under Add to this space and copying rather than sharing are
-Claude's choices, not yet confirmed by Tavi.
+Claude's choices, not yet confirmed by Octavian.
 
 @cc [owner:OctavianTocan,label:product;motion] choose-finds-by-sweeping
 Holding a find in the All gallery or in search results and then sliding, without
@@ -558,7 +558,7 @@ backpack before it does anything else. Holding and sliding is the only way to st
 choosing: the card menu MUST NOT gain a Choose row. A tap, a scroll and a pinch MUST
 behave as they did with nothing chosen. A Space's gallery does not sweep: there,
 holding and dragging a card belongs to reordering.
-Source: Tavi's pick of 02 Sweep only on the Choose many finds canvas, 6 November 2026,
+Source: Octavian's pick of 02 Sweep only on the Choose many finds canvas, 6 November 2026,
 14:49 ("02 only"), after asking at 14:39 that the sweep "works like Google Photos, and
 selects rows as you drag down, not just what you drag over". Leaving Spaces to
 reordering was agreed with the reorder thread the same day and is Claude's choice; so
@@ -577,7 +577,7 @@ action can follow, and offer one Undo for 8 seconds that takes back exactly what
 changed: a tag a find already had MUST NOT come off on Undo. Finds that could not be
 changed MUST be counted in the bar's words.
 Source: the pack bar and tag sheet of frame 01 on the Choose many finds canvas, which
-Tavi's pick of 02 (6 November 2026, 14:49) builds on, and the EGM review's brief in
+Octavian's pick of 02 (6 November 2026, 14:49) builds on, and the EGM review's brief in
 project files `multi-select-tagging/concepts_brief.md`. The 8 seconds and the wording
 are Claude's choice and not yet confirmed.
 
@@ -591,12 +591,12 @@ it stays where it is let go. Holding a card and letting go without moving MUST s
 menu. A move MUST be one change, the card and the card it now follows (none for the first
 place), that the phone shows at once and sends through the push when it can, so it works
 offline (gallery-keeps-offline-changes).
-Source: Tavi, 6 November 2026 ("people should be able to reorder the cards inside of a space.
+Source: Octavian, 6 November 2026 ("people should be able to reorder the cards inside of a space.
 Not inside of the 'All' view, but in spaces yes"; then, of a separate list of rows, "No.
 Reordering should happen in the shape they're in. No turning it into a different look
 first"). Hold-and-drag in a space, with hold-and-slide choosing kept to All and search, was
 agreed with the multi-select work; leaving smart spaces out is Claude's choice, not yet
-confirmed by Tavi.
+confirmed by Octavian.
 
 @cc [owner:OctavianTocan,label:product] backpack-copies-and-saves-many
 The backpack's bar MUST also offer Copy, which opens a sheet to copy or save the
@@ -608,7 +608,7 @@ Downloads folder, a picture file as it is and any other picture as drawn. A row 
 show only when some chosen find has what it copies, and finds stay chosen afterwards.
 A single picture card's Copy MUST copy the picture itself, and its Download MUST save
 it even when it keeps no file.
-Source: Tavi, 6 November 2026: "Once we have multi-select, with reorder and multi-tag,
+Source: Octavian, 6 November 2026: "Once we have multi-select, with reorder and multi-tag,
 we should also have multi-copy of the different types" and "Images should also be able
 to be copied, and downloaded. Both single and multi." The four rows, their words and
 putting them behind one Copy pill are Claude's choice and not yet confirmed.

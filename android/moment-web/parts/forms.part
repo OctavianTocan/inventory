@@ -1,4 +1,4 @@
-/* Finds that are not the usual card (Tavi, 5 Nov: "15 different card ideas that work in all those animations. Maybe
+/* Finds that are not the usual card (Octavian, 5 Nov: "15 different card ideas that work in all those animations. Maybe
    some of them don't have to even look like a card"). Each find is a real object built in 3D (a rune stone, a coin,
    a dog tag, a record...) that the moments handle exactly like the card: it spins in, turns over, takes the stars
    and the tags, and flies to the backpack. A find is picked with FIND_PICK; '' keeps the moment's own card. */

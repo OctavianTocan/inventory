@@ -670,7 +670,7 @@ private const val THREAD_SUMMARY = "What the thread says"
 /**
  * An X thread as one section in X's colours, as X shows a thread: every post with its author's initials in a circle,
  * the name and handle, its words and its pictures whole, a line running down from each circle to the next post, then
- * when the last post was posted and saved and how many posts the thread has (Tavi's pick of 08 Summary first, 4 November
+ * when the last post was posted and saved and how many posts the thread has (Octavian's pick of 08 Summary first, 4 November
  * 2026). Holding the words opens the post's sheet ([onHold]); a picture opens the source when tapped and calls
  * [onPictureHold] when held. It shows no counts of likes or reposts.
  */

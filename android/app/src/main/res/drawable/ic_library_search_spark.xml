@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- AI search: a magnifier open at the top right with a four-point sparkle in the gap, drawn for Inventory after the
-     Ask glyph in Google Photos' search circle (Tavi, 6 November 2026). Measured from a Google Photos screenshot:
+     Ask glyph in Google Photos' search circle (Octavian, 6 November 2026). Measured from a Google Photos screenshot:
      ring 5.43 at (9.4, 9.4) open from -10 to 70 degrees, 1.9 stroke with round caps, sparkle radius 4.4 at (17.4, 6.46). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"

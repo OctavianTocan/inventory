@@ -51,7 +51,7 @@ describe("GitHub calls", () => {
     expect(await recorded({ [path]: [422, { message: "expected head sha didn't match current head ref." }] }).github.updateBranch(5, "h")).toBe("stale");
   });
 
-  it("marks a pull request for review and reads Tavi's answer from its state and labels", async () => {
+  it("marks a pull request for review and reads Octavian's answer from its state and labels", async () => {
     const marked = recorded({ "POST /labels": [422, { message: "Validation Failed" }], "POST /issues/5/labels": [200, [{ name: "needs-review" }]] });
     await marked.github.markForReview(5, "needs-review", "approved");
     expect(marked.sent.map((s) => [s.method, s.url.replace(BASE, ""), s.body])).toEqual([

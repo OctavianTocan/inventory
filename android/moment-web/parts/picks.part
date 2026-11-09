@@ -1,4 +1,4 @@
-/* Tavi's picks from the card-backs canvas (5 Nov, "M9, M10"): the icon grid and the selection bar, as backs the card
+/* Octavian's picks from the card-backs canvas (5 Nov, "M9, M10"): the icon grid and the selection bar, as backs the card
    turns over to after a reveal. Tags are picked from a list (the find's own already ticked) instead of typed. */
 document.head.appendChild(h(`<style>
 .tagp.pool { background: #0B2227; padding: 12px; color: #F4F2EF; }

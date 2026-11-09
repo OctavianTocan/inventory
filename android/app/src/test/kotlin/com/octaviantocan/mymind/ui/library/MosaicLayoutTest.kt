@@ -73,7 +73,7 @@ class MosaicLayoutTest {
 
     @Test
     fun wordsGrowGentlyWithTheTiles() {
-        // Look 07 Prints with its Gentle sizes (Tavi, 1 November 2026): 11 sp at four columns, 13 at three, 16 at two.
+        // Look 07 Prints with its Gentle sizes (Octavian, 1 November 2026): 11 sp at four columns, 13 at three, 16 at two.
         val sample = (1..8).map { testCard("n$it", type = "Note", note = "Note $it") }
         val layouts = MosaicLayouts(sample, 352f, listOf(16f, 8f, 6f, 6f))
         val shown = (2..4).associateWith { columns -> 13f * layouts.level(columns).cells[0].width / layouts.wordsFrame(0, columns).width }

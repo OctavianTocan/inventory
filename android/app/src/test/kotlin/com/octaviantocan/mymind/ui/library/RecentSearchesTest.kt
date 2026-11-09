@@ -23,7 +23,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Version 10 of the search page (Tavi, 5 November 2026, "Let's build 10"): recent searches, the engine and the ranked-only view. */
+/** Version 10 of the search page (Octavian, 5 November 2026, "Let's build 10"): recent searches, the engine and the ranked-only view. */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
 class RecentSearchesTest {

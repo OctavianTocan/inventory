@@ -27,4 +27,4 @@ operations retain their existing triggers and protections.
 Two checks run on every pull request and on `main`: `android` (Android verify) and `rust` (Rust verify:
 the native test targets that run without the owner's library, the wasm check of the Worker, and the feedback
 runner's tests). Feedback agents' pull requests (docs/feedback.md) run on these same runners, where the release
-keystore and Cloudflare token also live; Tavi accepted that risk on 5 November 2026.
+keystore and Cloudflare token also live; Octavian accepted that risk on 5 November 2026.

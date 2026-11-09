@@ -13,10 +13,10 @@ before it goes MUST still reach the saved cards, however it closes. After the
 shooting star (share-moment-shooting-star) its tag step waits the same way,
 from when the card has turned over; the star's own play before it, which a tap
 skips, and the flight into the backpack after it come on top of that wait.
-Source: Tavi's Cap recording of the share prototype, 29 October 2026: "it has to
+Source: Octavian's Cap recording of the share prototype, 29 October 2026: "it has to
 be something that goes away by itself ... if I don't tap anything, not something
 that I have to close"; "we do not want to block people". The shooting star's
-play time comes from Tavi's request of 5 November 2026 to build it into the app.
+play time comes from Octavian's request of 5 November 2026 to build it into the app.
 
 @cc [owner:OctavianTocan,label:product;design] share-field-takes-everything
 The share sheet MUST be Pully's paper over the app that shared, resting at its
@@ -31,18 +31,18 @@ and Use as your note for words with a space. Enter adds the first row.
 This sheet shows when the shooting star does not play (share-moment-shooting-star):
 with the system's animations turned off, and when nothing was saved; otherwise
 the star's tag step (share-tag-step-icon-grid) takes its place.
-Source: Tavi's pick of 10, One field for everything, in the share prototype,
+Source: Octavian's pick of 10, One field for everything, in the share prototype,
 29 October 2026 ("Let's do 10"). "Your inventory" in place of mymind's "your mind" is
-Tavi's pick of 6 November 2026. Inventory's own tags show above the field
+Octavian's pick of 6 November 2026. Inventory's own tags show above the field
 (share-sheet-shows-thymind-tags), so the empty field offers recent tags. The tag
-step took its place with Tavi's pick of M9 Icon grid, 5 November 2026.
+step took its place with Octavian's pick of M9 Icon grid, 5 November 2026.
 
 @cc [owner:OctavianTocan,label:product] share-problems-speak-for-thymind
 When nothing can be saved (nothing to keep, more than 20 things, a file over
 the share limit of `share-takes-gallery-videos`, a PDF with a password, signed out) the share target MUST say so in its own
 words on the same sheet, titled Nothing was saved: a mark, what went wrong and
 what to do, and one button. It MUST NOT name mymind, its address or its artwork.
-Source: the 29 October 2026 share prototype's problem sheets, which Tavi saw
+Source: the 29 October 2026 share prototype's problem sheets, which Octavian saw
 with every version; AGENTS.md: the replica is its own product.
 
 @cc [owner:OctavianTocan,label:product] share-takes-gallery-videos
@@ -51,7 +51,7 @@ as cards. The share target MUST take files as big as an upload from inside the a
 (5 GB), not mymind's 25 MB, since a phone's videos are mostly bigger than that.
 A saved video's speech is transcribed on the server and shown in the reader as its
 Transcript (`card-reader-shows-the-whole-card`).
-Source: Tavi, 5 November 2026: "You should be able to save videos and images
+Source: Octavian, 5 November 2026: "You should be able to save videos and images
 directly into the app ... share from my Gallery ... And when videos are shared, we
 transcribe them." The same day he moved transcription from xAI to OpenAI's latest
 model ("Let's use OpenAI's API for this"), and raised the limit from 500 MB to
@@ -69,7 +69,7 @@ Inventory MUST NOT read a Gallery entry, in place or to copy it, unless the shar
 carried a read grant (Android grants only what the sender could read), and MUST
 unwrap a Google Photos link only when that authority belongs to the preinstalled
 Google Photos, so another app cannot use Inventory's access to read the Gallery.
-Source: Tavi, 5 November 2026, chose "Read from the Gallery" over copying, because a
+Source: Octavian, 5 November 2026, chose "Read from the Gallery" over copying, because a
 5 GB video needed 5 GB free on the phone.
 
 @cc [owner:OctavianTocan,label:product] share-sheet-shows-thymind-tags
@@ -80,7 +80,7 @@ in their place. A tag taken off MUST come off the card when the sheet goes, and
 choosing that tag again in the field MUST put it back. The phone MUST look for
 them at least every second while it waits, and the server MUST start tagging a
 link as soon as its words are read, not after its pictures and screenshot.
-Source: Tavi, 5 November 2026: "the moment I share them and I see the little
+Source: Octavian, 5 November 2026: "the moment I share them and I see the little
 tag screen where I can add my own tags, I should already see tags that Jev
 generated" (Jev was the tag judge then; OpenAI's Decisions API took its place
 the same day). This replaces the share prototype's choice to leave Inventory's tags
@@ -95,5 +95,5 @@ copy goes to the trash where it can be restored. The share sheet MUST then show
 the earlier card, titled Merged with an earlier save, and spaces, tags and a note
 added on the sheet MUST reach the earlier card. Only a near-certain match is
 merged, and only for something saved in the last half hour.
-Source: Tavi's pick on 5 November 2026, "Merge into the earlier card", over
+Source: Octavian's pick on 5 November 2026, "Merge into the earlier card", over
 keeping both or a review list.

@@ -8,7 +8,7 @@ Codex with their marks and whether each is signed in. The rows carry no lines th
 explain them. Model, Effort and each provider open child pages inside the same Profile
 sheet (`ui/menu/CONTRACTS` `card-sheet-pages-stay-in-the-sheet`). The rows MUST use
 Inventory's own sheet rows, type and colours, not Pully's look.
-Source: Tavi, 28 October 2026 ("fully copy from the Pully project how it does sign-in for
+Source: Octavian, 28 October 2026 ("fully copy from the Pully project how it does sign-in for
 those, how it puts them in the settings, its model and effort selectors"); pulls.review
 `settings-model-row-names-the-model`, `settings-effort-under-model` and
 `settings-no-helper-lines` at c71ee10d2f6fc1b279c5396076cfed5039f8dbd7.
@@ -21,7 +21,7 @@ list the model's efforts by Pully's names, mark the model's default as Recommend
 end with Pully's footnote on what higher effort costs. Each engine MUST keep the model
 last chosen for it on the phone, and changing the model MUST keep the chosen effort only
 when the new model lists it.
-Source: Tavi, 28 October 2026 (as `profile-ai-rows-are-pullys`); pulls.review
+Source: Octavian, 28 October 2026 (as `profile-ai-rows-are-pullys`); pulls.review
 `ui/review/ModelPicker.kt` and `AiSettingsLogic` (ai-kit) at
 c71ee10d2f6fc1b279c5396076cfed5039f8dbd7.
 
@@ -39,7 +39,7 @@ the session that opened it: a new session MUST clear it and drop remembered sign
 model lists, and while the app is in the background a page MUST NOT send requests, open
 pages or read the clipboard (waiting on the callback is not a request). A refused AI
 request MUST NOT answer 401, because the app signs its session out on a 401.
-Source: Tavi, 28 October 2026 (as `profile-ai-rows-are-pullys`); Tavi, 6 November 2026
+Source: Octavian, 28 October 2026 (as `profile-ai-rows-are-pullys`); Octavian, 6 November 2026
 ("Let's implement proper Sign in with ChatGPT ... instead of what we custom-built", and
 "Just use the self served flow. We literally only use it for personal use."); ai-kit
 `kit-subscription-sign-in-only`; pulls.review
@@ -54,7 +54,7 @@ app starts and when the sheet opens, and MUST stay while the app is offline or t
 server is slow; the sheet MUST NOT blank them while it asks the server again. A session
 MUST NOT show another session's photo, and the photo MUST be fetched by a loader that
 never carries the library session.
-Source: Tavi, 28 October 2026 ("we also aren't loading the user's profile picture
+Source: Octavian, 28 October 2026 ("we also aren't loading the user's profile picture
 properly, which we should").
 
 @cc [owner:OctavianTocan,label:product;security] profile-connected-agents
@@ -64,7 +64,7 @@ Inventory's MCP server by the name it gave itself, with when it connected and wa
 used. Remove MUST ask once more on the same row before it signs the app out, and the app
 MUST leave the list at once. The page MUST list only this account's AI apps, never a
 phone or browser session, and removing one MUST NOT sign out the phone.
-Source: Tavi, 5 November 2026 ("Nice. Build it." on the MCP brief, step 3: list and
+Source: Octavian, 5 November 2026 ("Nice. Build it." on the MCP brief, step 3: list and
 remove your own MCP tokens, Rust routes plus a Profile row in the app).
 
 @cc [owner:OctavianTocan,label:product] connected-agents-helps-add-an-ai-app
@@ -75,21 +75,21 @@ which shares both apps' steps with the address as plain text so the person can f
 a computer. ChatGPT offers no link that adds a custom server for the person, and adds one
 only on the web (OpenAI's custom MCP server guide, read 6 Nov 2026), so the page MUST NOT
 promise a one-tap install.
-Source: Tavi, 6 November 2026 ("How can people install the ChatGPT plugin directly from
+Source: Octavian, 6 November 2026 ("How can people install the ChatGPT plugin directly from
 the app? Is there some way for us to help people do that?"); the rows, their words and
-Send the steps are Claude's choice, not yet confirmed by Tavi.
+Send the steps are Claude's choice, not yet confirmed by Octavian.
 
 @cc [owner:OctavianTocan,label:product;security] profile-feedback-sends-with-the-senders-ai
 The Profile sheet MUST list a Send feedback row under Providers that opens a page with a text field,
 Send, and under Send the line "Uses your Claude or Codex plan. Your change ships to
-everyone using Inventory." (the app's name since Tavi's rename, 5 Nov 2026) The page MUST offer only engines the account has signed in; with
+everyone using Inventory." (the app's name since Octavian's rename, 5 Nov 2026) The page MUST offer only engines the account has signed in; with
 none it MUST say "Sign in to Claude Code or Codex first" and take the person back to Providers. It MUST keep
 its own engine, model and effort apart from AI search (the model and effort pages are
 titled Feedback model and Feedback effort, search's Search model and Search effort), so a
 feedback pick MUST NOT change AI search and an AI search pick MUST NOT change feedback.
 With no model chosen it MUST start at the engine's first recommended model at medium. A
 refusal MUST show the server's sentence and MUST NOT sign the account out.
-Source: design_draft.md decision 4 and decision 5 (Tavi, 5 Nov 2026).
+Source: design_draft.md decision 4 and decision 5 (Octavian, 5 Nov 2026).
 
 @cc [owner:OctavianTocan,label:product] feedback-one-notification-per-job
 A feedback job MUST have one notification, on the feedback channel, with the job id as its
@@ -98,7 +98,7 @@ server's title and detail. It MUST end in a final state (shipped, merged_server,
 merged_not_released, no_change or failed), after which the phone MUST stop asking about
 the job. A shipped job MUST start the update check, and its tap MUST open the app on the
 update screen. A denied notification permission MUST NOT crash or block the job.
-Source: design_draft.md decision 2 (Tavi, 5 Nov 2026).
+Source: design_draft.md decision 2 (Octavian, 5 Nov 2026).
 
 @cc [owner:OctavianTocan,label:product;design] profile-theme-picks-pullys-themes
 The Profile sheet MUST offer a Theme row under Appearance, showing the theme in use, that
@@ -109,7 +109,7 @@ and the default. The page MUST have a Find a theme search, show each theme as fo
 MUST apply the theme at once through Pully's wipe, without leaving the page, and the
 phone MUST keep the pick through restarts and sign-outs. With system animations off the
 theme MUST change without the wipe.
-Source: Tavi, 5 November 2026 ("Look into how Pully does themes, and let's bring the same
+Source: Octavian, 5 November 2026 ("Look into how Pully does themes, and let's bring the same
 themes functionality and all the themes from it"); pulls.review `theme-colour-themes` at
 9a44869.
 
@@ -121,7 +121,7 @@ right for Dark, from the top left otherwise, and without a wipe when no colour o
 changes or system animations are off. The phone MUST keep the pick through restarts and
 sign-outs. Until one is picked, the chrome follows the system and the pages the account's
 own appearance, and the tabs show the account's.
-Source: Tavi, 5 November 2026 ("Also bring in the System/Light/Dark toggle, and the effect
+Source: Octavian, 5 November 2026 ("Also bring in the System/Light/Dark toggle, and the effect
 it does over the app, too"); pulls.review Settings Appearance `CapsuleTabs` and
 `ThemeWipe` at 9a44869.
 
@@ -133,7 +133,7 @@ another theme; a theme with one look MUST use it for both. Colours a card takes 
 it holds (a network's own colour, a type colour, a picture) MUST NOT change with the
 theme, and the splash keeps Inventory's own colours. Inventory's own theme MUST draw exactly
 as the app did before themes.
-Source: Tavi, 5 November 2026 (as `profile-theme-picks-pullys-themes`); pulls.review
+Source: Octavian, 5 November 2026 (as `profile-theme-picks-pullys-themes`); pulls.review
 `theme-changes-colours-only` at 9a44869.
 
 @cc [owner:OctavianTocan,label:product;design] profile-theme-backdrops
@@ -144,6 +144,6 @@ The doodles MUST be Inventory's own drawings, not copied from any app, and MUST 
 enough that the cards read first. The backdrop MUST stay still behind the whole window,
 status bar included, while the cards scroll and the pages swipe; tiles, sheets and opened
 cards keep solid colours. In the picker such a theme's first dot MUST show its backdrop.
-Source: Tavi, 5 November 2026 ("Let's make some themes for this app that also use
+Source: Octavian, 5 November 2026 ("Let's make some themes for this app that also use
 gradients, and some that use doodles that you draw on the background in the style of
 Telegram or WhatsApp. And we add these to the themes we already have").

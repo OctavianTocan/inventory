@@ -1,5 +1,5 @@
 /**
- * The tools that change a person's library: save, note, tag, sort, pin, trash and restore. Tavi chose (2026-11-05)
+ * The tools that change a person's library: save, note, tag, sort, pin, trash and restore. Octavian chose (2026-11-05)
  * that agents read, save and edit; each tool builds its push changes from typed arguments, and only a grant with
  * `thymind.write` may call them.
  */

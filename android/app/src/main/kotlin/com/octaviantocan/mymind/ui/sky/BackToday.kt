@@ -220,7 +220,7 @@ private val SEEN = ListSerializer(String.serializer())
 
 /**
  * Back today: up to three old finds under Pinned, each a flickering blue hologram until it is opened (the prototype's
- * Hologram, picked by Tavi on 6 November 2026). A tap restores it from the finger outward with a burst of glints, then
+ * Hologram, picked by Octavian on 6 November 2026). A tap restores it from the finger outward with a burst of glints, then
  * opens it; a find already opened today shows as it is.
  *
  * @param state The band's finds.

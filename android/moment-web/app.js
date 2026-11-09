@@ -102,7 +102,7 @@ function reset() {
 const appBackToPage = backToPage;
 backToPage = (ms = 160) => { APP.skyOut(ms); appBackToPage(ms); };
 
-/* A tap skips everything, the tag step too (Tavi, 5 Nov). */
+/* A tap skips everything, the tag step too (Octavian, 5 Nov). */
 const appSkipNow = skipNow;
 skipNow = async () => {
   if (APP.skipped || APP.aborted || APP.inTags) return;

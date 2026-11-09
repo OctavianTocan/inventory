@@ -127,7 +127,7 @@ export function fakeLibrary(token = "app-token-1", options: { refuse?: boolean }
         const { idToken, nonce } = body as { idToken: string; nonce: string };
         if (idToken !== "google-id-token" || !state.nonces.delete(nonce)) return Response.json({ error: "invalid-token" }, { status: 400 });
         if (options.refuse) return Response.json({ error: "not-allowed" }, { status: 401 });
-        return Response.json({ token, expiresAt: "2027-02-01T00:00:00Z", user: { email: "tavi@octaviantocan.com", kind: "google" } });
+        return Response.json({ token, expiresAt: "2027-02-01T00:00:00Z", user: { email: "octavian@octaviantocan.com", kind: "google" } });
       }
       if (state.dead || request.headers.get("authorization") !== `Bearer ${token}`) return new Response("{}", { status: 401 });
       if (url.pathname === "/app/v1/push") {
@@ -158,7 +158,7 @@ export function fakeLibrary(token = "app-token-1", options: { refuse?: boolean }
         return Response.json({ columns: ["event", "n"], total: 1, cut: false, rows: [{ event: "search", n: 3 }] });
       }
       if (url.pathname === "/app/v1/analytics/daily") {
-        return Response.json({ days: [{ day: "2026-11-05", library: "u-tavi", account: "google:tavi@octaviantocan.com", totals: { cards: 2 } }] });
+        return Response.json({ days: [{ day: "2026-11-05", library: "u-octavian", account: "google:octavian@octaviantocan.com", totals: { cards: 2 } }] });
       }
       const restore = /^\/objects\/([^/]+)\/restore$/.exec(url.pathname);
       if (restore && request.method === "POST") return known(restore[1]) ? Response.json({}) : Response.json({ error: "not-found" }, { status: 404 });

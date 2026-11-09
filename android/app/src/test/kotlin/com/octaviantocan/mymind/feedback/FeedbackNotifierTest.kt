@@ -33,7 +33,7 @@ class FeedbackNotifierTest {
         Triple("merging", "Getting ready to ship", false),
         Triple("shipped", "Shipped in 0.6.56. Tap to update", true),
         Triple("merged_server", "Merged. It goes live with the next server update", true),
-        Triple("merged_not_released", "Merged, but the release didn't go out. Tavi can see why", true),
+        Triple("merged_not_released", "Merged, but the release didn't go out. Octavian can see why", true),
         Triple("no_change", "No change needed: it already works that way", true),
         Triple("failed", "Couldn't ship this: the tests kept failing", true),
     )

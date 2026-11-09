@@ -179,7 +179,7 @@ private data class MosaicLoadPosition(val count: Int, val last: Int, val total: 
  * @param onMoveCard Called when a held card is dragged to a new place and let go, with the card and the card it now
  *   follows (null when it is now first); null leaves the cards' order alone. While it is set, holding a card and
  *   letting go without moving opens [onLongPressCard] on release, and holding then dragging moves the card in the grid
- *   as it is, the other cards making way under the finger (Tavi, 6 November 2026: "Reordering should happen in the
+ *   as it is, the other cards making way under the finger (Octavian, 6 November 2026: "Reordering should happen in the
  *   shape they're in").
  */
 @Composable
@@ -821,7 +821,7 @@ private data class MosaicSlot(val index: Int, val copy: Boolean, val under: Bool
 
 /**
  * Where each card is drawn now, in viewport pixels, while the fingers move it between its places in the grids of two
- * stops (Tavi's pick, version O3b of the "Calmer steps for O" canvas, 28 October 2026). A card that stays on its line
+ * stops (Octavian's pick, version O3b of the "Calmer steps for O" canvas, 28 October 2026). A card that stays on its line
  * slides to its new place; one that changes line slides out past one edge of its old line and in from the other edge
  * of its new one, shrinking a little and fading between the two drawings. Lines further down start later, like a
  * wave. Behind the cards both grids are drawn whole and blurred ([fill]), so no blank paper shows between them.

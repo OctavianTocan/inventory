@@ -1,5 +1,5 @@
 // FeedbackJob: one Durable Object per feedback id (docs/feedback.md). It owns the job's record and state machine, runs
-// its rounds (sign-in checkout, sandbox, checkin), watches CI, waits for Tavi's review, and merges when the desk gives
+// its rounds (sign-in checkout, sandbox, checkin), watches CI, waits for Octavian's review, and merges when the desk gives
 // it the merge turn. An
 // alarm drives every step, so nothing waits inside a request.
 import { DurableObject } from "cloudflare:workers";
@@ -58,14 +58,14 @@ export interface JobRecord {
   stage: MergeStage;
   stageAt: number | null;
   mergeSha: string | null;
-  /** When Tavi approved the merge; the job's time limit counts from here after review (missing on older jobs). */
+  /** When Octavian approved the merge; the job's time limit counts from here after review (missing on older jobs). */
   approvedAt?: number | null;
-  /** Links Tavi's record keeps: the last failed check and the release run. */
+  /** Links Octavian's record keeps: the last failed check and the release run. */
   ciLog: string | null;
   checkedOut: boolean;
 }
 
-/** The row the desk keeps for each job (Tavi's record). */
+/** The row the desk keeps for each job (Octavian's record). */
 export interface JobRow {
   id: string;
   email: string;
@@ -227,7 +227,7 @@ export class FeedbackJob extends DurableObject<Env> {
       log("pr_opened", job, { pr: job.pr });
     }
     if (job.progress.state === "testing" && job.next.kind === "conflict") {
-      // A merge round brought main in and changed the code, so it goes back to Tavi's review.
+      // A merge round brought main in and changed the code, so it goes back to Octavian's review.
       await this.#move(job, { type: "ci", result: "green" });
       await this.#askReview(job);
     }
@@ -268,14 +268,14 @@ export class FeedbackJob extends DurableObject<Env> {
     return 0;
   }
 
-  /** Labels a green pull request for Tavi's review (Tavi, 6 Nov 2026: feedback is not merged without it). */
+  /** Labels a green pull request for Octavian's review (Octavian, 6 Nov 2026: feedback is not merged without it). */
   async #askReview(job: JobRecord): Promise<void> {
     await this.#github.markForReview(job.pr!, this.#reviewLabel(), this.#approveLabel()).catch(() => {});
     log("review_requested", job, { pr: job.pr });
   }
 
   /**
-   * Waits for Tavi: the approve label sends the job to the merge queue, a hand merge goes on to the release check,
+   * Waits for Octavian: the approve label sends the job to the merge queue, a hand merge goes on to the release check,
    * and closing the pull request ends the job.
    */
   async #watchReview(job: JobRecord): Promise<number> {

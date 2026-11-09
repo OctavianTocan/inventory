@@ -8,7 +8,7 @@ by a hairline, 24dp top padding and 28dp bottom padding. Bundled illustrations
 appear under their associated bullet, rounded and framed, at most 420dp tall.
 The sheet uses the app's font like every other screen. This layout MUST NOT
 change update permission, install, download or once-after-install bookkeeping.
-Source: Tavi, 22 October 2026: "literally copy exactly the format from Pully for
+Source: Octavian, 22 October 2026: "literally copy exactly the format from Pully for
 the changelog. It's a bottom sheet." pulls.review UpdateUi.kt WhatsNewSheet,
 ChangelogEntries, ChangelogItem and NewTag at
 20e889540b7c05ed9174b038ae366191932924e9.
@@ -21,10 +21,10 @@ action. Nothing MUST close it but the update, and Back MUST leave the app. The p
 remembers the last offer, so a start shows the screen before the server answers again;
 a failed check keeps the offer and a server with nothing newer takes it away. Updates
 MUST NOT start installing by themselves when the user leaves the app; an update the user
-started carries on (update-carries-on-when-you-leave). Source: Tavi, 5 Nov 2026
+started carries on (update-carries-on-when-you-leave). Source: Octavian, 5 Nov 2026
 ("updating when you open and not letting you use until updated. Like Pully"); pulls.review
 update-screen-is-required and updater-remembers-the-offer. The app's name changed from
-ThyMind to Inventory on Tavi's word, 5 Nov 2026 ("fully rename it to Inventory everywhere").
+ThyMind to Inventory on Octavian's word, 5 Nov 2026 ("fully rename it to Inventory everywhere").
 
 @cc [owner:OctavianTocan,label:product] update-shows-its-progress
 Update MUST download (when the package is not on the phone yet), wait for any upload in
@@ -32,7 +32,7 @@ flight and install in the app, showing how far it got in place. Without Android'
 install permission, Update MUST open its settings page and carry on by itself when the
 user comes back allowing it. A failed download or install MUST offer Try again, and an
 approval Android still waits for MUST offer Continue update; neither lets the user
-through. Source: Tavi, 5 Nov 2026; pulls.review update-shows-its-progress and
+through. Source: Octavian, 5 Nov 2026; pulls.review update-shows-its-progress and
 update-confirmation-remains-actionable.
 
 @cc [owner:OctavianTocan,label:product] update-prompt-opens-from-the-screen
@@ -40,14 +40,14 @@ Android's install prompt MUST be opened by the visible update screen, never from
 background, and only once per prompt Android sends; Continue update opens it again. A
 status Android reports for an install session the app no longer follows (one a retry
 abandoned) MUST be ignored. Saying no in Android's prompt MUST bring back Update, not a
-failure. Source: Tavi, 7 Nov 2026 ("It say to try again because this shit no work. 'The
+failure. Source: Octavian, 7 Nov 2026 ("It say to try again because this shit no work. 'The
 install was cancelled' and the Android prompt for install did show up but it just stays
 there"); pulls.review UpdateInstallReceiver and Updates.openConfirmation.
 
 @cc [owner:OctavianTocan,label:product] update-notifies-once
 While the app is closed, the background check MUST download a newer release and tell the
 user in a notification once per version; its tap opens the app on the update screen.
-Source: Tavi, 5 Nov 2026; pulls.review updater-notifies-once.
+Source: Octavian, 5 Nov 2026; pulls.review updater-notifies-once.
 
 @cc [owner:OctavianTocan,label:product] update-carries-on-when-you-leave
 Once the user taps Update (or Try again), the download, the wait for uploads in flight and
@@ -56,6 +56,6 @@ notification that shows the download's percent, the wait for an upload and the i
 its tap opens the update screen. When Android then needs the user's tap, a notification
 MUST ask for it; when the update stops while the user is away (a failed download or
 install, not a cancel of Android's prompt), a notification MUST say so and its tap opens
-the update screen with Try again. Source: Tavi, 7 Nov 2026 ("once we start an update in
+the update screen with Try again. Source: Octavian, 7 Nov 2026 ("once we start an update in
 the app, we gotta make sure it happens even if you leave the app as it downloads or
-installs!"). The wording of the notifications is Claude's choice, not confirmed by Tavi.
+installs!"). The wording of the notifications is Claude's choice, not confirmed by Octavian.

@@ -119,7 +119,7 @@ fun rememberStarMoment(seed: Long = System.nanoTime()): StarMoment {
 }
 
 /**
- * The shooting star moment over the app that shared (Tavi's pick of 03, 5 November 2026; share-moment-shooting-star):
+ * The shooting star moment over the app that shared (Octavian's pick of 03, 5 November 2026; share-moment-shooting-star):
  * the page goes under a night sky, a constellation in the shape of the gem draws itself, one star breaks off and falls
  * changing colour by rarity, lands in a white-out, and the find's card spins out of it face up. Its stars stamp in and
  * its points count up; then the card turns over and grows into [tagStep], and once that is done it turns back and flies

@@ -111,7 +111,7 @@ class GalleryIntegrationTest {
     }
 
     @Test fun aSwipeMovesBetweenEverythingSpacesAndAsk() {
-        // "I want to be able to swipe between the everything, spaces, and ask pages ... Just as it does in Pully" (Tavi,
+        // "I want to be able to swipe between the everything, spaces, and ask pages ... Just as it does in Pully" (Octavian,
         // 5 Nov 2026).
         showShell()
         compose.onRoot().performTouchInput { swipeLeft(startX = width * 0.9f, endX = width * 0.1f) }
@@ -119,7 +119,7 @@ class GalleryIntegrationTest {
         compose.onNodeWithContentDescription("Card gallery").assertDoesNotExist()
         compose.onRoot().performTouchInput { swipeLeft(startX = width * 0.9f, endX = width * 0.1f) }
         compose.onNodeWithText("Find something").assertIsDisplayed()
-        // "When I swipe over to the search screen, the search input should be automatically focused" (Tavi, 5 Nov 2026).
+        // "When I swipe over to the search screen, the search input should be automatically focused" (Octavian, 5 Nov 2026).
         compose.onNodeWithContentDescription("Search your inventory").assertIsFocused()
         compose.onRoot().performTouchInput { swipeRight(startX = width * 0.1f, endX = width * 0.9f) }
         compose.onNodeWithText("Spaces").assertIsSelected()
@@ -157,7 +157,7 @@ class GalleryIntegrationTest {
     }
 
     @Test fun searchResultsPinchLikeTheGallery() {
-        // "The zoom in and stuff should work on the results too" (Tavi, 28 Oct 2026): the results open before their cards.
+        // "The zoom in and stuff should work on the results too" (Octavian, 28 Oct 2026): the results open before their cards.
         showShell(searchHits = (1..40).map { testCard("s$it", type = "Image", title = "Found $it") })
         compose.onNodeWithContentDescription("Search").performClick()
         compose.onNodeWithContentDescription("Search your inventory").performTextInput("forest")
@@ -178,7 +178,7 @@ class GalleryIntegrationTest {
     }
 
     @Test fun theSpacesListPinchesLikeTheGalleryAndKeepsItsSizeAcrossASpace() {
-        // "for spaces we also need the pinching stuff" (Tavi, 28 Oct 2026).
+        // "for spaces we also need the pinching stuff" (Octavian, 28 Oct 2026).
         showShell(spaces = (1..12).map { Space("s$it", "Space $it", "#ff5924") })
         compose.onNodeWithText("Spaces").performClick()
         compose.waitForIdle()
@@ -202,7 +202,7 @@ class GalleryIntegrationTest {
 
     @Test fun thePlusOnSpacesAndTheNewSpaceTileOpenTheNewSpaceSheet() {
         // "On the Spaces screen ... there should be a space that has a little plus in the middle ... if you press the
-        // plus, we already assume that you're trying to add a space" (Tavi, 5 Nov 2026).
+        // plus, we already assume that you're trying to add a space" (Octavian, 5 Nov 2026).
         showShell(spaces = listOf(Space("s1", "Walks", "#ff5924")))
         compose.onNodeWithText("Spaces").performClick()
         compose.waitForIdle()
@@ -232,7 +232,7 @@ class GalleryIntegrationTest {
     }
 
     @Test fun aSpaceIsRenamedFromItsDotMenu() {
-        // "We need a way to rename a space in its dot menu" (Tavi, 5 Nov 2026).
+        // "We need a way to rename a space in its dot menu" (Octavian, 5 Nov 2026).
         showShell(spaces = listOf(Space("s1", "Walks", "#ff5924")))
         compose.onNodeWithText("Spaces").performClick()
         compose.waitForIdle()
@@ -248,7 +248,7 @@ class GalleryIntegrationTest {
     }
 
     @Test fun holdingASpaceOnTheListOpensItsOptions() {
-        // "also show that dot menu when holding over it in the spaces page" (Tavi, 5 Nov 2026).
+        // "also show that dot menu when holding over it in the spaces page" (Octavian, 5 Nov 2026).
         showShell(spaces = listOf(Space("s1", "Walks", "#ff5924")))
         compose.onNodeWithText("Spaces").performClick()
         compose.waitForIdle()

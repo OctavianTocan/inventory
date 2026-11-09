@@ -254,7 +254,7 @@ describe("connecting an AI app", () => {
   });
 
   it("lists the usage analytics tools to the owner only", async () => {
-    const owner = setup({ owner: " Tavi@OctavianTocan.com " });
+    const owner = setup({ owner: " Octavian@OctavianTocan.com " });
     const signedIn = await connect(owner.call);
     const client = await mcp(owner.call, (await tokens(owner.call, signedIn.client_id, signedIn.back)).access_token);
     const { tools } = await client.listTools();
@@ -274,7 +274,7 @@ describe("connecting an AI app", () => {
     expect((refused.content as Array<{ text: string }>)[0]!.text).toBe("Only one SELECT question is allowed.");
 
     const daily = await client.callTool({ name: "thymind_analytics_daily", arguments: { since: "2026-11-01" } });
-    expect((daily.content as Array<{ text: string }>)[0]!.text).toContain("google:tavi@octaviantocan.com");
+    expect((daily.content as Array<{ text: string }>)[0]!.text).toContain("google:octavian@octaviantocan.com");
     expect(new URLSearchParams(owner.library.calls.find((found) => found.path === "/app/v1/analytics/daily")!.search).get("since")).toBe("2026-11-01");
 
     for (const other of [setup({ owner: "someone@octaviantocan.com" }), setup()]) {

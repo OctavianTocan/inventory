@@ -190,7 +190,7 @@ mod tests {
         configure();
         assert_eq!(login_for(None), AgentLogin::Server);
         assert_eq!(login_for(Some("  ")), AgentLogin::Server);
-        assert_eq!(login_for(Some("Tavi@Example.com")), login_for(Some("tavi@example.com")));
+        assert_eq!(login_for(Some("Octavian@Example.com")), login_for(Some("octavian@example.com")));
         assert!(login_for(Some("a@example.com")).volume().starts_with("thymind-agents-home-"));
         assert_eq!(AgentLogin::Server.volume(), "thymind-agents-home");
         assert_eq!(login_for(Some("a@example.com")).missing("codex"), "Sign in to Codex first: Profile, AI, Codex.");
