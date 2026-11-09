@@ -177,7 +177,7 @@ class UploadQueue(
         /** Largest piece of a file the server takes in one request: 32 MiB. */
         const val CHUNK_SIZE = 32L * 1024 * 1024
 
-        /** Largest file the server takes: 5 GB (Tavi, 5 November 2026; mymind's own `maxUploadSize` was 500 MB). */
+        /** Largest file the server takes: 5 GB (Octavian, 5 November 2026; mymind's own `maxUploadSize` was 500 MB). */
         const val MAX_UPLOAD_SIZE = 5_000_000_000L
 
         /** Most authorizations one `POST /uploads/authorize` hands out. */

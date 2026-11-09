@@ -8,11 +8,11 @@ day's kept band at once and without internet (`LibraryMemory.sky`), but never a 
 kept from an earlier day. A find sent to the trash leaves it. Nothing else in the
 gallery wears, ages or changes its look with time. The band MUST NOT become a deck of
 cards to keep or forget (library-has-no-serendipity).
-Source: Tavi, 5 November 2026, 23:02, on worn finds ("your library will just become
+Source: Octavian, 5 November 2026, 23:02, on worn finds ("your library will just become
 this huge 4000+ cards of moss or stone. You'd never actually click on them anymore, and
 also not understand what the heck is up"), then his pick of "Three a day, at the top"
 at 23:05 and "implement all this other stuff into the actual app" at 23:06. The "Back
-today" label is Claude's choice, not yet confirmed by Tavi.
+today" label is Claude's choice, not yet confirmed by Octavian.
 
 @cc [owner:OctavianTocan,label:product;design;motion] back-today-finds-are-under-leaves
 (The id is kept from the leaves this replaced.) A find in Back today that has not been
@@ -25,12 +25,12 @@ crosses the find, and the find opens as the shine starts. The find then counts a
 visited (`visit`, sent through the outbox so it waits offline like any change,
 gallery-keeps-offline-changes) and shows as it is for the rest of the day; it MUST NOT
 become a hologram again that day. Before Android 13 it is tinted blue instead.
-Source: Tavi, 6 November 2026, 12:43: "you've added leaves on top of the carts that are
+Source: Octavian, 6 November 2026, 12:43: "you've added leaves on top of the carts that are
 back for the day instead of something actually interesting. You should use Hologram",
 look 25 of the worn directions on the "Your sky" canvas (artboard ab04974a31ee); the
 restore and its glints are that prototype's. How far gone a find shows (by months since
 it was last saved, never less than stage 2, so every Back today find reads as a
-hologram) is Claude's choice, not yet confirmed by Tavi.
+hologram) is Claude's choice, not yet confirmed by Octavian.
 
 @cc [owner:OctavianTocan,label:product;design;motion] sky-opens-from-the-star-button
 On All, a star button MUST sit beside Add once the sky has anything to show: a
@@ -43,7 +43,7 @@ could not be seen. The button MUST then show how many finds wait to light, and l
 up MUST light each of them with a shooting star in front of the person, after which the
 count is gone. Which stars have lit is kept on the phone (`LibraryMemory.skySeen`); on
 the first run every star already in the sky counts as lit.
-Source: Tavi, 6 November 2026, 12:43: "The stars don't go into the Star button and show
+Source: Octavian, 6 November 2026, 12:43: "The stars don't go into the Star button and show
 up as numbers. And they don't do it when you close the card, which is where it made
 sense because you can actually see it." The flight, bounce, ring and count are the
 prototype's (claude.ai/artifact/JvWYpVNhTuipvb119JDd6P).
@@ -60,15 +60,15 @@ opens straight onto the sky, and the status bar takes the sky's colour; while lo
 up, a sideways swipe MUST NOT move to another page such as Spaces. In the sky, swiping
 up MUST come back down to the page, carrying on at the finger's speed the same way, and
 Back does too. The sky MUST NOT have a close or X button.
-Source: Tavi, 6 November 2026, 12:43: "There's no transition by swiping between the Sky
+Source: Octavian, 6 November 2026, 12:43: "There's no transition by swiping between the Sky
 and the normal pages. Instead, you added an X button to the sky. That's shit. And
 unwanted." and "The transition looked far better here" (the prototype,
-claude.ai/artifact/JvWYpVNhTuipvb119JDd6P). Tavi, 6 November 2026, 16:53: "The
+claude.ai/artifact/JvWYpVNhTuipvb119JDd6P). Octavian, 6 November 2026, 16:53: "The
 scrolling up and down feels like shit to go to the sky. And for some reason the UI for
 normal stuff stays while in the sky and I can even swipe to go to spaces." Carrying on at
-the finger's speed and the 1.3 seconds are Claude's choice, not yet confirmed by Tavi.
+the finger's speed and the 1.3 seconds are Claude's choice, not yet confirmed by Octavian.
 While there is a sky, this pull replaces pull to refresh on All and looking up syncs the
-library instead; that is Claude's choice, not yet confirmed by Tavi.
+library instead; that is Claude's choice, not yet confirmed by Octavian.
 
 @cc [owner:OctavianTocan,label:product;design] sky-shows-constellations-not-sentences
 Your sky MUST look and move as the prototype's does, with its light added the way the
@@ -101,19 +101,19 @@ faint haze. Every phone MUST combine the lights with blends its GPU runs in fixe
 blending (Screen), the way the tests draw them, so no star shows as a dark shape and no
 light sits on a lighter panel; the wide bloom alone is added up in linear light, on the
 CPU. Android 16's own blends MUST NOT be used for the sky until a real phone's frames show
-them right: on Tavi's Galaxy Z Fold they drew the field stars as dark octagons and the
-lines and the shooting star on lighter rectangles (Tavi, 6 November 2026, 16:53: "The
+them right: on Octavian's Galaxy Z Fold they drew the field stars as dark octagons and the
+lines and the shooting star on lighter rectangles (Octavian, 6 November 2026, 16:53: "The
 star rendering is broken. Both zoomed out or in."). Screen lets overlapping faint lights
 brighten each other a little more than the prototype's linear adding; that trade is
-Claude's choice, not yet confirmed by Tavi.
-Source: Tavi, 6 November 2026: 12:43, "The sky and stars, and constellations looked far
+Claude's choice, not yet confirmed by Octavian.
+Source: Octavian, 6 November 2026: 12:43, "The sky and stars, and constellations looked far
 better" in the prototype; 12:56, "Why is the starry sky so... Boring and lifeless?" and
 "Wtf even is a constellation? How would I know?"; 12:57, "The stars themselves and
 chains between them also look like shitty 2d icons. Instead of how cool they looked in
-the designs we made." The line under the name is Tavi's pick on 6 November 2026, 14:48:
+the designs we made." The line under the name is Octavian's pick on 6 November 2026, 14:48:
 "Name plus what links them". Showing at most twelve loose stars and
 the extra places for finished constellations beyond the prototype's two are Claude's
-choices, not yet confirmed by Tavi.
+choices, not yet confirmed by Octavian.
 
 @cc [owner:OctavianTocan,label:product;design;motion] sky-star-condenses-into-its-find
 Tapping a star MUST move the camera in on it, and its find MUST condense out of
@@ -130,13 +130,13 @@ regaining its colour, and a constellation whose last star lights then completes.
 The find MUST show whole, in its own shape, inside the screen with a margin on each side
 and above its title, small enough to tell what it is: never cut off at an edge, cropped
 to a square or blown up past the screen, its smoke fading out before the edge of what is
-drawn (Tavi, 6 November 2026, 21:50, on the Fold's cover screen: "the cards are still
+drawn (Octavian, 6 November 2026, 21:50, on the Fold's cover screen: "the cards are still
 cut off in the stars zoom. At the bottom. And they're too scaled up. It's hard to tell
 what they are."). Its size, at most 440 by 380 of the prototype's units and 28 in from
-each side, is Claude's choice, not yet confirmed by Tavi.
+each side, is Claude's choice, not yet confirmed by Octavian.
 Accessibility MUST offer Back to your library, a way to each star of the middle
 constellation by its find's title, and Next star and Previous star while one shows.
-Source: Tavi, 5 November 2026, 23:06: "Let's do 13 Condense"; 6 November 2026, 12:43:
+Source: Octavian, 5 November 2026, 23:06: "Let's do 13 Condense"; 6 November 2026, 12:43:
 "DId you use 13-Condense for the star tap? I hope you did." and "Did you implement all
 the swiping mechanics between stars?"; 12:56: "How do I even go back from being focused
 on a star? Why are the cards not using the condense effect?"
@@ -150,7 +150,7 @@ The sky MUST then send that visit and ask the server again, and the next constel
 the server forms MUST gather in the middle out of its vortex while the sky shows. When
 the server has none to form (no save from the last two weeks with old finds near it),
 the middle stays empty until it has.
-Source: Tavi, 6 November 2026, 21:50: "once I finished a constellation it played a nice
+Source: Octavian, 6 November 2026, 21:50: "once I finished a constellation it played a nice
 animation and then proceeded to just snap back to the constellation itself. No new one
 generated. That's bad"; and 5 November 2026, 17:02: "Once you complete one, another AI
 gives you a new one".
@@ -168,9 +168,9 @@ a swipe travels between its stars. A tap on empty sky, or Back, MUST send it to 
 and bring the forming one forward again. Going back MUST NOT light, finish or change
 anything, and a new constellation from the server waits until the person is back.
 Accessibility MUST offer each finished constellation by its name.
-Source: Tavi, 6 November 2026, 22:09: "Also, not being able to go back to previous
+Source: Octavian, 6 November 2026, 22:09: "Also, not being able to go back to previous
 constellations sucks. Fix." The tap, the sideways swipe and which way goes back in time
-are Claude's choice, not yet confirmed by Tavi.
+are Claude's choice, not yet confirmed by Octavian.
 
 @cc [owner:OctavianTocan,label:product;design;motion] sky-sounds
 Your sky MUST make game-like sounds for its beats, timed to what moves: a rising swell
@@ -186,6 +186,6 @@ star flies into the star button. The sounds MUST be made by the app's own synth 
 recorded files, so nothing carries another licence), and like the share moment they
 MUST play only while the phone's ringer is on, at the media volume
 (share-moment-sounds). The sky MUST NOT play a sound while nothing moves in it.
-Source: Tavi, 6 November 2026, 21:50: "We need cool game-like sound effects for the
+Source: Octavian, 6 November 2026, 21:50: "We need cool game-like sound effects for the
 sky." Which beats sound, the recipes, the D major pentatonic scale and the synth over
-licensed recordings are Claude's choices, not yet confirmed by Tavi.
+licensed recordings are Claude's choices, not yet confirmed by Octavian.

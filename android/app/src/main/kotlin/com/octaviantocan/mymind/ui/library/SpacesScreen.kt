@@ -214,7 +214,7 @@ fun SpaceListContent(
                             if (card.id == NEW_SPACE_CARD.id) onNewSpace() else state.spaces.firstOrNull { it.id == card.id }?.let(onOpenSpace)
                         },
                         state = scroll, mosaic = mosaic, header = { GalleryTitle("All Spaces") }, tiles = tiles, label = "All spaces",
-                        // Holding a space opens the same options as its opened page's dot menu (Tavi, 5 November 2026).
+                        // Holding a space opens the same options as its opened page's dot menu (Octavian, 5 November 2026).
                         onLongPressCard = options?.let { { card -> if (card.id != NEW_SPACE_CARD.id) heldId = card.id } })
                 }
                 GalleryScrollEdge(backdrop, LibraryStyle.colors.background, Modifier.align(Alignment.TopCenter), visible = { scroll.scrolledBy() })
@@ -393,7 +393,7 @@ internal fun SpaceOptionsSheet(space: Space, onClose: () -> Unit, onAdd: () -> U
 
 /**
  * The tile after the spaces that makes a new one: a stack's square outlined on the page with a plus in it, and "New
- * space" where a space shows its name (Tavi, 5 November 2026).
+ * space" where a space shows its name (Octavian, 5 November 2026).
  *
  * @param onClick Called when the tile is tapped.
  * @param modifier Modifier for the cell.

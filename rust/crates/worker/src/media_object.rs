@@ -13,7 +13,7 @@ use crate::util::{call, get, js_error};
 
 const PORT: u16 = 8080;
 const START_TIMEOUT_MS: f64 = 60_000.0;
-// Billing runs until the container sleeps; one quiet minute keeps a burst of saves warm (Tavi, 5 Nov 2026).
+// Billing runs until the container sleeps; one quiet minute keeps a burst of saves warm (Octavian, 5 Nov 2026).
 const IDLE_MS: f64 = 60_000.0;
 
 /// The Rust media container (`rust/container/`): image and video renditions, PDF previews, page screenshots and validated

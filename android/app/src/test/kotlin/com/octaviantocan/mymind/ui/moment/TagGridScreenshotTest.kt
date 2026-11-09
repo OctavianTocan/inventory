@@ -29,7 +29,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * share-tag-step-icon-grid: the tag step on the card's back at the size it has on the reference phone, with text 10%
- * bigger as on Tavi's phone, so its spacing can be checked by eye.
+ * bigger as on Octavian's phone, so its spacing can be checked by eye.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

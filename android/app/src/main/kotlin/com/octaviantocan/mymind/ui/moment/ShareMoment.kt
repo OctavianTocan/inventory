@@ -86,7 +86,7 @@ fun ShareMoment(
     val phase = if (onWeb && web != null) web.phase else moment.phase
     LaunchedEffect(phase) {
         when (phase) {
-            // No space is chosen for the user; the suggested one only comes first in the row (Tavi, 6 Nov 2026).
+            // No space is chosen for the user; the suggested one only comes first in the row (Octavian, 6 Nov 2026).
             StarPhase.Settled -> if (!problem && !tagOpen) tagOpen = true
             StarPhase.Done -> if (!problem) latestClosed()
             else -> Unit

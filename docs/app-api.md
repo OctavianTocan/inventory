@@ -239,12 +239,12 @@ The manifest entry behind both is described in `docs/plans/2026-10-17-1935-feat-
 ## Feedback
 
 Feedback from the app becomes a pull request that an agent writes on the sender's own Claude Code or Codex plan and
-the runner merges after green CI and Tavi's review (`docs/feedback.md`, Review). Every refusal is 403 (never 401) with `{"error": "<sentence>"}`.
+the runner merges after green CI and Octavian's review (`docs/feedback.md`, Review). Every refusal is 403 (never 401) with `{"error": "<sentence>"}`.
 
 - `POST /app/v1/feedback` with `{text, engine, model, effort, client_id}`: `engine` is `claude` (or `claude-code`) or
   `codex`, `model` an id from `GET /app/v1/ai/models`, `effort` one of `none`, `minimal`, `low`, `medium`, `high`,
   `xhigh`, `max`, and `client_id` 8 to 64 letters, digits, `-` or `_`, made once per send so a retry returns the
-  same job. Answers `202 {id, state}`. 400 for a malformed body or text outside 1 to 4000 characters; 403 "Only Tavi
+  same job. Answers `202 {id, state}`. 400 for a malformed body or text outside 1 to 4000 characters; 403 "Only Octavian
   can send feedback for now." (while `FEEDBACK_OPEN` is `owner`), "Sign in to Claude Code first." (or Codex), "That
   model isn't available any more.", "You already have feedback in progress.", "You've sent 5 today. Try again
   tomorrow." (UTC day), "Feedback is paused for now."

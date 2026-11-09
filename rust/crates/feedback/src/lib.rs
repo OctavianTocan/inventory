@@ -135,7 +135,7 @@ where
             };
             Forward { method: "POST", path: "/feedback/pause".into(), body: Some(json!({ "paused": paused })) }
         }
-        ("GET", "" | "/") | ("POST", "/pause") => return Some(Reply::problem(403, "Only Tavi can see this.")),
+        ("GET", "" | "/") | ("POST", "/pause") => return Some(Reply::problem(403, "Only Octavian can see this.")),
         ("GET", id) if is_id(id.trim_start_matches('/')) => Forward { method: "GET", path: format!("/feedback{id}"), body: None },
         _ => return Some(Reply::problem(404, "Not found.")),
     };
@@ -151,7 +151,7 @@ fn is_id(id: &str) -> bool {
 /// engine named as the runner names it, the engine, and its name for sentences.
 fn check_send(caller: &Caller<'_>, body: &[u8]) -> Result<(Value, &'static str, &'static str), Reply> {
     if caller.open == Open::Owner && !caller.is_owner() {
-        return Err(Reply::problem(403, "Only Tavi can send feedback for now."));
+        return Err(Reply::problem(403, "Only Octavian can send feedback for now."));
     }
     let bad = |message: &str| Reply::problem(400, message);
     let parsed: Value = serde_json::from_slice(body).map_err(|_| bad("Send a JSON body."))?;
@@ -175,10 +175,10 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
 
-    const TAVI: &str = "tavi@example.com";
+    const OCTAVIAN: &str = "octavian@example.com";
 
     fn caller(email: &str, open: Open) -> Caller<'_> {
-        Caller { email, owner: Some(TAVI), open }
+        Caller { email, owner: Some(OCTAVIAN), open }
     }
 
     fn send(text: &str) -> Vec<u8> {
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn a_good_send_reaches_the_runner_with_its_client_id_unchanged() {
-        let (reply, sent) = run(&caller(TAVI, Open::Owner), "POST", "/app/v1/feedback", &send(" Keep it open "), true, &["opus"]);
+        let (reply, sent) = run(&caller(OCTAVIAN, Open::Owner), "POST", "/app/v1/feedback", &send(" Keep it open "), true, &["opus"]);
         assert_eq!(reply.unwrap().status, 202);
         let sent = sent.unwrap();
         assert_eq!(sent.path, "/feedback");
@@ -220,17 +220,17 @@ mod tests {
 
     #[test]
     fn every_refusal_has_its_status_and_sentence_and_none_is_401() {
-        let tavi = caller(TAVI, Open::Owner);
+        let octavian = caller(OCTAVIAN, Open::Owner);
         let ana = caller("ana@example.com", Open::Everyone);
         let cases = [
-            (run(&caller("ana@example.com", Open::Owner), "POST", "/app/v1/feedback", &send("x"), true, &["opus"]), 403, "Only Tavi can send feedback for now."),
-            (run(&tavi, "POST", "/app/v1/feedback", b"nope", true, &["opus"]), 400, "Send a JSON body."),
-            (run(&tavi, "POST", "/app/v1/feedback", &send(""), true, &["opus"]), 400, "Write between 1 and 4000 characters."),
-            (run(&tavi, "POST", "/app/v1/feedback", &send(&"a".repeat(4001)), true, &["opus"]), 400, "Write between 1 and 4000 characters."),
+            (run(&caller("ana@example.com", Open::Owner), "POST", "/app/v1/feedback", &send("x"), true, &["opus"]), 403, "Only Octavian can send feedback for now."),
+            (run(&octavian, "POST", "/app/v1/feedback", b"nope", true, &["opus"]), 400, "Send a JSON body."),
+            (run(&octavian, "POST", "/app/v1/feedback", &send(""), true, &["opus"]), 400, "Write between 1 and 4000 characters."),
+            (run(&octavian, "POST", "/app/v1/feedback", &send(&"a".repeat(4001)), true, &["opus"]), 400, "Write between 1 and 4000 characters."),
             (run(&ana, "POST", "/app/v1/feedback", &send("x"), false, &["opus"]), 403, "Sign in to Claude Code first."),
             (run(&ana, "POST", "/app/v1/feedback", &send("x"), true, &["sonnet"]), 403, "That model isn't available any more."),
-            (run(&ana, "GET", "/app/v1/feedback", b"", true, &[]), 403, "Only Tavi can see this."),
-            (run(&ana, "POST", "/app/v1/feedback/pause", br#"{"paused":true}"#, true, &[]), 403, "Only Tavi can see this."),
+            (run(&ana, "GET", "/app/v1/feedback", b"", true, &[]), 403, "Only Octavian can see this."),
+            (run(&ana, "POST", "/app/v1/feedback/pause", br#"{"paused":true}"#, true, &[]), 403, "Only Octavian can see this."),
             (run(&ana, "GET", "/app/v1/feedback/NOT-AN-ID", b"", true, &[]), 404, "Not found."),
         ];
         for (result, code, sentence) in cases {
@@ -238,20 +238,20 @@ mod tests {
         }
         let mut bad_effort: Value = serde_json::from_slice(&send("x")).unwrap();
         bad_effort["effort"] = json!("turbo");
-        assert_eq!(status(run(&tavi, "POST", "/app/v1/feedback", bad_effort.to_string().as_bytes(), true, &["opus"])).0, 400);
+        assert_eq!(status(run(&octavian, "POST", "/app/v1/feedback", bad_effort.to_string().as_bytes(), true, &["opus"])).0, 400);
     }
 
     #[test]
     fn text_length_counts_characters_not_bytes() {
-        let (reply, _) = run(&caller(TAVI, Open::Owner), "POST", "/app/v1/feedback", &send(&"é".repeat(4000)), true, &["opus"]);
+        let (reply, _) = run(&caller(OCTAVIAN, Open::Owner), "POST", "/app/v1/feedback", &send(&"é".repeat(4000)), true, &["opus"]);
         assert_eq!(reply.unwrap().status, 202);
     }
 
     #[test]
     fn owner_routes_and_status_are_forwarded() {
-        let tavi = caller("Tavi@Example.com", Open::Owner);
-        assert_eq!(run(&tavi, "GET", "/app/v1/feedback", b"", true, &[]).1.unwrap().path, "/feedback");
-        let pause = run(&tavi, "POST", "/app/v1/feedback/pause", br#"{"paused":true}"#, true, &[]).1.unwrap();
+        let octavian = caller("Octavian@Example.com", Open::Owner);
+        assert_eq!(run(&octavian, "GET", "/app/v1/feedback", b"", true, &[]).1.unwrap().path, "/feedback");
+        let pause = run(&octavian, "POST", "/app/v1/feedback/pause", br#"{"paused":true}"#, true, &[]).1.unwrap();
         assert_eq!((pause.path.as_str(), pause.body.unwrap()), ("/feedback/pause", json!({ "paused": true })));
         let ana = caller("ana@example.com", Open::Everyone);
         assert_eq!(run(&ana, "GET", "/app/v1/feedback/abcdef123456", b"", true, &[]).1.unwrap().path, "/feedback/abcdef123456");
@@ -261,7 +261,7 @@ mod tests {
     fn other_paths_are_not_ours() {
         assert!(!serves("/app/v1/feedbacks"));
         assert!(serves("/app/v1/feedback"));
-        assert!(run(&caller(TAVI, Open::Owner), "GET", "/app/v1/ai/models", b"", true, &[]).0.is_none());
+        assert!(run(&caller(OCTAVIAN, Open::Owner), "GET", "/app/v1/ai/models", b"", true, &[]).0.is_none());
     }
 
     #[test]

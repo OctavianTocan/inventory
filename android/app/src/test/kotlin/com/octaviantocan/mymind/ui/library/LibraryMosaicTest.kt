@@ -80,7 +80,7 @@ class LibraryMosaicTest {
     @Test
     fun aGalleryShownBeforeItsCardsArrivePinchesOnceTheyDo() {
         // Opening the app shows the gallery a moment before its cards: "the moment I open the app pinching doesnt work
-        // until I switch to spaces and back" (Tavi, 28 Oct 2026).
+        // until I switch to spaces and back" (Octavian, 28 Oct 2026).
         val density = MosaicState(2)
         var feed by mutableStateOf(FeedState(loading = true))
         compose.setContent { MymindTheme(dark = true) { LibraryMosaic(feed, {}, {}, mosaic = density) } }
@@ -448,7 +448,7 @@ class LibraryMosaicTest {
     @Test
     fun aPinchLetGoBeforeTheNextSizeLandsThereWithoutAJump() {
         // "It's when I pinch and let go without fully getting to the next stage. Then it pops, instead of being smooth"
-        // (Tavi, 28 Oct 2026). The list took the new size's rows a frame after the scroll position meant for them.
+        // (Octavian, 28 Oct 2026). The list took the new size's rows a frame after the scroll position meant for them.
         val positions = landPartway(2, 2.35f, hold = true)
         assertEquals(3f, positions.last(), 0f)
         // The fingers were still, so the landing starts from still rather than at its fastest.
@@ -548,7 +548,7 @@ class LibraryMosaicTest {
     fun aNoteShowsItsWordsAtEachStopsSize() {
         val density = MosaicState(3)
         compose.setContent { MymindTheme(dark = true) { LibraryMosaic(FeedState(notes, endReached = true), {}, {}, mosaic = density) } }
-        // The words are laid out at 13 sp in a frame drawn scaled to the tile (look 07 Prints, Tavi, 1 November 2026).
+        // The words are laid out at 13 sp in a frame drawn scaled to the tile (look 07 Prints, Octavian, 1 November 2026).
         fun shown(): Float {
             val results = mutableListOf<TextLayoutResult>()
             val node = compose.onNode(hasText(longNote) and hasAnyAncestor(hasClickAction()), useUnmergedTree = true)
@@ -1049,7 +1049,7 @@ class LibraryMosaicTest {
 
     @Test
     fun pinchingToOneColumnOpensReelsThatSwipeOnePageAtATime() {
-        // Tavi, 30 October 2026: "When I zoom all the way in by pinching on the everything screen, we go into a
+        // Octavian, 30 October 2026: "When I zoom all the way in by pinching on the everything screen, we go into a
         // Instagram-reels-like mode where we full screen one thing and we allow scroll to move between them", then
         // "When you get to one column we already should go into the reels mode, not zoom further."
         val density = MosaicState(2, reels = true)
@@ -1103,7 +1103,7 @@ class LibraryMosaicTest {
 
     @Test
     fun aPageInReelsShowsTheFullerCard() {
-        // Tavi, 30 October 2026: "what you see in the reels mode should be fuller cards in full screen with info and stuff".
+        // Octavian, 30 October 2026: "what you see in the reels mode should be fuller cards in full screen with info and stuff".
         val article = testCard("walking", type = "Article", title = "Walking", tags = listOf(Tag("t1", "walks"), Tag("t2", "nature")))
             .copy(siteName = "The Atlantic", description = "Thoreau argues for long, aimless walks.",
                 cover = Cover("https://gallery.example.test/forest.jpg", 800, 1200))

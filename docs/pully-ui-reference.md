@@ -31,7 +31,7 @@ The imported obligations live beside the implementation in
 Android Back, one shared panel, and independent retained page scroll positions.
 Card reading continues to use its full-screen reader. The action panel keeps the selected card's accent as a faint wash at its top
 and in the grabber. Its paper, raised cards, controls and primary actions stay
-neutral, following Tavi's later accent correction.
+neutral, following Octavian's later accent correction.
 
 Creating the first space is a child of the space selector in the same panel. Header
 Back and Android Back return to the selector; creation failures keep the form
@@ -54,7 +54,7 @@ recorded in [`ui/shell/CONTRACTS`](../android/app/src/main/kotlin/com/octavianto
 
 Everything and Spaces are two icon tabs in a small navigation pill centred with
 Search's separate circle, the chosen place's name showing for a moment after a change
-(version 03 of the Everything bar, Tavi's pick on 1 November 2026); there is no
+(version 03 of the Everything bar, Octavian's pick on 1 November 2026); there is no
 Create tab. Search replaces that arrangement through the same bar layer. Rediscover
 and account settings remain available in the gallery header.
 
@@ -82,7 +82,7 @@ and image-only cards keep their own presentation.
 The app uses Google Sans Flex, the typeface of Google's own phone apps such as Google
 Photos, for all text, including the reader, settings, and Material components. The
 bundled file is a Latin subset with a variable weight axis
-(`android/app/src/main/assets/font-licenses/`). Tavi's recorded review of 22 October
+(`android/app/src/main/assets/font-licenses/`). Octavian's recorded review of 22 October
 2026 replaced the system font: "just not default Android font". Gallery excerpts keep
 their smaller preview sizes independently of the reader.
 
@@ -111,7 +111,7 @@ All page motion, detents, Back behavior and retained scroll obligations above st
 apply. Native renders use the shipped Phosphor assets, with license and pinned
 source mappings in `android/app/src/main/assets/icon-licenses/`.
 
-The full-screen reader follows Tavi's separate toolbar reference: one centered
+The full-screen reader follows Octavian's separate toolbar reference: one centered
 title pill between the cross and vertical overflow button. This single-row title
 may ellipsize while its complete accessible text remains available; the reader
 body does not repeat it. Sheet titles remain plain. The gallery profile controls

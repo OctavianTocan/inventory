@@ -262,7 +262,7 @@ class SkyTest {
 
     @Test
     fun aFindFitsTheScreenInItsOwnShape() {
-        // Tavi's Galaxy Z Fold cover screen, 1080 by 2520 pixels: 362 units wide. A video's frame keeps its shape.
+        // Octavian's Galaxy Z Fold cover screen, 1080 by 2520 pixels: 362 units wide. A video's frame keeps its shape.
         val (w, h) = findBox(16f / 9f, 362f)
         assertEquals(362f - 2 * SkyScene.FIND_MARGIN, w, 0.01f)
         assertEquals(w * 9f / 16f, h, 0.01f)

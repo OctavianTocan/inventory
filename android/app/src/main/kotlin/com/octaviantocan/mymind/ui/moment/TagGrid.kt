@@ -144,7 +144,7 @@ fun toggleTag(state: ShareSheetState, tile: TagTile) {
 }
 
 /**
- * The back of the find's card as the tag step, M9 Icon grid (Tavi's pick, 5 November 2026): the spaces along the
+ * The back of the find's card as the tag step, M9 Icon grid (Octavian's pick, 5 November 2026): the spaces along the
  * top with the one the find is in lit, a field to search or add tags, a grid of tags with icons to tap on and off, and
  * a button that saves them. While [left] counts, a darker part drains from the button (share-sheet-fades-by-itself).
  *

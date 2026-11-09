@@ -82,7 +82,7 @@ export function step(job: Progress, event: Event): Progress {
       }
     case "testing":
       if (event.type !== "ci") return job;
-      // Green CI waits for Tavi's review instead of merging (Tavi, 6 Nov 2026).
+      // Green CI waits for Octavian's review instead of merging (Octavian, 6 Nov 2026).
       return event.result === "green" ? { ...job, state: "review" } : another("tests");
     case "review":
       if (event.type === "approved") return { ...job, state: "merging" };
@@ -124,9 +124,9 @@ export function reasonText(reason: Reason, engine: Engine): string {
     case "main_moved":
       return "the app changed too often to merge.";
     case "stopped":
-      return "stopped by Tavi.";
+      return "stopped by Octavian.";
     case "declined":
-      return "Tavi decided not to ship it.";
+      return "Octavian decided not to ship it.";
     default:
       return "something went wrong on our side.";
   }
@@ -152,7 +152,7 @@ export function describe(job: Progress, engine: Engine, summary: string | null, 
     case "fixing":
       return { title: "Fixing a failed test", detail: summary };
     case "review":
-      return { title: "Waiting for Tavi's review", detail: summary };
+      return { title: "Waiting for Octavian's review", detail: summary };
     case "merging":
       return { title: "Getting ready to ship", detail: summary };
     case "shipped":
@@ -160,7 +160,7 @@ export function describe(job: Progress, engine: Engine, summary: string | null, 
     case "merged_server":
       return { title: "Merged. It goes live with the next server update", detail: summary };
     case "merged_not_released":
-      return { title: "Merged, but the release didn't go out. Tavi can see why", detail: summary };
+      return { title: "Merged, but the release didn't go out. Octavian can see why", detail: summary };
     case "no_change":
       return { title: "No change needed", detail: summary };
     case "failed":

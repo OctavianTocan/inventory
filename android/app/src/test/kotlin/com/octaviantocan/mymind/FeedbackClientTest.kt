@@ -58,9 +58,9 @@ class FeedbackClientTest {
 
     @Test
     fun aRefusalOrAnUnknownJobIsTheServersSentence() {
-        answer("""{"error":"Only Tavi can send feedback for now."}""", code = 403)
+        answer("""{"error":"Only Octavian can send feedback for now."}""", code = 403)
         val refused = assertThrows(FeedbackProblem::class.java) { runBlocking { feedback.send("x", AiChoice(), "c") } }
-        assertEquals("Only Tavi can send feedback for now.", refused.message)
+        assertEquals("Only Octavian can send feedback for now.", refused.message)
         assertFalse(refused.notFound)
 
         answer("""{"error":"No such feedback."}""", code = 404)

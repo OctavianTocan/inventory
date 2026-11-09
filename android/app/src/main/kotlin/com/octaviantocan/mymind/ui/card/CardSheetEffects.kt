@@ -71,7 +71,7 @@ fun Modifier.sheetEdgeFade(
 }
 
 /**
- * [sheetEdgeFade] at both ends of a scrolling column (the app's edge rule, Tavi, 5 November 2026): the top band shows
+ * [sheetEdgeFade] at both ends of a scrolling column (the app's edge rule, Octavian, 5 November 2026): the top band shows
  * once [scroll] has left its start and the bottom band while more lies below, each growing in over [reach] of scroll.
  *
  * @param scroll The column's scroll state.

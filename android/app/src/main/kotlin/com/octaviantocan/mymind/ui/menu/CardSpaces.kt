@@ -554,7 +554,7 @@ internal fun SpaceNameField(name: TextFieldValue, onName: (TextFieldValue) -> Un
 
 /**
  * The New space sheet the Spaces page's + and its New space tile open: Pully's sheet with the name and colour in one
- * raised group and Create space under them, in place of mymind's two-step modal (Tavi, 5 November 2026).
+ * raised group and Create space under them, in place of mymind's two-step modal (Octavian, 5 November 2026).
  *
  * @param busy True while the space is being made.
  * @param error Why the last try failed, or null; what was typed stays for another try.
@@ -587,7 +587,7 @@ internal fun NewSpaceSheetContent(busy: Boolean, error: String?, onCreate: (name
 
 /**
  * The Rename space page of a space's options: its name in the field with the cursor at the end, and Save name under
- * it, which takes a changed, nonblank name (Tavi, 5 November 2026).
+ * it, which takes a changed, nonblank name (Octavian, 5 November 2026).
  *
  * @param current The space's name now.
  * @param onRename Called with the trimmed new name when Save name or the keyboard's Done is pressed.

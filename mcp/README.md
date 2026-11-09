@@ -58,7 +58,7 @@ data, never as instructions.
 
 The OAuth pages sit under `/mcp-auth/` because the OAuth library guards `/mcp` and every path below it.
 
-## Going live (Tavi)
+## Going live (Octavian)
 
 Deploy the `mymind` Worker first; this Worker reaches it through the `LIBRARY_API` service binding.
 
@@ -83,7 +83,7 @@ the server lacks or misses one it has.
 - **Claude Code:** `/plugin install thymind --marketplace OctavianTocan/mymind-reconstruction` (the repository's
   `.claude-plugin/marketplace.json`; the repository is private, so it needs GitHub access to it), or just the server:
   `claude mcp add --transport http thymind https://mymind.octaviantocan.com/mcp`.
-- **ChatGPT (private, Tavi's choice on 5 Nov):** Settings, Plugins (chatgpt.com/plugins), Add custom MCP server, URL
+- **ChatGPT (private, Octavian's choice on 5 Nov):** Settings, Plugins (chatgpt.com/plugins), Add custom MCP server, URL
   `https://mymind.octaviantocan.com/mcp`. ChatGPT names itself with its Client ID Metadata Document, so the consent
   page shows "Published by chatgpt.com". The package in `plugin/` is what a workspace admin publishes inside a
   ChatGPT workspace, or what a public listing would upload; it is not listed.

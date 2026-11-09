@@ -6,7 +6,7 @@ import type { ConsentDescription } from "@cloudflare/workers-oauth-provider";
 
 /** The scope every connection gets. */
 export const READ_SCOPE = "thymind.read";
-/** The scope that lets an agent change the library; ticked by default (Tavi, 2026-11-05: "Read, save and edit"). */
+/** The scope that lets an agent change the library; ticked by default (Octavian, 2026-11-05: "Read, save and edit"). */
 export const WRITE_SCOPE = "thymind.write";
 
 /**

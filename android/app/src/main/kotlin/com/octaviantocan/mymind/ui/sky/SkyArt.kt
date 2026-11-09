@@ -47,7 +47,7 @@ internal object Srgb {
 /**
  * Gathers the sky's light with Screen, a blend every GPU runs in its fixed blending, so the phone draws what the tests
  * draw. Linear light is added only inside [WideBloom], on the CPU. Android 16's own blends (RuntimeXfermode) are not
- * used: on a Galaxy Z Fold's GPU they drew field stars as dark octagons on lighter panels (Tavi's screenshot, 6 November
+ * used: on a Galaxy Z Fold's GPU they drew field stars as dark octagons on lighter panels (Octavian's screenshot, 6 November
  * 2026, 16:53).
  */
 internal object LightBlend {

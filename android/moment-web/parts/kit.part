@@ -102,7 +102,7 @@ function applyTags(c) { c.tags = tagsOf(c.ts); c.redraw(); const [x, y] = cardPt
 const CHEV = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 /**
  * Shrinks the editor inside a fixed-size panel until the panel's content fits, and again after every change to it.
- * Some phones draw text bigger than its CSS size (Tavi's draws it about 8% bigger), which pushed the note off the card.
+ * Some phones draw text bigger than its CSS size (Octavian's draws it about 8% bigger), which pushed the note off the card.
  * @param {HTMLElement} ed the panel, a box with a fixed size
  * @param {HTMLElement} te the editor inside it, the part that may shrink
  */
@@ -311,7 +311,7 @@ function skipHint() {
   A(e, [{ opacity: 0 }, { opacity: 1 }], 300, { delay: 700 });
 }
 /**
- * A tap while a moment plays (Tavi, 5 Nov): skip the whole thing, tags too. The page comes back at once,
+ * A tap while a moment plays (Octavian, 5 Nov): skip the whole thing, tags too. The page comes back at once,
  * the find shows for a beat as a small card with one chime, and flies into the backpack.
  */
 async function skipNow() {

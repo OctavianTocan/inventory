@@ -3,10 +3,10 @@
 What each account has in Inventory (ThyMind inside the code) and how it is used, read by asking Claude through the MCP server. The brief and
 its six reviews are in the project files (`analytics/concepts_brief.md`).
 
-Tavi's decisions (2026-11-05):
+Octavian's decisions (2026-11-05):
 
 - **Everything is recorded**, including card ids and search words.
-- **No dashboard.** Tavi asks Claude, through two MCP tools that only `OWNER_EMAIL` gets.
+- **No dashboard.** Octavian asks Claude, through two MCP tools that only `OWNER_EMAIL` gets.
 - **Events are kept 3 months**, the Analytics Engine limit. **Daily totals are kept forever.**
 - **People are not told.** There is no notice and no opt-out.
 
@@ -103,6 +103,6 @@ and that rule.
 1. In the Cloudflare dashboard, create an API token with **Account › Account Analytics › Read**.
 2. In `rust/crates/worker`, run `npx wrangler secret put ANALYTICS_TOKEN` (the token) and
    `npx wrangler secret put ANALYTICS_ACCOUNT_ID` (the account id).
-3. In `mcp/`, run `npx wrangler secret put OWNER_EMAIL` (Tavi's Google address).
+3. In `mcp/`, run `npx wrangler secret put OWNER_EMAIL` (Octavian's Google address).
 4. The `mymind` Worker deploys itself when `main` moves (the VPS timer). Deploy the MCP Worker by hand with
    `npm run deploy` in `mcp/`. The dataset appears on its first write, and the first daily row on the next 23:30 UTC.

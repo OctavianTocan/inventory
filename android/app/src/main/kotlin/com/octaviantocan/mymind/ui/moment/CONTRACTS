@@ -20,11 +20,11 @@ step. A redrawing of it that leaves effects out MUST NOT ship in its place. Wher
 that page cannot play (no WebView, a page error, or not ready within 2.5
 seconds) the app's own drawing of the moment SHOULD play instead, so a share
 never waits on it; the fallback and its 2.5 seconds are Claude's choice.
-Source: Tavi, 5 November 2026, 23:09: "Let's make the 03 shooting star one into a
+Source: Octavian, 5 November 2026, 23:09: "Let's make the 03 shooting star one into a
 real thing in the app and build it out fully", moment 03 of the Inventory share
 moment prototype; the tap to skip, the backpack and no levels come from his
 feedback on that prototype the same day. Playing the prototype's own engine
-follows Tavi, 6 November 2026, 13:01: "you didn't include most of the detailed
+follows Octavian, 6 November 2026, 13:01: "you didn't include most of the detailed
 animations, nor backgrounds, nor effects...it looks like absolute shit in the
 actual app."
 
@@ -45,12 +45,12 @@ inside the tile on both sides, at the phone's own text size; a grid with more
 rows than fit fades at the bottom rather than cutting a row off. It MUST turn on
 from the edge the card turned to and leave by the other, so the turn carries on
 one way round.
-Source: Tavi's pick of M9 Icon grid on 5 November 2026, 23:27, for the tag step
+Source: Octavian's pick of M9 Icon grid on 5 November 2026, 23:27, for the tag step
 that follows the shooting star; the icon for each tag is Claude's choice. The M9
-frame chose the suggested space from the start; Tavi turned that off on 6 November
+frame chose the suggested space from the start; Octavian turned that off on 6 November
 2026, 22:14: "Make it so the share doesn't always put my stuff in "Always
 Relevant" space. That's super annoying. It shouldn't auto choose a space."
-The spacing follows Tavi, 6 November 2026, 13:03: "There's not enough margin on
+The spacing follows Octavian, 6 November 2026, 13:03: "There's not enough margin on
 the side for the small icon, the tags on the card's back don't have proper
 spacing inside"; the 10 dp corner inset and the bottom fade are Claude's choice.
 
@@ -63,7 +63,7 @@ and music.youtube.com as youtube.com; a file's or note's source is its kind.
 Rarity sets the star's colours, the card's stars (1, 3, 5) and its points (10,
 40, 80). When the library cannot be counted before the star breaks off, the find
 is Common.
-Source: Tavi's rules for Inventory, 5 November 2026: rarity comes from the
+Source: Octavian's rules for Inventory, 5 November 2026: rarity comes from the
 user's own library and points reward saving. The thresholds, the sources and
 the point values are Claude's choice and not yet confirmed.
 
@@ -72,7 +72,7 @@ The moment's sounds MUST play only while the phone's ringer is on, never when it
 is silent or on vibrate, and its vibrations MUST follow the phone's touch
 feedback setting. The app's sounds MUST play at the phone's media volume, the
 one the volume keys set while the app is open, as a game's do.
-Source: the sound and feel of the Inventory share moment prototype Tavi heard on
+Source: the sound and feel of the Inventory share moment prototype Octavian heard on
 5 November 2026; following the ringer and the touch feedback setting is Claude's
-choice. Media volume: Tavi, 6 November 2026, 22:14: "the volume doesn't get
+choice. Media volume: Octavian, 6 November 2026, 22:14: "the volume doesn't get
 controlled by normal sound volume for some reason? That sucks."

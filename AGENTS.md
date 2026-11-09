@@ -12,7 +12,7 @@ a feedback runner (`feedback-runner/`). It began as a localhost replica of mymin
 binary (`mymind serve`) still serves mymind's front-end (`mirror/`) as the web library, but it is its own product
 and nothing checks it against mymind any more.
 
-Direction (Tavi, 5 November 2026): a game-like inventory in a modern, comfortable app. Finds have rarity from the
+Direction (Octavian, 5 November 2026): a game-like inventory in a modern, comfortable app. Finds have rarity from the
 person's own library (never chance or payment), a shooting star brings each share in, a backpack holds finds (never a
 basket), Back today brings up to three old finds a day, and Your sky gathers them into constellations. There are no
 levels or XP anywhere. Design ideas taken from games or other apps are drawn in the app's own colours, type and
@@ -20,7 +20,7 @@ shapes, never as a copy of a specific game.
 
 Everything a person reads says Inventory. Internal names stay (`com.octaviantocan.mymind`, the `mymind` binary and
 Worker, `thymind_*` MCP tools and scopes, preference keys, Kotlin identifiers), because changing them breaks
-installed phones, sign-ins and connected agents; renaming one needs Tavi's go-ahead.
+installed phones, sign-ins and connected agents; renaming one needs Octavian's go-ahead.
 
 ## Hard rules
 
@@ -55,7 +55,7 @@ installed phones, sign-ins and connected agents; renaming one needs Tavi's go-ah
 
 ## How work ships
 
-- **Merge your own PR once CI is green** (Tavi, 22 October 2026: "If it passes CI, you can merge any of the PRs you
+- **Merge your own PR once CI is green** (Octavian, 22 October 2026: "If it passes CI, you can merge any of the PRs you
   make"), and do it as soon as it is green rather than leaving it open. This covers PRs that publish an Android
   release. It does not cover PRs someone else opened.
 - **A merge to `main` is a release.** `Android verify` (the `android` check) then `Android release` publish the app to
@@ -73,10 +73,10 @@ installed phones, sign-ins and connected agents; renaming one needs Tavi's go-ah
 
 `CONTRACTS` files hold the rules a part of the app must keep, for their directory and everything under it
 (`@cc [owner:OctavianTocan,label:<labels>] <id>`, then prose with RFC 2119 MUST/SHOULD/MAY that names its source:
-Tavi's words with the date, or the pick from a design page). Before changing a part of the Android app, read the
+Octavian's words with the date, or the pick from a design page). Before changing a part of the Android app, read the
 `CONTRACTS` of its directory and those above it. When behaviour changes on purpose, change its contract in the same PR
 and say whose decision changed it; never weaken or delete one to make code pass. Add a contract for each new
-behaviour Tavi asks for or picks, and mark choices Tavi has not confirmed as Claude's choice. Keep ids stable even
+behaviour Octavian asks for or picks, and mark choices Octavian has not confirmed as Claude's choice. Keep ids stable even
 when the words they hold change (`share-sheet-shows-thymind-tags`).
 
 ## Long-running processes
@@ -140,7 +140,7 @@ output format and a length cap.
 
 ## Feedback agents
 
-Feedback sent from the app is implemented by an agent in a sandbox and merged on green CI once Tavi approves it
+Feedback sent from the app is implemented by an agent in a sandbox and merged on green CI once Octavian approves it
 (`docs/feedback.md`, Review). In
 that work, do not change version numbers or `android/CHANGELOG.md`; the feedback runner does that.
 

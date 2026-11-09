@@ -170,7 +170,7 @@ export class GitHub {
   }
 
   /**
-   * Where Tavi's review of a pull request stands.
+   * Where Octavian's review of a pull request stands.
    *
    * @param pr the pull request
    * @param approve the label that approves the merge

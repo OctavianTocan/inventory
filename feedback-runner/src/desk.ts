@@ -1,6 +1,6 @@
 // FeedbackDesk: the one index and queue (docs/feedback.md). It answers sends (dedup by client_id, the pause switch,
 // one active job per person, 5 a day), hands out the 3 round slots, gives the merge turn first in first out, and keeps
-// Tavi's record of the last 100 jobs.
+// Octavian's record of the last 100 jobs.
 import { DurableObject } from "cloudflare:workers";
 
 import type { Env } from "./env";
@@ -53,7 +53,7 @@ export class FeedbackDesk extends DurableObject<Env> {
     if (same) return same.email === send.email ? { ok: true, id: same.id, state: same.state } : { ok: false, error: "That send was already used." };
     if (this.paused()) return { ok: false, error: "Feedback is paused for now." };
     const finals = [...FINAL].map((state) => `'${state}'`).join(",");
-    // A job waiting for Tavi's review does not hold up the sender's next one.
+    // A job waiting for Octavian's review does not hold up the sender's next one.
     const active = this.#sql.exec(`SELECT COUNT(*) AS n FROM jobs WHERE email = ? AND state NOT IN (${finals}, 'review')`, send.email).one().n as number;
     if (active > 0) return { ok: false, error: "You already have feedback in progress." };
     const day = new Date(now);
@@ -147,7 +147,7 @@ export class FeedbackDesk extends DurableObject<Env> {
     return paused;
   }
 
-  /** Tavi's record: the last 100 jobs, newest first. */
+  /** Octavian's record: the last 100 jobs, newest first. */
   list(): JobRow[] {
     return this.#sql.exec<JobRow & Record<string, SqlStorageValue>>(
       "SELECT id, email, state, engine, model, effort, pr, rounds, reason, created_at, finished_at, ci_log FROM jobs ORDER BY created_at DESC LIMIT 100",

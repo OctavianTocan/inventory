@@ -1305,7 +1305,7 @@ internal class SkyScene {
 
         /**
          * The most a find's picture takes, in units, and the margin it keeps from each side of the screen, so it shows
-         * whole and small enough to tell what it is (Claude's choice, after Tavi, 6 November 2026, 21:50: "they're too
+         * whole and small enough to tell what it is (Claude's choice, after Octavian, 6 November 2026, 21:50: "they're too
          * scaled up").
          */
         const val FIND_MAX_W = 440f

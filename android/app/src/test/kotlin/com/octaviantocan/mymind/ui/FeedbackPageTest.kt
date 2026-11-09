@@ -119,14 +119,14 @@ class FeedbackPageTest {
     @Test
     fun aRefusedSendShowsTheServersSentenceAndTheRetryKeepsItsClientId() {
         val ai = ai(claude = true, codex = false)
-        val tracker = TrackerFixture().apply { api.refuse = FeedbackProblem("Only Tavi can send feedback for now.") }
+        val tracker = TrackerFixture().apply { api.refuse = FeedbackProblem("Only Octavian can send feedback for now.") }
         show(ai, tracker)
         compose.onNodeWithText("Send").assertIsNotEnabled()
         compose.onNode(hasSetTextAction()).performTextInput("Make the cards rounder")
         settle()
         compose.onNodeWithText("Send").assertIsEnabled().performClick()
         settle()
-        compose.onNodeWithText("Only Tavi can send feedback for now.").assertExists()
+        compose.onNodeWithText("Only Octavian can send feedback for now.").assertExists()
         assertTrue(tracker.store.active().isEmpty())
 
         tracker.api.refuse = null

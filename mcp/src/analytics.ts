@@ -1,5 +1,5 @@
 /**
- * The owner's usage analytics tools (`docs/analytics.md`). Tavi chose (2026-11-05) to read analytics by asking
+ * The owner's usage analytics tools (`docs/analytics.md`). Octavian chose (2026-11-05) to read analytics by asking
  * Claude, with no dashboard. They are listed only when the signed-in account is `OWNER_EMAIL`, and the `mymind`
  * Worker checks the owner again on its own routes, so another account neither sees nor reaches them.
  */

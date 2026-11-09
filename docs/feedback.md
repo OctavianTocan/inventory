@@ -2,8 +2,8 @@
 
 A signed-in Inventory user writes feedback in the Android app, picks Claude Code or Codex with a model and an effort,
 and an agent on their own subscription turns it into a pull request inside a Cloudflare sandbox, which the runner
-merges once CI is green and Tavi has approved it. The design
-(Tavi's decisions of 5 November 2026, the parts, job states and build order) is `feedback-agent/design_draft.md` in
+merges once CI is green and Octavian has approved it. The design
+(Octavian's decisions of 5 November 2026, the parts, job states and build order) is `feedback-agent/design_draft.md` in
 the Inventory project files. This page holds what the repository needs to know: the routes, the runner, the GitHub
 sign-in, review, deploying, the kill switch, the runbook for a bad release and the spike's answers.
 
@@ -22,7 +22,7 @@ reaches it through the `FEEDBACK_RUNNER` service binding after its sign-in gate,
 `x-feedback-email` and their AI login in `x-feedback-login`.
 
 - `FeedbackDesk` (`src/desk.ts`, one object): the `client_id` map, one active job per person, 5 sends per person per
-  UTC day, 3 round slots for everyone, the merge queue (first in, first out), the pause switch and Tavi's record of
+  UTC day, 3 round slots for everyone, the merge queue (first in, first out), the pause switch and Octavian's record of
   the last 100 jobs.
 - `FeedbackJob` (`src/job.ts`, one per feedback id): the job's record and state machine (`src/states.ts`, a pure
   function tested as a table per journey), driven by an alarm: every minute while a round runs, every 2 minutes while
@@ -34,7 +34,7 @@ reaches it through the `FEEDBACK_RUNNER` service binding after its sign-in gate,
   `/workspace/context/<name>`, runs the CLI for at most 45 minutes, adds the CHANGELOG entry the release gate asks for,
   refuses to push a commit holding a sign-in file's text, and pushes `feedback/<id>`.
 - The outbound handler (`src/outbound.ts`) adds the GitHub sign-in to git traffic for this repository and the
-  `READ_REPOS` ones (fetch only, never push; Tavi, 5 Nov 2026), lets a push update only the round's own branch and
+  `READ_REPOS` ones (fetch only, never push; Octavian, 5 Nov 2026), lets a push update only the round's own branch and
   never delete it, passes the engine's hosts (Claude Code: `api.anthropic.com`
   plus its sign-in hosts; Codex: `chatgpt.com`, `auth.openai.com`, `api.openai.com`) and GET downloads from
   `index.crates.io`, `static.crates.io` and `registry.npmjs.org`, and refuses everything else.
@@ -45,7 +45,7 @@ reaches it through the `FEEDBACK_RUNNER` service binding after its sign-in gate,
   outlasts the 45-minute limit, writes the rotated refresh token back for the checkin, and gives Codex only the access
   token in `ACCESS_TOKEN`, sent to `api.openai.com/v1`.
 - Review: a pull request with green checks is not merged yet (see Review below); the job waits in `review` until
-  Tavi approves it.
+  Octavian approves it.
 - Merging: once approved, the job at the head of the queue takes its CHANGELOG entry out of the branch (two branches that each add a
   top entry always conflict), merges `main` in with update-branch, puts the entry back numbered one above `main`'s,
   waits for the `android` and `rust` checks, and squash-merges with a `Feedback-Id:` trailer. A conflict sends the job
@@ -57,7 +57,7 @@ check runs it on every PR.
 
 ### GitHub sign-in
 
-There is no GitHub App (Tavi, 5 November 2026). Like Pully (`backend/src/personal_auth/`), the runner uses one normal
+There is no GitHub App (Octavian, 5 November 2026). Like Pully (`backend/src/personal_auth/`), the runner uses one normal
 GitHub CLI sign-in: GitHub's device flow with the GitHub CLI's public client, which GitHub lists as a privileged app,
 so the consent page says "GitHub CLI". It is made once and reused for every job. It asks for `repo` only; without
 `workflow`, GitHub itself refuses any push that changes `.github/workflows`. The token is the runner's `GITHUB_TOKEN`
@@ -65,24 +65,24 @@ secret and never enters a sandbox. Pushes, pull requests and merges appear as th
 
 ## Review
 
-Tavi, 6 November 2026: "When someone sends feedback through the app, we need to mark that PR for me to review,
+Octavian, 6 November 2026: "When someone sends feedback through the app, we need to mark that PR for me to review,
 instead of letting it through directly." This replaces the 5 November decision to merge on green CI with no human
 check.
 
 When the `android` and `rust` checks pass, the runner adds the `needs-review` label (`REVIEW_LABEL`) to the pull
-request and the job moves to `review`; the sender's notification reads "Waiting for Tavi's review". The runner then
+request and the job moves to `review`; the sender's notification reads "Waiting for Octavian's review". The runner then
 asks GitHub every 5 minutes and nothing else moves the job:
 
 - **Approve:** add the `approved` label (`APPROVE_LABEL`; the runner creates it so it is in the label menu). The job
   joins the merge queue, which brings `main` in, renumbers the CHANGELOG entry above `main`'s, waits for the checks
   again and squash-merges. This is the safe way, since a hand merge can collide with another release's version.
 - **Merge by hand:** the runner notices the merge and goes on to the release check as if it had merged it.
-- **Turn it down:** close the pull request. The job fails with "Tavi decided not to ship it."
+- **Turn it down:** close the pull request. The job fails with "Octavian decided not to ship it."
 
 Any new agent round after an approval (a red check after `main` came in, or a conflict) takes the `approved` label off
-and ends in `review` again, because the code changed after Tavi read it. Review has no time limit, and a job in review
+and ends in `review` again, because the code changed after Octavian read it. Review has no time limit, and a job in review
 does not count as the sender's active job, so they can send more; the job's 10-hour limit counts again from the
-approval. The pull requests appear as the account of the GitHub sign-in (Tavi's), so GitHub cannot request his review
+approval. The pull requests appear as the account of the GitHub sign-in (Octavian's), so GitHub cannot request his review
 or take his approval; find them with the `needs-review` label.
 
 ## Deploying
@@ -110,7 +110,7 @@ last 100 jobs.
 
 ## A bad release
 
-A merged feedback change publishes an Android release to every phone once Tavi approves it on green CI.
+A merged feedback change publishes an Android release to every phone once Octavian approves it on green CI.
 
 - If the app still starts and updates: pause feedback, then revert the feedback's commit (its `Feedback-Id:` trailer
   names the job) in a pull request that also adds a newer `android/CHANGELOG.md` entry, and merge it. Phones update

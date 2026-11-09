@@ -258,7 +258,7 @@ fun MainShell(
     val searching = searchActive
     val closeSearch = { viewModel.search.clear(); searchActive = false; focusManager.clearFocus() }
     val selectTab: (Tab) -> Unit = { next -> focusManager.clearFocus(); searchActive = false; tab = next }
-    // Everything, Spaces and Ask sit side by side in the bar's order, the circle's Ask last (Tavi, 5 November 2026).
+    // Everything, Spaces and Ask sit side by side in the bar's order, the circle's Ask last (Octavian, 5 November 2026).
     val page = if (searching) ASK_PAGE else tab.ordinal
     val pages = rememberSidePages(page, PAGE_COUNT) { next ->
         if (next == ASK_PAGE) {

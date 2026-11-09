@@ -78,7 +78,7 @@ enum class StarPhase {
 }
 
 /**
- * The shooting star moment (Tavi's pick of 03, 5 November 2026) as a simulation in moment time, so it plays the same at
+ * The shooting star moment (Octavian's pick of 03, 5 November 2026) as a simulation in moment time, so it plays the same at
  * any frame rate, under a test's fixed steps, and through hit-stops. Positions are in units of a 360-wide phone, as in
  * the prototype; [width] and [height] are the screen in those units, the story centred on it.
  *
@@ -283,7 +283,7 @@ internal class StarSim(val width: Float, val height: Float, private val top: Flo
         frame++
     }
 
-    /** A tap while the moment plays (Tavi, 5 November 2026): the page comes back at once and the find flies home. */
+    /** A tap while the moment plays (Octavian, 5 November 2026): the page comes back at once and the find flies home. */
     fun skip() {
         if (phase != StarPhase.Playing || skipAt >= 0f) return
         keepRarity()
@@ -309,7 +309,7 @@ internal class StarSim(val width: Float, val height: Float, private val top: Flo
     }
 
     /**
-     * Turns the settled card over while it grows, for the tag grid on its back (Tavi's pick M9, 5 November 2026).
+     * Turns the settled card over while it grows, for the tag grid on its back (Octavian's pick M9, 5 November 2026).
      *
      * @param y Where its centre goes, in units.
      * @param scale How big it gets, against its 284-unit height.

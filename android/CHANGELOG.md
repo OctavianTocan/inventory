@@ -294,7 +294,7 @@ You can send feedback from the app, and ThyMind tells you how it goes.
 - One Feedback notification follows what you sent. It updates in place as the change is worked on, tested and shipped, and ends with the result. When a change ships, ThyMind checks for the update, and tapping the notification opens the app on it.
 
 ### Changed
-- For now only Tavi can send feedback; for everyone else the page says so when you tap Send.
+- For now only Octavian can send feedback; for everyone else the page says so when you tap Send.
 - The model and effort pages are now titled Search model and Search effort.
 
 ## 0.6.57 (68), 2026-11-05

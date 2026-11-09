@@ -17,7 +17,7 @@ spaces are refreshed. A pending creation MUST remain guarded against duplicate
 submission when the form is reopened. Completion MUST close the form only if it is
 still showing.
 Source: the same-sheet creation flow and its native Back/dismissal regressions,
-22 October 2026; Create and add follows Tavi's pick of F08 in the reader
+22 October 2026; Create and add follows Octavian's pick of F08 in the reader
 prototype, 28 October 2026.
 
 @cc [owner:OctavianTocan,label:motion] card-sheet-pages-follow-navigation
@@ -42,7 +42,7 @@ page with the space's name, its colour and Create and add, open at once when the
 are no spaces yet. Create and add MUST make the space and add the card to it. A
 failed creation MUST keep the form and its name for retry. Header Back and Android
 Back return to Choose one, then dismiss.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M10, new space
+Source: Octavian's pick of F08 in the reader prototype, 28 October 2026 (M10, new space
 inline), which replaces the 22 October child creation page that did not add the
 card.
 
@@ -55,8 +55,8 @@ server sent one, otherwise the space holding the most other cards that share a
 tag or a site with this card; it is never one the card is already in, nor a
 smart space. All spaces lists the suggestion, then every space with its mosaic
 and card count; holding a space MUST show its latest cards until it is let go.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M12, hold to
-look inside; M13, suggested space first). Tavi, 5 November 2026, on OpenAI's
+Source: Octavian's pick of F08 in the reader prototype, 28 October 2026 (M12, hold to
+look inside; M13, suggested space first). Octavian, 5 November 2026, on OpenAI's
 Decisions API suggesting Spaces for new cards: "something we should do
 immediately".
 
@@ -68,7 +68,7 @@ sheet and reader close and a bar with the card's name offers Undo for 5 seconds.
 The card MUST NOT be trashed until Undo has run out, Undo MUST put it back where it
 was, and a trash that fails MUST bring it back and show why. Accessibility services
 delete with one action, since Undo covers a slip.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (H10, hold to
+Source: Octavian's pick of F08 in the reader prototype, 28 October 2026 (H10, hold to
 delete; M14, the card shrinks while Delete is held).
 
 @cc [owner:OctavianTocan,label:design] card-sheet-actions-have-hierarchy
@@ -83,10 +83,10 @@ canvas shadow with its tight edge; header controls use the 10dp/8% variant. The
 title MUST remain centered in its own fixed area even while its animated content
 changes. The grabber has a 14dp gap to the header; the first content respects
 Pully's 20dp top gap.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026, for the
+Source: Octavian's pick of F08 in the reader prototype, 28 October 2026, for the
 order; pulls.review DESIGN rules 45, 70, 74 and 141; SheetHeading, SheetCard,
 QuickAction and SheetHeader at f651a784cfca9b3730c60116832b89bbe236c9c3;
-Tavi's 22 October 2026 request to port the composition as well as sheet motion.
+Octavian's 22 October 2026 request to port the composition as well as sheet motion.
 
 @cc [owner:OctavianTocan,label:design] card-sheet-accent-is-only-a-top-hint
 A card sheet MUST keep neutral Pully paper, raised groups, controls and primary
@@ -94,7 +94,7 @@ actions. The selected card's accent MUST be limited to a faint wash fading out
 within the top 64dp and the grabber. Child pages MUST retain that hint without
 tinting the body or their fields. Semantic colors such as Delete and space
 selection colors remain independent of the card-type accent.
-Source: Tavi's explicit correction, 22 October 2026: "Don't paint the entire
+Source: Octavian's explicit correction, 22 October 2026: "Don't paint the entire
 bottom sheets in the color of the card type, just a little hint at the top of it".
 
 @cc [owner:OctavianTocan,label:product] card-share-sheet-offers-what-the-card-has
@@ -107,7 +107,7 @@ a page in the same sheet that draws the card (its picture, title and byline) wit
 Your note and Tags as choices, the note chosen when there is one, and Share image.
 Each other choice closes the sheet before it hands off to the system's share sheet
 or the clipboard.
-Source: Tavi's pick of F08 in the reader prototype, 28 October 2026 (M25, the Share
+Source: Octavian's pick of F08 in the reader prototype, 28 October 2026 (M25, the Share
 sheet with the card as an image).
 
 @cc [owner:OctavianTocan,label:product] share-copies-a-link-for-ai-agents
@@ -116,17 +116,17 @@ of Inventory's MCP server MUST take that link wherever it takes a card id, so an
 the person connected can open that card at once; for a video it reads the transcript and
 any frame it picks (thymind_get_transcript, thymind_get_frames). The link names a card
 only: it MUST open nothing except through the person's own connected agent.
-Source: Tavi, 6 November 2026 ("have an ID for each card such that I have a button that
+Source: Octavian, 6 November 2026 ("have an ID for each card such that I have a button that
 I can use to share a link. I can give that link to those clients and they will be able
 to search for exactly that using the MCP super easily"). The name "Link for AI agents",
 its place after The card as an image, and copying rather than sharing are Claude's
-choices, not yet confirmed by Tavi.
+choices, not yet confirmed by Octavian.
 
 @cc [owner:OctavianTocan,label:product] pinning-is-called-pin
 The app MUST call keeping a card first "Pin" and the cards kept that way "Pinned",
 never mymind's "Top of Mind": the sheet's tile and the reader's switch read Pin, and a
 pinned card's tile is spoken as Pinned.
-Source: Tavi, 5 November 2026 ("Rename 'Top of mind' everywhere for 'Pinned'. Same for
+Source: Octavian, 5 November 2026 ("Rename 'Top of mind' everywhere for 'Pinned'. Same for
 the actions to 'Pin'").
 
 @cc [owner:OctavianTocan,label:design] sheets-stay-column-wide
@@ -135,7 +135,7 @@ foot of the window. On an unfolded window it MUST rise over the pane it was open
 card's sheet from the reader over the reader, anything opened from the gallery over the
 gallery) while its scrim still dims the whole window. On a phone held sideways a sheet MUST
 rest at its tall height, since half the window is too little to read.
-Source: Tavi, 5 November 2026 (follow Pully's foldable and rotated layouts); pulls.review
+Source: Octavian, 5 November 2026 (follow Pully's foldable and rotated layouts); pulls.review
 sheets-and-foot-bars-stay-column-wide, DESIGN rule 208 (PR #137).
 
 @cc [owner:OctavianTocan,label:product] picture-rotation-is-kept
@@ -145,7 +145,7 @@ and keep the sheet open for the next tap; a fourth tap makes it upright again. T
 turn MUST be saved with the card on the server, so the gallery tile's shape, the
 reel, the reader and the card shared as an image all show it turned, on every
 phone, and it waits on the phone like any other change while offline.
-Source: Tavi, 6 November 2026: "We also need the ability to rotate images in
+Source: Octavian, 6 November 2026: "We also need the ability to rotate images in
 cards. So you can rotate it when its not in the right rotation you want." Quarter
 turns clockwise, the tile in Choose one and the sheet staying open are Claude's
 choices, not yet confirmed.

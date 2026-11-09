@@ -98,8 +98,8 @@ fn every_field_lands_in_its_fixed_column() {
         at_ms: 1_762_000_000_000.0,
     };
     let origin = Origin {
-        library: "u-tavi-abc".into(),
-        email: "tavi@example.com".into(),
+        library: "u-octavian-abc".into(),
+        email: "octavian@example.com".into(),
         version: "0.7.0".into(),
         batch: "b1".into(),
     };
@@ -117,14 +117,14 @@ fn every_field_lands_in_its_fixed_column() {
             "words",
             "b1",
             "android",
-            "tavi@example.com"
+            "octavian@example.com"
         ]
     );
     assert_eq!(
         point.doubles,
         [analytics::LAYOUT_VERSION, 2.0, 7.0, 31.0, 200.0, 1_762_000_000_000.0]
     );
-    assert_eq!(point.index, analytics::index_of("u-tavi-abc"));
+    assert_eq!(point.index, analytics::index_of("u-octavian-abc"));
     assert_eq!(
         point.index.len(),
         32,

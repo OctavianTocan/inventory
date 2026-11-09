@@ -1,7 +1,7 @@
-@cc [owner:OctavianTocan,label:product;security] feedback-waits-for-tavis-review
-The feedback runner MUST NOT merge a feedback pull request until Tavi has approved it, however green its
+@cc [owner:OctavianTocan,label:product;security] feedback-waits-for-octavians-review
+The feedback runner MUST NOT merge a feedback pull request until Octavian has approved it, however green its
 checks are: on green CI it MUST label the pull request for review and wait, with no time limit, for the
-approve label, a merge Tavi made by hand, or the pull request being closed (which ends the job as declined).
+approve label, a merge Octavian made by hand, or the pull request being closed (which ends the job as declined).
 New agent commits after an approval MUST take the approval away and send the pull request back to review.
-Source: Tavi, 6 Nov 2026: "When someone sends feedback through the app, we need to mark that PR for me to
+Source: Octavian, 6 Nov 2026: "When someone sends feedback through the app, we need to mark that PR for me to
 review, instead of letting it through directly." This replaces his 5 Nov decision to merge on green CI.

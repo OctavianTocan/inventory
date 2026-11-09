@@ -167,7 +167,7 @@ class GalleryScreenshotTest(private val dark: Boolean) {
         )),
     )
 
-    /** One of each kind of print (look 07 Prints, Tavi, 1 November 2026): sources under words, pins, apps, videos and a PDF. */
+    /** One of each kind of print (look 07 Prints, Octavian, 1 November 2026): sources under words, pins, apps, videos and a PDF. */
     private val kinds: List<Card> get() = listOf(
         testCard("quote", type = "Quote", note = "In every walk with nature one receives far more than he seeks.").copy(author = "John Muir"),
         photo("pin", "hills", 900, 1200, "Speckled stoneware mug").copy(type = "Product", siteName = "Hearth & Clay", product = Product(price = "GBP 24.00")),
@@ -288,7 +288,7 @@ class GalleryScreenshotTest(private val dark: Boolean) {
 
     private fun snap(name: String) = compose.onRoot().captureRoboImage("screenshots/${name}_${if (dark) "dark" else "light"}.png")
 
-    // Version 10 of the search pages, "Near your thumb" (Tavi, 5 November 2026: "Let's build 10").
+    // Version 10 of the search pages, "Near your thumb" (Octavian, 5 November 2026: "Let's build 10").
     @Test fun searchOpensWithRecentSearchesAndTagsNearTheThumb() {
         val searched = mutableListOf<String>()
         var forgot = false

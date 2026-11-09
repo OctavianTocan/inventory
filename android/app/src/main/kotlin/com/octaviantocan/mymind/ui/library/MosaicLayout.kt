@@ -447,7 +447,7 @@ internal fun MosaicState.between(): MosaicBetween {
     return if (home <= low) MosaicBetween(low, high, p - low) else MosaicBetween(high, low, 1f - (p - low))
 }
 
-/** Pinch scale, as a natural log, that moves the gallery one stop: about 30% at every size (Tavi's canvas, 28 Oct 2026). */
+/** Pinch scale, as a natural log, that moves the gallery one stop: about 30% at every size (Octavian's canvas, 28 Oct 2026). */
 private val PINCH_STEP = ln(1.3f)
 
 /** Share of the finger travel the cards follow; the rest is a quick hop when the fingers pass halfway between stops. */

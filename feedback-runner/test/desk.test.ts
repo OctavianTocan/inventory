@@ -37,7 +37,7 @@ describe("FeedbackDesk", () => {
     expect(await object.submit(send())).toEqual({ ok: false, error: "You already have feedback in progress." });
   });
 
-  it("lets a sender whose last job waits for Tavi's review send another", async () => {
+  it("lets a sender whose last job waits for Octavian's review send another", async () => {
     const { object } = desk();
     const first = await object.submit(send());
     if (!first.ok) throw new Error(first.error);
@@ -102,7 +102,7 @@ describe("FeedbackDesk", () => {
     expect(object.mergeTurn("second")).toBe(true);
   });
 
-  it("keeps Tavi's record of jobs, newest first", async () => {
+  it("keeps Octavian's record of jobs, newest first", async () => {
     const { object } = desk();
     const answer = await object.submit(send("cy@example.com"), 1000);
     if (!answer.ok) throw new Error(answer.error);

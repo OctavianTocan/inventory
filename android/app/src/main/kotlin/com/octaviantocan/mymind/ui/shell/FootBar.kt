@@ -130,7 +130,7 @@ const val FOOT_PILL_TAG = "foot-pill"
 
 /**
  * The round button beside the pill. Pages that both have one share it: it stays in place and only its glyph changes,
- * blurring out and the next one in, the way the pill keeps its place while its words change (Tavi, 28 October 2026).
+ * blurring out and the next one in, the way the pill keeps its place while its words change (Octavian, 28 October 2026).
  *
  * @property icon Drawable of its glyph.
  * @property label What a tap does, read by accessibility services.
@@ -149,7 +149,7 @@ class FootCircle(@DrawableRes val icon: Int, val label: String, val onClick: () 
  * its field focused ("a shorter bar that says Ask. And when you tap on it ... it kind of expands", Q5).
  * With [hug] the pill is only as wide as what it holds and sits centred with its circle, growing and shrinking as its
  * contents do; the next bar that does not hug widens it to the full width, and back (the gallery's two icons opening
- * into search, Tavi's pick of 03 on 1 November 2026).
+ * into search, Octavian's pick of 03 on 1 November 2026).
  * [veil] dims or holds the bar with its page. Outside a [FootBarLayer] the bar draws here, placed by [modifier].
  */
 @Composable

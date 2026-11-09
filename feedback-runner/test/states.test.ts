@@ -73,7 +73,7 @@ describe("job states, one table per journey (docs/feedback.md, CUJs)", () => {
     expect(run(roundStart, pushed, green, approved, red)).toEqual(["working", "testing", "review", "merging", "fixing"]);
   });
 
-  it("green CI waits for Tavi's review: nothing but approved moves it on, and a declined job fails", () => {
+  it("green CI waits for Octavian's review: nothing but approved moves it on, and a declined job fails", () => {
     expect(run(roundStart, pushed, green, green, { type: "merged", android: true }, red, approved)).toEqual([
       "working", "testing", "review", "review", "review", "review", "merging",
     ]);
@@ -100,8 +100,8 @@ describe("job states, one table per journey (docs/feedback.md, CUJs)", () => {
       title: "Couldn't ship this",
       detail: "your Claude plan's limit was reached. Try again later.",
     });
-    expect(describeJob({ ...start, state: "review" }, "claude", "Bigger tiles", null)).toEqual({ title: "Waiting for Tavi's review", detail: "Bigger tiles" });
-    expect(describeJob({ ...start, state: "failed", reason: "declined" }, "codex", null, null).detail).toBe("Tavi decided not to ship it.");
+    expect(describeJob({ ...start, state: "review" }, "claude", "Bigger tiles", null)).toEqual({ title: "Waiting for Octavian's review", detail: "Bigger tiles" });
+    expect(describeJob({ ...start, state: "failed", reason: "declined" }, "codex", null, null).detail).toBe("Octavian decided not to ship it.");
     expect(describeJob({ ...start, state: "no_change" }, "codex", "It already does that", null)).toEqual({ title: "No change needed", detail: "It already does that" });
   });
 });

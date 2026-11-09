@@ -14,7 +14,7 @@
     "AUTH": "google",
     "PUBLIC_URL": "https://mymind.octaviantocan.com",
     "ALLOWED_GOOGLE_DOMAIN": "octaviantocan.com",
-    // Who may send feedback (docs/feedback.md): "everyone" signed in (Tavi, 5 Nov 2026) or "owner" (OWNER_EMAIL only).
+    // Who may send feedback (docs/feedback.md): "everyone" signed in (Octavian, 5 Nov 2026) or "owner" (OWNER_EMAIL only).
     "FEEDBACK_OPEN": "everyone"
   },
   // The feedback runner Worker (feedback-runner/), which has no public route of its own.

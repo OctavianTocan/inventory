@@ -1,12 +1,12 @@
 /**
  * How a tool names one card: its id, or the card's agent link that the app's Share sheet copies
- * (`<server>/c/<id>`, Tavi 2026-11-06: "I give that link to one of the clients that has the MCP connected and then it
+ * (`<server>/c/<id>`, Octavian 2026-11-06: "I give that link to one of the clients that has the MCP connected and then it
  * can immediately look through the video"). A link names a card in the signed-in person's own library only; it
  * reaches nothing for anyone else.
  */
 import { z } from "zod";
 
-/** The path a space's agent link starts with, before the space's id (Tavi 2026-11-06: "a link thing to share a space"). */
+/** The path a space's agent link starts with, before the space's id (Octavian 2026-11-06: "a link thing to share a space"). */
 export const SPACE_LINK_PATH = "/s/";
 
 /** The path a card's agent link starts with, before the card's id. */
