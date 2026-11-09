@@ -43,9 +43,10 @@ cards of moss that nobody clicks. Inventory is built on two ideas to change that
 It is a game-like inventory inside a calm, modern app: ideas from games, drawn in the app's own colours, type and
 shapes. It is also *mine*: the library, the server and the data belong to the person who runs it.
 
-Inventory started in October 2026 as a faithful local replica of [mymind](https://mymind.com), the visual
-bookmarking app, to keep a library on my own server. It grew into its own product, with its own Android app, server,
-search and AI, and was renamed Inventory (from ThyMind) on 5 November 2026.
+Inventory started in October 2026 as a study of [mymind](https://mymind.com)'s design. This is my own local-first
+take on a visual bookmarking app, with its own Android app, server, search and AI. The web library still runs
+mymind's own front-end, so that part is not mine and is not published here. The project was renamed Inventory
+(from ThyMind) on 5 November 2026.
 
 ## What it does
 
@@ -101,7 +102,7 @@ change log.
 [MIT](LICENSE) for the code written for this project. Fonts and third-party libraries keep their own licenses.
 
 This is the public copy of a private working repository. It leaves out `mirror/` (mymind's own web front-end,
-which is not ours to publish) and the recordings of a real library the replica was first built from, in every
+which is not ours to publish) and the recordings of a real library the first version was built from, in every
 commit. The Android app, the server, the MCP and the feedback agent are all here; the original web library needs
 mymind's front-end in `mirror/` to run.
 
@@ -250,7 +251,7 @@ To reach the library from other computers, run the server with Google sign-in an
 | `AUTH_DB` | Sessions and password users, default `data/auth.db`. |
 | `LOCAL_PORT` | Also serves this computer without sign-in on `127.0.0.1:LOCAL_PORT`; tunnelled requests there get 403. |
 
-Signed-out visitors get the replica's own plain sign-in page, with no mymind name, logo, favicon or assets,
+Signed-out visitors get the server's own plain sign-in page, with no mymind name, logo, favicon or assets,
 `noindex`, and a `robots.txt` that disallows everything. After sign-in everything is mymind's front-end. The Google
 button opens a popup; the server runs the OAuth flow (PKCE, `state`, `nonce`), verifies Google's ID token and sets a
 30-day HttpOnly session cookie. API requests and the `/hub` socket without a session get 401, cross-origin writes 403.
@@ -313,7 +314,7 @@ the tunnel's traffic, and the database must have one writer), copy `data/`, `.en
 
 #### Setting up a host
 
-`deploy/install.sh` runs the replica as systemd user services that start at boot: the server with sign-in on
+`deploy/install.sh` runs Inventory as systemd user services that start at boot: the server with sign-in on
 `127.0.0.1:4330`, the desktop app downloads on `127.0.0.1:4332`, and a Cloudflare tunnel that publishes both at your
 hostname. There is no Cloudflare Access in front (the user's decision, 2026-10-16): every request meets the library's
 own sign-in, which admits `OWNER_EMAIL` and a verified address at `ALLOWED_GOOGLE_DOMAIN` through Google, and the
@@ -359,7 +360,7 @@ node tools/check-hosted.mjs --browser   # also signs in with headless Chromium; 
 
 ## Desktop app
 
-`desktop/` wraps the replica in a native window (Tauri 2). The app uses the server already listening on `PORT`
+`desktop/` wraps the web library in a native window (Tauri 2). The app uses the server already listening on `PORT`
 (default 4331, which the hosted service serves on its host), or starts the Rust server (`mymind serve`) from this
 checkout and stops it when the window closes; with `MYMIND_URL` it opens that hosted library instead of starting a server.
 It stays off `:4321`, which belongs to verification.
@@ -422,7 +423,7 @@ but its edits never reach the host.
 
 | Variable | Default | Effect |
 |---|---|---|
-| `PORT` | `4331` | Port of the replica the window opens, and of the server the app starts. |
+| `PORT` | `4331` | Port of the web library the window opens, and of the server the app starts. |
 | `MYMIND_URL` | none; the build's value | A hosted library to open when nothing listens on `PORT`, instead of starting a server. Set at build time, it becomes the default (`deploy/package-app.sh`). |
 | `MYMIND_ROOT` | the checkout it was built in | The checkout the server runs in (recordings, `data/`, `.env`). |
 | `MYMIND_SERVER` | `rust/target/release/mymind` in the checkout | The server binary it starts. |
@@ -432,7 +433,7 @@ The server reads `.env` in the checkout, so AI features work in the app when the
 
 ### How it behaves
 
-- Links to other sites open in your default browser; the window only shows the replica.
+- Links to other sites open in your default browser; the window only shows the web library.
 - Files dropped on the window go through mymind's own upload code, as in a browser. WebKitGTK currently gives pages
   an empty `dataTransfer.files` ([WebKit bug 323277](https://bugs.webkit.org/show_bug.cgi?id=323277)), so on Linux
   the app reads dropped files itself and hands them to the page as a `drop` event (`src/file_drop.rs`).
@@ -448,27 +449,6 @@ The server reads `.env` in the checkout, so AI features work in the app when the
   `MYMIND_SERVER` to its path, and run `rust/target/release/mymind serve` in the checkout to see the server's error.
 - **Testing drops without a file manager** (e.g. on Xvfb): `cargo run --release --example drag_source -- <file>`
   opens a small window whose button drags that file.
-
-## How it was reverse engineered
-
-1. Find the page: `rea list-browser-targets http://127.0.0.1:9222`.
-2. Capture it passively, with the CDN origin allowed (otherwise every script is filtered out):
-   `rea inspect-web-page <cdp> <target> --allowed-origins https://access.mymind.com --allowed-origins https://static.accelerator.net --include-script-sources --include-json-body-shapes --include-accessibility-text`
-3. Export and statically analyse the scripts:
-   `rea export-web-scripts evidence/page-capture.json evidence/scripts` then
-   `rea analyze-javascript-application evidence/scripts`.
-4. The data the UI needed was recorded, then replaced by the local database (`mymind serve`).
-
-Hopper and Ghidra are not involved. They read native machine code; this app ships readable JavaScript.
-
-## What the app is
-
-- Server-rendered HTML plus ~80 unbundled, unminified ES modules from `static.accelerator.net/134/0.109.0/`.
-  No framework and no build step. Vendor code: Lit, TipTap 3, GSAP, OGL (WebGL), Sortable, Lottie, SignalR, msgpack.
-- `GET /cards` streams msgpack values shaped `{ html, json }`: the server renders every card, the client only
-  lays them out (`grid.js`, `modules/layouts.js`).
-- Opening a card fetches server-rendered HTML from `/cards/:id/detail`.
-- Live updates come from `/changes?since=` (msgpack) and a SignalR hub at `/hub`.
 
 ## Known gaps
 
