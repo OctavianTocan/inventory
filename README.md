@@ -16,16 +16,18 @@
 
 <table align="center">
   <tr>
-    <td align="center"><img src="docs/media/share.gif" width="240" alt="Sharing a link to Inventory: a shooting star brings it in as a legendary find, then its tags"></td>
-    <td align="center"><img src="docs/media/library.gif" width="240" alt="The library: a grid of saved photos, notes and articles, then an article opened in reader mode"></td>
-    <td align="center"><img src="docs/media/sky.gif" width="240" alt="Your sky: finds you came back to light up stars in a constellation"></td>
+    <td align="center"><img src="docs/media/save-note.png" width="240" alt="Inventory's share UI with a spoken note, rendered in Android CI with a simplified host-page fixture"></td>
+    <td align="center"><img src="docs/media/library.gif" width="240" alt="Scrolling Inventory's native Android library, rendered in Android CI with synthetic sample content"></td>
+    <td align="center"><img src="docs/media/search.png" width="240" alt="Inventory's recent searches and AI chats, rendered in Android CI with synthetic sample content"></td>
   </tr>
   <tr>
-    <td align="center"><b>Save</b><br>Share anything from any app</td>
-    <td align="center"><b>Keep</b><br>Your whole library, read cleanly</td>
-    <td align="center"><b>Come back</b><br>Old finds light up your sky</td>
+    <td align="center"><b>Save</b><br>Add a spoken note while saving</td>
+    <td align="center"><b>Keep</b><br>Scroll through your saved finds</td>
+    <td align="center"><b>Find</b><br>Recent searches and AI chats</td>
   </tr>
 </table>
+
+<sub>Actual Compose UI rendered in Android CI with synthetic sample content, 10 November 2026. The share host page is a simplified fixture. Motion is a deterministic CI capture, not a device-performance recording.</sub>
 
 ## Why
 
